@@ -1,0 +1,39 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model ImportBatch {
+  id         String          @id @default(cuid())
+  fileName   String
+  rowCount   Int
+  importedAt DateTime        @default(now())
+  entries    LearningEntry[]
+}
+
+model LearningEntry {
+  id            String      @id @default(cuid())
+  originalText  String
+  correctedText String
+  pinyin        String
+  createdAt     DateTime    @default(now())
+  batchId       String
+  batch         ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  hints         Hint[]
+  @@index([createdAt])
+  @@index([batchId])
+}
+
+model Hint {
+  id              String        @id @default(cuid())
+  content         String
+  position        Int
+  learningEntryId String
+  learningEntry   LearningEntry @relation(fields: [learningEntryId], references: [id], onDelete: Cascade)
+  @@unique([learningEntryId, position])
+  @@index([learningEntryId])
+}
