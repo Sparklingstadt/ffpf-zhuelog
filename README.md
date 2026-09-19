@@ -29,7 +29,7 @@ src/
 
 ## 起動方法
 
-前提: Node.js 20.19以上、Docker Desktop
+前提: Node.js 22以上、Docker Desktop
 
 ```bash
 cp .env.example .env
