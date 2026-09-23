@@ -56,7 +56,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
     : null;
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-4 py-12">
+    <main className="flex flex-1 items-center justify-center px-4 py-8 sm:py-12">
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="space-y-4 text-center">
           <div className="mx-auto flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
