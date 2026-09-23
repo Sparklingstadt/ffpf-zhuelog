@@ -1,6 +1,6 @@
 {
   "name": "ffpf-zhuelog",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "engines": {
     "node": ">=22.0.0"
@@ -9,10 +9,19 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "eslint --max-warnings 0",
+    "typecheck": "next typegen && tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "hooks:install": "node scripts/install-hooks.mjs",
+    "prepare": "npm run hooks:install",
+    "test:e2e": "docker compose -f compose.e2e.yaml up -d --wait && playwright test",
+    "test:e2e:ui": "docker compose -f compose.e2e.yaml up -d --wait && playwright test --ui",
+    "test:e2e:stop": "docker compose -f compose.e2e.yaml down",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate"
   },
@@ -38,6 +47,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/pg": "^8.23.1",
@@ -45,8 +55,11 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.5",
+    "lefthook": "^2.1.14",
+    "prettier": "^3.9.9",
     "prisma": "^7.10.0",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   },
   "overrides": {

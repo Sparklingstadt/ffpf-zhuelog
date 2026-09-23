@@ -1,0 +1,22 @@
+{
+  "batches": [
+    {
+      "id": "seed-batch-2026-09-20-example",
+      "fileName": "seed-example.csv",
+      "importedAt": "2026-09-19T21:00:00.000Z",
+      "entries": [
+        {
+          "id": "seed-entry-2026-09-20-example-1",
+          "createdAt": "2026-09-19T21:00:00.000Z",
+          "originalText": "我昨天去图书馆了。",
+          "correctedText": "我昨天去了图书馆。",
+          "pinyin": "Wǒ zuótiān qù le túshūguǎn.",
+          "hints": [
+            "場所の前では「去」を使う",
+            "動作の完了を示す「了」は動詞の直後"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-export type AppRole = "admin" | "user";
+export type AppRole = "admin" | "guest" | "user";
 
 export type AuthenticatedUser = {
   githubLogin: string;

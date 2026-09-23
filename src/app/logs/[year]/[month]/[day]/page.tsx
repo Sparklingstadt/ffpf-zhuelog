@@ -2,7 +2,7 @@ import { ArrowLeft, CalendarDays, Languages } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { getCurrentAdminUser } from "@/composition/identity-container";
+import { getCurrentViewerUser } from "@/composition/identity-container";
 import { learningUseCases } from "@/composition/learning-container";
 import { parseLogDate } from "@/domain/learning/value-objects/log-date";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
@@ -19,7 +19,7 @@ type LogDatePageProps = {
 };
 
 export default async function LogDatePage({ params }: LogDatePageProps) {
-  const user = await getCurrentAdminUser();
+  const user = await getCurrentViewerUser();
   if (!user) redirect("/signin");
 
   const { year, month, day } = await params;
@@ -37,15 +37,21 @@ export default async function LogDatePage({ params }: LogDatePageProps) {
               <Languages className="size-3.5" /> Daily learning log
             </Badge>
             <div>
-              <h1 className="text-3xl font-semibold tracking-tight">{formatLogDate(date)}</h1>
-              <p className="mt-2 text-sm text-muted-foreground">この日に追加した学習ノート：{entries.length}件</p>
+              <h1 className="text-3xl font-semibold tracking-tight">
+                {formatLogDate(date)}
+              </h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                この日に追加した学習ノート：{entries.length}件
+              </p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline" size="sm">
-              <Link href="/logs"><ArrowLeft /> 日付一覧へ</Link>
+              <Link href="/logs">
+                <ArrowLeft /> 日付一覧へ
+              </Link>
             </Button>
-            <AuthControls githubLogin={user.githubLogin} />
+            <AuthControls user={user} />
           </div>
         </header>
 

@@ -1,0 +1,30 @@
+pre-commit:
+  piped: true
+  commands:
+    format:
+      priority: 1
+      glob: "*.{js,jsx,mjs,cjs,ts,tsx,mts,cts,json,jsonc,css,md,mdx,yml,yaml,html}"
+      exclude: "(^|/)(package-lock.json|src/generated/|prisma/seed.private.json)"
+      run: npx --no-install prettier --write "{staged_files}"
+      stage_fixed: true
+    lint:
+      priority: 2
+      run: npm run lint
+    typecheck:
+      priority: 3
+      run: npm run typecheck
+
+pre-push:
+  piped: true
+  commands:
+    lint:
+      priority: 1
+      run: npm run lint
+    typecheck:
+      priority: 2
+      run: npm run typecheck
+    e2e:
+      priority: 3
+      run: |
+        trap 'npm run test:e2e:stop' EXIT
+        npm run test:e2e

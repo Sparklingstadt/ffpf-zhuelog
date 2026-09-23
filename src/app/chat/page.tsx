@@ -3,7 +3,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getCurrentAdminUser } from "@/composition/identity-container";
-import { isOpenAiConfigured, getOpenAiModelName } from "@/infrastructure/config/environment";
+import {
+  isOpenAiConfigured,
+  getOpenAiModelName,
+} from "@/infrastructure/config/environment";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { ChatInterface } from "@/presentation/components/chat/chat-interface";
 import { Badge } from "@/presentation/components/ui/badge";
@@ -32,7 +35,9 @@ export default async function ChatPage() {
               </Badge>
             </div>
             <div>
-              <h1 className="text-3xl font-semibold tracking-tight">会話練習</h1>
+              <h1 className="text-3xl font-semibold tracking-tight">
+                会話練習
+              </h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
                 ChatGPTと中国語を練習し、表現・文法・語彙についてその場で質問できます。
               </p>
@@ -44,7 +49,7 @@ export default async function ChatPage() {
                 <ArrowLeft /> 学習ノートへ
               </Link>
             </Button>
-            <AuthControls githubLogin={user.githubLogin} />
+            <AuthControls user={user} />
           </div>
         </header>
 

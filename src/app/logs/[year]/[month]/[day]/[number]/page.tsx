@@ -2,9 +2,12 @@ import { ArrowLeft, CalendarDays, Languages } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { getCurrentAdminUser } from "@/composition/identity-container";
+import { getCurrentViewerUser } from "@/composition/identity-container";
 import { learningUseCases } from "@/composition/learning-container";
-import { parseLogDate, parseLogNumber } from "@/domain/learning/value-objects/log-date";
+import {
+  parseLogDate,
+  parseLogNumber,
+} from "@/domain/learning/value-objects/log-date";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { LearningEntryCard } from "@/presentation/components/learning/learning-entry-card";
 import { Badge } from "@/presentation/components/ui/badge";
@@ -18,7 +21,7 @@ type LogDetailPageProps = {
 };
 
 export default async function LogDetailPage({ params }: LogDetailPageProps) {
-  const user = await getCurrentAdminUser();
+  const user = await getCurrentViewerUser();
   if (!user) redirect("/signin");
 
   const { year, month, day, number } = await params;
@@ -26,7 +29,10 @@ export default async function LogDetailPage({ params }: LogDetailPageProps) {
   const entryNumber = parseLogNumber(number);
   if (!date || !entryNumber) notFound();
 
-  const result = await learningUseCases.getDailyEntry.execute(date, entryNumber);
+  const result = await learningUseCases.getDailyEntry.execute(
+    date,
+    entryNumber,
+  );
   if (!result) notFound();
   const { entry, total } = result;
 
@@ -41,29 +47,48 @@ export default async function LogDetailPage({ params }: LogDetailPageProps) {
               <Languages className="size-3.5" /> Daily learning log
             </Badge>
             <div>
-              <h1 className="text-3xl font-semibold tracking-tight">{formatLogDate(date)} · #{entryNumber}</h1>
-              <p className="mt-2 text-sm text-muted-foreground">この日の{entryNumber}件目／全{total}件</p>
+              <h1 className="text-3xl font-semibold tracking-tight">
+                {formatLogDate(date)} · #{entryNumber}
+              </h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                この日の{entryNumber}件目／全{total}件
+              </p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline" size="sm">
-              <Link href={dateHref}><ArrowLeft /> この日の一覧へ</Link>
+              <Link href={dateHref}>
+                <ArrowLeft /> この日の一覧へ
+              </Link>
             </Button>
-            <AuthControls githubLogin={user.githubLogin} />
+            <AuthControls user={user} />
           </div>
         </header>
 
-        <LearningEntryCard entry={entry} numberLabel={`#${entryNumber}`} defaultOpen />
+        <LearningEntryCard
+          entry={entry}
+          numberLabel={`#${entryNumber}`}
+          defaultOpen
+        />
 
-        <nav className="flex items-center justify-between gap-3" aria-label="同じ日の学習ノート">
+        <nav
+          className="flex items-center justify-between gap-3"
+          aria-label="同じ日の学習ノート"
+        >
           {entryNumber > 1 ? (
             <Button asChild variant="outline">
-              <Link href={`${dateHref}/${entryNumber - 1}`}><ArrowLeft /> 前のノート</Link>
+              <Link href={`${dateHref}/${entryNumber - 1}`}>
+                <ArrowLeft /> 前のノート
+              </Link>
             </Button>
-          ) : <span />}
+          ) : (
+            <span />
+          )}
           {entryNumber < total ? (
             <Button asChild variant="outline">
-              <Link href={`${dateHref}/${entryNumber + 1}`}><CalendarDays /> 次のノート</Link>
+              <Link href={`${dateHref}/${entryNumber + 1}`}>
+                <CalendarDays /> 次のノート
+              </Link>
             </Button>
           ) : null}
         </nav>
