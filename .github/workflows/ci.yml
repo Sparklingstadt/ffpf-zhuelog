@@ -15,13 +15,16 @@ jobs:
     env:
       DATABASE_URL: postgresql://zhuelog:zhuelog@127.0.0.1:5432/zhuelog?schema=public
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - run: npm audit
+      - run: npm run typecheck
       - run: npm run lint
       - run: npm run test:unit
       - run: npm run build
@@ -32,8 +35,10 @@ jobs:
     env:
       DATABASE_URL: postgresql://zhuelog_e2e:local-e2e-only@127.0.0.1:55439/zhuelog_e2e
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
