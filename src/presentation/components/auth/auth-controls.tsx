@@ -20,7 +20,7 @@ export function AuthControls({ user }: AuthControlsProps) {
         ) : (
           <CircleUserRound className="size-3.5" />
         )}
-        {isGuest ? "ゲスト（閲覧のみ）" : `@${user.githubLogin}`}
+        {isGuest ? "ゲスト（共有ノートは閲覧のみ）" : `@${user.githubLogin}`}
       </Badge>
       <form action={signOutAction}>
         <Button type="submit" variant="ghost" size="sm">

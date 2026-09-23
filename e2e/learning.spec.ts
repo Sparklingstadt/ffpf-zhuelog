@@ -7,6 +7,7 @@ test("unauthenticated pages redirect to signin", async ({ page }) => {
     "/logs/2026/9/20",
     "/logs/2026/9/20/1",
     "/chat",
+    "/practice",
   ]) {
     await page.goto(path);
     await expect(page).toHaveURL(/\/signin(?:\?|$)/);
@@ -20,7 +21,9 @@ test("guest signs in, cannot post or use chat, and can sign out", async ({
   page,
 }) => {
   await asGuest(page);
-  await expect(page.getByText("閲覧専用モード")).toBeVisible();
+  await expect(
+    page.getByText("共有ノートは閲覧専用", { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText("まだ学習文がありません")).toBeVisible();
   await expect(page.getByLabel("CSVファイル", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "ChatGPTと話す" })).toHaveCount(
@@ -135,13 +138,11 @@ for (const [name, bytes, error] of [
   test(`rejects upload ${name}`, async ({ page, context, db }) => {
     await asAdmin(context);
     await page.goto("/");
-    await page
-      .getByLabel("CSVファイル", { exact: true })
-      .setInputFiles({
-        name,
-        mimeType: "text/csv",
-        buffer: Buffer.alloc(bytes, "a"),
-      });
+    await page.getByLabel("CSVファイル", { exact: true }).setInputFiles({
+      name,
+      mimeType: "text/csv",
+      buffer: Buffer.alloc(bytes, "a"),
+    });
     await page
       .getByRole("button", { name: "CSVをインポート", exact: true })
       .click();

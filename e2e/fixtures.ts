@@ -52,7 +52,7 @@ export async function asAdmin(context: BrowserContext) {
 export async function asGuest(page: Page, callback = "/") {
   await page.goto(`/signin?callbackUrl=${encodeURIComponent(callback)}`);
   await page.getByRole("button", { name: "ゲストとして閲覧" }).click();
-  await expect(page.getByText("ゲスト（閲覧のみ）")).toBeVisible();
+  await expect(page.getByText("ゲスト（共有ノートは閲覧のみ）")).toBeVisible();
 }
 
 export async function upload(page: Page, text: string, name = "learning.csv") {

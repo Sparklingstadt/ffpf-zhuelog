@@ -28,6 +28,7 @@ import {
   CardTitle,
 } from "@/presentation/components/ui/card";
 import { Separator } from "@/presentation/components/ui/separator";
+import { PracticeNotice } from "@/presentation/components/practice/practice-notice";
 import { getSafeCallbackPath } from "@/presentation/http/safe-callback-path";
 
 const errorMessages: Record<string, string> = {
@@ -63,11 +64,11 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
           </div>
           <div className="space-y-2">
             <Badge variant="secondary" className="gap-1.5">
-              <ShieldCheck className="size-3.5" /> 管理者 / 閲覧ゲスト
+              <ShieldCheck className="size-3.5" /> 管理者 / ゲスト
             </Badge>
             <CardTitle className="text-2xl">学习録にログイン</CardTitle>
             <CardDescription>
-              管理者としてログインするか、閲覧専用のゲストとして利用できます。
+              ゲストも共有ノートの閲覧と、自分のAPIキーでの添削を利用できます。
             </CardDescription>
           </div>
         </CardHeader>
@@ -106,8 +107,16 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
               <Eye /> ゲストとして閲覧
             </Button>
           </form>
+          <form action={signInAsGuestAction.bind(null, "/practice")}>
+            <Button type="submit" className="w-full" variant="outline">
+              自分のAPIキーで添削
+            </Button>
+          </form>
+          <div className="rounded-lg border bg-muted/30 p-4">
+            <PracticeNotice />
+          </div>
           <p className="text-center text-xs leading-5 text-muted-foreground">
-            ゲストは学習ノートを閲覧できますが、CSVインポートやChatGPTの利用はできません。
+            ゲストは共有ノートへの投稿・CSVインポート・管理者用ChatGPT・LINE添削を利用できません。
             GitHub認証ではユーザー名・表示名・メールアドレス・プロフィール画像が利用されます。
           </p>
         </CardContent>

@@ -81,6 +81,11 @@ export default async function Home() {
             <AuthControls user={user} />
             <div className="flex flex-wrap gap-2 sm:justify-end">
               <Button asChild variant="outline" size="sm">
+                <Link href="/practice">
+                  <Sparkles /> 自分のAPIキーで添削
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="sm">
                 <Link href="/logs">
                   <CalendarDays /> 日付から見る
                 </Link>
@@ -173,9 +178,9 @@ export default async function Home() {
                   <div className="mb-2 flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
                     <Eye className="size-4" />
                   </div>
-                  <CardTitle>閲覧専用モード</CardTitle>
+                  <CardTitle>共有ノートは閲覧専用</CardTitle>
                   <CardDescription>
-                    ゲストは学習ノートを閲覧できます。CSVインポートやChatGPTの利用は管理者限定です。
+                    ゲストは共有ノートを閲覧できます。投稿・CSVインポート・管理者用ChatGPTは利用できません。個人練習は「自分のAPIキーで添削」から利用できます。
                   </CardDescription>
                 </CardHeader>
               </Card>
