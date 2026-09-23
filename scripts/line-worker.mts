@@ -58,13 +58,15 @@ console.log(
   "LINE worker started. Outbound polling only; no listening port. Ctrl+C to stop.",
 );
 while (!stop.signal.aborted) {
+  let processed = false;
   try {
     const response = await call({ action: "claim" });
     const job = response?.job ? jobSchema.parse(response.job) : null;
     if (job) {
       const identity = { id: job.id, leaseToken: job.leaseToken };
       if (job.phase === "deliver")
-        await call({ action: "deliver", ...identity });
+        processed =
+          (await call({ action: "deliver", ...identity }))?.ok === true;
       else {
         let correction;
         try {
@@ -74,7 +76,9 @@ while (!stop.signal.aborted) {
           if (!stop.signal.aborted) await call({ action: "fail", ...identity });
           throw new Error("CORRECTION_FAILED");
         }
-        await call({ action: "complete", ...identity, correction });
+        processed =
+          (await call({ action: "complete", ...identity, correction }))?.ok ===
+          true;
       }
       // No original text, CSV, LINE user ID, token or raw provider error in logs.
       console.log(`LINE job ${job.id}: ${job.phase} processed`);
@@ -86,6 +90,10 @@ while (!stop.signal.aborted) {
       );
   }
   if (process.argv.includes("--once")) break;
+  // Drain completed work immediately: generation saves a READY job, which
+  // must still be claimed with a fresh lease before delivery. Keep backoff
+  // for empty queues, errors and ambiguous/stale responses (including 409).
+  if (processed) continue;
   try {
     await delay(15_000, undefined, { signal: stop.signal });
   } catch {

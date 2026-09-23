@@ -46,7 +46,16 @@ createInterface({ input: process.stdin }).on("line", (line) => {
     send({
       method: "item/agentMessage/delta",
       params: {
-        delta: text === "long" ? "字".repeat(12_001) : "你好（nǐ hǎo）",
+        delta:
+          text === "long"
+            ? "字".repeat(12_001)
+            : text.startsWith('{"originalText":')
+              ? JSON.stringify({
+                  correctedText: "今天我很忙。",
+                  pinyin: "Jīntiān wǒ hěn máng.",
+                  hints: ["忙＝忙しい"],
+                })
+              : "你好（nǐ hǎo）",
       },
     });
     send({
