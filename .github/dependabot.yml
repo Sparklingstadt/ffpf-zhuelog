@@ -5,9 +5,28 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      react:
+        patterns: ["react", "react-dom", "@types/react", "@types/react-dom"]
+      nextjs:
+        patterns: ["next", "eslint-config-next"]
+      compatible-updates:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    # Revisit these constraints using docs/dependency-maintenance.md.
+    ignore:
+      - dependency-name: typescript
+        versions: ["7.x"] # typescript-eslint supports TypeScript <6.1.
+      - dependency-name: eslint
+        versions: ["10.x"] # eslint-plugin-react does not yet support ESLint 10.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"] # Match minimum runtime: Node 22.
 
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns: ["*"]
