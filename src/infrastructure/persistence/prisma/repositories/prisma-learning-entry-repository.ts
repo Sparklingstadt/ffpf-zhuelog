@@ -12,7 +12,10 @@ const hintsByPosition = { orderBy: { position: "asc" as const } };
 const oldestFirst = [{ createdAt: "asc" as const }, { id: "asc" as const }];
 
 export class PrismaLearningEntryRepository implements LearningEntryRepository {
-  async importBatch(fileName: string, entries: LearningEntryDraft[]): Promise<number> {
+  async importBatch(
+    fileName: string,
+    entries: LearningEntryDraft[],
+  ): Promise<number> {
     const prisma = getPrismaClient();
 
     await prisma.$transaction(
@@ -29,7 +32,10 @@ export class PrismaLearningEntryRepository implements LearningEntryRepository {
               correctedText: entry.correctedText,
               pinyin: entry.pinyin,
               hints: {
-                create: entry.hints.map((content, position) => ({ content, position })),
+                create: entry.hints.map((content, position) => ({
+                  content,
+                  position,
+                })),
               },
             },
           });
@@ -78,15 +84,19 @@ export class PrismaLearningEntryRepository implements LearningEntryRepository {
   ): Promise<DailyLearningEntry | null> {
     const prisma = getPrismaClient();
     const where = { createdAt: { gte: range.start, lt: range.end } };
-    const [record, total] = await Promise.all([
-      prisma.learningEntry.findFirst({
-        where,
-        include: { hints: hintsByPosition },
-        orderBy: oldestFirst,
-        skip: entryNumber - 1,
-      }),
-      prisma.learningEntry.count({ where }),
-    ]);
+    const total = await prisma.learningEntry.count({ where });
+    if (
+      !Number.isSafeInteger(entryNumber) ||
+      entryNumber < 1 ||
+      entryNumber > total
+    )
+      return null;
+    const record = await prisma.learningEntry.findFirst({
+      where,
+      include: { hints: hintsByPosition },
+      orderBy: oldestFirst,
+      skip: entryNumber - 1,
+    });
 
     if (!record || entryNumber > total) return null;
     return { entry: toLearningEntry(record), total };

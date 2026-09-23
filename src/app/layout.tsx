@@ -3,6 +3,9 @@ import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
 import "./globals.css";
 
+// Request-specific CSP nonces cannot be used in a statically cached document.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "学习録 | 中国語学習ノート",
   description: "添削文・ピン音・学習ヒントをCSVから蓄積する中国語学習アプリ",

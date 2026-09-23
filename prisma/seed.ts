@@ -5,6 +5,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import "dotenv/config";
 
 import { PrismaClient } from "../src/generated/prisma/client";
+import { securePostgresConnectionString } from "../src/infrastructure/config/postgres-connection";
 
 type SeedEntry = {
   id: string;
@@ -116,19 +117,7 @@ if (!rawConnectionString) {
   );
 }
 
-function secureConnectionString(value: string) {
-  const url = new URL(value);
-  if (
-    ["prefer", "require", "verify-ca"].includes(
-      url.searchParams.get("sslmode") ?? "",
-    )
-  ) {
-    url.searchParams.set("sslmode", "verify-full");
-  }
-  return url.toString();
-}
-
-const connectionString = secureConnectionString(rawConnectionString);
+const connectionString = securePostgresConnectionString(rawConnectionString);
 
 const seedFile = path.resolve(
   process.cwd(),

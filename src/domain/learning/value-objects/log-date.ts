@@ -11,8 +11,16 @@ export type DateRange = {
   end: Date;
 };
 
-export function parseLogDate(year: string, month: string, day: string): LogDate | null {
-  if (!/^\d{4}$/.test(year) || !/^\d{1,2}$/.test(month) || !/^\d{1,2}$/.test(day)) {
+export function parseLogDate(
+  year: string,
+  month: string,
+  day: string,
+): LogDate | null {
+  if (
+    !/^\d{4}$/.test(year) ||
+    !/^\d{1,2}$/.test(month) ||
+    !/^\d{1,2}$/.test(day)
+  ) {
     return null;
   }
 
@@ -35,7 +43,9 @@ export function parseLogDate(year: string, month: string, day: string): LogDate 
 export function parseLogNumber(value: string): number | null {
   if (!/^[1-9]\d*$/.test(value)) return null;
   const number = Number(value);
-  return Number.isSafeInteger(number) ? number : null;
+  return Number.isSafeInteger(number) && number <= 2_147_483_647
+    ? number
+    : null;
 }
 
 export function getTokyoDateRange({ year, month, day }: LogDate): DateRange {

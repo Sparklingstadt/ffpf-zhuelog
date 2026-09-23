@@ -24,7 +24,7 @@ export function CsvFormatGuide() {
         <dt className="text-muted-foreground">3列目</dt>
         <dd>ピン音（必須）</dd>
         <dt className="text-muted-foreground">4列目以降</dt>
-        <dd>覚えるべきヒント（任意・個数自由）</dd>
+        <dd>覚えるべきヒント（任意・100個まで）</dd>
       </dl>
 
       <figure className="min-w-0 space-y-2">
@@ -39,6 +39,7 @@ export function CsvFormatGuide() {
       <ul className="list-disc space-y-1 pl-4 text-xs leading-5 text-muted-foreground">
         <li>UTF-8の.csvファイルに対応しています（5MB・1,000行まで）。</li>
         <li>ヘッダー行は省略できます。</li>
+        <li>各項目は1万文字、1行は10万文字までです。</li>
         <li>
           ヒントは1列に1個ずつ追加できます。行ごとに個数が違ってもよく、空欄は無視されます。
         </li>

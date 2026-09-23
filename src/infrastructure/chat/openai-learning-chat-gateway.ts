@@ -19,10 +19,14 @@ export class OpenAiLearningChatGateway implements LearningChatGateway {
       system: request.systemPrompt,
       messages,
       maxOutputTokens: request.maxOutputTokens,
+      maxRetries: 0,
+      timeout: 45_000,
+      onError: () => console.error("LEARNING_CHAT_PROVIDER_ERROR"),
       providerOptions: { openai: { store: false } },
     });
 
     return result.toUIMessageStreamResponse({
+      headers: { "Cache-Control": "no-store" },
       onError: () => "ChatGPTから応答を受信できませんでした。",
     });
   }

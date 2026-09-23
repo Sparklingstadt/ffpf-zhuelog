@@ -3,6 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import GitHub from "next-auth/providers/github";
 
 import { isAllowedGitHubLogin } from "@/infrastructure/auth/github-login-policy";
+import { resolveSessionRole } from "./session-role-policy";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
@@ -54,12 +55,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     session({ session, token }) {
       session.user.githubLogin =
         typeof token.githubLogin === "string" ? token.githubLogin : "";
-      session.user.role =
-        token.role === "admin"
-          ? "admin"
-          : token.role === "guest"
-            ? "guest"
-            : "user";
+      session.user.role = resolveSessionRole(token.role, token.githubLogin);
       return session;
     },
     authorized({ auth: session, request }) {
@@ -68,13 +64,31 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // These exact endpoints enforce LINE HMAC / worker Bearer auth themselves.
         pathname === "/api/line/webhook" ||
         pathname === "/api/line/worker" ||
-        pathname.startsWith("/signin") ||
-        pathname.startsWith("/api/auth");
-      return (
+        pathname === "/signin" ||
+        pathname.startsWith("/api/auth/");
+      const permitted =
         isPublicRoute ||
         session?.user.role === "admin" ||
-        session?.user.role === "guest"
+        session?.user.role === "guest";
+      if (permitted) return true;
+      if (pathname.startsWith("/api/")) {
+        return Response.json(
+          { error: "認証が必要です。" },
+          { status: 401, headers: { "Cache-Control": "no-store" } },
+        );
+      }
+      // Server Actions perform their own authorization. Let them return the
+      // typed denial; a proxy HTML redirect is not a valid action response.
+      // This header is only protocol detection, never an authorization grant.
+      if (request.method === "POST" && request.headers.has("next-action"))
+        return true;
+      const signInUrl = new URL("/signin", request.nextUrl.origin);
+      signInUrl.searchParams.set(
+        "callbackUrl",
+        `${pathname}${request.nextUrl.search}`,
       );
+      // Explicit Response is important when auth() wraps a custom proxy handler.
+      return Response.redirect(signInUrl);
     },
   },
 });

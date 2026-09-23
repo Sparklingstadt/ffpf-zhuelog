@@ -9,6 +9,7 @@ import {
   PersonalCorrectionError,
 } from "../../domain/practice/personal-correction";
 import { PersonalRequestLimiter } from "./personal-request-limiter";
+import { readLimitedBody } from "../http/read-limited-body";
 
 const responseSchema = z.object({
   status: z.literal("completed"),
@@ -73,7 +74,11 @@ export class OpenAiPersonalCorrectionGateway implements PersonalCorrectionGatewa
               : "unavailable",
         );
       }
-      const payload = responseSchema.parse(await response.json());
+      const payload = responseSchema.parse(
+        JSON.parse(
+          (await readLimitedBody(response, 128 * 1024)).toString("utf8"),
+        ),
+      );
       const contents = payload.output
         .filter((item) => item.type === "message")
         .flatMap((item) => item.content ?? []);

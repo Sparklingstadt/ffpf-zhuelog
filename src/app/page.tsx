@@ -43,8 +43,8 @@ async function loadEntries(): Promise<{
   try {
     const result = await learningUseCases.listRecentEntries.execute(100);
     return { ...result, databaseError: null };
-  } catch (error) {
-    console.error("Failed to load learning entries", error);
+  } catch {
+    console.error("LEARNING_ENTRIES_UNAVAILABLE");
     return {
       entries: [],
       total: 0,

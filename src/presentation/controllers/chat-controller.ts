@@ -2,21 +2,41 @@ import { safeValidateUIMessages } from "ai";
 
 import type { StreamLearningChat } from "@/application/chat/use-cases/stream-learning-chat";
 import type { LearningChatMessage } from "@/domain/chat/entities/chat-message";
+import {
+  BodyLimitError,
+  readLimitedBody,
+} from "@/infrastructure/http/read-limited-body";
+import { isSameOriginRequest } from "../http/same-origin";
 
 const MAX_MESSAGES = 40;
 const MAX_TEXT_LENGTH = 40_000;
 
 export async function handleChatRequest(
   request: Request,
-  streamLearningChat: StreamLearningChat,
+  streamLearningChat: Pick<StreamLearningChat, "execute">,
 ) {
+  if (!isSameOriginRequest(request))
+    return Response.json(
+      { error: "この画面から送信してください。" },
+      { status: 403 },
+    );
+  if (
+    request.headers.get("content-type")?.split(";")[0].trim() !==
+    "application/json"
+  )
+    return Response.json(
+      { error: "JSON形式で送信してください。" },
+      { status: 415 },
+    );
   let body: unknown;
   try {
-    body = await request.json();
-  } catch {
+    body = JSON.parse(
+      (await readLimitedBody(request, 256 * 1024)).toString("utf8"),
+    );
+  } catch (error) {
     return Response.json(
       { error: "リクエストを読み取れませんでした。" },
-      { status: 400 },
+      { status: error instanceof BodyLimitError ? 413 : 400 },
     );
   }
 
@@ -70,5 +90,12 @@ export async function handleChatRequest(
     );
   }
 
-  return streamLearningChat.execute(messages, request.signal);
+  try {
+    return streamLearningChat.execute(messages, request.signal);
+  } catch {
+    return Response.json(
+      { error: "応答を取得できませんでした。" },
+      { status: 502 },
+    );
+  }
 }

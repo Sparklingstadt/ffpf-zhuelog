@@ -15,6 +15,17 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  poweredByHeader: false,
+  outputFileTracingExcludes: {
+    "/*": [
+      ".env*",
+      ".git/**/*",
+      ".vercel/**/*",
+      "prisma/seed.private.json",
+      "test-results/**/*",
+      "playwright-report/**/*",
+    ],
+  },
   experimental: { serverActions: { bodySizeLimit: "6mb" } },
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];

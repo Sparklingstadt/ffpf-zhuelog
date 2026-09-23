@@ -86,6 +86,7 @@ export async function runCodexLocalTurn(options: {
     if (process.env[name]) env[name] = process.env[name];
   }
   const child = spawn(
+    /* turbopackIgnore: true */
     process.env.CODEX_LOCAL_BIN || "codex",
     [
       "app-server",

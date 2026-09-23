@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { getCurrentAdminUser } from "@/composition/identity-container";
 import { learningUseCases } from "@/composition/learning-container";
+import { csvImportErrorMessage } from "@/domain/learning/csv-validation-error";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
@@ -32,7 +33,10 @@ export async function importLearningCsvAction(
     return { status: "error", message: "ファイルは5MB以下にしてください。" };
   }
   if (!file.name.toLowerCase().endsWith(".csv")) {
-    return { status: "error", message: "拡張子が.csvのファイルを選択してください。" };
+    return {
+      status: "error",
+      message: "拡張子が.csvのファイルを選択してください。",
+    };
   }
 
   try {
@@ -42,12 +46,14 @@ export async function importLearningCsvAction(
     );
     revalidatePath("/");
     revalidatePath("/logs", "layout");
-    return { status: "success", message: `${rowCount}件の学習文を登録しました。` };
+    return {
+      status: "success",
+      message: `${rowCount}件の学習文を登録しました。`,
+    };
   } catch (error) {
-    console.error("CSV import failed", error);
     return {
       status: "error",
-      message: error instanceof Error ? error.message : "予期しないエラーが発生しました。",
+      message: csvImportErrorMessage(error),
     };
   }
 }
