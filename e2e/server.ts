@@ -1,5 +1,10 @@
 import { spawn, spawnSync } from "node:child_process";
-import { authSecret, baseURL, databaseUrl } from "./environment";
+import {
+  authSecret,
+  baseURL,
+  databaseUrl,
+  lineTestConfig,
+} from "./environment";
 
 // Explicit values take precedence over .env.local/.env.production.local.
 const env: NodeJS.ProcessEnv = {
@@ -14,6 +19,13 @@ const env: NodeJS.ProcessEnv = {
   AUTH_GITHUB_SECRET: "",
   AUTH_ALLOWED_GITHUB_LOGINS: "e2e-admin",
   OPENAI_API_KEY: "",
+  CHAT_PROVIDER: "openai",
+  LINE_INTEGRATION_ENABLED: "true",
+  LINE_CHANNEL_SECRET: lineTestConfig.secret,
+  LINE_CHANNEL_ACCESS_TOKEN: "test-only-never-send",
+  LINE_ALLOWED_USER_ID: lineTestConfig.userId,
+  LINE_BOT_USER_ID: lineTestConfig.botId,
+  LINE_WORKER_TOKEN: authSecret(),
   NODE_ENV: "production",
 };
 

@@ -13,8 +13,9 @@ const SYSTEM_PROMPT = `あなたは中国語学習アプリ「学习録」の会
 export class StreamLearningChat {
   constructor(private readonly gateway: LearningChatGateway) {}
 
-  execute(messages: LearningChatMessage[]) {
+  execute(messages: LearningChatMessage[], signal?: AbortSignal) {
     return this.gateway.stream({
+      signal,
       messages,
       systemPrompt: SYSTEM_PROMPT,
       maxOutputTokens: 1_600,

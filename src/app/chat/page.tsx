@@ -11,6 +11,11 @@ import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { ChatInterface } from "@/presentation/components/chat/chat-interface";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
+import {
+  CODEX_LOCAL_MODEL,
+  isCodexLocalEnabled,
+  isCodexLocalRequested,
+} from "@/infrastructure/chat/codex-local-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -18,8 +23,9 @@ export default async function ChatPage() {
   const user = await getCurrentAdminUser();
   if (!user) redirect("/signin?callbackUrl=/chat");
 
-  const configured = isOpenAiConfigured();
-  const modelName = getOpenAiModelName();
+  const localCodex = isCodexLocalRequested();
+  const configured = localCodex ? isCodexLocalEnabled() : isOpenAiConfigured();
+  const modelName = localCodex ? CODEX_LOCAL_MODEL : getOpenAiModelName();
 
   return (
     <main className="min-h-screen bg-background">
@@ -53,7 +59,11 @@ export default async function ChatPage() {
           </div>
         </header>
 
-        <ChatInterface configured={configured} modelName={modelName} />
+        <ChatInterface
+          configured={configured}
+          modelName={modelName}
+          localCodex={localCodex}
+        />
       </div>
     </main>
   );

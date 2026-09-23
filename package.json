@@ -1,12 +1,15 @@
 {
   "name": "ffpf-zhuelog",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
   "engines": {
     "node": ">=22.0.0"
   },
   "scripts": {
     "dev": "next dev",
+    "dev:codex": "CHAT_PROVIDER=codex-local next dev --hostname 127.0.0.1",
+    "line:worker": "NODE_ENV=development CHAT_PROVIDER=codex-local tsx scripts/line-worker.mts",
+    "test:unit": "tsx --test tests/*.test.ts",
     "build": "next build",
     "start": "next start",
     "lint": "eslint --max-warnings 0",

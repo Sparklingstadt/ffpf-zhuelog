@@ -37,3 +37,25 @@ model Hint {
   @@unique([learningEntryId, position])
   @@index([learningEntryId])
 }
+
+// Durable inbox + outbox. Kept separate so existing notes work before enabling LINE.
+model LineLearningJob {
+  id              String   @id @default(cuid())
+  eventId         String   @unique
+  userId          String
+  originalText    String
+  receivedAt      DateTime
+  createdAt       DateTime @default(now())
+  status          String   @default("PENDING")
+  leaseToken      String?
+  availableAt     DateTime @default(now())
+  generationTries Int      @default(0)
+  deliveryTries   Int      @default(0)
+  csv             String?
+  entryId         String?  @unique
+  retryKey        String   @unique
+  firstDeliveryAt DateTime?
+  failureCode     String?
+
+  @@index([status, availableAt])
+}

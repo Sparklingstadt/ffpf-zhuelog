@@ -14,6 +14,7 @@ export class OpenAiLearningChatGateway implements LearningChatGateway {
       content: message.text,
     }));
     const result = streamText({
+      abortSignal: request.signal,
       model: openai(getOpenAiModelName()),
       system: request.systemPrompt,
       messages,

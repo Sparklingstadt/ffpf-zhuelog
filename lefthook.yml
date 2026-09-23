@@ -26,5 +26,7 @@ pre-push:
     e2e:
       priority: 3
       run: |
+        set -e
         trap 'npm run test:e2e:stop' EXIT
+        npm run test:unit
         npm run test:e2e
