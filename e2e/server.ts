@@ -21,6 +21,7 @@ const env: NodeJS.ProcessEnv = {
   OPENAI_API_KEY: "",
   CHAT_PROVIDER: "openai",
   LINE_INTEGRATION_ENABLED: "true",
+  LINE_DEV_MODE_ENABLED: "true",
   LINE_CHANNEL_SECRET: lineTestConfig.secret,
   LINE_CHANNEL_ACCESS_TOKEN: "test-only-never-send",
   LINE_ALLOWED_USER_ID: lineTestConfig.userId,

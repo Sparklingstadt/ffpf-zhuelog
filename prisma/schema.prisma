@@ -58,6 +58,13 @@ model LineLearningJob {
   retryKey        String   @unique
   firstDeliveryAt DateTime?
   failureCode     String?
+  issueAttempted  Boolean  @default(false)
 
   @@index([status, availableAt])
+}
+
+model LineDevelopmentSession {
+  userId      String   @id
+  expiresAt   DateTime?
+  lastEventAt DateTime
 }

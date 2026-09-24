@@ -38,6 +38,7 @@ const event = {
 const repo = (): LineJobRepository => ({
   enqueue: async () => {},
   claim: async () => null,
+  beginIssue: async () => false,
   leased: async () => null,
   saveResult: async () => true,
   saveReply: async () => true,

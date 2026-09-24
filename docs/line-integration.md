@@ -122,3 +122,28 @@ npm run test:e2e:stop
 - [LINE APIの安全な再試行](https://developers.line.biz/en/docs/messaging-api/retrying-api-request/)
 - [メッセージ送信と配信数](https://developers.line.biz/en/docs/messaging-api/sending-messages/)
 - [Codex App Server](https://learn.chatgpt.com/docs/app-server)
+
+# LINE開発モード（/dev・/devend）
+
+- 本人の1対1トークで `/dev` を送ると開発モードを開始。公開先と注意事項の返信を確認してから改善案を送ります。
+- 以降のテキスト（500文字以内）は1通につき1件、`Sparklingstadt/ffpf-zhuelog` の公開Issueに登録し、URLをLINEへ返信します。日本語・英語・中文に対応します。
+- タイトルは先頭行、本文は原文を保持します。AIによる仕様補完・コード変更・コミット・リリースは行いません。個人情報や秘密情報を投稿しないでください。
+- `/devend` で終了し、通常の中文添削へ戻ります。既に受け付けたIssueは終了後も処理されます。モードはDBに保存され、Mac再起動をまたいで維持されます。
+- 誤公開防止のため開始から24時間で自動終了。期限切れ後の最初の文は添削にもIssueにも回さず、期限切れを通知します。
+- `/battery` はモードに関係なく従来どおり動作します。他のスラッシュコマンドは無視します。
+- 開発モードでは学習ノート・インポート履歴を作成しません。専用の非公開ジョブとモード状態のみDBに保持します。
+- Mac停止・スリープ中は受付状態を保存し、起動後に処理・返信します。モード操作そのものはWebhook受信時に確定します。順序が逆転した古いメッセージは公開せず、再送を案内します（遅れた `/devend` は安全のため終了を優先）。
+
+## 有効化手順
+
+1. DBのバックアップ後、`20260925010000_line_development_mode` までのマイグレーションを対象DBに適用する。
+2. 新サーバーをデプロイする。Vercel側の `LINE_DEV_MODE_ENABLED` はまだ `false` にする。
+3. MacのGitHub CLIに対象リポジトリのIssue作成権限でログインする（`gh auth login --hostname github.com`）。`LINE_GH_BIN` は既定で `/opt/homebrew/bin/gh`。GitHub認証情報はMacでのみ使用し、Vercelへ登録しない。
+4. Macを新しいコードに更新し、Mac側で `LINE_DEV_ISSUES_ENABLED=true` を設定してワーカーを再起動する。旧サーバーは新capabilityを受け付けないため、サーバーの更新を先に行う。
+5. Vercel側の `LINE_DEV_MODE_ENABLED=true` を設定して再デプロイし、本人のLINEから確認する。公開Issueを作る本番テストには公開してよい文だけを使う。
+
+機能停止時はサーバー側の受付フラグとMac側の実行フラグを両方無効にしてください。DBの追加列・テーブルは残せます。サーバーの受付だけ止めても受付済みのIssueは処理されます。
+
+GitHubへの作成前にDB上の一度限りの作成許可を消費します。レスポンス喪失・再起動時はIssue本文の専用マーカーで既存Issueを照合し、POSTを自動再実行しません。結果不明の場合はLINEに確認案内を返すため、一覧を確認してから必要に応じて再送してください。照合は検索インデックスを使わず、open/closed両方の直近最大1,000件が対象です。GitHubやDBの障害時に「必ず作れる」保証より重複公開防止を優先します。
+
+GitHub API仕様: [Issue API](https://docs.github.com/en/rest/issues/issues#create-an-issue)、[ローカルCLI認証](https://cli.github.com/manual/gh_auth_token)。

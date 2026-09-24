@@ -3,7 +3,12 @@ import type { LineInput, LineJob } from "@/domain/line/line-learning";
 
 export interface LineJobRepository {
   enqueue(inputs: LineInput[]): Promise<void>;
-  claim(userId: string, supportsBattery?: boolean): Promise<LineJob | null>;
+  claim(
+    userId: string,
+    supportsBattery?: boolean,
+    supportsDevelopment?: boolean,
+  ): Promise<LineJob | null>;
+  beginIssue(job: LineJob): Promise<boolean>;
   leased(
     id: string,
     token: string,

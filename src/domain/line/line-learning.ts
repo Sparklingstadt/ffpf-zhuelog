@@ -7,7 +7,7 @@ export {
 } from "../learning/chinese-correction";
 export type { Correction } from "../learning/chinese-correction";
 export type LineInput = {
-  kind: "correction" | "battery";
+  kind: "correction" | "battery" | "development-input";
   eventId: string;
   userId: string;
   originalText: string;

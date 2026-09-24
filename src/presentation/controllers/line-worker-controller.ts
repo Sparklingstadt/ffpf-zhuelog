@@ -3,6 +3,7 @@ import type { LineJobRepository } from "@/application/line/ports/line-job-reposi
 import type { ProcessLineLearning } from "@/application/line/use-cases/process-line-learning";
 import { correctionSchema } from "@/domain/line/line-learning";
 import { batteryReportSchema } from "@/domain/line/battery-report";
+import { issueResultSchema } from "@/domain/line/development-mode";
 import {
   readLimitedBody,
   verifyWorkerToken,
@@ -17,7 +18,18 @@ const commandSchema = z.discriminatedUnion("action", [
   z
     .object({
       action: z.literal("claim"),
-      capabilities: z.array(z.literal("battery")).max(1).optional(),
+      capabilities: z
+        .array(z.enum(["battery", "development"]))
+        .max(2)
+        .optional(),
+    })
+    .strict(),
+  z.object({ action: z.literal("begin-issue"), ...identity }).strict(),
+  z
+    .object({
+      action: z.literal("complete-issue"),
+      ...identity,
+      result: issueResultSchema,
     })
     .strict(),
   z
@@ -64,6 +76,7 @@ export async function handleLineWorker(
       const job = await jobs.claim(
         config.userId,
         command.capabilities?.includes("battery") ?? false,
+        command.capabilities?.includes("development") ?? false,
       );
       return json({
         job: job
@@ -74,9 +87,12 @@ export async function handleLineWorker(
                 job.status === "GENERATING"
                   ? job.kind === "battery"
                     ? "battery"
-                    : "generate"
+                    : job.kind === "dev-issue"
+                      ? "issue"
+                      : "generate"
                   : "deliver",
-              ...(job.status === "GENERATING" && job.kind === "correction"
+              ...(job.status === "GENERATING" &&
+              ["correction", "dev-issue"].includes(job.kind)
                 ? { originalText: job.originalText }
                 : {}),
             }
@@ -84,6 +100,10 @@ export async function handleLineWorker(
       });
     }
     const { id, leaseToken } = command;
+    if (command.action === "begin-issue") {
+      const permit = await service.beginIssue(id, leaseToken, config.userId);
+      return permit ? json(permit) : json({ ok: false }, 409);
+    }
     const ok =
       command.action === "complete"
         ? await service.complete(
@@ -92,16 +112,23 @@ export async function handleLineWorker(
             config.userId,
             command.correction,
           )
-        : command.action === "complete-battery"
-          ? await service.completeBattery(
+        : command.action === "complete-issue"
+          ? await service.completeIssue(
               id,
               leaseToken,
               config.userId,
-              command.report,
+              command.result,
             )
-          : command.action === "deliver"
-            ? await service.deliver(id, leaseToken, config.userId)
-            : await service.generationFailed(id, leaseToken, config.userId);
+          : command.action === "complete-battery"
+            ? await service.completeBattery(
+                id,
+                leaseToken,
+                config.userId,
+                command.report,
+              )
+            : command.action === "deliver"
+              ? await service.deliver(id, leaseToken, config.userId)
+              : await service.generationFailed(id, leaseToken, config.userId);
     return json({ ok }, ok ? 200 : 409);
   } catch {
     return json({ error: "PROCESSING_FAILED" }, 503);

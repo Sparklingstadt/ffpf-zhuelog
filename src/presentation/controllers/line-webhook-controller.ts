@@ -58,8 +58,13 @@ export async function handleLineWebhook(
       return [];
     const data = parsed.data;
     const battery = data.message.text === "/battery";
+    const development =
+      config.developmentEnabled &&
+      (!data.message.text.startsWith("/") ||
+        ["/dev", "/devend"].includes(data.message.text));
     if (
       (!battery &&
+        !development &&
         (data.message.text.startsWith("/") ||
           !/\p{Script=Han}/u.test(data.message.text))) ||
       data.timestamp > Date.now() + 60_000 ||
@@ -68,7 +73,11 @@ export async function handleLineWebhook(
       return [];
     return [
       {
-        kind: battery ? ("battery" as const) : ("correction" as const),
+        kind: battery
+          ? ("battery" as const)
+          : development
+            ? ("development-input" as const)
+            : ("correction" as const),
         eventId: data.webhookEventId,
         userId: data.source.userId,
         originalText: data.message.text,

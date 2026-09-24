@@ -4,6 +4,7 @@ import { z } from "zod";
 import { correctLineText } from "../src/infrastructure/line/codex-line-corrector";
 import { isCodexLocalEnabled } from "../src/infrastructure/chat/codex-local-policy";
 import { readMacBattery } from "../src/infrastructure/macos/mac-battery-reader";
+import { localGithubDevelopmentIssues } from "../src/infrastructure/github/development-issues";
 
 nextEnv.loadEnvConfig(process.cwd(), true, { info() {}, error() {} });
 if (!isCodexLocalEnabled())
@@ -34,7 +35,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const)
 const jobSchema = z.object({
   id: z.string().min(1).max(100),
   leaseToken: z.string().uuid(),
-  phase: z.enum(["generate", "deliver", "battery"]),
+  phase: z.enum(["generate", "deliver", "battery", "issue"]),
   originalText: z.string().min(1).max(500).optional(),
 });
 async function call(command: unknown) {
@@ -61,7 +62,15 @@ console.log(
 while (!stop.signal.aborted) {
   let processed = false;
   try {
-    const response = await call({ action: "claim", capabilities: ["battery"] });
+    const response = await call({
+      action: "claim",
+      capabilities: [
+        "battery",
+        ...(process.env.LINE_DEV_ISSUES_ENABLED === "true"
+          ? ["development"]
+          : []),
+      ],
+    });
     const job = response?.job ? jobSchema.parse(response.job) : null;
     if (job) {
       const identity = { id: job.id, leaseToken: job.leaseToken };
@@ -73,6 +82,34 @@ while (!stop.signal.aborted) {
         processed =
           (await call({ action: "complete-battery", ...identity, report }))
             ?.ok === true;
+      } else if (job.phase === "issue") {
+        if (process.env.LINE_DEV_ISSUES_ENABLED !== "true")
+          throw new Error("DEVELOPMENT_DISABLED");
+        if (!job.originalText) throw new Error("MISSING_TEXT");
+        let github;
+        try {
+          github = await localGithubDevelopmentIssues(stop.signal);
+        } catch {
+          stop.signal.throwIfAborted();
+        }
+        const result = github
+          ? await github.publish(
+              job.id,
+              job.originalText,
+              async () => {
+                const permit = await call({
+                  action: "begin-issue",
+                  ...identity,
+                });
+                return permit ? permit.allowed === true : null;
+              },
+              stop.signal,
+            )
+          : { outcome: "unavailable" };
+        if (result)
+          processed =
+            (await call({ action: "complete-issue", ...identity, result }))
+              ?.ok === true;
       } else {
         let correction;
         try {

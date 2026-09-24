@@ -38,6 +38,7 @@ const config = {
 const repo = (): LineJobRepository => ({
   enqueue: async () => {},
   claim: async () => null,
+  beginIssue: async () => false,
   leased: async () => null,
   saveResult: async () => {
     assert.fail("must never create a learning note");

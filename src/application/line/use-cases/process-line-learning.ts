@@ -4,6 +4,7 @@ import type {
 } from "../ports/line-job-repository";
 import { makeLineLearningResult } from "@/domain/line/line-learning";
 import { formatBatteryReply } from "@/domain/line/battery-report";
+import { formatIssueReply } from "@/domain/line/development-mode";
 
 export class ProcessLineLearning {
   constructor(
@@ -40,7 +41,7 @@ export class ProcessLineLearning {
     // LINE guarantees retry-key deduplication for 24h. Never send beyond that
     // window after an ambiguous response, even if this Mac was asleep.
     if (
-      !(job.kind === "battery"
+      !(["battery", "dev-issue", "dev-reply"].includes(job.kind)
         ? job.replyText
         : job.kind === "correction"
           ? job.csv
@@ -51,18 +52,30 @@ export class ProcessLineLearning {
       await this.jobs.fail(job, true, "DELIVERY_WINDOW_EXPIRED");
       return true;
     }
-    const outcome =
-      job.kind === "battery"
-        ? await this.messenger.pushText(
-            job.userId,
-            job.replyText!,
-            job.retryKey,
-          )
-        : await this.messenger.push(job.userId, job.csv!, job.retryKey);
+    const outcome = ["battery", "dev-issue", "dev-reply"].includes(job.kind)
+      ? await this.messenger.pushText(job.userId, job.replyText!, job.retryKey)
+      : await this.messenger.push(job.userId, job.csv!, job.retryKey);
     if (outcome === "accepted") await this.jobs.finishDelivery(job);
     else
       await this.jobs.fail(job, outcome === "rejected", "LINE_DELIVERY_FAILED");
     return true;
+  }
+
+  async beginIssue(id: string, token: string, userId: string) {
+    const job = await this.jobs.leased(id, token, userId, "GENERATING");
+    if (!job || job.kind !== "dev-issue") return null;
+    return { allowed: await this.jobs.beginIssue(job) };
+  }
+
+  async completeIssue(
+    id: string,
+    token: string,
+    userId: string,
+    result: unknown,
+  ) {
+    const job = await this.jobs.leased(id, token, userId, "GENERATING");
+    if (!job || job.kind !== "dev-issue") return false;
+    return this.jobs.saveReply(job, formatIssueReply(result));
   }
 
   async generationFailed(id: string, token: string, userId: string) {

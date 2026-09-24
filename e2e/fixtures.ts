@@ -17,7 +17,7 @@ export const test = base.extend<{ db: Client }>({
         const { rows } = await db.query("SELECT current_database() AS name");
         if (rows[0].name !== "zhuelog_e2e")
           throw new Error("Refusing to reset a non-E2E database");
-        await db.query('TRUNCATE "LineLearningJob"');
+        await db.query('TRUNCATE "LineLearningJob", "LineDevelopmentSession"');
         await db.query(
           'TRUNCATE "Hint", "LearningEntry", "ImportBatch" CASCADE',
         );
