@@ -240,12 +240,9 @@ test("LINE reply uses readable sections and numbered hints without changing the 
   assert.equal(
     formatLineLearningReply(csv),
     [
-      "添削しました。",
-      '【あなたの文】\n你好，"朋友"\n再见',
-      '【添削後の文】\n我说："你好"。\n今天很好。',
-      "【ピン音】\nNǐ hǎo, jīntiān hěn hǎo.",
-      '【学習ヒント】\n1. 说=話す\n\n2. 引用符 " と改行\nのテスト',
-      "学習ノートに保存しました。",
+      '【元の文】\n你好，"朋友"\n再见',
+      '【添削後】\n我说："你好"。\n今天很好。\nNǐ hǎo, jīntiān hěn hǎo.',
+      '【ヒント】\n1. 说=話す\n2. 引用符 " と改行\nのテスト',
     ].join("\n\n"),
   );
   assert.equal(formatLineLearningReply(csv), formatLineLearningReply(csv));
