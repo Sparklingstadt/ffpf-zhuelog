@@ -22,12 +22,18 @@ export class PrismaLineJobRepository implements LineJobRepository {
     });
   }
 
-  async claim(userId: string): Promise<LineJob | null> {
+  async claim(
+    userId: string,
+    supportsBattery = false,
+  ): Promise<LineJob | null> {
     const prisma = getPrismaClient();
     const now = new Date();
     await prisma.lineLearningJob.updateMany({
       where: {
         userId,
+        kind: {
+          in: supportsBattery ? ["correction", "battery"] : ["correction"],
+        },
         availableAt: { lte: now },
         OR: [
           {
@@ -47,6 +53,9 @@ export class PrismaLineJobRepository implements LineJobRepository {
       const job = await prisma.lineLearningJob.findFirst({
         where: {
           userId,
+          kind: {
+            in: supportsBattery ? ["correction", "battery"] : ["correction"],
+          },
           status: { in: ["PENDING", "GENERATING", "READY", "SENDING"] },
           availableAt: { lte: now },
         },
@@ -95,9 +104,10 @@ export class PrismaLineJobRepository implements LineJobRepository {
   }
 
   async saveResult(job: LineJob, draft: LearningEntryDraft, csv: string) {
+    if (job.kind !== "correction") return false;
     return getPrismaClient().$transaction(async (tx) => {
       const locked = await tx.lineLearningJob.updateMany({
-        where: leaseWhere(job),
+        where: { ...leaseWhere(job), kind: "correction" },
         data: {
           status: "READY",
           leaseToken: null,
@@ -132,6 +142,21 @@ export class PrismaLineJobRepository implements LineJobRepository {
       });
       return true;
     });
+  }
+
+  async saveReply(job: LineJob, text: string) {
+    if (job.kind !== "battery") return false;
+    const result = await getPrismaClient().lineLearningJob.updateMany({
+      where: { ...leaseWhere(job), kind: "battery" },
+      data: {
+        status: "READY",
+        leaseToken: null,
+        replyText: text,
+        availableAt: new Date(),
+        failureCode: null,
+      },
+    });
+    return result.count === 1;
   }
 
   async finishDelivery(job: LineJob) {

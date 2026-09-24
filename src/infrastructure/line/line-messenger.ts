@@ -14,6 +14,11 @@ export class LinePushMessenger implements LineMessenger {
     } catch {
       return "rejected" as const;
     }
+    return this.pushText(userId, text, retryKey);
+  }
+
+  async pushText(userId: string, text: string, retryKey: string) {
+    if (!text.trim() || text.length > 5000) return "rejected" as const;
     try {
       const result = await this.fetcher(
         "https://api.line.me/v2/bot/message/push",

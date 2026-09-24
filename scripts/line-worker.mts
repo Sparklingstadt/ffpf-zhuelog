@@ -3,6 +3,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { z } from "zod";
 import { correctLineText } from "../src/infrastructure/line/codex-line-corrector";
 import { isCodexLocalEnabled } from "../src/infrastructure/chat/codex-local-policy";
+import { readMacBattery } from "../src/infrastructure/macos/mac-battery-reader";
 
 nextEnv.loadEnvConfig(process.cwd(), true, { info() {}, error() {} });
 if (!isCodexLocalEnabled())
@@ -33,7 +34,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const)
 const jobSchema = z.object({
   id: z.string().min(1).max(100),
   leaseToken: z.string().uuid(),
-  phase: z.enum(["generate", "deliver"]),
+  phase: z.enum(["generate", "deliver", "battery"]),
   originalText: z.string().min(1).max(500).optional(),
 });
 async function call(command: unknown) {
@@ -60,14 +61,19 @@ console.log(
 while (!stop.signal.aborted) {
   let processed = false;
   try {
-    const response = await call({ action: "claim" });
+    const response = await call({ action: "claim", capabilities: ["battery"] });
     const job = response?.job ? jobSchema.parse(response.job) : null;
     if (job) {
       const identity = { id: job.id, leaseToken: job.leaseToken };
       if (job.phase === "deliver")
         processed =
           (await call({ action: "deliver", ...identity }))?.ok === true;
-      else {
+      else if (job.phase === "battery") {
+        const report = await readMacBattery(stop.signal);
+        processed =
+          (await call({ action: "complete-battery", ...identity, report }))
+            ?.ok === true;
+      } else {
         let correction;
         try {
           if (!job.originalText) throw new Error("MISSING_TEXT");

@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { batteryReportSchema } from "../src/domain/line/battery-report";
 
 test("standalone LINE worker loads environment and polls once without invoking AI", async () => {
   let claims = 0;
@@ -13,7 +14,10 @@ test("standalone LINE worker loads environment and polls once without invoking A
     for await (const chunk of request) body += chunk;
     assert.equal(request.headers.authorization, `Bearer ${token}`);
     assert.equal(request.url, "/api/line/worker");
-    assert.deepEqual(JSON.parse(body), { action: "claim" });
+    assert.deepEqual(JSON.parse(body), {
+      action: "claim",
+      capabilities: ["battery"],
+    });
     claims++;
     response.setHeader("Content-Type", "application/json");
     response.end(JSON.stringify({ job: null }));
@@ -55,6 +59,102 @@ test("standalone LINE worker loads environment and polls once without invoking A
     await new Promise<void>((resolve, reject) =>
       server.close((error) => (error ? reject(error) : resolve())),
     );
+  }
+});
+
+test("battery worker reads local status and drains delivery without invoking Codex", async () => {
+  const actions: string[] = [];
+  const identity = {
+    id: "battery-offline-job",
+    leaseToken: "11111111-1111-4111-8111-111111111111",
+  };
+  let completed!: () => void;
+  const drained = new Promise<void>((resolve) => {
+    completed = resolve;
+  });
+  const server = createServer(async (request, response) => {
+    let body = "";
+    for await (const chunk of request) body += chunk;
+    const command = JSON.parse(body);
+    actions.push(command.action);
+    response.setHeader("Content-Type", "application/json");
+    if (command.action === "claim") {
+      assert.deepEqual(command.capabilities, ["battery"]);
+      response.end(
+        JSON.stringify({
+          job:
+            actions.length === 1
+              ? { ...identity, phase: "battery" }
+              : actions.length === 3
+                ? { ...identity, phase: "deliver" }
+                : null,
+        }),
+      );
+      if (actions.length === 5) completed();
+    } else {
+      if (command.action === "complete-battery") {
+        assert.ok(batteryReportSchema.safeParse(command.report).success);
+        assert.equal(command.correction, undefined);
+      } else assert.equal(command.action, "deliver");
+      response.end(JSON.stringify({ ok: true }));
+    }
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const child = spawn(
+    process.execPath,
+    ["--import", "tsx", "scripts/line-worker.mts"],
+    {
+      env: {
+        ...process.env,
+        NODE_ENV: "development",
+        CHAT_PROVIDER: "codex-local",
+        VERCEL: "",
+        CODEX_LOCAL_BIN: "/must-not-run-codex-for-battery",
+        LINE_WORKER_TOKEN: "a".repeat(64),
+        LINE_WORKER_URL: `http://127.0.0.1:${address.port}`,
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  let output = "";
+  child.stdout.on("data", (chunk) => {
+    output += chunk;
+  });
+  child.stderr.on("data", (chunk) => {
+    output += chunk;
+  });
+  const exited = new Promise<number | null>((resolve, reject) => {
+    child.once("exit", resolve);
+    child.once("error", reject);
+  });
+  const deadline = setTimeout(() => child.kill("SIGKILL"), 12000);
+  try {
+    await Promise.race([
+      drained,
+      exited.then(() => assert.fail(`worker ended: ${output}`)),
+    ]);
+    child.kill("SIGTERM");
+    assert.equal(await exited, 0, output);
+    assert.deepEqual(actions, [
+      "claim",
+      "complete-battery",
+      "claim",
+      "deliver",
+      "claim",
+    ]);
+    assert.doesNotMatch(
+      output,
+      /processing failed|percent|checkedAt|remainingMinutes/,
+    );
+  } finally {
+    clearTimeout(deadline);
+    if (child.exitCode === null && child.signalCode === null)
+      child.kill("SIGKILL");
+    await exited.catch(() => {});
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 });
 

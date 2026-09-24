@@ -57,14 +57,18 @@ export async function handleLineWebhook(
     if (!parsed.success || parsed.data.source.userId !== config.userId)
       return [];
     const data = parsed.data;
+    const battery = data.message.text === "/battery";
     if (
-      !/\p{Script=Han}/u.test(data.message.text) ||
+      (!battery &&
+        (data.message.text.startsWith("/") ||
+          !/\p{Script=Han}/u.test(data.message.text))) ||
       data.timestamp > Date.now() + 60_000 ||
       Date.now() - data.timestamp > 7 * 86400_000
     )
       return [];
     return [
       {
+        kind: battery ? ("battery" as const) : ("correction" as const),
         eventId: data.webhookEventId,
         userId: data.source.userId,
         originalText: data.message.text,

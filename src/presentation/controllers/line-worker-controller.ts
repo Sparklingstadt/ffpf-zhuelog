@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { LineJobRepository } from "@/application/line/ports/line-job-repository";
 import type { ProcessLineLearning } from "@/application/line/use-cases/process-line-learning";
 import { correctionSchema } from "@/domain/line/line-learning";
+import { batteryReportSchema } from "@/domain/line/battery-report";
 import {
   readLimitedBody,
   verifyWorkerToken,
@@ -13,7 +14,19 @@ const identity = {
   leaseToken: z.string().uuid(),
 };
 const commandSchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("claim") }).strict(),
+  z
+    .object({
+      action: z.literal("claim"),
+      capabilities: z.array(z.literal("battery")).max(1).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal("complete-battery"),
+      ...identity,
+      report: batteryReportSchema,
+    })
+    .strict(),
   z
     .object({
       action: z.literal("complete"),
@@ -48,14 +61,22 @@ export async function handleLineWorker(
   }
   try {
     if (command.action === "claim") {
-      const job = await jobs.claim(config.userId);
+      const job = await jobs.claim(
+        config.userId,
+        command.capabilities?.includes("battery") ?? false,
+      );
       return json({
         job: job
           ? {
               id: job.id,
               leaseToken: job.leaseToken,
-              phase: job.status === "GENERATING" ? "generate" : "deliver",
-              ...(job.status === "GENERATING"
+              phase:
+                job.status === "GENERATING"
+                  ? job.kind === "battery"
+                    ? "battery"
+                    : "generate"
+                  : "deliver",
+              ...(job.status === "GENERATING" && job.kind === "correction"
                 ? { originalText: job.originalText }
                 : {}),
             }
@@ -71,9 +92,16 @@ export async function handleLineWorker(
             config.userId,
             command.correction,
           )
-        : command.action === "deliver"
-          ? await service.deliver(id, leaseToken, config.userId)
-          : await service.generationFailed(id, leaseToken, config.userId);
+        : command.action === "complete-battery"
+          ? await service.completeBattery(
+              id,
+              leaseToken,
+              config.userId,
+              command.report,
+            )
+          : command.action === "deliver"
+            ? await service.deliver(id, leaseToken, config.userId)
+            : await service.generationFailed(id, leaseToken, config.userId);
     return json({ ok }, ok ? 200 : 409);
   } catch {
     return json({ error: "PROCESSING_FAILED" }, 503);

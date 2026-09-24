@@ -41,6 +41,7 @@ model Hint {
 // Durable inbox + outbox. Kept separate so existing notes work before enabling LINE.
 model LineLearningJob {
   id              String   @id @default(cuid())
+  kind            String   @default("correction")
   eventId         String   @unique
   userId          String
   originalText    String
@@ -52,6 +53,7 @@ model LineLearningJob {
   generationTries Int      @default(0)
   deliveryTries   Int      @default(0)
   csv             String?
+  replyText       String?
   entryId         String?  @unique
   retryKey        String   @unique
   firstDeliveryAt DateTime?

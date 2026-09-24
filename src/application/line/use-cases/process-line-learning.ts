@@ -3,6 +3,7 @@ import type {
   LineMessenger,
 } from "../ports/line-job-repository";
 import { makeLineLearningResult } from "@/domain/line/line-learning";
+import { formatBatteryReply } from "@/domain/line/battery-report";
 
 export class ProcessLineLearning {
   constructor(
@@ -17,9 +18,20 @@ export class ProcessLineLearning {
     correction: unknown,
   ) {
     const job = await this.jobs.leased(id, token, userId, "GENERATING");
-    if (!job) return false;
+    if (!job || job.kind !== "correction") return false;
     const { draft, csv } = makeLineLearningResult(job.originalText, correction);
     return this.jobs.saveResult(job, draft, csv);
+  }
+
+  async completeBattery(
+    id: string,
+    token: string,
+    userId: string,
+    report: unknown,
+  ) {
+    const job = await this.jobs.leased(id, token, userId, "GENERATING");
+    if (!job || job.kind !== "battery") return false;
+    return this.jobs.saveReply(job, formatBatteryReply(report));
   }
 
   async deliver(id: string, token: string, userId: string) {
@@ -28,18 +40,25 @@ export class ProcessLineLearning {
     // LINE guarantees retry-key deduplication for 24h. Never send beyond that
     // window after an ambiguous response, even if this Mac was asleep.
     if (
-      !job.csv ||
+      !(job.kind === "battery"
+        ? job.replyText
+        : job.kind === "correction"
+          ? job.csv
+          : null) ||
       !job.firstDeliveryAt ||
       Date.now() - job.firstDeliveryAt.getTime() >= 23 * 60 * 60 * 1000
     ) {
       await this.jobs.fail(job, true, "DELIVERY_WINDOW_EXPIRED");
       return true;
     }
-    const outcome = await this.messenger.push(
-      job.userId,
-      job.csv,
-      job.retryKey,
-    );
+    const outcome =
+      job.kind === "battery"
+        ? await this.messenger.pushText(
+            job.userId,
+            job.replyText!,
+            job.retryKey,
+          )
+        : await this.messenger.push(job.userId, job.csv!, job.retryKey);
     if (outcome === "accepted") await this.jobs.finishDelivery(job);
     else
       await this.jobs.fail(job, outcome === "rejected", "LINE_DELIVERY_FAILED");

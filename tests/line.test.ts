@@ -40,6 +40,7 @@ const repo = (): LineJobRepository => ({
   claim: async () => null,
   leased: async () => null,
   saveResult: async () => true,
+  saveReply: async () => true,
   finishDelivery: async () => {},
   fail: async () => {},
 });
@@ -161,6 +162,7 @@ test("worker rejects missing credentials and arbitrary payload fields", async ()
   const jobs = repo();
   const service = new ProcessLineLearning(jobs, {
     push: async () => "accepted",
+    pushText: async () => "accepted",
   });
   const request = (body: unknown, auth = true) =>
     new Request("https://example.test", {
@@ -278,6 +280,8 @@ test("expired outbox stops without sending; retry reuses persisted CSV", async (
   let failure = "";
   let sent = false;
   const job: LineJob = {
+    kind: "correction",
+    replyText: null,
     id: "job",
     eventId: "event",
     userId: config.userId,
@@ -300,6 +304,9 @@ test("expired outbox stops without sending; retry reuses persisted CSV", async (
     sent = true;
   };
   const service = new ProcessLineLearning(jobs, {
+    pushText: async () => {
+      assert.fail("must not send plain text for corrections");
+    },
     push: async (_user, csv, key) => {
       sends++;
       assert.equal(csv, job.csv);

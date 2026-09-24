@@ -7,16 +7,19 @@ export {
 } from "../learning/chinese-correction";
 export type { Correction } from "../learning/chinese-correction";
 export type LineInput = {
+  kind: "correction" | "battery";
   eventId: string;
   userId: string;
   originalText: string;
   receivedAt: Date;
 };
-export type LineJob = LineInput & {
+export type LineJob = Omit<LineInput, "kind"> & {
+  kind: string;
   id: string;
   status: string;
   leaseToken: string | null;
   csv: string | null;
+  replyText: string | null;
   retryKey: string;
   firstDeliveryAt: Date | null;
   generationTries: number;
