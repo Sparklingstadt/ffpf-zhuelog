@@ -76,12 +76,19 @@ openssl rand -hex 32
 
 ```sh
 codex login status
+npm run line:worker:build
 npm run line:worker
 ```
 
 手動起動ではこのコマンドを起動している間だけ動きます。停止はCtrl+C。1回だけ処理する診断用コマンドは `npm run line:worker -- --once` です。
 
-運用中のMacには本人の承認でLaunchAgent `jp.ffpf.zhuelog.line-worker` を登録しています。ログイン時に自動起動し、終了時は自動再起動します。設定は `~/Library/LaunchAgents/jp.ffpf.zhuelog.line-worker.plist`、ログは `~/Library/Logs/ffpf-zhuelog/` にあり、Gitには含めません。macOSの「書類」フォルダーへのNodeアクセス許可が必要です。電源・スリープ設定は変更していません。
+ワーカーは `workers/line/` のGo実装です。Go 1.27以降でビルドし、`build/line-worker` を直接実行します（常駐にNode.js/npm/tsxは不要、外部Go依存もありません）。WebアプリとAPI・DBは従来のTypeScriptのままです。添削モデル・ポーリング間隔・再送制御は変えません。
+
+運用中のMacには本人の承認でLaunchAgent `jp.ffpf.zhuelog.line-worker` を登録しています。ログイン時に自動起動し、終了時は自動再起動します。設定は `~/Library/LaunchAgents/jp.ffpf.zhuelog.line-worker.plist`、ログは `~/Library/Logs/ffpf-zhuelog/` にあり、Gitには含めません。`ProgramArguments` はビルドしたGoバイナリの絶対パス1つ、`WorkingDirectory` はこのリポジトリです。環境には `NODE_ENV=development`、`CHAT_PROVIDER=codex-local`、検証済み `CODEX_LOCAL_BIN` の絶対パスを設定します。macOSの「書類」フォルダーに置く場合、新しい実行ファイルへのアクセス許可を求められることがあります。電源・スリープ設定は変更していません。
+
+Goワーカーは、OSの環境変数 → `.env.development.local` → `.env.local` → `.env.development` → `.env` の優先順で、ワーカー用の設定だけを読み込みます。DB接続情報やLINEチャネルシークレットは読み込みません。設定値は1行のリテラル（引用符・コメント・`export` 可）にしてください。Next.jsの `$VARIABLE` 展開・複数行の値には対応せず、対象設定に含まれる場合は安全のため起動を拒否します。`npm run line:worker -- --check` は設定確認のみで、通信しません。`--once` は実際に1件取得・処理するため、本番での単なる疎通確認には使わないでください。
+
+検証は `npm run test:worker`（Go vet・race detector付きテスト）、`npm run test:unit`（上記に加えGoバイナリのビルドと既存TypeScript契約テスト）です。通常のテストは模擬Codex／GitHub／LINE APIのみを使います。ビルド済みファイルはGitに含めません。更新時は常駐サービスを停止し、旧バイナリとplistを退避してから新しいバイナリに切り替えます。旧版へ戻す場合は退避した両方を戻し、同じLaunchAgentを再登録してください。新旧ワーカーの二重起動は避けてください。
 
 常駐中は手動ワーカーを二重起動しないでください。状態確認は `launchctl print gui/$(id -u)/jp.ffpf.zhuelog.line-worker`、停止は `launchctl bootout gui/$(id -u)/jp.ffpf.zhuelog.line-worker`、再登録は `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/jp.ffpf.zhuelog.line-worker.plist` です。
 

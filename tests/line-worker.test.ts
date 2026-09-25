@@ -26,22 +26,18 @@ test("standalone LINE worker loads environment and polls once without invoking A
   const address = server.address();
   assert.ok(address && typeof address !== "string");
   try {
-    const child = spawn(
-      process.execPath,
-      ["--import", "tsx", "scripts/line-worker.mts", "--once"],
-      {
-        env: {
-          ...process.env,
-          NODE_ENV: "development",
-          CHAT_PROVIDER: "codex-local",
-          VERCEL: "",
-          LINE_WORKER_TOKEN: token,
-          LINE_DEV_ISSUES_ENABLED: "false",
-          LINE_WORKER_URL: `http://127.0.0.1:${address.port}`,
-        },
-        stdio: ["ignore", "pipe", "pipe"],
+    const child = spawn(resolve("build/line-worker"), ["--once"], {
+      env: {
+        ...process.env,
+        NODE_ENV: "development",
+        CHAT_PROVIDER: "codex-local",
+        VERCEL: "",
+        LINE_WORKER_TOKEN: token,
+        LINE_DEV_ISSUES_ENABLED: "false",
+        LINE_WORKER_URL: `http://127.0.0.1:${address.port}`,
       },
-    );
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     let output = "";
     child.stdout.on("data", (chunk) => (output += chunk));
     child.stderr.on("data", (chunk) => (output += chunk));
@@ -103,23 +99,19 @@ test("battery worker reads local status and drains delivery without invoking Cod
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   assert.ok(address && typeof address !== "string");
-  const child = spawn(
-    process.execPath,
-    ["--import", "tsx", "scripts/line-worker.mts"],
-    {
-      env: {
-        ...process.env,
-        NODE_ENV: "development",
-        CHAT_PROVIDER: "codex-local",
-        VERCEL: "",
-        CODEX_LOCAL_BIN: "/must-not-run-codex-for-battery",
-        LINE_WORKER_TOKEN: "a".repeat(64),
-        LINE_DEV_ISSUES_ENABLED: "false",
-        LINE_WORKER_URL: `http://127.0.0.1:${address.port}`,
-      },
-      stdio: ["ignore", "pipe", "pipe"],
+  const child = spawn(resolve("build/line-worker"), [], {
+    env: {
+      ...process.env,
+      NODE_ENV: "development",
+      CHAT_PROVIDER: "codex-local",
+      VERCEL: "",
+      CODEX_LOCAL_BIN: "/must-not-run-codex-for-battery",
+      LINE_WORKER_TOKEN: "a".repeat(64),
+      LINE_DEV_ISSUES_ENABLED: "false",
+      LINE_WORKER_URL: `http://127.0.0.1:${address.port}`,
     },
-  );
+    stdio: ["ignore", "pipe", "pipe"],
+  });
   let output = "";
   child.stdout.on("data", (chunk) => {
     output += chunk;
@@ -230,13 +222,8 @@ for (const scenario of [
     const address = server.address();
     assert.ok(address && typeof address !== "string");
     const child = spawn(
-      process.execPath,
-      [
-        "--import",
-        "tsx",
-        "scripts/line-worker.mts",
-        ...(scenario === "once" ? ["--once"] : []),
-      ],
+      resolve("build/line-worker"),
+      scenario === "once" ? ["--once"] : [],
       {
         env: {
           ...process.env,

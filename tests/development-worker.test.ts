@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
+import { resolve } from "node:path";
 
 test("development worker reports missing GitHub auth without running AI or requesting a publication permit", async () => {
   const commands: Record<string, unknown>[] = [];
@@ -43,24 +44,20 @@ test("development worker reports missing GitHub auth without running AI or reque
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   assert.ok(address && typeof address !== "string");
-  const child = spawn(
-    process.execPath,
-    ["--import", "tsx", "scripts/line-worker.mts"],
-    {
-      env: {
-        ...process.env,
-        NODE_ENV: "development",
-        CHAT_PROVIDER: "codex-local",
-        VERCEL: "",
-        LINE_DEV_ISSUES_ENABLED: "true",
-        LINE_GH_BIN: "/does-not-exist-gh",
-        CODEX_LOCAL_BIN: "/must-not-invoke-ai",
-        LINE_WORKER_TOKEN: "a".repeat(64),
-        LINE_WORKER_URL: `http://127.0.0.1:${address.port}`,
-      },
-      stdio: ["ignore", "pipe", "pipe"],
+  const child = spawn(resolve("build/line-worker"), [], {
+    env: {
+      ...process.env,
+      NODE_ENV: "development",
+      CHAT_PROVIDER: "codex-local",
+      VERCEL: "",
+      LINE_DEV_ISSUES_ENABLED: "true",
+      LINE_GH_BIN: "/does-not-exist-gh",
+      CODEX_LOCAL_BIN: "/must-not-invoke-ai",
+      LINE_WORKER_TOKEN: "a".repeat(64),
+      LINE_WORKER_URL: `http://127.0.0.1:${address.port}`,
     },
-  );
+    stdio: ["ignore", "pipe", "pipe"],
+  });
   let output = "";
   child.stdout.on("data", (value) => (output += value));
   child.stderr.on("data", (value) => (output += value));

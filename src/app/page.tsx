@@ -3,6 +3,7 @@ import {
   CalendarDays,
   Database,
   Eye,
+  Keyboard,
   Languages,
   MessageCircle,
   Sparkles,
@@ -91,11 +92,18 @@ export default async function Home() {
                 </Link>
               </Button>
               {user.role === "admin" ? (
-                <Button asChild variant="outline" size="sm">
-                  <Link href="/chat">
-                    <MessageCircle /> ChatGPTと話す
-                  </Link>
-                </Button>
+                <>
+                  <Button asChild variant="outline" size="sm">
+                    <Link href="/typle">
+                      <Keyboard /> Typle用リスト
+                    </Link>
+                  </Button>
+                  <Button asChild variant="outline" size="sm">
+                    <Link href="/chat">
+                      <MessageCircle /> ChatGPTと話す
+                    </Link>
+                  </Button>
+                </>
               ) : null}
             </div>
             <div className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3 text-sm shadow-xs">

@@ -8,6 +8,7 @@ test("unauthenticated pages redirect to signin", async ({ page }) => {
     "/logs/2026/9/20/1",
     "/chat",
     "/practice",
+    "/typle",
   ]) {
     await page.goto(path);
     await expect(page).toHaveURL(/\/signin(?:\?|$)/);
@@ -35,6 +36,10 @@ test("guest signs in, cannot post or use chat, and can sign out", async ({
   expect(response.status()).toBe(403);
   await page.goto("/chat");
   await expect(page).toHaveURL(/\/$/);
+  await page.goto("/typle");
+  await expect(page).toHaveURL(/\/$/);
+  const typleResponse = await page.request.get("/api/typle/export");
+  expect(typleResponse.status()).toBe(403);
   await page.getByRole("button", { name: "ログアウト" }).click();
   await expect(
     page.getByRole("button", { name: "ゲストとして閲覧" }),
@@ -83,6 +88,38 @@ test("CSV persists variable hints, quoted fields and survives reload", async ({
   await expect(card.getByText("添削A", { exact: true })).toBeHidden();
   await card.locator("summary").click();
   await expect(card.getByText("添削A", { exact: true })).toBeVisible();
+});
+
+test("admin creates a Typle-compatible review list from corrections and hints", async ({
+  context,
+  page,
+}) => {
+  await asAdmin(context);
+  await page.goto("/");
+  await upload(
+    page,
+    "最初の文,添削後の文,ピン音,ヒント1\n这个菜很好吃。,这道菜很好吃。,Zhè dào cài hěn hǎochī.,料理を数える量詞は「道」",
+  );
+  await expect(page.getByText("1件の学習文を登録しました。")).toBeVisible();
+  await page.getByRole("link", { name: "Typle用リスト" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Typle用の復習リスト" }),
+  ).toBeVisible();
+  await expect(page.getByText("道", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Typle互換JSONをダウンロード" }),
+  ).toBeVisible();
+
+  const response = await page.request.get("/api/typle/export");
+  expect(response.status()).toBe(200);
+  expect(response.headers()["content-disposition"]).toContain(
+    "ffpf-zhuelog-typle-words.json",
+  );
+  const payload = await response.json();
+  expect(payload.version).toBe(1);
+  expect(payload.lists[0].words).toEqual([
+    expect.objectContaining({ display: "道", input: "道" }),
+  ]);
 });
 
 for (const [name, csv, error] of [
