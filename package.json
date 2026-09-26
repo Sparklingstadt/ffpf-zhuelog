@@ -1,7 +1,10 @@
 {
-  "name": "ffpf-zhuelog",
+  "name": "@ffpf-zhuelog/web",
   "version": "0.8.0",
   "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
   "engines": {
     "node": ">=22.0.0"
   },
@@ -33,6 +36,8 @@
   "dependencies": {
     "@ai-sdk/openai": "^4.0.73",
     "@ai-sdk/react": "^4.0.115",
+    "@ffpf-zhuelog/core": "*",
+    "@ffpf-zhuelog/typle-integrate-plugin": "*",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "ai": "^7.0.107",

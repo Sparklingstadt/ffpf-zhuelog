@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { getCurrentAdminUser } from "@/composition/identity-container";
 import { learningUseCases } from "@/composition/learning-container";
-import { csvImportErrorMessage } from "@/domain/learning/csv-validation-error";
+import { csvImportErrorMessage } from "@ffpf-zhuelog/core/domain/learning/csv-validation-error";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 

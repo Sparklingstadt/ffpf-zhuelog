@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { formatLineLearningReply } from "../src/infrastructure/line/line-reply-formatter";
-import { makeLineLearningResult } from "../src/domain/line/line-learning";
+import { makeLineLearningResult } from "@ffpf-zhuelog/core/domain/line/line-learning";
 import { CsvParseLearningParser } from "../src/infrastructure/csv/csv-parse-learning-parser";
 
 test("issue 11 pairs each corrected sentence with its pinyin while leaving stored CSV untouched", () => {

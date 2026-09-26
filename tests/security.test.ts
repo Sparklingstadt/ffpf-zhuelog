@@ -11,8 +11,8 @@ import { CsvParseLearningParser } from "../src/infrastructure/csv/csv-parse-lear
 import {
   CsvValidationError,
   csvImportErrorMessage,
-} from "../src/domain/learning/csv-validation-error";
-import { parseLogNumber } from "../src/domain/learning/value-objects/log-date";
+} from "@ffpf-zhuelog/core/domain/learning/csv-validation-error";
+import { parseLogNumber } from "@ffpf-zhuelog/core/domain/learning/value-objects/log-date";
 import { getSafeCallbackPath } from "../src/presentation/http/safe-callback-path";
 import { handleChatRequest } from "../src/presentation/controllers/chat-controller";
 

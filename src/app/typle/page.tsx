@@ -11,7 +11,7 @@ import { redirect } from "next/navigation";
 
 import { getCurrentViewerUser } from "@/composition/identity-container";
 import { learningUseCases } from "@/composition/learning-container";
-import { extractTypleWords } from "@/domain/typle/typle-word-list";
+import { extractTypleWords } from "@ffpf-zhuelog/typle-integrate-plugin";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { Alert, AlertDescription } from "@/presentation/components/ui/alert";
 import { Badge } from "@/presentation/components/ui/badge";

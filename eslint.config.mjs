@@ -14,6 +14,9 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     "playwright-report/**",
     "test-results/**",
+    // Claude Code worktrees live here. Git skips them via .git/info/exclude,
+    // which ESLint does not read.
+    ".claude/**",
   ]),
 ]);
 

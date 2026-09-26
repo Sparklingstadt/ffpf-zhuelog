@@ -13,7 +13,7 @@ import { redirect } from "next/navigation";
 
 import { getCurrentViewerUser } from "@/composition/identity-container";
 import { learningUseCases } from "@/composition/learning-container";
-import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
+import type { LearningEntry } from "@ffpf-zhuelog/core/domain/learning/entities/learning-entry";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { CsvFormatGuide } from "@/presentation/components/learning/csv-format-guide";
 import { CsvImportForm } from "@/presentation/components/learning/csv-import-form";

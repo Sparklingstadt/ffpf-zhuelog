@@ -8,10 +8,10 @@ import {
   formatIssueReply,
   issueResultSchema,
   makeDevelopmentIssue,
-} from "../src/domain/line/development-mode";
+} from "@ffpf-zhuelog/core/domain/line/development-mode";
 import { handleLineWebhook } from "../src/presentation/controllers/line-webhook-controller";
-import type { LineJobRepository } from "../src/application/line/ports/line-job-repository";
-import { routeDevelopmentMessage } from "../src/domain/line/development-routing";
+import type { LineJobRepository } from "@ffpf-zhuelog/core/application/line/ports/line-job-repository";
+import { routeDevelopmentMessage } from "@ffpf-zhuelog/core/domain/line/development-routing";
 
 test("domain routing keeps mode changes independent of persistence and expires safely", () => {
   const now = new Date("2026-09-25T00:00:00Z");

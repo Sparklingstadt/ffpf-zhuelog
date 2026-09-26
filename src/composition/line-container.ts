@@ -1,4 +1,4 @@
-import { ProcessLineLearning } from "@/application/line/use-cases/process-line-learning";
+import { ProcessLineLearning } from "@ffpf-zhuelog/core/application/line/use-cases/process-line-learning";
 import { getLineConfig } from "@/infrastructure/line/config";
 import { LinePushMessenger } from "@/infrastructure/line/line-messenger";
 import { PrismaLineJobRepository } from "@/infrastructure/persistence/prisma/repositories/prisma-line-job-repository";

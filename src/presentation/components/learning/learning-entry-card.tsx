@@ -1,7 +1,7 @@
 import { CalendarDays, ChevronDown, Clock3 } from "lucide-react";
 import Link from "next/link";
 
-import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
+import type { LearningEntry } from "@ffpf-zhuelog/core/domain/learning/entities/learning-entry";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
 import {

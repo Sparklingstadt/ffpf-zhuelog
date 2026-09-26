@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { getCurrentViewerUser } from "@/composition/identity-container";
 import { learningUseCases } from "@/composition/learning-container";
-import { parseLogDate } from "@/domain/learning/value-objects/log-date";
+import { parseLogDate } from "@ffpf-zhuelog/core/domain/learning/value-objects/log-date";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { LearningEntryCard } from "@/presentation/components/learning/learning-entry-card";
 import { Badge } from "@/presentation/components/ui/badge";

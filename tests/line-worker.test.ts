@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { batteryReportSchema } from "../src/domain/line/battery-report";
+import { batteryReportSchema } from "@ffpf-zhuelog/core/domain/line/battery-report";
 
 test("standalone LINE worker loads environment and polls once without invoking AI", async () => {
   let claims = 0;

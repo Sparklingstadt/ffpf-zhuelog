@@ -1,5 +1,5 @@
 import { createHmac, randomBytes } from "node:crypto";
-import { PersonalCorrectionError } from "../../domain/practice/personal-correction";
+import { PersonalCorrectionError } from "@ffpf-zhuelog/core/domain/practice/personal-correction";
 
 // Best-effort per-process protection, not a distributed quota or billing cap.
 // Only key digests and counters are held in volatile memory; never raw keys.

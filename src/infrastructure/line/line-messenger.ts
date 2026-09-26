@@ -1,4 +1,4 @@
-import type { LineMessenger } from "@/application/line/ports/line-job-repository";
+import type { LineMessenger } from "@ffpf-zhuelog/core/application/line/ports/line-job-repository";
 import { formatLineLearningReply } from "./line-reply-formatter";
 
 export class LinePushMessenger implements LineMessenger {

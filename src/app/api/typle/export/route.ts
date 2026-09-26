@@ -1,6 +1,6 @@
 import { getCurrentAdminUser } from "@/composition/identity-container";
 import { learningUseCases } from "@/composition/learning-container";
-import { createTypleExport } from "@/domain/typle/typle-word-list";
+import { createTypleExport } from "@ffpf-zhuelog/typle-integrate-plugin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

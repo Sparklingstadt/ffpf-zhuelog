@@ -1,10 +1,10 @@
-import type { LearningEntryDraft } from "@/domain/learning/entities/learning-entry";
+import type { LearningEntryDraft } from "@ffpf-zhuelog/core/domain/learning/entities/learning-entry";
 import type {
   DailyLearningEntry,
   LearningEntryRepository,
   RecentLearningEntries,
-} from "@/domain/learning/repositories/learning-entry-repository";
-import type { DateRange } from "@/domain/learning/value-objects/log-date";
+} from "@ffpf-zhuelog/core/domain/learning/repositories/learning-entry-repository";
+import type { DateRange } from "@ffpf-zhuelog/core/domain/learning/value-objects/log-date";
 import { getPrismaClient } from "@/infrastructure/persistence/prisma/prisma-client";
 import { toLearningEntry } from "@/infrastructure/persistence/prisma/mappers/learning-entry-mapper";
 

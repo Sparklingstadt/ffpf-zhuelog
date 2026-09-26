@@ -1,13 +1,13 @@
 import { z } from "zod";
-import type { PersonalCorrectionGateway } from "../../application/practice/ports/personal-correction-gateway";
+import type { PersonalCorrectionGateway } from "@ffpf-zhuelog/core/application/practice/ports/personal-correction-gateway";
 import {
   correctionSchema,
   CORRECTION_INSTRUCTIONS,
-} from "../../domain/learning/chinese-correction";
+} from "@ffpf-zhuelog/core/domain/learning/chinese-correction";
 import {
   PERSONAL_CORRECTION_MODEL,
   PersonalCorrectionError,
-} from "../../domain/practice/personal-correction";
+} from "@ffpf-zhuelog/core/domain/practice/personal-correction";
 import { PersonalRequestLimiter } from "./personal-request-limiter";
 import { readLimitedBody } from "../http/read-limited-body";
 

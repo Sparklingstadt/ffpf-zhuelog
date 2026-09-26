@@ -2,7 +2,7 @@
 
 import { useState, useSyncExternalStore } from "react";
 import { Monitor, Moon, Sun } from "lucide-react";
-import type { ThemePreference } from "@/domain/preferences/theme";
+import type { ThemePreference } from "@ffpf-zhuelog/core/domain/preferences/theme";
 import {
   getServerThemeSnapshot,
   getThemeSnapshot,

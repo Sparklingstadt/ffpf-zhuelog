@@ -2,7 +2,7 @@ import {
   isDarkTheme,
   parseThemePreference,
   type ThemePreference,
-} from "../../domain/preferences/theme";
+} from "@ffpf-zhuelog/core/domain/preferences/theme";
 import { SYSTEM_DARK_QUERY, THEME_STORAGE_KEY } from "./theme-bootstrap";
 
 const THEME_CHANGE_EVENT = "zhuelog:theme-change";

@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import { createHmac, randomUUID } from "node:crypto";
 import { test } from "node:test";
-import { makeLineLearningResult } from "../src/domain/line/line-learning";
-import type { LineInput, LineJob } from "../src/domain/line/line-learning";
+import { makeLineLearningResult } from "@ffpf-zhuelog/core/domain/line/line-learning";
+import type {
+  LineInput,
+  LineJob,
+} from "@ffpf-zhuelog/core/domain/line/line-learning";
 import { CsvParseLearningParser } from "../src/infrastructure/csv/csv-parse-learning-parser";
 import {
   verifyLineSignature,
@@ -10,8 +13,8 @@ import {
 } from "../src/infrastructure/line/security";
 import { handleLineWebhook } from "../src/presentation/controllers/line-webhook-controller";
 import { handleLineWorker } from "../src/presentation/controllers/line-worker-controller";
-import { ProcessLineLearning } from "../src/application/line/use-cases/process-line-learning";
-import type { LineJobRepository } from "../src/application/line/ports/line-job-repository";
+import { ProcessLineLearning } from "@ffpf-zhuelog/core/application/line/use-cases/process-line-learning";
+import type { LineJobRepository } from "@ffpf-zhuelog/core/application/line/ports/line-job-repository";
 import { LinePushMessenger } from "../src/infrastructure/line/line-messenger";
 import { formatLineLearningReply } from "../src/infrastructure/line/line-reply-formatter";
 

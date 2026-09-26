@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CorrectPersonalText } from "../src/application/practice/use-cases/correct-personal-text";
+import { CorrectPersonalText } from "@ffpf-zhuelog/core/application/practice/use-cases/correct-personal-text";
 import {
   correctionErrors,
   PersonalCorrectionError,
-} from "../src/domain/practice/personal-correction";
+} from "@ffpf-zhuelog/core/domain/practice/personal-correction";
 import { OpenAiPersonalCorrectionGateway } from "../src/infrastructure/practice/openai-personal-correction-gateway";
 import { PersonalRequestLimiter } from "../src/infrastructure/practice/personal-request-limiter";
 import {

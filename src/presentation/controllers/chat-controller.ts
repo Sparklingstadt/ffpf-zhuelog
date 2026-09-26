@@ -1,7 +1,7 @@
 import { safeValidateUIMessages } from "ai";
 
-import type { StreamLearningChat } from "@/application/chat/use-cases/stream-learning-chat";
-import type { LearningChatMessage } from "@/domain/chat/entities/chat-message";
+import type { StreamLearningChat } from "@ffpf-zhuelog/core/application/chat/use-cases/stream-learning-chat";
+import type { LearningChatMessage } from "@ffpf-zhuelog/core/domain/chat/entities/chat-message";
 import {
   BodyLimitError,
   readLimitedBody,

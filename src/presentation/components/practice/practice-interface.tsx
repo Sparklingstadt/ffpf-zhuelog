@@ -13,7 +13,7 @@ import {
   personalCorrectionRequestSchema,
   type CorrectionErrorCode,
   type PersonalCorrectionRecord,
-} from "@/domain/practice/personal-correction";
+} from "@ffpf-zhuelog/core/domain/practice/personal-correction";
 import {
   clearPracticeHistory,
   MAX_PRACTICE_HISTORY,

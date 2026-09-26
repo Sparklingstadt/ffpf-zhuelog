@@ -7,7 +7,7 @@ import { learningUseCases } from "@/composition/learning-container";
 import {
   parseLogDate,
   parseLogNumber,
-} from "@/domain/learning/value-objects/log-date";
+} from "@ffpf-zhuelog/core/domain/learning/value-objects/log-date";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { LearningEntryCard } from "@/presentation/components/learning/learning-entry-card";
 import { Badge } from "@/presentation/components/ui/badge";

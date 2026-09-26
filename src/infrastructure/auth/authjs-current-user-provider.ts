@@ -1,5 +1,5 @@
-import type { CurrentUserProvider } from "@/application/identity/ports/current-user-provider";
-import type { AuthenticatedUser } from "@/domain/identity/entities/authenticated-user";
+import type { CurrentUserProvider } from "@ffpf-zhuelog/core/application/identity/ports/current-user-provider";
+import type { AuthenticatedUser } from "@ffpf-zhuelog/core/domain/identity/entities/authenticated-user";
 import { auth } from "@/infrastructure/auth/authjs-config";
 
 export class AuthJsCurrentUserProvider implements CurrentUserProvider {
