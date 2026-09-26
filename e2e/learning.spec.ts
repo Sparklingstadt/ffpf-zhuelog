@@ -8,7 +8,7 @@ test("unauthenticated pages redirect to signin", async ({ page }) => {
     "/logs/2026/9/20/1",
     "/chat",
     "/practice",
-    "/typle",
+    "/integrations/typle",
   ]) {
     await page.goto(path);
     await expect(page).toHaveURL(/\/signin(?:\?|$)/);
@@ -16,6 +16,23 @@ test("unauthenticated pages redirect to signin", async ({ page }) => {
       page.getByRole("button", { name: "ゲストとして閲覧" }),
     ).toBeVisible();
   }
+});
+
+test("integration pages keep sign-in callbacks and hide unknown ids", async ({
+  page,
+}) => {
+  // The Auth.js proxy redirects signed-out visitors before the page runs and
+  // encodes the return path; unknown ids get the same sign-in page, not a 404.
+  await page.goto("/integrations/typle");
+  await expect(page).toHaveURL(
+    /\/signin\?callbackUrl=%2Fintegrations%2Ftyple$/,
+  );
+  const unknown = await page.goto("/integrations/unknown");
+  expect(unknown?.status()).toBe(200);
+  await expect(page).toHaveURL(/\/signin\?callbackUrl=/);
+  await asGuest(page);
+  await page.goto("/integrations/unknown");
+  await expect(page).toHaveURL(/\/$/);
 });
 
 test("guest signs in, cannot post or use chat, and can sign out", async ({
@@ -30,15 +47,20 @@ test("guest signs in, cannot post or use chat, and can sign out", async ({
   await expect(page.getByRole("link", { name: "ChatGPTと話す" })).toHaveCount(
     0,
   );
+  await expect(page.getByRole("link", { name: "Typle用リスト" })).toHaveCount(
+    0,
+  );
   const response = await page.request.post("/api/chat", {
     data: { messages: [] },
   });
   expect(response.status()).toBe(403);
   await page.goto("/chat");
   await expect(page).toHaveURL(/\/$/);
-  await page.goto("/typle");
+  await page.goto("/integrations/typle");
   await expect(page).toHaveURL(/\/$/);
-  const typleResponse = await page.request.get("/api/typle/export");
+  const typleResponse = await page.request.get(
+    "/api/integrations/typle/export",
+  );
   expect(typleResponse.status()).toBe(403);
   await page.getByRole("button", { name: "ログアウト" }).click();
   await expect(
@@ -110,7 +132,7 @@ test("admin creates a Typle-compatible review list from corrections and hints", 
     page.getByRole("link", { name: "Typle互換JSONをダウンロード" }),
   ).toBeVisible();
 
-  const response = await page.request.get("/api/typle/export");
+  const response = await page.request.get("/api/integrations/typle/export");
   expect(response.status()).toBe(200);
   expect(response.headers()["content-disposition"]).toContain(
     "ffpf-zhuelog-typle-words.json",
@@ -120,6 +142,43 @@ test("admin creates a Typle-compatible review list from corrections and hints", 
   expect(payload.lists[0].words).toEqual([
     expect.objectContaining({ display: "道", input: "道" }),
   ]);
+});
+
+test("admin gets 404 for unknown integrations", async ({ context, page }) => {
+  await asAdmin(context);
+  const response = await page.goto("/integrations/unknown");
+  expect(response?.status()).toBe(404);
+  const api = await page.request.get("/api/integrations/unknown/export");
+  expect(api.status()).toBe(404);
+  expect(await api.json()).toEqual({ error: "連携が見つかりません。" });
+});
+
+test("admin preview shows 20 items while the download keeps all of them", async ({
+  context,
+  page,
+}) => {
+  await asAdmin(context);
+  await page.goto("/");
+  const words = Array.from("天地人山川日月水火木金土花草鳥魚犬猫馬牛羊");
+  await upload(
+    page,
+    [
+      "最初の文,添削後の文,ピン音,ヒント1",
+      ...words.map(
+        (word, index) => `row${index},row${index},pinyin,「${word}」`,
+      ),
+    ].join("\n"),
+  );
+  await expect(page.getByText("21件の学習文を登録しました。")).toBeVisible();
+  await page.goto("/integrations/typle");
+  await expect(page.getByText("21語", { exact: true })).toBeVisible();
+  await expect(page.locator('p[lang="zh-Hans"]')).toHaveCount(20);
+  await expect(
+    page.getByText("先頭20件を表示しています。出力には全21件が含まれます。"),
+  ).toBeVisible();
+  const response = await page.request.get("/api/integrations/typle/export");
+  expect(response.status()).toBe(200);
+  expect((await response.json()).lists[0].words).toHaveLength(21);
 });
 
 for (const [name, csv, error] of [

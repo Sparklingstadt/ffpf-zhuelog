@@ -2,16 +2,6 @@ import { defineIntegration } from "@ffpf-zhuelog/core/integration";
 
 import { createTypleExport, extractTypleWords } from "./typle-word-list";
 
-// Named exports keep the legacy /typle routes working until the shared
-// integration screen replaces them.
-export {
-  createTypleExport,
-  extractTypleWords,
-  type TypleExport,
-  type TypleWord,
-  type TypleWordList,
-} from "./typle-word-list";
-
 export default defineIntegration({
   id: "typle",
   text: {

@@ -3,15 +3,16 @@ import {
   CalendarDays,
   Database,
   Eye,
-  Keyboard,
   Languages,
   MessageCircle,
+  Puzzle,
   Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getCurrentViewerUser } from "@/composition/identity-container";
+import { integrations } from "@/composition/integration-container";
 import { learningUseCases } from "@/composition/learning-container";
 import type { LearningEntry } from "@ffpf-zhuelog/core/domain/learning/entities/learning-entry";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
@@ -93,11 +94,18 @@ export default async function Home() {
               </Button>
               {user.role === "admin" ? (
                 <>
-                  <Button asChild variant="outline" size="sm">
-                    <Link href="/typle">
-                      <Keyboard /> Typle用リスト
-                    </Link>
-                  </Button>
+                  {integrations.list().map((integration) => (
+                    <Button
+                      key={integration.id}
+                      asChild
+                      variant="outline"
+                      size="sm"
+                    >
+                      <Link href={`/integrations/${integration.id}`}>
+                        <Puzzle /> {integration.text.navLabel}
+                      </Link>
+                    </Button>
+                  ))}
                   <Button asChild variant="outline" size="sm">
                     <Link href="/chat">
                       <MessageCircle /> ChatGPTと話す
