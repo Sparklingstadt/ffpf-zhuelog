@@ -1,4 +1,4 @@
-import type { LearningEntry } from "@ffpf-zhuelog/core/domain/learning/entities/learning-entry";
+import type { LearningEntry } from "@ffpf-zhuelog/core/integration";
 
 export type TypleWord = {
   display: string;
@@ -84,7 +84,9 @@ function annotationFor(entry: LearningEntry, term: string) {
   return parts.join(" / ").slice(0, 500);
 }
 
-export function extractTypleWords(entries: LearningEntry[]): TypleWord[] {
+export function extractTypleWords(
+  entries: readonly LearningEntry[],
+): TypleWord[] {
   const words = new Map<string, TypleWord>();
 
   for (const entry of entries) {
@@ -108,7 +110,7 @@ export function extractTypleWords(entries: LearningEntry[]): TypleWord[] {
 }
 
 export function createTypleExport(
-  entries: LearningEntry[],
+  entries: readonly LearningEntry[],
   createdAt = new Date(),
 ): TypleExport {
   return {

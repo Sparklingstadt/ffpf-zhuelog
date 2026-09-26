@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import type { LearningEntry } from "@ffpf-zhuelog/core/domain/learning/entities/learning-entry";
+import type { LearningEntry } from "@ffpf-zhuelog/core/integration";
 import { createTypleExport, extractTypleWords } from "../src/typle-word-list";
 
 function entry(overrides: Partial<LearningEntry> = {}): LearningEntry {
