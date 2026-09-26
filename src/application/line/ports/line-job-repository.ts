@@ -1,5 +1,6 @@
 import type { LearningEntryDraft } from "@/domain/learning/entities/learning-entry";
 import type { LineInput, LineJob } from "@/domain/line/line-learning";
+import type { GenerationFailureCode } from "@/domain/line/generation-failure";
 
 export interface LineJobRepository {
   enqueue(inputs: LineInput[]): Promise<void>;
@@ -20,7 +21,11 @@ export interface LineJobRepository {
     draft: LearningEntryDraft,
     csv: string,
   ): Promise<boolean>;
-  saveReply(job: LineJob, text: string): Promise<boolean>;
+  saveReply(
+    job: LineJob,
+    text: string,
+    failureCode?: GenerationFailureCode,
+  ): Promise<boolean>;
   finishDelivery(job: LineJob): Promise<void>;
   fail(job: LineJob, permanent: boolean, code: string): Promise<void>;
 }

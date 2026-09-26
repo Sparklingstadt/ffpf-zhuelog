@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -12,8 +13,10 @@ import (
 )
 
 func TestHTTPRedirectAndLimits(t *testing.T) {
+	t.Parallel()
 	for _, scenario := range []string{"redirect", "large", "malformed", "trailing", "conflict"} {
 		t.Run(scenario, func(t *testing.T) {
+			t.Parallel()
 			redirected := false
 			destination := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { redirected = true }))
 			defer destination.Close()
@@ -48,25 +51,53 @@ func TestHTTPRedirectAndLimits(t *testing.T) {
 	}
 }
 func TestGenerationFailureIsReportedWithoutCompleting(t *testing.T) {
-	var actions []string
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var cmd map[string]any
-		json.NewDecoder(r.Body).Decode(&cmd)
-		actions = append(actions, cmd["action"].(string))
-		if cmd["action"] == "claim" {
-			fmt.Fprint(w, `{"job":{"id":"test","leaseToken":"11111111-1111-4111-8111-111111111111","phase":"generate","originalText":"今天"}}`)
-		} else {
-			fmt.Fprint(w, `{"ok":true}`)
-		}
-	}))
-	defer s.Close()
-	w := newWorker(config{endpoint: s.URL, codexBin: "/must-not-exist"})
-	processed, err := w.step(context.Background())
-	if err == nil || processed || !reflect.DeepEqual(actions, []string{"claim", "fail"}) {
-		t.Fatal("generation failure handling", actions)
+	t.Parallel()
+	for _, scenario := range []string{"notification", "legacy-server", "report-failed"} {
+		t.Run(scenario, func(t *testing.T) {
+			t.Parallel()
+			var actions []string
+			s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var cmd map[string]any
+				json.NewDecoder(r.Body).Decode(&cmd)
+				actions = append(actions, cmd["action"].(string))
+				if cmd["action"] == "claim" {
+					fmt.Fprintf(w, `{"failureNotifications":%t,"job":{"id":"test","leaseToken":"11111111-1111-4111-8111-111111111111","phase":"generate","originalText":"今天"}}`, scenario != "legacy-server")
+				} else {
+					if scenario == "legacy-server" {
+						if _, exists := cmd["code"]; exists {
+							t.Error("old server must receive legacy payload")
+						}
+					} else if cmd["code"] != "CODEX_CONNECTION_FAILED" {
+						t.Error("missing safe failure code")
+					}
+					if scenario == "report-failed" {
+						w.WriteHeader(503)
+						return
+					}
+					fmt.Fprint(w, `{"ok":true}`)
+				}
+			}))
+			defer s.Close()
+			w := newWorker(config{endpoint: s.URL, codexBin: "/must-not-exist"})
+			processed, err := w.step(context.Background())
+			if !reflect.DeepEqual(actions, []string{"claim", "fail"}) {
+				t.Fatal("must report failure without completing", actions)
+			}
+			if scenario == "report-failed" {
+				if err == nil || processed {
+					t.Fatal("failure report was lost silently")
+				}
+			} else if err != nil || !processed {
+				t.Fatal("acknowledged notification should drain immediately")
+			}
+			if strings.Contains(workerFailureMessage(errors.New("secret-token")), "secret-token") {
+				t.Fatal("provider error leaked")
+			}
+		})
 	}
 }
 func TestJobValidation(t *testing.T) {
+	t.Parallel()
 	base := job{ID: "test", LeaseToken: "11111111-1111-4111-8111-111111111111", Phase: "deliver"}
 	if err := base.validate(); err != nil {
 		t.Fatal(err)

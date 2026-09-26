@@ -5,6 +5,10 @@ import type {
 import { makeLineLearningResult } from "@/domain/line/line-learning";
 import { formatBatteryReply } from "@/domain/line/battery-report";
 import { formatIssueReply } from "@/domain/line/development-mode";
+import {
+  formatGenerationFailure,
+  type GenerationFailureCode,
+} from "@/domain/line/generation-failure";
 
 export class ProcessLineLearning {
   constructor(
@@ -38,10 +42,13 @@ export class ProcessLineLearning {
   async deliver(id: string, token: string, userId: string) {
     const job = await this.jobs.leased(id, token, userId, "SENDING");
     if (!job) return false;
+    const textReply =
+      ["battery", "dev-issue", "dev-reply"].includes(job.kind) ||
+      (job.kind === "correction" && Boolean(job.replyText));
     // LINE guarantees retry-key deduplication for 24h. Never send beyond that
     // window after an ambiguous response, even if this Mac was asleep.
     if (
-      !(["battery", "dev-issue", "dev-reply"].includes(job.kind)
+      !(textReply
         ? job.replyText
         : job.kind === "correction"
           ? job.csv
@@ -52,7 +59,7 @@ export class ProcessLineLearning {
       await this.jobs.fail(job, true, "DELIVERY_WINDOW_EXPIRED");
       return true;
     }
-    const outcome = ["battery", "dev-issue", "dev-reply"].includes(job.kind)
+    const outcome = textReply
       ? await this.messenger.pushText(job.userId, job.replyText!, job.retryKey)
       : await this.messenger.push(job.userId, job.csv!, job.retryKey);
     if (outcome === "accepted") await this.jobs.finishDelivery(job);
@@ -78,9 +85,31 @@ export class ProcessLineLearning {
     return this.jobs.saveReply(job, formatIssueReply(result));
   }
 
-  async generationFailed(id: string, token: string, userId: string) {
+  async generationFailed(
+    id: string,
+    token: string,
+    userId: string,
+    code: GenerationFailureCode = "CODEX_REQUEST_FAILED",
+  ) {
     const job = await this.jobs.leased(id, token, userId, "GENERATING");
     if (!job) return false;
+    if (job.kind === "correction") {
+      const saved = await this.jobs.saveReply(
+        job,
+        formatGenerationFailure(code),
+        code,
+      );
+      if (saved)
+        console.warn(
+          JSON.stringify({
+            event: "line_correction_failed",
+            at: new Date().toISOString(),
+            jobId: job.id,
+            code,
+          }),
+        );
+      return saved;
+    }
     await this.jobs.fail(job, false, "GENERATION_FAILED");
     return true;
   }

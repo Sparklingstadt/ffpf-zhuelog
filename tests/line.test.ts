@@ -320,3 +320,129 @@ test("expired outbox stops without sending; retry reuses persisted CSV", async (
   assert.equal(sends, 1);
   assert.ok(sent);
 });
+
+test("correction failure is persisted before text delivery, with bounded retry and no note", async () => {
+  const jobs = repo();
+  const job: LineJob = {
+    kind: "correction",
+    id: "failed-job",
+    eventId: "failed-event",
+    userId: config.userId,
+    originalText: "private text",
+    receivedAt: new Date(),
+    status: "GENERATING",
+    leaseToken: randomUUID(),
+    csv: null,
+    replyText: null,
+    retryKey: randomUUID(),
+    firstDeliveryAt: null,
+    generationTries: 1,
+    deliveryTries: 0,
+  };
+  let savedCode: string | undefined;
+  let deliveries = 0;
+  let failures = 0;
+  let finished = false;
+  jobs.leased = async (_id, token, _user, status) =>
+    token === job.leaseToken && status === job.status ? job : null;
+  jobs.saveResult = async () => assert.fail("must not save a learning note");
+  jobs.saveReply = async (_job, text, code) => {
+    savedCode = code;
+    job.replyText = text;
+    job.status = "READY";
+    return true;
+  };
+  jobs.fail = async (_job, permanent) => {
+    assert.equal(permanent, false);
+    failures++;
+  };
+  jobs.finishDelivery = async () => {
+    finished = true;
+  };
+  const service = new ProcessLineLearning(jobs, {
+    push: async () => assert.fail("must not send CSV"),
+    pushText: async (user, text, key) => {
+      assert.equal(user, config.userId);
+      assert.equal(key, job.retryKey);
+      assert.match(text, /CODEX_TIMEOUT/);
+      assert.ok(!text.includes(job.originalText));
+      return ++deliveries === 1 ? "retry" : "accepted";
+    },
+  });
+  assert.equal(
+    await service.generationFailed(
+      job.id,
+      job.leaseToken!,
+      config.userId,
+      "CODEX_TIMEOUT",
+    ),
+    true,
+  );
+  assert.equal(savedCode, "CODEX_TIMEOUT");
+  assert.equal(deliveries, 0);
+  assert.equal(
+    await service.generationFailed(
+      job.id,
+      job.leaseToken!,
+      config.userId,
+      "CODEX_TIMEOUT",
+    ),
+    false,
+  );
+  job.status = "SENDING";
+  job.firstDeliveryAt = new Date();
+  await service.deliver(job.id, job.leaseToken!, config.userId);
+  await service.deliver(job.id, job.leaseToken!, config.userId);
+  assert.equal(failures, 1);
+  assert.equal(deliveries, 2);
+  assert.ok(finished);
+});
+
+test("worker failure API rejects raw errors and forwards only allowed codes", async () => {
+  const jobs = repo();
+  const service = new ProcessLineLearning(jobs, {
+    push: async () => "accepted",
+    pushText: async () => "accepted",
+  });
+  let received: string | undefined;
+  const claim = await handleLineWorker(
+    new Request("https://example.test/api/line/worker", {
+      method: "POST",
+      headers: { authorization: `Bearer ${config.workerToken}` },
+      body: JSON.stringify({ action: "claim" }),
+    }),
+    config,
+    jobs,
+    service,
+  );
+  assert.equal((await claim.json()).failureNotifications, true);
+  service.generationFailed = async (_id, _token, _user, code) => {
+    received = code;
+    return true;
+  };
+  const send = (extra: object) =>
+    handleLineWorker(
+      new Request("https://example.test/api/line/worker", {
+        method: "POST",
+        headers: { authorization: `Bearer ${config.workerToken}` },
+        body: JSON.stringify({
+          action: "fail",
+          id: "job",
+          leaseToken: randomUUID(),
+          ...extra,
+        }),
+      }),
+      config,
+      jobs,
+      service,
+    );
+  assert.equal((await send({ code: "secret-token" })).status, 400);
+  assert.equal(
+    (await send({ code: "CODEX_TIMEOUT", error: "private text" })).status,
+    400,
+  );
+  assert.equal(received, undefined);
+  assert.equal((await send({ code: "CODEX_TIMEOUT" })).status, 200);
+  assert.equal(received, "CODEX_TIMEOUT");
+  assert.equal((await send({})).status, 200); // Older workers remain compatible.
+});

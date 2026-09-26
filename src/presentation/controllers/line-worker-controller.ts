@@ -4,6 +4,7 @@ import type { ProcessLineLearning } from "@/application/line/use-cases/process-l
 import { correctionSchema } from "@/domain/line/line-learning";
 import { batteryReportSchema } from "@/domain/line/battery-report";
 import { issueResultSchema } from "@/domain/line/development-mode";
+import { generationFailureSchema } from "@/domain/line/generation-failure";
 import {
   readLimitedBody,
   verifyWorkerToken,
@@ -47,7 +48,13 @@ const commandSchema = z.discriminatedUnion("action", [
     })
     .strict(),
   z.object({ action: z.literal("deliver"), ...identity }).strict(),
-  z.object({ action: z.literal("fail"), ...identity }).strict(),
+  z
+    .object({
+      action: z.literal("fail"),
+      ...identity,
+      code: generationFailureSchema.optional(),
+    })
+    .strict(),
 ]);
 
 export async function handleLineWorker(
@@ -79,6 +86,7 @@ export async function handleLineWorker(
         command.capabilities?.includes("development") ?? false,
       );
       return json({
+        failureNotifications: true,
         job: job
           ? {
               id: job.id,
@@ -128,7 +136,12 @@ export async function handleLineWorker(
               )
             : command.action === "deliver"
               ? await service.deliver(id, leaseToken, config.userId)
-              : await service.generationFailed(id, leaseToken, config.userId);
+              : await service.generationFailed(
+                  id,
+                  leaseToken,
+                  config.userId,
+                  command.code,
+                );
     return json({ ok }, ok ? 200 : 409);
   } catch {
     return json({ error: "PROCESSING_FAILED" }, 503);

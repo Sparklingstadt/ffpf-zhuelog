@@ -245,3 +245,58 @@ test("owner battery command is deduplicated, capability-gated and never creates 
   expect(delivery.phase).toBe("deliver");
   // Actual LINE delivery is verified separately; unit tests mock the HTTP API.
 });
+
+test("failed correction persists a notification without a note and rejects stale completion", async ({
+  request,
+  db,
+}) => {
+  const body = payload("failed-correction");
+  await request.post("/api/line/webhook", {
+    data: body,
+    headers: { "x-line-signature": signature(body) },
+  });
+  const worker = (data: unknown) =>
+    request.post("/api/line/worker", {
+      data,
+      headers: { Authorization: `Bearer ${authSecret()}` },
+    });
+  const job = (await (await worker({ action: "claim" })).json()).job;
+  const failure = {
+    action: "fail",
+    id: job.id,
+    leaseToken: job.leaseToken,
+    code: "CODEX_TIMEOUT",
+  };
+  expect((await worker({ ...failure, code: "raw-secret" })).status()).toBe(400);
+  expect((await worker(failure)).status()).toBe(200);
+  expect((await worker(failure)).status()).toBe(409);
+  expect(
+    (
+      await worker({
+        action: "complete",
+        id: job.id,
+        leaseToken: job.leaseToken,
+        correction,
+      })
+    ).status(),
+  ).toBe(409);
+  const stored = (
+    await db.query(
+      'SELECT status, csv, "replyText", "failureCode", "entryId" FROM "LineLearningJob"',
+    )
+  ).rows[0];
+  expect(stored.status).toBe("READY");
+  expect(stored.failureCode).toBe("CODEX_TIMEOUT");
+  expect(stored.replyText).toContain("添削できませんでした");
+  expect(stored.replyText).not.toContain("今天我busy");
+  expect(stored.csv).toBeNull();
+  expect(stored.entryId).toBeNull();
+  expect(
+    (await db.query('SELECT count(*)::int AS count FROM "LearningEntry"'))
+      .rows[0].count,
+  ).toBe(0);
+  const delivery = (await (await worker({ action: "claim" })).json()).job;
+  expect(delivery.phase).toBe("deliver");
+  expect(delivery.originalText).toBeUndefined();
+  // Delivery is unit-tested with a fake messenger; never send real LINE in E2E.
+});

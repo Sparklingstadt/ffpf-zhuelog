@@ -3,6 +3,7 @@ package main
 import "testing"
 
 func TestBatteryParsing(t *testing.T) {
+	t.Parallel()
 	r := parseBattery("Now drawing from 'Battery Power'\n -InternalBattery-0 (id=123) 42%; discharging; 2:03 remaining present: true")
 	if r["available"] != true || r["percent"] != 42 || r["remainingMinutes"] != 123 || r["state"] != "discharging" || r["powerSource"] != "battery" {
 		t.Fatal(r)

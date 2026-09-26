@@ -4,6 +4,7 @@ import type { LineInput, LineJob } from "@/domain/line/line-learning";
 import type { LearningEntryDraft } from "@/domain/learning/entities/learning-entry";
 import { getPrismaClient } from "../prisma-client";
 import { routeDevelopmentMessage } from "@/domain/line/development-routing";
+import type { GenerationFailureCode } from "@/domain/line/generation-failure";
 
 const leaseWhere = (job: LineJob) => ({
   id: job.id,
@@ -203,8 +204,17 @@ export class PrismaLineJobRepository implements LineJobRepository {
     });
   }
 
-  async saveReply(job: LineJob, text: string) {
-    if (!["battery", "dev-issue"].includes(job.kind)) return false;
+  async saveReply(
+    job: LineJob,
+    text: string,
+    failureCode?: GenerationFailureCode,
+  ) {
+    if (
+      job.kind === "correction"
+        ? !failureCode
+        : !["battery", "dev-issue"].includes(job.kind)
+    )
+      return false;
     const result = await getPrismaClient().lineLearningJob.updateMany({
       where: { ...leaseWhere(job), kind: job.kind },
       data: {
@@ -212,7 +222,7 @@ export class PrismaLineJobRepository implements LineJobRepository {
         leaseToken: null,
         replyText: text,
         availableAt: new Date(),
-        failureCode: null,
+        failureCode: failureCode ?? null,
       },
     });
     return result.count === 1;
@@ -232,7 +242,13 @@ export class PrismaLineJobRepository implements LineJobRepository {
   async finishDelivery(job: LineJob) {
     await getPrismaClient().lineLearningJob.updateMany({
       where: leaseWhere(job),
-      data: { status: "SENT", leaseToken: null, failureCode: null },
+      data: {
+        status: "SENT",
+        leaseToken: null,
+        ...(job.kind === "correction" && job.replyText
+          ? {}
+          : { failureCode: null }),
+      },
     });
   }
 
@@ -246,7 +262,9 @@ export class PrismaLineJobRepository implements LineJobRepository {
         status:
           permanent || exhausted ? "FAILED" : generating ? "PENDING" : "READY",
         leaseToken: null,
-        failureCode: code,
+        ...(job.kind === "correction" && job.replyText
+          ? {}
+          : { failureCode: code }),
         availableAt: new Date(Date.now() + 30_000 * 2 ** tries),
       },
     });

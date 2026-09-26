@@ -24,9 +24,10 @@ type job struct {
 	OriginalText string `json:"originalText"`
 }
 type response struct {
-	Job     *job  `json:"job"`
-	OK      bool  `json:"ok"`
-	Allowed *bool `json:"allowed"`
+	Job                  *job  `json:"job"`
+	OK                   bool  `json:"ok"`
+	Allowed              *bool `json:"allowed"`
+	FailureNotifications bool  `json:"failureNotifications"`
 }
 
 var uuid = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
@@ -148,19 +149,31 @@ func (w *worker) step(ctx context.Context) (bool, error) {
 	case "generate":
 		result, err := w.correct(ctx, j.OriginalText)
 		if err != nil {
-			if ctx.Err() == nil {
-				_, _ = w.call(ctx, map[string]any{"action": "fail", "id": j.ID, "leaseToken": j.LeaseToken})
+			if ctx.Err() != nil {
+				return false, ctx.Err()
 			}
-			return false, errors.New("correction failed")
+			code := correctionFailureCode(err)
+			fmt.Fprintf(os.Stderr, "%s LINE job %s: %s\n", time.Now().Format(time.RFC3339), j.ID, code)
+			command["action"] = "fail"
+			if r.FailureNotifications {
+				command["code"] = code
+			} else {
+				fmt.Fprintln(os.Stderr, time.Now().Format(time.RFC3339), "LINE failure notification requires a server update; reporting legacy failure.")
+			}
+		} else {
+			command["action"], command["correction"] = "complete", result
 		}
-		command["action"], command["correction"] = "complete", result
 	}
 	r, err = w.call(ctx, command)
 	if err != nil {
 		return false, err
 	}
 	if r != nil && r.OK {
-		fmt.Printf("LINE job %s: %s processed\n", j.ID, j.Phase)
+		phase := j.Phase
+		if command["action"] == "fail" {
+			phase = "failure reported"
+		}
+		fmt.Printf("LINE job %s: %s processed\n", j.ID, phase)
 	}
 	return r != nil && r.OK, nil
 }
@@ -169,7 +182,7 @@ func (w *worker) run(ctx context.Context, once bool, wait time.Duration) {
 	for ctx.Err() == nil {
 		processed, err := w.step(ctx)
 		if err != nil && ctx.Err() == nil {
-			fmt.Fprintln(os.Stderr, "LINE processing failed. Check settings/usage and job status; retries are bounded.")
+			fmt.Fprintln(os.Stderr, time.Now().Format(time.RFC3339), workerFailureMessage(err))
 		}
 		if once {
 			return
@@ -184,6 +197,10 @@ func (w *worker) run(ctx context.Context, once bool, wait time.Duration) {
 		}
 	}
 }
+func workerFailureMessage(err error) string {
+	return "LINE processing failed. Check settings/usage and job status; retries are bounded."
+}
+
 func main() {
 	once := flag.Bool("once", false, "Process at most one job (may change server state)")
 	check := flag.Bool("check", false, "Validate local configuration only; no network or AI")

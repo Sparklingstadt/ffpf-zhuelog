@@ -31,9 +31,26 @@ func TestCodexProtocolAndIsolation(t *testing.T) {
 		t.Fatal("wrong correction")
 	}
 }
+func TestCodexAcceptsUnknownVersion(t *testing.T) {
+	t.Parallel()
+	source, err := os.ReadFile(fixture(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	modified := strings.Replace(string(source), "codex/0.155.0-alpha.9.2", "codex/future-version", 1)
+	path := filepath.Join(t.TempDir(), "fixture.mjs")
+	if err := os.WriteFile(path, []byte(modified), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := correctText(context.Background(), path, "今天我很busy。"); err != nil {
+		t.Fatal(err)
+	}
+}
 func TestCodexFailsClosed(t *testing.T) {
+	t.Parallel()
 	for _, scenario := range []string{"tool", "failure", "exit", "long"} {
 		t.Run(scenario, func(t *testing.T) {
+			t.Parallel()
 			if _, err := runCodex(context.Background(), fixture(t), scenario); err == nil {
 				t.Fatal("accepted unsafe response")
 			}
@@ -42,12 +59,12 @@ func TestCodexFailsClosed(t *testing.T) {
 }
 
 func TestCodexRejectsUnsafeHandshake(t *testing.T) {
+	t.Parallel()
 	source, err := os.ReadFile(fixture(t))
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, scenario := range []struct{ name, before, after string }{
-		{"version", "codex/0.155.0-alpha.9.2", "codex/unknown"},
 		{"account", `type: "chatgpt"`, `type: "apiKey"`},
 		{"plan", `planType: "business"`, `planType: "unknown"`},
 		{"model", `model: "gpt-5.6-sol"`, `model: "wrong-model"`},
@@ -56,6 +73,7 @@ func TestCodexRejectsUnsafeHandshake(t *testing.T) {
 		{"tool-item", `type: "unused"`, `type: "unused"`},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
+			t.Parallel()
 			modified := strings.Replace(string(source), scenario.before, scenario.after, 1)
 			if scenario.name == "tool-item" {
 				modified = strings.Replace(string(source), `const text = params.input[0].text;`, `send({method:"item/started",params:{item:{type:"commandExecution"}}}); const text = params.input[0].text;`, 1)
@@ -85,6 +103,7 @@ func TestLiveCodex(t *testing.T) {
 	}
 }
 func TestCodexCancellation(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	if _, err := runCodex(ctx, fixture(t), "hang"); err == nil {
@@ -97,6 +116,7 @@ func TestCodexCancellation(t *testing.T) {
 	}
 }
 func TestCorrectionBounds(t *testing.T) {
+	t.Parallel()
 	for _, output := range []string{
 		`{"correctedText":"a","pinyin":"b","hints":["c"],"extra":true}`,
 		`{"correctedText":"a","pinyin":"b","hints":[]}`,
@@ -110,6 +130,7 @@ func TestCorrectionBounds(t *testing.T) {
 	}
 }
 func TestPromptAndSecurityParity(t *testing.T) {
+	t.Parallel()
 	data, err := os.ReadFile("../../src/domain/learning/chinese-correction.ts")
 	if err != nil {
 		t.Fatal(err)
@@ -137,8 +158,5 @@ func TestPromptAndSecurityParity(t *testing.T) {
 	}
 	if !reflect.DeepEqual(ts, goFeatures) {
 		t.Fatal("disabled features drift")
-	}
-	if !strings.Contains(string(data), `"`+testedCodexVersion+`"`) {
-		t.Fatal("protocol version drift")
 	}
 }

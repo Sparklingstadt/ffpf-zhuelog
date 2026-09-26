@@ -77,6 +77,7 @@ func TestConfigLocalOnly(t *testing.T) {
 	}
 }
 func TestEnvRejectsExpansion(t *testing.T) {
+	t.Parallel()
 	for _, raw := range []string{"$TOKEN", "'unterminated", "$(echo secret)", "`echo secret`", `"foo" junk`} {
 		if _, err := literalEnv(raw); err == nil {
 			t.Errorf("accepted %s", raw)

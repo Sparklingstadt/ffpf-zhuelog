@@ -11,6 +11,7 @@ import (
 )
 
 func TestIssueDraft(t *testing.T) {
+	t.Parallel()
 	d, err := makeIssue("job-1", "@user 検索\n![image](https://example.com)\x00")
 	if err != nil {
 		t.Fatal(err)
@@ -26,8 +27,10 @@ func TestIssueDraft(t *testing.T) {
 	}
 }
 func TestIssueReconciliation(t *testing.T) {
+	t.Parallel()
 	for _, scenario := range []string{"create", "existing", "lost-response", "uncertain", "denied", "lost-lease", "scan-failed", "scan-limit", "invalid-url", "pull-request"} {
 		t.Run(scenario, func(t *testing.T) {
+			t.Parallel()
 			posts, gets, permits := 0, 0, 0
 			marker := "<!-- zhuelog-dev:job-1 -->"
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
