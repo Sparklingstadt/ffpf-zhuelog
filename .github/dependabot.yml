@@ -12,6 +12,7 @@ updates:
         patterns: ["next", "eslint-config-next"]
       compatible-updates:
         patterns: ["*"]
+        exclude-patterns: ["cn", "class-variance-authority"] # 0.x can break in minor/patch releases.
         update-types: ["minor", "patch"]
     # Revisit these constraints using docs/dependency-maintenance.md.
     ignore:
