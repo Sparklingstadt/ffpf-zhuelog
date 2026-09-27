@@ -265,7 +265,7 @@ export function defineIntegration(integration: Integration): Integration {
 処理の順番：
 
 1. `params` から `id` を取り出し、`integrations.find(id)` で連携を引く（`Map` を引くだけ）
-2. 未ログインなら、連携があれば `/signin?callbackUrl=/integrations/<登録済みの id>` へ、なければ `/signin` へリダイレクトする（URL の入力値をそのまま戻り先に入れない）
+2. 未ログインなら、通常は Auth.js の proxy（`authorized` コールバック）がページより先に `/signin?callbackUrl=<エンコードしたパス>` へリダイレクトする（既存のアプリ共通の動き。戻り先はサインイン時に `getSafeCallbackPath` で検査される）。ページ自身も念のため、連携があれば `/signin?callbackUrl=/integrations/<登録済みの id>` へ、なければ `/signin` へリダイレクトする
 3. 管理者でなければ `/` へリダイレクトする
 4. 連携がなければ `notFound()`
 5. `integrationUseCases.previewIntegration.execute(integration)` で表示内容を作る。例外が起きたら固定のエラー文言を表示し、`console.error("INTEGRATION_PREVIEW_UNAVAILABLE", integration.id)` を出す
@@ -295,13 +295,13 @@ export function defineIntegration(integration: Integration): Integration {
 - ルートは `params` から `id` を取り出し、依存と一緒にコントローラーへ渡すだけにする（既存の `src/app/api/corrections/route.ts` と同じ形）。`runtime = "nodejs"` と `dynamic = "force-dynamic"` は今と同じ。
 - コントローラー `src/presentation/controllers/integration-export-controller.ts` は、上から順に判定する。
 
-| 順  | 条件                                                                       | 応答                                                      |
-| --- | -------------------------------------------------------------------------- | --------------------------------------------------------- |
-| 1   | 管理者でない（未ログイン・ゲスト）                                         | 403 `{ "error": "管理者としてログインしてください。" }`   |
-| 2   | 連携がない                                                                 | 404 `{ "error": "連携が見つかりません。" }`               |
-| 3   | `export` が `null`                                                         | 422 `{ "error": "出力できる項目がありません。" }`         |
-| 4   | 成功                                                                       | 200。本文は `body`                                        |
-| 5   | 想定外の例外（DB・プラグイン・不正なファイル名・不正な Content-Type など） | 503 `{ "error": "出力ファイルを作成できませんでした。" }` |
+| 順  | 条件                                                                                           | 応答                                                      |
+| --- | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| 1   | 管理者でない（ゲスト。未ログインは proxy が先に 401 `{ "error": "認証が必要です。" }` を返す） | 403 `{ "error": "管理者としてログインしてください。" }`   |
+| 2   | 連携がない                                                                                     | 404 `{ "error": "連携が見つかりません。" }`               |
+| 3   | `export` が `null`                                                                             | 422 `{ "error": "出力できる項目がありません。" }`         |
+| 4   | 成功                                                                                           | 200。本文は `body`                                        |
+| 5   | 想定外の例外（DB・プラグイン・不正なファイル名・不正な Content-Type など）                     | 503 `{ "error": "出力ファイルを作成できませんでした。" }` |
 
 - すべての応答に `Cache-Control: private, no-store` を付ける
 - 200 のときは `Content-Type: <contentType>` と `Content-Disposition: attachment; filename="<fileName>"` を付ける

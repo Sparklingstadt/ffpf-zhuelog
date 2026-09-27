@@ -32,8 +32,10 @@ export default async function IntegrationPage({
   params,
 }: IntegrationPageProps) {
   const { id } = await params;
-  // Map lookup only, so the sign-in redirect never echoes the raw URL segment.
   const integration = integrations.find(id);
+  // The Auth.js proxy normally redirects signed-out visitors before this page
+  // runs (with the encoded path as callbackUrl, checked again on sign-in).
+  // This branch is defense in depth and only ever uses a registered id.
   const user = await getCurrentViewerUser();
   if (!user)
     redirect(
