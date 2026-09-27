@@ -17,6 +17,7 @@
 - ReactとReact DOM、およびそれぞれの型定義は同じPRで更新する。
 - Next.jsとeslint-config-nextも同じPRで更新する。
 - その他のminor/patch更新とGitHub Actions更新はそれぞれグループ化する。major更新は互換性を個別に確認する。
+- 0.x系のパッケージ（`cn`、`class-variance-authority`）はminor/patchでも互換性が保証されない（`cn` は0.3.1・0.3.2のpatch更新でクラスのマージ規則が変わった）。そのため `compatible-updates` グループから除外し、個別PRで互換性を確認する。0.x系の依存を追加したら `exclude-patterns` にも追加する。
 - CIで型チェック・Lint・ユニットテスト・ビルド・PC/モバイルE2E・npm auditを実行する。警告の無効化や `--force` / `--legacy-peer-deps` による回避は行わない。
 - 実行環境の最低バージョンを変更する際は、Nodeの型・CI・README・本番設定を一緒に見直す。
 
