@@ -139,6 +139,7 @@ OPENAI_MODEL="gpt-5-mini"
 管理者はホームの「Typle用リスト」（`/integrations/typle`）から、学習ノートをTyple向けの復習リストへ変換できます。処理は連携プラグイン `@ffpf-zhuelog/typle-integrate-plugin`（`packages/typle-integrate-plugin/`）にあります。
 
 - ヒント内の「引用語」と、添削によって追加された短い中国語を抽出します。
+- 3文字以下の語（图书馆など）は分割せず1語として扱います。語順を入れ替えただけの部分は、追加された語に数えません。
 - 同じ語をまとめ、中国語を表示・入力対象、元のヒント・例文・拼音を補足にします。
 - 新しい学習ノートから最大1,000件、重複を除いて最大500語を扱います。
 - `/api/integrations/typle/export` から、`typle-r` v1保存形式のJSONをダウンロードできます。
