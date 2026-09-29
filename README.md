@@ -13,12 +13,25 @@
 
 ## アーキテクチャ
 
-コードは依存関係が内側へ向くよう、機能別の関心事を5層に分けています。
+npm workspaces のモノレポです。ルートの Next.js アプリ（`@ffpf-zhuelog/web`）が、`packages/` のパッケージを使います。パッケージはビルドせず、TypeScript のまま読み込みます。
 
 ```text
-src/
+.
+├── src/                          # Next.js アプリ（@ffpf-zhuelog/web）
+├── packages/
+│   ├── core/                     # @ffpf-zhuelog/core
+│   └── typle-integrate-plugin/   # @ffpf-zhuelog/typle-integrate-plugin
+└── workers/line/                 # Go製のLINEワーカー
+```
+
+コードは依存関係が内側へ向くよう、機能別の関心事を層に分けています。
+
+```text
+packages/core/src/
 ├── domain/          # エンティティ、値オブジェクト、リポジトリの契約
 ├── application/     # ユースケースと外部サービスのポート
+└── integration/     # 連携プラグインとの約束事（defineIntegration・登録）
+src/
 ├── infrastructure/  # Prisma、Auth.js、CSV解析、OpenAIの実装
 ├── presentation/    # 画面部品、Server Action、HTTPコントローラー
 ├── composition/     # 実装を組み立ててユースケースを公開
@@ -26,6 +39,21 @@ src/
 ```
 
 `domain` はフレームワークやデータベースに依存せず、`application` はドメインの契約だけを利用します。外部サービス固有のコードは `infrastructure` に閉じ込め、`composition` で依存性を注入します。
+
+パッケージ間の依存は、次のルールをESLintで検査します。
+
+- `packages/` からアプリの内部（`@/…`）、Next.js、React、Prismaを import しない
+- `@ffpf-zhuelog/core` は個別の連携プラグインを import しない
+- プラグインは `@ffpf-zhuelog/core/integration` だけを使う
+- アプリでプラグインを import するのは `src/composition/` だけ
+
+### 連携プラグインの追加
+
+連携の画面（`/integrations/<id>`）、出力API（`/api/integrations/<id>/export`）、管理者の確認はアプリ側が共通で用意します。プラグインは、学習ノートから表示内容と出力ファイルを作る処理だけを持ちます。
+
+1. `packages/<名前>-plugin/` を作り、`package.json` の `name` を `@ffpf-zhuelog/<名前>-plugin`、`exports` を `{ ".": "./src/index.ts" }`、`dependencies` を `{ "@ffpf-zhuelog/core": "*" }` にします。
+2. `src/index.ts` で、`@ffpf-zhuelog/core/integration` の `defineIntegration` を使って連携を定義し、default export します。`id` は英小文字・数字・ハイフンで、40文字以内です。
+3. ルートの `package.json` の `dependencies` に追加して `npm install` を実行し、`src/composition/integration-container.ts` の `createIntegrationRegistry([...])` に加えます。
 
 ## 起動方法
 
@@ -108,12 +136,12 @@ OPENAI_MODEL="gpt-5-mini"
 
 ## Typle用の復習リスト
 
-管理者はホームの「Typle用リスト」から、学習ノートをTyple向けの復習リストへ変換できます。
+管理者はホームの「Typle用リスト」（`/integrations/typle`）から、学習ノートをTyple向けの復習リストへ変換できます。処理は連携プラグイン `@ffpf-zhuelog/typle-integrate-plugin`（`packages/typle-integrate-plugin/`）にあります。
 
 - ヒント内の「引用語」と、添削によって追加された短い中国語を抽出します。
 - 同じ語をまとめ、中国語を表示・入力対象、元のヒント・例文・拼音を補足にします。
 - 新しい学習ノートから最大1,000件、重複を除いて最大500語を扱います。
-- `/api/typle/export` から、`typle-r` v1保存形式のJSONをダウンロードできます。
+- `/api/integrations/typle/export` から、`typle-r` v1保存形式のJSONをダウンロードできます。
 
 画面と出力APIは管理者専用です。現在の `typle-r` には外部JSONを読み込む画面がないため、現時点の連携範囲は自動抽出・プレビュー・互換JSON出力までです。Typleアカウントへ直接保存するには、`typle-r` 側にインポート導線を追加してください。
 
@@ -182,7 +210,7 @@ Desktop Chromiumとモバイル幅（Pixel 7 / Chromium）の両方で検証し�
 - CSVの登録・リロード後の永続化・可変ヒント・BOM・引用符・改行・入力エラー
 - 日付一覧・ノート詳細・前後移動・JST日付境界・無効なURL・折り畳み
 - OpenAIキー未設定時のチャット利用拒否
-- Typle用リストの抽出・管理者限定表示・互換JSON出力
+- Typle用リストの抽出・管理者限定表示・互換JSON出力・先頭20件の表示・存在しない連携の404
 
 DBは`127.0.0.1:55439/zhuelog_e2e`に固定され、`compose.e2e.yaml`の専用コンテナだけを使用します。
 各テスト前にこのDBの学習データを初期化します。ポート55439を別のDBに割り当てないでください。

@@ -30,6 +30,19 @@ function run(command, args, options = {}) {
   });
 }
 
+async function testFiles(dir) {
+  const names = await readdir(new URL(`../${dir}`, import.meta.url)).catch(
+    (error) => {
+      if (error.code === "ENOENT") return [];
+      throw error;
+    },
+  );
+  return names
+    .filter((name) => name.endsWith(".test.ts"))
+    .sort()
+    .map((name) => `${dir}${name}`);
+}
+
 const workerOnly = process.argv.includes("--worker");
 const worker = { cwd: new URL("../workers/line/", import.meta.url) };
 const checks = [
@@ -37,10 +50,23 @@ const checks = [
   run("go", ["test", "-race", "-parallel", "4", "./..."], worker),
 ];
 if (!workerOnly) {
-  const files = (await readdir(new URL("../tests/", import.meta.url)))
-    .filter((name) => name.endsWith(".test.ts"))
-    .sort()
-    .map((name) => `tests/${name}`);
+  // App tests live in tests/; each workspace package keeps its own tests/.
+  const packages = (
+    await readdir(new URL("../packages/", import.meta.url), {
+      withFileTypes: true,
+    })
+  )
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+  const files = [
+    ...(await testFiles("tests/")),
+    ...(
+      await Promise.all(
+        packages.map((name) => testFiles(`packages/${name}/tests/`)),
+      )
+    ).flat(),
+  ];
   checks.push(
     (async () =>
       (await run(

@@ -1,4 +1,4 @@
-import type { CorrectPersonalText } from "../../application/practice/use-cases/correct-personal-text";
+import type { CorrectPersonalText } from "@ffpf-zhuelog/core/application/practice/use-cases/correct-personal-text";
 import {
   readLimitedBody,
   BodyLimitError,
@@ -8,7 +8,7 @@ import {
   correctionErrors,
   PersonalCorrectionError,
   type CorrectionErrorCode,
-} from "../../domain/practice/personal-correction";
+} from "@ffpf-zhuelog/core/domain/practice/personal-correction";
 
 const statuses: Record<CorrectionErrorCode, number> = {
   invalid: 400,

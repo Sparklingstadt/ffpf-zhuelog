@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { PersonalCorrectionRecord } from "@/domain/practice/personal-correction";
+import type { PersonalCorrectionRecord } from "@ffpf-zhuelog/core/domain/practice/personal-correction";
 import { LearningEntryCard } from "@/presentation/components/learning/learning-entry-card";
 import { Button } from "@/presentation/components/ui/button";
 

@@ -4,19 +4,22 @@ import { createHmac, randomUUID } from "node:crypto";
 import {
   batteryReportSchema,
   formatBatteryReply,
-} from "../src/domain/line/battery-report";
+} from "@ffpf-zhuelog/core/domain/line/battery-report";
 import {
   parseMacBattery,
   readMacBattery,
 } from "../src/infrastructure/macos/mac-battery-reader";
 import { handleLineWebhook } from "../src/presentation/controllers/line-webhook-controller";
 import { handleLineWorker } from "../src/presentation/controllers/line-worker-controller";
-import { ProcessLineLearning } from "../src/application/line/use-cases/process-line-learning";
+import { ProcessLineLearning } from "@ffpf-zhuelog/core/application/line/use-cases/process-line-learning";
 import type {
   LineJobRepository,
   LineMessenger,
-} from "../src/application/line/ports/line-job-repository";
-import type { LineJob, LineInput } from "../src/domain/line/line-learning";
+} from "@ffpf-zhuelog/core/application/line/ports/line-job-repository";
+import type {
+  LineJob,
+  LineInput,
+} from "@ffpf-zhuelog/core/domain/line/line-learning";
 import { LinePushMessenger } from "../src/infrastructure/line/line-messenger";
 
 const checkedAt = "2026-09-24T15:00:00.000Z";

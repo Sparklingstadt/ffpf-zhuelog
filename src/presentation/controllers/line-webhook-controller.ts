@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { LineJobRepository } from "@/application/line/ports/line-job-repository";
+import type { LineJobRepository } from "@ffpf-zhuelog/core/application/line/ports/line-job-repository";
 import {
   readLimitedBody,
   verifyLineSignature,

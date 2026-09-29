@@ -131,7 +131,7 @@ func TestCorrectionBounds(t *testing.T) {
 }
 func TestPromptAndSecurityParity(t *testing.T) {
 	t.Parallel()
-	data, err := os.ReadFile("../../src/domain/learning/chinese-correction.ts")
+	data, err := os.ReadFile("../../packages/core/src/domain/learning/chinese-correction.ts")
 	if err != nil {
 		t.Fatal(err)
 	}

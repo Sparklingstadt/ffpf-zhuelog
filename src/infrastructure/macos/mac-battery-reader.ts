@@ -3,7 +3,7 @@ import { promisify } from "node:util";
 import {
   batteryReportSchema,
   type BatteryReport,
-} from "@/domain/line/battery-report";
+} from "@ffpf-zhuelog/core/domain/line/battery-report";
 
 const execute = promisify(execFile);
 

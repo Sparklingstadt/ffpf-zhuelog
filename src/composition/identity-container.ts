@@ -1,5 +1,5 @@
-import { RequireAdminUser } from "@/application/identity/use-cases/require-admin-user";
-import { RequireViewerUser } from "@/application/identity/use-cases/require-viewer-user";
+import { RequireAdminUser } from "@ffpf-zhuelog/core/application/identity/use-cases/require-admin-user";
+import { RequireViewerUser } from "@ffpf-zhuelog/core/application/identity/use-cases/require-viewer-user";
 import { AuthJsCurrentUserProvider } from "@/infrastructure/auth/authjs-current-user-provider";
 import { signIn, signOut } from "@/infrastructure/auth/authjs-config";
 

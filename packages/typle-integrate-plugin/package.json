@@ -1,0 +1,11 @@
+{
+  "name": "@ffpf-zhuelog/typle-integrate-plugin",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@ffpf-zhuelog/core": "*"
+  }
+}

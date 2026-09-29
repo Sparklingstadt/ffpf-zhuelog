@@ -1,7 +1,7 @@
 import {
   correctionSchema,
   LINE_CORRECTION_INSTRUCTIONS,
-} from "@/domain/line/line-learning";
+} from "@ffpf-zhuelog/core/domain/line/line-learning";
 import { runCodexLocalTurn } from "@/infrastructure/chat/codex-local-client";
 
 export async function correctLineText(text: string, signal?: AbortSignal) {

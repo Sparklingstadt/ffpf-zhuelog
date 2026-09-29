@@ -1,4 +1,4 @@
-import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
+import type { LearningEntry } from "@ffpf-zhuelog/core/domain/learning/entities/learning-entry";
 
 type PrismaLearningEntryRecord = {
   id: string;
@@ -9,7 +9,9 @@ type PrismaLearningEntryRecord = {
   hints: { id: string; content: string; position: number }[];
 };
 
-export function toLearningEntry(record: PrismaLearningEntryRecord): LearningEntry {
+export function toLearningEntry(
+  record: PrismaLearningEntryRecord,
+): LearningEntry {
   return {
     id: record.id,
     originalText: record.originalText,

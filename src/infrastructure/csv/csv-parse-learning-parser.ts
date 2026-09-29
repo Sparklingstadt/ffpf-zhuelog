@@ -1,8 +1,8 @@
 import { parse } from "csv-parse/sync";
 
-import type { CsvLearningParser } from "@/application/learning/ports/csv-learning-parser";
-import type { LearningEntryDraft } from "@/domain/learning/entities/learning-entry";
-import { CsvValidationError } from "@/domain/learning/csv-validation-error";
+import type { CsvLearningParser } from "@ffpf-zhuelog/core/application/learning/ports/csv-learning-parser";
+import type { LearningEntryDraft } from "@ffpf-zhuelog/core/domain/learning/entities/learning-entry";
+import { CsvValidationError } from "@ffpf-zhuelog/core/domain/learning/csv-validation-error";
 
 const MAX_ROWS = 1_000;
 const normalizeHeader = (value: string) =>

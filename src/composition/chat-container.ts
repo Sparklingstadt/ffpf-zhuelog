@@ -1,4 +1,4 @@
-import { StreamLearningChat } from "@/application/chat/use-cases/stream-learning-chat";
+import { StreamLearningChat } from "@ffpf-zhuelog/core/application/chat/use-cases/stream-learning-chat";
 import { OpenAiLearningChatGateway } from "@/infrastructure/chat/openai-learning-chat-gateway";
 import { CodexLocalLearningChatGateway } from "@/infrastructure/chat/codex-local-learning-chat-gateway";
 import { isCodexLocalRequested } from "@/infrastructure/chat/codex-local-policy";

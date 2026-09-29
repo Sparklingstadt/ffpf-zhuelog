@@ -4,7 +4,7 @@ import { streamText, type ModelMessage } from "ai";
 import type {
   LearningChatGateway,
   LearningChatRequest,
-} from "@/application/chat/ports/learning-chat-gateway";
+} from "@ffpf-zhuelog/core/application/chat/ports/learning-chat-gateway";
 import { getOpenAiModelName } from "@/infrastructure/config/environment";
 
 export class OpenAiLearningChatGateway implements LearningChatGateway {

@@ -6,7 +6,7 @@ import {
   issueResultSchema,
   makeDevelopmentIssue,
   type IssueResult,
-} from "@/domain/line/development-mode";
+} from "@ffpf-zhuelog/core/domain/line/development-mode";
 
 const execute = promisify(execFile);
 const endpoint = `https://api.github.com/repos/${DEVELOPMENT_REPOSITORY}/issues`;

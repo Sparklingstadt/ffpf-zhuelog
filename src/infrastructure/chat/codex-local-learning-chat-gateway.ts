@@ -3,7 +3,7 @@ import { createUIMessageStream, createUIMessageStreamResponse } from "ai";
 import type {
   LearningChatGateway,
   LearningChatRequest,
-} from "@/application/chat/ports/learning-chat-gateway";
+} from "@ffpf-zhuelog/core/application/chat/ports/learning-chat-gateway";
 import { CodexLocalError, runCodexLocalTurn } from "./codex-local-client";
 
 // Limit usage to one active local generation, including across dev hot reloads.

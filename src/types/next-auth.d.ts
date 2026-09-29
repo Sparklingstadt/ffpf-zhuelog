@@ -1,6 +1,6 @@
 import type { DefaultSession } from "next-auth";
 
-import type { AppRole } from "@/domain/identity/entities/authenticated-user";
+import type { AppRole } from "@ffpf-zhuelog/core/domain/identity/entities/authenticated-user";
 
 declare module "next-auth" {
   interface Session {

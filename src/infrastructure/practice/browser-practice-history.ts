@@ -2,7 +2,7 @@ import { z } from "zod";
 import {
   personalCorrectionRecordSchema,
   type PersonalCorrectionRecord,
-} from "../../domain/practice/personal-correction";
+} from "@ffpf-zhuelog/core/domain/practice/personal-correction";
 
 export const PRACTICE_HISTORY_KEY = "zhuelog:personal-practice:v1";
 export const MAX_PRACTICE_HISTORY = 100;

@@ -1,10 +1,10 @@
 import { z } from "zod";
-import type { LineJobRepository } from "@/application/line/ports/line-job-repository";
-import type { ProcessLineLearning } from "@/application/line/use-cases/process-line-learning";
-import { correctionSchema } from "@/domain/line/line-learning";
-import { batteryReportSchema } from "@/domain/line/battery-report";
-import { issueResultSchema } from "@/domain/line/development-mode";
-import { generationFailureSchema } from "@/domain/line/generation-failure";
+import type { LineJobRepository } from "@ffpf-zhuelog/core/application/line/ports/line-job-repository";
+import type { ProcessLineLearning } from "@ffpf-zhuelog/core/application/line/use-cases/process-line-learning";
+import { correctionSchema } from "@ffpf-zhuelog/core/domain/line/line-learning";
+import { batteryReportSchema } from "@ffpf-zhuelog/core/domain/line/battery-report";
+import { issueResultSchema } from "@ffpf-zhuelog/core/domain/line/development-mode";
+import { generationFailureSchema } from "@ffpf-zhuelog/core/domain/line/generation-failure";
 import {
   readLimitedBody,
   verifyWorkerToken,

@@ -1,10 +1,13 @@
 import { randomUUID } from "node:crypto";
-import type { LineJobRepository } from "@/application/line/ports/line-job-repository";
-import type { LineInput, LineJob } from "@/domain/line/line-learning";
-import type { LearningEntryDraft } from "@/domain/learning/entities/learning-entry";
+import type { LineJobRepository } from "@ffpf-zhuelog/core/application/line/ports/line-job-repository";
+import type {
+  LineInput,
+  LineJob,
+} from "@ffpf-zhuelog/core/domain/line/line-learning";
+import type { LearningEntryDraft } from "@ffpf-zhuelog/core/domain/learning/entities/learning-entry";
 import { getPrismaClient } from "../prisma-client";
-import { routeDevelopmentMessage } from "@/domain/line/development-routing";
-import type { GenerationFailureCode } from "@/domain/line/generation-failure";
+import { routeDevelopmentMessage } from "@ffpf-zhuelog/core/domain/line/development-routing";
+import type { GenerationFailureCode } from "@ffpf-zhuelog/core/domain/line/generation-failure";
 
 const leaseWhere = (job: LineJob) => ({
   id: job.id,

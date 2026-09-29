@@ -1,0 +1,13 @@
+{
+  "name": "@ffpf-zhuelog/core",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    "./domain/*": "./src/domain/*.ts",
+    "./application/*": "./src/application/*.ts",
+    "./integration": "./src/integration/index.ts"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  }
+}
