@@ -47,6 +47,51 @@ test("deduplicates terms newest-first and accepts a short all-Han hint", () => {
   );
 });
 
+test("keeps only the added word when a correction moves text", () => {
+  const words = extractTypleWords([
+    entry({
+      originalText: "我昨天去图书馆了。",
+      correctedText: "我昨天去了图书馆。",
+      pinyin: "Wǒ zuótiān qù le túshūguǎn.",
+      hints: [],
+    }),
+  ]);
+  assert.deepEqual(
+    words.map((word) => word.display),
+    ["了"],
+  );
+});
+
+test("keeps three-character words whole instead of ICU fragments", () => {
+  const words = extractTypleWords([
+    entry({
+      originalText: "我去书店。",
+      correctedText: "我去图书馆。",
+      pinyin: "Wǒ qù túshūguǎn.",
+      hints: [{ id: "hint-1", content: "「博物馆」も同じ形", position: 0 }],
+    }),
+  ]);
+  assert.deepEqual(
+    words.map((word) => word.display),
+    ["博物馆", "图书馆"],
+  );
+});
+
+test("still segments longer corrected spans into words", () => {
+  const words = extractTypleWords([
+    entry({
+      originalText: "我吃饭了。",
+      correctedText: "我已经吃过饭了。",
+      pinyin: "Wǒ yǐjīng chīguo fàn le.",
+      hints: [],
+    }),
+  ]);
+  assert.deepEqual(
+    words.map((word) => word.display),
+    ["已经", "吃", "过"],
+  );
+});
+
 test("creates the v1 saved-list shape accepted by typle-r", () => {
   const payload = createTypleExport(
     [entry()],

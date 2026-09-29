@@ -19,21 +19,52 @@ export type TypleExport = {
   lists: [TypleWordList];
 };
 
-const HAN = /\p{Script=Han}/u;
+const HAN_RUN = /\p{Script=Han}+/gu;
 const ONLY_HAN = /^\p{Script=Han}{1,20}$/u;
 const QUOTED = /[\u300c\u300e“"']([^\u300d\u300f”"']{1,40})[\u300d\u300f”"']/gu;
 const MAX_WORDS = 500;
+// ICU's Chinese dictionary splits many common three-character words
+// (图书馆 → 图书|馆, 电影院 → 电影|院), so short runs are kept whole.
+const MAX_UNSEGMENTED = 3;
+// Text this long that the original sentence also contains was moved, not added.
+const MIN_MOVED = 2;
 
 function chineseTokens(text: string) {
   const segmenter = new Intl.Segmenter("zh", { granularity: "word" });
-  return Array.from(segmenter.segment(text))
-    .filter((part) => part.isWordLike && HAN.test(part.segment))
-    .map((part) => part.segment.trim())
-    .filter(Boolean);
+  return (text.match(HAN_RUN) ?? []).flatMap((run) =>
+    Array.from(run).length <= MAX_UNSEGMENTED
+      ? [run]
+      : Array.from(segmenter.segment(run))
+          .filter((part) => part.isWordLike)
+          .map((part) => part.segment),
+  );
+}
+
+// The longest run of `changed` that `original` also contains. `changed` is at
+// most 20 characters, so trying its substrings stays cheap for long notes.
+function movedRun(original: string, changed: readonly string[]) {
+  for (let length = changed.length; length >= MIN_MOVED; length--) {
+    for (let start = 0; start + length <= changed.length; start++) {
+      if (original.includes(changed.slice(start, start + length).join("")))
+        return { start, length };
+    }
+  }
+  return undefined;
+}
+
+// Splits the changed part of the corrected sentence around text that also
+// appears in the original, so a reordering keeps only what was really added.
+function addedParts(original: string, changed: readonly string[]): string[] {
+  const moved = movedRun(original, changed);
+  if (!moved) return [changed.join("")];
+  return [
+    ...addedParts(original, changed.slice(0, moved.start)),
+    ...addedParts(original, changed.slice(moved.start + moved.length)),
+  ];
 }
 
 function termsFromHint(hint: string) {
-  const terms = Array.from(hint.matchAll(QUOTED), (match) => match[1].trim())
+  const terms = Array.from(hint.matchAll(QUOTED), (match) => match[1])
     .flatMap(chineseTokens)
     .filter((term) => ONLY_HAN.test(term));
 
@@ -64,12 +95,14 @@ function correctedTerms(originalText: string, correctedText: string) {
     suffix++;
   }
 
-  const changed = corrected
-    .slice(prefix, corrected.length - suffix)
-    .join("")
-    .trim();
-  if (!changed || Array.from(changed).length > 20) return [];
-  return chineseTokens(changed).filter((token) => ONLY_HAN.test(token));
+  const changed = corrected.slice(prefix, corrected.length - suffix);
+  if (changed.length > 20) return [];
+  return addedParts(
+    original.slice(prefix, original.length - suffix).join(""),
+    changed,
+  )
+    .flatMap(chineseTokens)
+    .filter((token) => ONLY_HAN.test(token));
 }
 
 function annotationFor(entry: LearningEntry, term: string) {
