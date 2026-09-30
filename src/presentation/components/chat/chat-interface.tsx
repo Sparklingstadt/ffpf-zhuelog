@@ -117,7 +117,7 @@ export function ChatInterface({
                 API課金への自動切り替えはありません。ファイル・外部サービスの操作は無効です。
                 {configured
                   ? ""
-                  : " npm run dev:codex でローカル起動してください。"}
+                  : " pnpm run dev:codex でローカル起動してください。"}
               </AlertDescription>
             </Alert>
           </div>

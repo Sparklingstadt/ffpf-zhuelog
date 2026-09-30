@@ -8,7 +8,7 @@ import { localGithubDevelopmentIssues } from "../src/infrastructure/github/devel
 
 nextEnv.loadEnvConfig(process.cwd(), true, { info() {}, error() {} });
 if (!isCodexLocalEnabled())
-  throw new Error("Use npm run line:worker on this Mac only.");
+  throw new Error("Use pnpm run line:worker on this Mac only.");
 const target = new URL(process.env.LINE_WORKER_URL || "http://localhost:3000");
 if (
   target.username ||

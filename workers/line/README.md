@@ -7,12 +7,12 @@ It uses the Go standard library only; no Node.js process is needed at runtime.
 From the repository root:
 
 ```sh
-npm run line:worker:build
-npm run line:worker -- --check
-npm run line:worker
+pnpm run line:worker:build
+pnpm run line:worker --check
+pnpm run line:worker
 ```
 
-The npm wrapper is optional. LaunchAgent executes `build/line-worker` directly
+The pnpm wrapper is optional. LaunchAgent executes `build/line-worker` directly
 with `NODE_ENV=development`, `CHAT_PROVIDER=codex-local`, the verified
 `CODEX_LOCAL_BIN`, and this repository as its working directory. Do not start a
 second worker while LaunchAgent is running. See [operations](../../docs/line-integration.md)
@@ -40,8 +40,8 @@ for configuration precedence, macOS permissions and rollback.
 ## Tests
 
 ```sh
-npm run test:worker # go vet + race-enabled offline Go tests
-npm run test:unit   # above + build + existing TS API-contract/process tests
+pnpm run test:worker # go vet + race-enabled offline Go tests
+pnpm run test:unit   # above + build + existing TS API-contract/process tests
 ```
 
 `test:unit` builds the binary first, then runs Go validation and TypeScript tests
