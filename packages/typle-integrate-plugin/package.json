@@ -6,6 +6,6 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@ffpf-zhuelog/core": "*"
+    "@ffpf-zhuelog/core": "workspace:*"
   }
 }

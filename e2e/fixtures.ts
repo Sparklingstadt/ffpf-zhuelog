@@ -14,6 +14,9 @@ export const test = base.extend<{ db: Client }>({
       const db = new Client({ connectionString: databaseUrl });
       await db.connect();
       try {
+        // Prisma stores timestamp-without-time-zone values in UTC. Keep NOW()
+        // in fixture SQL consistent on developer machines and CI.
+        await db.query("SET TIME ZONE 'UTC'");
         const { rows } = await db.query("SELECT current_database() AS name");
         if (rows[0].name !== "zhuelog_e2e")
           throw new Error("Refusing to reset a non-E2E database");

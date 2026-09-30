@@ -1,5 +1,7 @@
 # 学习録
 
+開発には `package.json` で指定した pnpm 11.25.0 を使用します。`corepack enable` 後、`pnpm install --frozen-lockfile` で依存関係をインストールしてください。
+
 添削前後の中国語、ピン音、可変個数の学習ヒントをCSVから取り込んで表示する、Next.js製の中国語学習アプリです。
 
 ## 技術構成
@@ -13,7 +15,7 @@
 
 ## アーキテクチャ
 
-npm workspaces のモノレポです。ルートの Next.js アプリ（`@ffpf-zhuelog/web`）が、`packages/` のパッケージを使います。パッケージはビルドせず、TypeScript のまま読み込みます。
+pnpm workspaces のモノレポです。ルートの Next.js アプリ（`@ffpf-zhuelog/web`）が、`packages/` のパッケージを使います。パッケージはビルドせず、TypeScript のまま読み込みます。
 
 ```text
 .
@@ -53,7 +55,7 @@ src/
 
 1. `packages/<名前>-plugin/` を作り、`package.json` の `name` を `@ffpf-zhuelog/<名前>-plugin`、`exports` を `{ ".": "./src/index.ts" }`、`dependencies` を `{ "@ffpf-zhuelog/core": "*" }` にします。
 2. `src/index.ts` で、`@ffpf-zhuelog/core/integration` の `defineIntegration` を使って連携を定義し、default export します。`id` は英小文字・数字・ハイフンで、40文字以内です。
-3. ルートの `package.json` の `dependencies` に追加して `npm install` を実行し、`src/composition/integration-container.ts` の `createIntegrationRegistry([...])` に加えます。
+3. ルートの `package.json` の `dependencies` に追加して `pnpm install` を実行し、`src/composition/integration-container.ts` の `createIntegrationRegistry([...])` に加えます。
 
 ## 起動方法
 
@@ -62,9 +64,9 @@ src/
 ```bash
 cp .env.example .env
 docker compose up -d
-npm install
-npm run db:migrate -- --name init
-npm run dev
+pnpm install
+pnpm run db:migrate --name init
+pnpm run dev
 ```
 
 ブラウザで <http://localhost:3000> を開きます。
@@ -186,7 +188,7 @@ HTMLにはリクエストごとのnonce付きCSPを設定します。AI通信・
 
 ```bash
 cp prisma/seed.example.json prisma/seed.private.json
-npm run db:seed
+pnpm run db:seed
 ```
 
 各エントリには固定IDと登録日時を指定します。seedは同じID、または同じ本文・添削文・ピン音の組み合わせを検出してスキップするため、再実行しても重複しません。公開してよいダミーデータの形式は [`prisma/seed.example.json`](prisma/seed.example.json) で確認できます。
@@ -196,13 +198,13 @@ npm run db:seed
 Node.js 22以降と、起動済みのDocker（Compose v2）が必要です。
 
 ```bash
-npm ci
-npx playwright install chromium
-npm run test:e2e
+pnpm install --frozen-lockfile
+pnpm exec playwright install chromium
+pnpm run test:e2e
 # 対話的な実行
-npm run test:e2e:ui
+pnpm run test:e2e:ui
 # 終了後、専用DBを停止・破棄（テストデータのみ）
-npm run test:e2e:stop
+pnpm run test:e2e:stop
 ```
 
 Desktop Chromiumとモバイル幅（Pixel 7 / Chromium）の両方で検証します。
@@ -224,12 +226,12 @@ DBは`127.0.0.1:55439/zhuelog_e2e`に固定され、`compose.e2e.yaml`の専用�
 GitHub OAuthの外部ログインとOpenAIの実API通信は、このE2Eの対象外です。
 
 失敗時のスクリーンショット・トレースは`test-results/`、HTMLレポートは`playwright-report/`に出力されます（Git管理外）。
-`npx playwright show-report`で結果を確認できます。GitHub Actionsにも同じE2Eを追加しています。
+`pnpm exec playwright show-report`で結果を確認できます。GitHub Actionsにも同じE2Eを追加しています。
 設定の参考：[Playwright webServer](https://playwright.dev/docs/test-webserver)。
 
 ## コミット・プッシュ前のチェック（Lefthook）
 
-`npm ci` / `npm install`でGitフックを自動設定します。再設定は`npm run hooks:install`です。CI・Vercel・Git管理外ではインストールをスキップします。
+`pnpm install --frozen-lockfile` / `pnpm install`でGitフックを自動設定します。再設定は`pnpm run hooks:install`です。CI・Vercel・Git管理外ではインストールをスキップします。
 
 | タイミング | 順番に実行する処理                                                                                   |
 | ---------- | ---------------------------------------------------------------------------------------------------- |
@@ -240,4 +242,9 @@ GitHub OAuthの外部ログインとOpenAIの実API通信は、このE2Eの対�
 
 プッシュには起動済みDockerとPlaywright Chromiumが必要です。上のE2E手順で準備し、`.next`の競合を避けるため開発サーバーを停止してください。フック終了時は成功・失敗にかかわらず専用E2Eコンテナを停止します。E2Eの手動実行との同時使用は避けてください。
 
-既存コード全体の一括整形は行わず、コミット対象から段階的に整形します。生成コード・ロックファイル・秘密情報・テストレポートは整形対象外です。手動の全体整形は`npm run format`、全体の整形確認は`npm run format:check`（移行中は既存ファイルで失敗し得ます）、個別チェックは`npm run lint`と`npm run typecheck`で実行できます。
+既存コード全体の一括整形は行わず、コミット対象から段階的に整形します。生成コード・ロックファイル・秘密情報・テストレポートは整形対象外です。手動の全体整形は`pnpm run format`、全体の整形確認は`pnpm run format:check`（移行中は既存ファイルで失敗し得ます）、個別チェックは`pnpm run lint`と`pnpm run typecheck`で実行できます。
+
+## pnpm移行の回帰テスト
+
+`pnpm install --frozen-lockfile` 後、`pnpm run test:regression` で既存機能の検証を実行します。GitHub Actions の Regression でも同じコマンドを実行します。
+ブラウザーテストの前に `pnpm exec playwright install chromium` を実行してください。Webの回帰テストは本番ビルドを使い、既存サーバーを再利用しません。

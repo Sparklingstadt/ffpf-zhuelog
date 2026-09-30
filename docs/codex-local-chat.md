@@ -5,7 +5,7 @@
 
 ```sh
 codex login status
-npm run dev:codex
+pnpm run dev:codex
 ```
 
 http://localhost:3000/chat を開き、従来どおり許可済みGitHubアカウントでログインしてください。
@@ -23,11 +23,11 @@ CodexがPATH上にない場合は `CODEX_LOCAL_BIN` に実行ファイルの絶�
 - 会話はJSON形式で毎回再送し、ephemeral threadを利用します。アプリDBへの保存はしませんが、OpenAIへの送信やCodexの診断ログまで「保存ゼロ」を保証するものではありません。秘密情報は入力しないでください。
 - 出力の1600トークン指定は通常API用です。App Server試作では55秒・出力12000文字の打ち切りを設けていますが、厳密なトークン予算ではありません。
 
-通常モードに戻すにはサーバーを停止し `npm run dev` で起動してください。`.env` や本番設定の書き換えは不要です。
+通常モードに戻すにはサーバーを停止し `pnpm run dev` で起動してください。`.env` や本番設定の書き換えは不要です。
 
-オフライン回帰テスト: `npm run test:unit`。実モデルを呼び出さないためCodex利用枠を消費しません。
+オフライン回帰テスト: `pnpm run test:unit`。実モデルを呼び出さないためCodex利用枠を消費しません。
 
-ブラウザー検証: 開発サーバーを止めた状態で `npx tsx scripts/check-codex-local.mts`。
+ブラウザー検証: 開発サーバーを止めた状態で `pnpm exec tsx scripts/check-codex-local.mts`。
 使い捨ての認証シークレットと署名付きテストCookieで認証・ゲスト拒否・送受信を確認します。
 `--live` を付けると、モックの代わりにBusinessの利用枠で短い質問を1回送信します。
 
