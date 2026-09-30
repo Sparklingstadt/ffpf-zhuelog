@@ -79,12 +79,86 @@ function diffMiddle(a: string[], b: string[]): Operation[] {
   return operations;
 }
 
-function toSegments(operations: Operation[]) {
-  const segments: DiffSegment[] = [];
+type Block =
+  | { kind: "equal"; chars: string[] }
+  | { kind: "change"; deleted: string[]; inserted: string[] };
+
+function toBlocks(operations: Operation[]) {
+  const blocks: Block[] = [];
   for (const { kind, char } of operations) {
+    const last = blocks.at(-1);
+    if (kind === "equal") {
+      if (last?.kind === "equal") last.chars.push(char);
+      else blocks.push({ kind, chars: [char] });
+    } else {
+      let change = last;
+      if (change?.kind !== "change") {
+        change = { kind: "change", deleted: [], inserted: [] };
+        blocks.push(change);
+      }
+      (kind === "delete" ? change.deleted : change.inserted).push(char);
+    }
+  }
+  return blocks;
+}
+
+const changeSize = (block: Block) =>
+  block.kind === "change"
+    ? Math.max(block.deleted.length, block.inserted.length)
+    : 0;
+
+// A character-level LCS also matches stray characters inside heavily
+// rewritten text, which splits one rewrite into many tiny changes. Fold an
+// unchanged run into the changes around it when it is at most half the size
+// of the smaller change, or a single character next to a change of two or
+// more characters. Short edits such as 学[+了]两年[+中文了] stay separate.
+function isNoiseBetween(equal: number, before: number, after: number) {
+  return (
+    equal * 2 <= Math.min(before, after) ||
+    (equal === 1 && Math.max(before, after) >= 2)
+  );
+}
+
+function mergeShortEqualities(blocks: Block[]) {
+  const merged: Block[] = [];
+  for (const block of blocks) {
+    merged.push(block);
+    // Merging can make the previous change large enough to absorb the
+    // equality before it, so keep checking the tail.
+    while (merged.length >= 3) {
+      const [before, equal, after] = merged.slice(-3);
+      if (
+        before.kind !== "change" ||
+        equal.kind !== "equal" ||
+        after.kind !== "change" ||
+        !isNoiseBetween(
+          equal.chars.length,
+          changeSize(before),
+          changeSize(after),
+        )
+      )
+        break;
+      merged.splice(-3, 3, {
+        kind: "change",
+        deleted: [...before.deleted, ...equal.chars, ...after.deleted],
+        inserted: [...before.inserted, ...equal.chars, ...after.inserted],
+      });
+    }
+  }
+  return merged;
+}
+
+function toSegments(blocks: Block[], side: "deleted" | "inserted") {
+  const segments: DiffSegment[] = [];
+  const push = (kind: DiffSegment["kind"], chars: string[]) => {
+    if (chars.length === 0) return;
     const last = segments.at(-1);
-    if (last?.kind === kind) last.text += char;
-    else segments.push({ kind, text: char });
+    if (last?.kind === kind) last.text += chars.join("");
+    else segments.push({ kind, text: chars.join("") });
+  };
+  for (const block of blocks) {
+    if (block.kind === "equal") push("equal", block.chars);
+    else push(side === "deleted" ? "delete" : "insert", block[side]);
   }
   return segments;
 }
@@ -99,25 +173,22 @@ export function diffCorrection(
   const b = Array.from(correctedText);
   const prefix = commonPrefixLength(a, b);
   const suffix = commonSuffixLength(a, b, prefix);
-  const operations: Operation[] = [
-    ...a.slice(0, prefix).map((char) => ({ kind: "equal" as const, char })),
-    ...diffMiddle(
-      a.slice(prefix, a.length - suffix),
-      b.slice(prefix, b.length - suffix),
-    ),
-    ...a
-      .slice(a.length - suffix)
-      .map((char) => ({ kind: "equal" as const, char })),
-  ];
+  const blocks = mergeShortEqualities(
+    toBlocks([
+      ...a.slice(0, prefix).map((char) => ({ kind: "equal" as const, char })),
+      ...diffMiddle(
+        a.slice(prefix, a.length - suffix),
+        b.slice(prefix, b.length - suffix),
+      ),
+      ...a
+        .slice(a.length - suffix)
+        .map((char) => ({ kind: "equal" as const, char })),
+    ]),
+  );
 
   return {
-    original: toSegments(operations.filter((op) => op.kind !== "insert")),
-    corrected: toSegments(operations.filter((op) => op.kind !== "delete")),
-    // Each run of consecutive edits is one change.
-    changeCount: operations.filter(
-      (op, index) =>
-        op.kind !== "equal" &&
-        (index === 0 || operations[index - 1].kind === "equal"),
-    ).length,
+    original: toSegments(blocks, "deleted"),
+    corrected: toSegments(blocks, "inserted"),
+    changeCount: blocks.filter((block) => block.kind === "change").length,
   };
 }
