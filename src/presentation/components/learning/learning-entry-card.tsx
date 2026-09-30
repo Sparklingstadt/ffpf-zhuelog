@@ -9,7 +9,10 @@ import {
   CardContent,
   CardFooter,
 } from "@/presentation/components/ui/card";
-import { Separator } from "@/presentation/components/ui/separator";
+import {
+  diffCorrection,
+  type DiffSegment,
+} from "@/presentation/presenters/correction-diff-presenter";
 import { formatTokyoDateTime } from "@/presentation/presenters/log-date-presenter";
 
 type LearningEntryCardProps = {
@@ -20,6 +23,29 @@ type LearningEntryCardProps = {
   defaultOpen?: boolean;
 };
 
+const deletedClassName =
+  "rounded-[3px] bg-destructive/10 text-destructive line-through decoration-destructive/60 box-decoration-clone dark:bg-destructive/20";
+const insertedClassName =
+  "rounded-[3px] bg-primary/12 font-semibold text-primary underline decoration-primary/60 decoration-2 underline-offset-[5px] box-decoration-clone";
+const sectionLabelClassName =
+  "text-xs font-medium tracking-wider text-muted-foreground";
+
+function DiffText({ segments }: { segments: DiffSegment[] }) {
+  return segments.map((segment, index) =>
+    segment.kind === "delete" ? (
+      <del key={index} className={deletedClassName}>
+        {segment.text}
+      </del>
+    ) : segment.kind === "insert" ? (
+      <ins key={index} className={insertedClassName}>
+        {segment.text}
+      </ins>
+    ) : (
+      segment.text
+    ),
+  );
+}
+
 export function LearningEntryCard({
   entry,
   numberLabel,
@@ -27,6 +53,8 @@ export function LearningEntryCard({
   linkLabel = "ノートを開く",
   defaultOpen = true,
 }: LearningEntryCardProps) {
+  const diff = diffCorrection(entry.originalText, entry.correctedText);
+  const hasHints = entry.hints.length > 0;
   return (
     <Card
       asChild
@@ -40,6 +68,15 @@ export function LearningEntryCard({
           <span lang="zh-Hans" className="min-w-0 flex-1 truncate font-medium">
             {entry.originalText}
           </span>
+          {diff.changeCount > 0 ? (
+            <Badge className="bg-primary/12 font-normal text-primary">
+              {diff.changeCount}箇所を添削
+            </Badge>
+          ) : (
+            <Badge variant="secondary" className="font-normal">
+              添削なし
+            </Badge>
+          )}
           <time
             dateTime={entry.createdAt.toISOString()}
             className="hidden shrink-0 items-center gap-1.5 text-xs text-muted-foreground sm:flex"
@@ -52,65 +89,77 @@ export function LearningEntryCard({
         </summary>
 
         <div className="min-w-0 border-t [overflow-wrap:anywhere]">
-          <CardContent className="p-0">
-            <div className="grid min-w-0 grid-cols-1 md:grid-cols-2">
-              <div className="min-w-0 space-y-3 bg-muted/40 p-5 sm:p-6">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
-                    最初の文
-                  </p>
-                  <span className="font-mono text-xs text-muted-foreground">
-                    {numberLabel}
-                  </span>
-                </div>
-                <p lang="zh-Hans" className="text-lg leading-8">
-                  {entry.originalText}
+          <CardContent
+            className={
+              hasHints
+                ? "grid min-w-0 grid-cols-1 p-0 md:grid-cols-[minmax(0,1fr)_16rem]"
+                : "min-w-0 p-0"
+            }
+          >
+            <div className="min-w-0 space-y-4 p-5 sm:p-6">
+              <div className="space-y-1.5">
+                <p className={sectionLabelClassName}>添削前</p>
+                <p
+                  lang="zh-Hans"
+                  className="text-base leading-7 text-muted-foreground"
+                >
+                  <DiffText segments={diff.original} />
                 </p>
               </div>
-              <div className="min-w-0 space-y-3 border-t p-5 sm:p-6 md:border-t-0 md:border-l">
-                <div>
-                  <p className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
-                    添削後の文
-                  </p>
-                  <p
-                    lang="zh-Hans"
-                    className="mt-2 text-lg font-medium leading-8"
-                  >
-                    {entry.correctedText}
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {entry.pinyin}
-                  </p>
-                </div>
-                {entry.hints.length > 0 ? (
-                  <>
-                    <Separator />
-                    <div className="flex flex-wrap gap-2">
-                      {entry.hints.map((hint) => (
-                        <Badge
-                          key={hint.id}
-                          variant="outline"
-                          className="h-auto min-w-0 max-w-full shrink rounded-lg text-left leading-5 font-normal whitespace-normal"
-                        >
-                          <span className="min-w-0">{hint.content}</span>
-                        </Badge>
-                      ))}
-                    </div>
-                  </>
-                ) : null}
+              <div className="space-y-1.5">
+                <p className="flex items-center gap-1.5 text-xs font-medium tracking-wider text-primary">
+                  <span className="size-1.5 rounded-full bg-primary" />
+                  添削後
+                </p>
+                <p
+                  lang="zh-Hans"
+                  className="text-xl leading-9 font-medium sm:text-[1.375rem]"
+                >
+                  <DiffText segments={diff.corrected} />
+                </p>
+                <p className="text-sm text-muted-foreground">{entry.pinyin}</p>
               </div>
             </div>
+            {hasHints ? (
+              <div className="min-w-0 space-y-3 border-t bg-muted/40 p-5 sm:p-6 md:border-t-0 md:border-l">
+                <p className={sectionLabelClassName}>覚えるポイント</p>
+                <ol className="space-y-2.5">
+                  {entry.hints.map((hint, index) => (
+                    <li
+                      key={hint.id}
+                      className="flex gap-2.5 text-sm leading-6"
+                    >
+                      <span
+                        aria-hidden="true"
+                        className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/12 font-mono text-[11px] text-primary"
+                      >
+                        {index + 1}
+                      </span>
+                      <span className="min-w-0">{hint.content}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : null}
           </CardContent>
-          <CardFooter className="flex flex-wrap justify-between gap-3 py-3 sm:justify-end">
-            <time
-              dateTime={entry.createdAt.toISOString()}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground sm:hidden"
-            >
-              <Clock3 className="size-3.5" />
-              {formatTokyoDateTime(entry.createdAt)} JST
-            </time>
+          <CardFooter className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2.5">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+              {diff.changeCount > 0 ? (
+                <span className="flex items-center gap-3" aria-hidden="true">
+                  <span className={deletedClassName}>削除</span>
+                  <span className={insertedClassName}>追加</span>
+                </span>
+              ) : null}
+              <time
+                dateTime={entry.createdAt.toISOString()}
+                className="flex items-center gap-1.5 text-muted-foreground sm:hidden"
+              >
+                <Clock3 className="size-3.5" />
+                {formatTokyoDateTime(entry.createdAt)} JST
+              </time>
+            </div>
             {href ? (
-              <Button asChild variant="ghost" size="sm">
+              <Button asChild variant="ghost" size="sm" className="ml-auto">
                 <Link href={href}>
                   <CalendarDays /> {linkLabel}
                 </Link>
