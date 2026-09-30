@@ -60,8 +60,10 @@ export default async function ChatPage() {
         </header>
 
         <ChatInterface
+          key={user.githubId ?? user.githubLogin}
+          ownerId={user.githubId}
           configured={configured}
-          modelName={modelName}
+          modelName={localCodex ? modelName : `${modelName} · 推論: 中`}
           localCodex={localCodex}
         />
       </div>

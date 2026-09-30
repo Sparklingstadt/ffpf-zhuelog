@@ -18,7 +18,7 @@ const env: NodeJS.ProcessEnv = {
   AUTH_GITHUB_ID: "",
   AUTH_GITHUB_SECRET: "",
   AUTH_ALLOWED_GITHUB_LOGINS: "e2e-admin",
-  OPENAI_API_KEY: "",
+  OPENAI_API_KEY: "e2e-test-only-never-use-upstream",
   CHAT_PROVIDER: "openai",
   LINE_INTEGRATION_ENABLED: "true",
   LINE_DEV_MODE_ENABLED: "true",

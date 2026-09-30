@@ -68,3 +68,17 @@ model LineDevelopmentSession {
   expiresAt   DateTime?
   lastEventAt DateTime
 }
+
+model ChatConversation {
+  id        String   @id
+  ownerId   String
+  title     String
+  modelName String
+  ended     Boolean
+  messages  Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([id, ownerId])
+  @@index([ownerId, updatedAt])
+}

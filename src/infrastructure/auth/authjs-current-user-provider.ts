@@ -8,6 +8,7 @@ export class AuthJsCurrentUserProvider implements CurrentUserProvider {
     if (!session?.user) return null;
     return {
       githubLogin: session.user.githubLogin,
+      githubId: session.user.githubId,
       role: session.user.role,
     };
   }

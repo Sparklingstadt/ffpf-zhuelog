@@ -22,7 +22,7 @@ export class OpenAiLearningChatGateway implements LearningChatGateway {
       maxRetries: 0,
       timeout: 45_000,
       onError: () => console.error("LEARNING_CHAT_PROVIDER_ERROR"),
-      providerOptions: { openai: { store: false } },
+      providerOptions: { openai: { store: false, reasoningEffort: "medium" } },
     });
 
     return result.toUIMessageStreamResponse({
