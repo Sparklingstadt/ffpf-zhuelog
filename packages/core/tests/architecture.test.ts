@@ -47,3 +47,11 @@ test("core never writes to the console; outer layers own logging", () => {
     .map(({ path }) => path);
   assert.deepEqual(logging, []);
 });
+
+test("application ports never expose HTTP types", () => {
+  const http = sources
+    .filter(({ path }) => /^application\/[^/]+\/ports\//.test(path))
+    .filter(({ text }) => /\b(Response|Request|Headers)\b/.test(text))
+    .map(({ path }) => path);
+  assert.deepEqual(http, []);
+});

@@ -2,10 +2,12 @@ import { safeValidateUIMessages } from "ai";
 
 import type { StreamLearningChat } from "@ffpf-zhuelog/core/application/chat/use-cases/stream-learning-chat";
 import type { LearningChatMessage } from "@ffpf-zhuelog/core/domain/chat/entities/chat-message";
+import { LearningChatBusyError } from "@ffpf-zhuelog/core/domain/chat/learning-chat-error";
 import {
   BodyLimitError,
   readLimitedBody,
 } from "@/infrastructure/http/read-limited-body";
+import { learningChatResponse } from "../http/learning-chat-response";
 import { isSameOriginRequest } from "../http/same-origin";
 
 const MAX_MESSAGES = 40;
@@ -90,9 +92,17 @@ export async function handleChatRequest(
     );
   }
 
+  // Stop generating when either the request or the response stream ends.
+  const cancel = new AbortController();
   try {
-    return streamLearningChat.execute(messages, request.signal);
-  } catch {
+    const answer = streamLearningChat.execute(
+      messages,
+      AbortSignal.any([request.signal, cancel.signal]),
+    );
+    return learningChatResponse(answer, () => cancel.abort());
+  } catch (error) {
+    if (error instanceof LearningChatBusyError)
+      return Response.json({ error: error.message }, { status: 429 });
     return Response.json(
       { error: "応答を取得できませんでした。" },
       { status: 502 },
