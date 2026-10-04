@@ -114,7 +114,7 @@ Goワーカーは、OSの環境変数 → `.env.development.local` → `.env.loc
 - ノート作成とCSV保存は1つのDBトランザクション。返信失敗でも作成済みノートを重複させません。
 - 生成は最大3回、配送は最大5回。失敗時は待ち時間を増やし、上限後は `FAILED` になります。
 - LINE配送は保存済みCSVから同じ文章を組み立て、宛先・同じ `X-Line-Retry-Key` を再利用します。受理済みの409は成功扱いにします。24時間の重複防止期限を越えないよう、初回配送開始から23時間後は自動再送を停止します。5,000文字を超える返信は切り捨てず配送を失敗扱いにします。
-- DBの `LineLearningJob.status` / `failureCode` を管理者が確認できます。状態は `PENDING → GENERATING → READY → SENDING → SENT`、または `FAILED`。`SENT` はLINE API受理を表し端末閲覧を保証しません。
+- DBの `LineLearningJob.status` / `failureCode` を管理者が確認できます。状態は `PENDING → GENERATING → READY → SENDING → SENT`、または `FAILED`。開発モード外で処理しない入力は、再送の重複防止のため `IGNORED`（本文なし）で残します。配信時の `failureCode` は、LINEの重複防止期間（24時間）に近づいて送信を止めた場合が `DELIVERY_WINDOW_EXPIRED`、送る内容が欠けた壊れたレコードの場合が `DELIVERY_STATE_INVALID` です。`SENT` はLINE API受理を表し端末閲覧を保証しません。
 - 利用制限、認証エラー、入力不正、長すぎるAI回答等は自動でAPI課金に逃がしません。`FAILED` のリセットは原因と送信済みの可能性を確認してから行います。
 
 ## 検証
