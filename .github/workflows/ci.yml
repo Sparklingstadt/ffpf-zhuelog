@@ -36,6 +36,16 @@ jobs:
       - run: pnpm run test:unit
       - run: pnpm run build
 
+  docker:
+    # The Cloud Run image (docs/cloud-run.md). Build only; nothing is pushed.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - run: docker build -t zhuelog .
+
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 15
