@@ -1,3 +1,4 @@
+import type { LineJob } from "../../../domain/line/line-learning";
 import type { LineJobRepository } from "../../../domain/line/repositories/line-job-repository";
 import { LineGenerationError } from "../../../domain/line/generation-failure";
 import type { LineLearningGenerator } from "../ports/line-learning-generator";
@@ -17,7 +18,8 @@ export class DrainLineJobs {
   ) {}
 
   // Processes jobs until none is left or the deadline (epoch ms) passes.
-  // Returns how many were generated or delivered.
+  // Returns how many were generated or delivered. A failure in one job never
+  // stops the others; only claim errors propagate, for the caller to report.
   async execute(deadline: number) {
     let processed = 0;
     while (this.now() < deadline) {
@@ -25,18 +27,20 @@ export class DrainLineJobs {
         deadline - this.now() < GENERATION_RESERVE_MS ? "deliver" : "any";
       const job = await this.jobs.claim(this.userId, phase);
       if (!job?.leaseToken) break;
-      if (job.status === "GENERATING") await this.generate(job, deadline);
-      else await this.process.deliver(job.id, job.leaseToken, this.userId);
+      const token = job.leaseToken;
+      try {
+        if (job.status === "GENERATING")
+          await this.generate(job, token, deadline);
+        else await this.process.deliver(job.id, token, this.userId);
+      } catch {
+        // The lease expires and the repository retries or fails the job.
+      }
       processed++;
     }
     return processed;
   }
 
-  private async generate(
-    job: NonNullable<Awaited<ReturnType<LineJobRepository["claim"]>>>,
-    deadline: number,
-  ) {
-    const token = job.leaseToken!;
+  private async generate(job: LineJob, token: string, deadline: number) {
     let output: unknown;
     try {
       const signal = AbortSignal.timeout(Math.max(1, deadline - this.now()));
@@ -55,6 +59,16 @@ export class DrainLineJobs {
       );
       return;
     }
-    await this.process.complete(job.id, token, this.userId, output);
+    try {
+      await this.process.complete(job.id, token, this.userId, output);
+    } catch {
+      // Reply with a failure instead of regenerating: one OpenAI call per message.
+      await this.process.generationFailed(
+        job.id,
+        token,
+        this.userId,
+        "OPENAI_INVALID_RESPONSE",
+      );
+    }
   }
 }

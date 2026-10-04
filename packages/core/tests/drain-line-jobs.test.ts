@@ -33,6 +33,10 @@ class FakeJobs implements LineJobRepository {
   claimPhases: string[] = [];
   saved: string[] = [];
   failed: string[] = [];
+  failCodes: string[] = [];
+  throwOnSave = new Set<string>();
+  // Jobs scheduled for a later retry; the real repository sets availableAt.
+  backedOff = new Set<string>();
 
   add(kind: LineJobKind, status: LineJobStatus, id: string) {
     this.jobs.push({
@@ -60,7 +64,11 @@ class FakeJobs implements LineJobRepository {
         ? ["READY", "SENDING"]
         : ["PENDING", "GENERATING", "READY", "SENDING"];
     const job = this.jobs.find(
-      (j) => j.userId === userId && allowed.includes(j.status),
+      (j) =>
+        j.userId === userId &&
+        allowed.includes(j.status) &&
+        !j.leaseToken &&
+        !this.backedOff.has(j.id),
     );
     if (!job) return null;
     job.leaseToken = `lease-${job.id}-${job.generationTries + job.deliveryTries}`;
@@ -93,11 +101,13 @@ class FakeJobs implements LineJobRepository {
     return this.jobs.find((j) => j.id === job.id)!;
   }
   async saveResult(job: LineJob, _draft: unknown, csv: string) {
+    if (this.throwOnSave.has(job.id)) throw new Error("db down");
     Object.assign(this.find(job), { status: "READY", leaseToken: null, csv });
     this.saved.push(job.id);
     return true;
   }
-  async saveReply(job: LineJob, text: string) {
+  async saveReply(job: LineJob, text: string, code?: string) {
+    if (code) this.failCodes.push(`${job.id}:${code}`);
     Object.assign(this.find(job), {
       status: "READY",
       leaseToken: null,
@@ -108,13 +118,21 @@ class FakeJobs implements LineJobRepository {
   async finishDelivery(job: LineJob) {
     Object.assign(this.find(job), { status: "SENT", leaseToken: null });
   }
-  async fail(job: LineJob, _permanent: boolean, code: string) {
-    Object.assign(this.find(job), { status: "FAILED", leaseToken: null });
+  async fail(job: LineJob, permanent: boolean, code: string) {
+    const exhausted = job.deliveryTries >= 5;
+    Object.assign(this.find(job), {
+      status: permanent || exhausted ? "FAILED" : "READY",
+      leaseToken: null,
+    });
+    if (!permanent && !exhausted) this.backedOff.add(job.id);
     this.failed.push(`${job.id}:${code}`);
   }
 }
 
-function setup(generator: Partial<LineLearningGenerator> = {}) {
+function setup(
+  generator: Partial<LineLearningGenerator> = {},
+  push?: LineMessenger["push"],
+) {
   const clock = { now: 1_000_000 };
   const jobs = new FakeJobs();
   const calls: string[] = [];
@@ -124,10 +142,12 @@ function setup(generator: Partial<LineLearningGenerator> = {}) {
       pushes.push({ text });
       return "accepted";
     },
-    async push(_user, csv, kind) {
-      pushes.push({ text: csv, kind });
-      return "accepted";
-    },
+    push:
+      push ??
+      (async (_user, csv, kind) => {
+        pushes.push({ text: csv, kind });
+        return "accepted";
+      }),
   };
   const fullGenerator: LineLearningGenerator = {
     async correct(text) {
@@ -218,4 +238,63 @@ test("the loop stops at the deadline", async () => {
   const processed = await drain.execute(clock.now);
   assert.equal(processed, 0);
   assert.deepEqual(jobs.claimPhases, []);
+});
+
+test("a temporary delivery failure stays queued", async () => {
+  let attempts = 0;
+  const { clock, jobs, drain } = setup({}, async () => {
+    attempts++;
+    return "retry";
+  });
+  jobs.add("correction", "READY", "a");
+  const processed = await drain.execute(clock.now + 120_000);
+  const job = jobs.jobs[0];
+  assert.equal(processed, 1);
+  assert.equal(attempts, 1);
+  assert.equal(job.status, "READY");
+  assert.equal(job.deliveryTries, 1);
+  assert.deepEqual(jobs.failed, ["a:LINE_DELIVERY_FAILED"]);
+  assert.deepEqual(jobs.claimPhases, ["any", "any"]);
+});
+
+test("a save failure after generation replies with a failure and moves on", async () => {
+  const { clock, jobs, calls, pushes, drain } = setup();
+  jobs.add("correction", "PENDING", "a");
+  jobs.add("correction", "PENDING", "b");
+  jobs.throwOnSave.add("a");
+  await drain.execute(clock.now + 120_000);
+  assert.deepEqual(calls, ["correct:text-a", "correct:text-b"]);
+  assert.deepEqual(jobs.failCodes, ["a:OPENAI_INVALID_RESPONSE"]);
+  assert.equal(pushes.length, 2);
+  assert.ok(pushes[0].text.includes("OPENAI_INVALID_RESPONSE"));
+  assert.deepEqual(
+    jobs.jobs.map((j) => j.status),
+    ["SENT", "SENT"],
+  );
+});
+
+test("a delivery error does not stop the drain", async () => {
+  const delivered: string[] = [];
+  let first = true;
+  const { clock, jobs, drain } = setup({}, async (_user, _csv, _kind, key) => {
+    if (first) {
+      first = false;
+      throw new Error("network");
+    }
+    delivered.push(key);
+    return "accepted";
+  });
+  jobs.add("correction", "READY", "a");
+  jobs.add("correction", "READY", "b");
+  const processed = await drain.execute(clock.now + 120_000);
+  assert.deepEqual(delivered, ["retry-b"]);
+  assert.equal(processed, 2);
+});
+
+test("claim errors propagate", async () => {
+  const { clock, jobs, drain } = setup();
+  jobs.claim = async () => {
+    throw new Error("db down");
+  };
+  await assert.rejects(drain.execute(clock.now + 120_000), /db down/);
 });
