@@ -10,6 +10,12 @@ permissions:
 
 jobs:
   verify:
+    # 22 is the minimum in package.json engines; 24 is the Vercel runtime.
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    name: verify (${{ matrix.node }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -21,7 +27,7 @@ jobs:
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: ${{ matrix.node }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm audit
@@ -42,7 +48,7 @@ jobs:
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24 # the Vercel runtime
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
