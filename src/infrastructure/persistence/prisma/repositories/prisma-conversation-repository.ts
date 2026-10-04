@@ -9,7 +9,7 @@ import type {
   DailyConversation,
 } from "@ffpf-zhuelog/core/domain/chat/repositories/conversation-note-repository";
 import type { ConversationRepository } from "@ffpf-zhuelog/core/domain/chat/repositories/conversation-repository";
-import type { DateRange } from "@ffpf-zhuelog/core/domain/learning/value-objects/log-date";
+import type { DateRange } from "@ffpf-zhuelog/core/domain/calendar/value-objects/log-date";
 import { getPrismaClient } from "../prisma-client";
 import type { ChatConversation } from "@/generated/prisma/client";
 function map(row: ChatConversation): Conversation {

@@ -1,5 +1,5 @@
-import type { LogDate } from "@ffpf-zhuelog/core/domain/learning/value-objects/log-date";
-import { getTokyoDateParts } from "@ffpf-zhuelog/core/domain/learning/value-objects/log-date";
+import type { LogDate } from "@ffpf-zhuelog/core/domain/calendar/value-objects/log-date";
+import { getTokyoDateParts } from "@ffpf-zhuelog/core/domain/calendar/value-objects/log-date";
 
 export function getLogDateHref(date: Date | LogDate, basePath = "/logs") {
   const value = date instanceof Date ? getTokyoDateParts(date) : date;

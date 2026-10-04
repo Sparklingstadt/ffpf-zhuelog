@@ -7,7 +7,7 @@ import { getCurrentAdminUser } from "@/composition/identity-container";
 import {
   parseLogDate,
   parseLogNumber,
-} from "@ffpf-zhuelog/core/domain/learning/value-objects/log-date";
+} from "@ffpf-zhuelog/core/domain/calendar/value-objects/log-date";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { ChatMessage } from "@/presentation/components/chat/chat-message";
 import { ConversationDownloadButton } from "@/presentation/components/chat/conversation-download-button";

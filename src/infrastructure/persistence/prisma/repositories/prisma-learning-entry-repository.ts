@@ -4,7 +4,7 @@ import type {
   LearningEntryRepository,
   RecentLearningEntries,
 } from "@ffpf-zhuelog/core/domain/learning/repositories/learning-entry-repository";
-import type { DateRange } from "@ffpf-zhuelog/core/domain/learning/value-objects/log-date";
+import type { DateRange } from "@ffpf-zhuelog/core/domain/calendar/value-objects/log-date";
 import { getPrismaClient } from "@/infrastructure/persistence/prisma/prisma-client";
 import { toLearningEntry } from "@/infrastructure/persistence/prisma/mappers/learning-entry-mapper";
 

@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { conversationNoteUseCases } from "@/composition/conversation-container";
 import { getCurrentAdminUser } from "@/composition/identity-container";
-import { parseLogDate } from "@ffpf-zhuelog/core/domain/learning/value-objects/log-date";
+import { parseLogDate } from "@ffpf-zhuelog/core/domain/calendar/value-objects/log-date";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { ReauthNotice } from "@/presentation/components/chat/reauth-notice";
 import { Badge } from "@/presentation/components/ui/badge";

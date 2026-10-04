@@ -12,7 +12,7 @@ import {
   CsvValidationError,
   csvImportErrorMessage,
 } from "@ffpf-zhuelog/core/domain/learning/csv-validation-error";
-import { parseLogNumber } from "@ffpf-zhuelog/core/domain/learning/value-objects/log-date";
+import { parseLogNumber } from "@ffpf-zhuelog/core/domain/calendar/value-objects/log-date";
 import { getSafeCallbackPath } from "../src/presentation/http/safe-callback-path";
 import { handleChatRequest } from "../src/presentation/controllers/chat-controller";
 

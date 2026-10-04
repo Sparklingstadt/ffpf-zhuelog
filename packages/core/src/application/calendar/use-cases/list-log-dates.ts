@@ -1,20 +1,21 @@
-import type { LogDate } from "../../../domain/learning/value-objects/log-date";
 import {
   getLogDateKey,
   getTokyoDateParts,
-} from "../../../domain/learning/value-objects/log-date";
-import type { LearningEntryRepository } from "../../../domain/learning/repositories/learning-entry-repository";
+  type LogDate,
+} from "../../../domain/calendar/value-objects/log-date";
 
 export type LogDateSummary = {
   date: LogDate;
   count: number;
 };
 
+// Any notes browsed by JST date, such as learning and conversation notes.
+export type CreatedAtSource = {
+  listCreatedAt(): Promise<Date[]>;
+};
+
 export class ListLogDates {
-  // Shared by learning and conversation notes: both are grouped by JST date.
-  constructor(
-    private readonly repository: Pick<LearningEntryRepository, "listCreatedAt">,
-  ) {}
+  constructor(private readonly repository: CreatedAtSource) {}
 
   async execute(): Promise<LogDateSummary[]> {
     const timestamps = await this.repository.listCreatedAt();
