@@ -4,12 +4,12 @@ import {
   correctionSchema,
   CORRECTION_INSTRUCTIONS,
 } from "@ffpf-zhuelog/core/domain/learning/chinese-correction";
-import {
-  PERSONAL_CORRECTION_MODEL,
-  PersonalCorrectionError,
-} from "@ffpf-zhuelog/core/domain/practice/personal-correction";
+import { PersonalCorrectionError } from "@ffpf-zhuelog/core/domain/practice/personal-correction";
 import { PersonalRequestLimiter } from "./personal-request-limiter";
 import { readLimitedBody } from "../http/read-limited-body";
+
+// Fixed on the server; clients never choose the model.
+const PERSONAL_CORRECTION_MODEL = "gpt-5-mini";
 
 const responseSchema = z.object({
   status: z.literal("completed"),

@@ -40,3 +40,10 @@ test("domain never depends on application", () => {
     .map(({ path }) => path);
   assert.deepEqual(leaks, []);
 });
+
+test("core never writes to the console; outer layers own logging", () => {
+  const logging = sources
+    .filter(({ text }) => /\bconsole\.\w+\(/.test(text))
+    .map(({ path }) => path);
+  assert.deepEqual(logging, []);
+});

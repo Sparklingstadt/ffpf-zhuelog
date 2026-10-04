@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { CorrectPersonalText } from "@ffpf-zhuelog/core/application/practice/use-cases/correct-personal-text";
-import {
-  correctionErrors,
-  PersonalCorrectionError,
-} from "@ffpf-zhuelog/core/domain/practice/personal-correction";
+import { PersonalCorrectionError } from "@ffpf-zhuelog/core/domain/practice/personal-correction";
 import { OpenAiPersonalCorrectionGateway } from "../src/infrastructure/practice/openai-personal-correction-gateway";
 import { PersonalRequestLimiter } from "../src/infrastructure/practice/personal-request-limiter";
 import {
@@ -120,7 +117,8 @@ test("provider errors and malformed/refused/incomplete results never expose secr
       (error: unknown) => {
         assert.ok(error instanceof PersonalCorrectionError);
         assert.equal(error.code, code);
-        assert.equal(error.message, correctionErrors[code]);
+        // Only the code: provider messages (and keys) never reach the error.
+        assert.equal(error.message, code);
         return true;
       },
     );

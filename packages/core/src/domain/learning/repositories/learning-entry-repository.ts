@@ -14,6 +14,8 @@ export type DailyLearningEntry = {
   total: number;
 };
 
+// Learning notes are shared: the admin writes them and guests may read them,
+// so unlike conversations they have no owner.
 export interface LearningEntryRepository {
   importBatch(fileName: string, entries: LearningEntryDraft[]): Promise<number>;
   listRecent(limit: number): Promise<RecentLearningEntries>;

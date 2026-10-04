@@ -78,6 +78,8 @@ test("development issues keep literal proposals, a fixed repository and a non-pe
   for (const bad of [
     "https://evil.test",
     "https://github.com/other/repo/issues/1",
+    // Dots in the repository URL must match literally.
+    "https://githubXcom/Sparklingstadt/ffpf-zhuelog/issues/1",
     `${url}?token=x`,
   ])
     assert.equal(
