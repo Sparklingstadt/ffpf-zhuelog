@@ -276,5 +276,5 @@ GitHub OAuthの外部ログインとOpenAI・LINEの実API通信は、このE2E�
 
 ## pnpm移行の回帰テスト
 
-`pnpm install --frozen-lockfile` 後、`pnpm run test:regression` で既存機能の検証を実行します。GitHub Actions の Regression でも同じコマンドを実行します。
+`pnpm install --frozen-lockfile` 後、`pnpm run test:regression` で既存機能の検証を実行します。GitHub Actions では同じ内容を CI ワークフローが並列で実行します（`verify` を Node 22 と、本番の Vercel と同じ Node 24 で、`e2e` を Node 24 で実行）。
 ブラウザーテストの前に `pnpm exec playwright install chromium` を実行してください。Webの回帰テストは本番ビルドを使い、既存サーバーを再利用しません。
