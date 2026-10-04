@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { LineJobRepository } from "@ffpf-zhuelog/core/application/line/ports/line-job-repository";
+import type { LineJobRepository } from "@ffpf-zhuelog/core/domain/line/repositories/line-job-repository";
 import { LINE_TEXT_LIMIT } from "@ffpf-zhuelog/core/domain/line/line-learning";
 import {
   readLimitedBody,

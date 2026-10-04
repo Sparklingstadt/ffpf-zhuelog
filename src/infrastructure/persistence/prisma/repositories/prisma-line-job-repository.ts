@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { LineJobRepository } from "@ffpf-zhuelog/core/application/line/ports/line-job-repository";
+import type { LineJobRepository } from "@ffpf-zhuelog/core/domain/line/repositories/line-job-repository";
 import {
   lineTextTooLongReply,
   type LineInput,
