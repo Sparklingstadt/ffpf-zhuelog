@@ -3,6 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import GitHub from "next-auth/providers/github";
 
 import { isAllowedGitHubLogin } from "@/infrastructure/auth/github-login-policy";
+import { githubIdFromAccount, githubIdFromToken } from "./github-identity";
 import { resolveSessionRole } from "./session-role-policy";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -45,20 +46,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         isAllowedGitHubLogin(profile.login)
       );
     },
-    jwt({ token, user }) {
+    jwt({ token, user, account }) {
       if (user) {
         token.githubLogin = user.githubLogin;
         token.role = user.role;
+        token.githubId = githubIdFromAccount(account);
       }
       return token;
     },
     session({ session, token }) {
       session.user.githubLogin =
         typeof token.githubLogin === "string" ? token.githubLogin : "";
-      session.user.githubId =
-        typeof token.sub === "string" && /^\d+$/.test(token.sub)
-          ? token.sub
-          : undefined;
+      session.user.githubId = githubIdFromToken(token.githubId);
       session.user.role = resolveSessionRole(token.role, token.githubLogin);
       return session;
     },

@@ -43,7 +43,10 @@ export async function asAdmin(context: BrowserContext) {
     salt: cookieName,
     maxAge: 3600,
     token: {
-      sub: "10001",
+      // Same shape as a real GitHub sign-in: Auth.js puts a random UUID in
+      // sub, and the app stores the numeric GitHub id in its own claim.
+      sub: "1b4e28ba-2fa1-11d2-883f-0016d3cca427",
+      githubId: "10001",
       name: "E2E Admin",
       role: "admin",
       githubLogin: "e2e-admin",
