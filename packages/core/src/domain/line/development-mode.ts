@@ -3,15 +3,16 @@ import { z } from "zod";
 // Neither a LINE message nor an AI response may select another repository.
 export const DEVELOPMENT_REPOSITORY = "Sparklingstadt/ffpf-zhuelog";
 export const DEVELOPMENT_ISSUES_URL = `https://github.com/${DEVELOPMENT_REPOSITORY}/issues`;
+const escapeRegExp = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+const ISSUE_URL = new RegExp(
+  `^${escapeRegExp(DEVELOPMENT_ISSUES_URL)}/[1-9]\\d*$`,
+);
 export const issueResultSchema = z.discriminatedUnion("outcome", [
   z
     .object({
       outcome: z.literal("created"),
-      url: z
-        .string()
-        .regex(
-          /^https:\/\/github\.com\/Sparklingstadt\/ffpf-zhuelog\/issues\/[1-9]\d*$/,
-        ),
+      url: z.string().regex(ISSUE_URL),
     })
     .strict(),
   z.object({ outcome: z.literal("uncertain") }).strict(),

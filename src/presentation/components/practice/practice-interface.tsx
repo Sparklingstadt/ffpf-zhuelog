@@ -8,12 +8,14 @@ import {
   type FormEvent,
 } from "react";
 import {
-  correctionErrors,
   personalCorrectionRecordSchema,
   personalCorrectionRequestSchema,
-  type CorrectionErrorCode,
   type PersonalCorrectionRecord,
 } from "@ffpf-zhuelog/core/domain/practice/personal-correction";
+import {
+  correctionErrors,
+  type CorrectionErrorCode,
+} from "@/presentation/presenters/personal-correction-errors";
 import {
   clearPracticeHistory,
   MAX_PRACTICE_HISTORY,

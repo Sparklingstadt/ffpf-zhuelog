@@ -262,7 +262,18 @@ export class PrismaLineJobRepository implements LineJobRepository {
         failureCode: failureCode ?? null,
       },
     });
-    return result.count === 1;
+    const saved = result.count === 1;
+    // Only corrections carry a failure code. Log the code, never the text.
+    if (saved && failureCode)
+      console.warn(
+        JSON.stringify({
+          event: "line_correction_failed",
+          at: new Date().toISOString(),
+          jobId: job.id,
+          code: failureCode,
+        }),
+      );
+    return saved;
   }
 
   async beginIssue(job: LineJob) {

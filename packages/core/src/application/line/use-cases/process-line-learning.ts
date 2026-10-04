@@ -117,23 +117,8 @@ export class ProcessLineLearning {
   ) {
     const job = await this.jobs.leased(id, token, userId, "GENERATING");
     if (!job) return false;
-    if (job.kind === "correction") {
-      const saved = await this.jobs.saveReply(
-        job,
-        formatGenerationFailure(code),
-        code,
-      );
-      if (saved)
-        console.warn(
-          JSON.stringify({
-            event: "line_correction_failed",
-            at: new Date().toISOString(),
-            jobId: job.id,
-            code,
-          }),
-        );
-      return saved;
-    }
+    if (job.kind === "correction")
+      return this.jobs.saveReply(job, formatGenerationFailure(code), code);
     await this.jobs.fail(job, false, "GENERATION_FAILED");
     return true;
   }
