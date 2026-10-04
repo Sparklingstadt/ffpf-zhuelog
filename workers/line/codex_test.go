@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -19,6 +20,23 @@ func fixture(t *testing.T) string {
 	}
 	return path
 }
+
+// writeFixture writes an executable fixture while holding syscall.ForkLock for
+// reading. Forks take it for writing, so no parallel test can fork while the
+// file is open for writing and inherit that descriptor; otherwise exec can fail
+// with "text file busy" (golang/go#22315).
+func writeFixture(t *testing.T, source string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "fixture.mjs")
+	syscall.ForkLock.RLock()
+	err := os.WriteFile(path, []byte(source), 0700)
+	syscall.ForkLock.RUnlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
 func TestCodexProtocolAndIsolation(t *testing.T) {
 	t.Setenv("DATABASE_URL", "must-not-leak")
 	t.Setenv("OPENAI_API_KEY", "must-not-leak")
@@ -38,10 +56,7 @@ func TestCodexAcceptsUnknownVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	modified := strings.Replace(string(source), "codex/0.155.0-alpha.9.2", "codex/future-version", 1)
-	path := filepath.Join(t.TempDir(), "fixture.mjs")
-	if err := os.WriteFile(path, []byte(modified), 0700); err != nil {
-		t.Fatal(err)
-	}
+	path := writeFixture(t, modified)
 	if _, err := correctText(context.Background(), path, "今天我很busy。"); err != nil {
 		t.Fatal(err)
 	}
@@ -78,10 +93,7 @@ func TestCodexRejectsUnsafeHandshake(t *testing.T) {
 			if scenario.name == "tool-item" {
 				modified = strings.Replace(string(source), `const text = params.input[0].text;`, `send({method:"item/started",params:{item:{type:"commandExecution"}}}); const text = params.input[0].text;`, 1)
 			}
-			path := filepath.Join(t.TempDir(), "fixture.mjs")
-			if err := os.WriteFile(path, []byte(modified), 0700); err != nil {
-				t.Fatal(err)
-			}
+			path := writeFixture(t, modified)
 			if _, err := correctText(context.Background(), path, "今天很好"); err == nil {
 				t.Fatal("unsafe handshake accepted")
 			}
