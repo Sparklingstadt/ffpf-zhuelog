@@ -12,7 +12,6 @@ allowBuilds:
   "unrs-resolver": true
 auditConfig:
   ignoreGhsas:
-    # braces <=3.0.3 stack-exhaustion DoS: no patched version yet. Only reached
-    # through build-time tooling (shadcn, eslint-config-next via fast-glob).
-    # Remove once a fixed braces is released and `pnpm update` picks it up.
+    # braces <=3.0.3: 修正版が未公開。shadcn CLI と eslint-config-next 経由の
+    # 開発時のみの依存で、アプリの実行時には読み込まれない。修正版が出たら削除する。
     - GHSA-vfj7-8cjw-p6xm
