@@ -15,8 +15,9 @@ PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNum
 # The default compute service account builds the image and runs the service.
 RUNTIME_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 
+# --quiet: with stderr hidden, an "enable this API?" prompt would wait unseen.
 secret_exists() {
-  gcloud secrets describe "zhuelog-$1" >/dev/null 2>&1
+  gcloud secrets describe "zhuelog-$1" --quiet >/dev/null 2>&1
 }
 
 # Creates the secret from stdin and lets the service read it.
@@ -49,6 +50,6 @@ prompt_secret() {
 }
 
 service_url() {
-  gcloud run services describe "$SERVICE" --region "$REGION" \
+  gcloud run services describe "$SERVICE" --region "$REGION" --quiet \
     --format='value(status.url)'
 }

@@ -12,14 +12,16 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 source scripts/cloud-run-common.sh
 
+echo "== APIを有効化しています"
+gcloud services enable run.googleapis.com secretmanager.googleapis.com \
+  cloudscheduler.googleapis.com
+
 URL="$(service_url 2>/dev/null || true)"
 [[ -n "$URL" ]] || {
-  echo "Cloud Runのサービス $SERVICE がありません。先に ./scripts/deploy-cloud-run.sh を実行してください。" >&2
+  echo "プロジェクト $PROJECT の $REGION に、Cloud Runのサービス $SERVICE がありません。" >&2
+  echo "Web画面をデプロイしたプロジェクトで実行するか、先に ./scripts/deploy-cloud-run.sh を実行してください。" >&2
   exit 1
 }
-
-echo "== Cloud Scheduler のAPIを有効化しています"
-gcloud services enable cloudscheduler.googleapis.com
 
 echo "== 秘密情報（入力内容は表示されません）"
 echo "   Vercelの環境変数、またはLINE Developersの「チャネル基本設定」「Messaging API設定」からコピーしてください。"
