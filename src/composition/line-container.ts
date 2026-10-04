@@ -8,16 +8,19 @@ import { PrismaLineJobRepository } from "@/infrastructure/persistence/prisma/rep
 export function createLineContainer() {
   const config = getLineConfig();
   const jobs = new PrismaLineJobRepository();
-  const drain = config
-    ? new DrainLineJobs(
-        jobs,
-        new ProcessLineLearning(
+  // Built on demand: an invalid endpoint override throws here, and that must
+  // never break the webhook response or the drain route's authentication.
+  const createDrain = () =>
+    config
+      ? new DrainLineJobs(
           jobs,
-          new LinePushMessenger(config.accessToken),
-        ),
-        new OpenAiLineLearningGenerator(process.env.OPENAI_API_KEY ?? ""),
-        config.userId,
-      )
-    : null;
-  return { config, jobs, drain };
+          new ProcessLineLearning(
+            jobs,
+            new LinePushMessenger(config.accessToken),
+          ),
+          new OpenAiLineLearningGenerator(process.env.OPENAI_API_KEY ?? ""),
+          config.userId,
+        )
+      : null;
+  return { config, jobs, createDrain };
 }

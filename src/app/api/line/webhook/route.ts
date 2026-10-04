@@ -6,13 +6,13 @@ import { handleLineWebhook } from "@/presentation/controllers/line-webhook-contr
 export const runtime = "nodejs";
 export const maxDuration = 60;
 export async function POST(request: Request) {
-  const { config, jobs, drain } = createLineContainer();
+  const { config, jobs, createDrain } = createLineContainer();
   const response = await handleLineWebhook(request, config, jobs);
-  if (response.status === 200 && drain) {
+  if (response.status === 200 && config) {
     const deadline = Date.now() + LINE_DRAIN_BUDGET_MS;
     after(async () => {
       try {
-        await drain.execute(deadline);
+        await createDrain()?.execute(deadline);
       } catch {
         // Fixed code only: errors from the database may contain row data.
         console.error("LINE_DRAIN_FAILED");
