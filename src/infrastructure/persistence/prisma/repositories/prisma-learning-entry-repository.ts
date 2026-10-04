@@ -28,6 +28,7 @@ export class PrismaLearningEntryRepository implements LearningEntryRepository {
           await tx.learningEntry.create({
             data: {
               batchId: batch.id,
+              kind: entry.kind ?? "correction",
               originalText: entry.originalText,
               correctedText: entry.correctedText,
               pinyin: entry.pinyin,

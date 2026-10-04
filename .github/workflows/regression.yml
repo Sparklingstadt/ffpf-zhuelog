@@ -23,10 +23,6 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: workers/line/go.mod
-          cache: false
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm run test:regression

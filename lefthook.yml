@@ -13,15 +13,6 @@ pre-commit:
     typecheck:
       priority: 3
       run: pnpm run typecheck
-    go-format:
-      priority: 4
-      glob: "*.go"
-      run: gofmt -w {staged_files}
-      stage_fixed: true
-    go-check:
-      priority: 5
-      glob: "*.go"
-      run: pnpm run test:worker
 
 pre-push:
   piped: true

@@ -23,7 +23,6 @@ pnpm workspaces のモノレポです。ルートの Next.js アプリ（`@ffpf-
 ├── packages/
 │   ├── core/                     # @ffpf-zhuelog/core
 │   └── typle-integrate-plugin/   # @ffpf-zhuelog/typle-integrate-plugin
-└── workers/line/                 # Go製のLINEワーカー
 ```
 
 コードは依存関係が内側へ向くよう、機能別の関心事を層に分けています。
@@ -91,11 +90,11 @@ AUTH_ALLOWED_GITHUB_LOGINS="github-login-1,github-login-2"
 
 認可はProxyによるページ保護に加え、画面のServer ComponentとCSVインポートのServer Actionでも検証します。
 
-ログイン画面からは、GitHub認証を使わずゲストとしてログインすることもできます。ゲストは共有ノートと日付別ログの閲覧、および本人のAPIキーでの個人添削を利用できます。共有ノートへの投稿・CSVインポート・管理者用ChatGPT・LINE添削は引き続き管理者専用です。共有データの書き込み権限はServer ActionとAPI Routeでも検証します。
+ログイン画面からは、GitHub認証を使わずゲストとしてログインすることもできます。ゲストは共有ノートと日付別ログの閲覧、および本人のAPIキーでの個人添削を利用できます。共有ノートへの投稿・CSVインポート・管理者用ChatGPT・LINE連携は引き続き管理者専用です。共有データの書き込み権限はServer ActionとAPI Routeでも検証します。
 
 ## 本人のAPIキーでの添削（BYOK）
 
-サインイン画面の「自分のAPIキーで添削」、またはログイン後の `/practice` から利用できます。管理者用の `OPENAI_API_KEY`、Codex、LINE処理とは独立しており、新しい環境変数やDBマイグレーションは不要です。
+サインイン画面の「自分のAPIキーで添削」、またはログイン後の `/practice` から利用できます。管理者用の `OPENAI_API_KEY` を使うChatGPT会話・LINE処理とは独立しており、新しい環境変数やDBマイグレーションは不要です。
 
 1. OpenAI Platformで本人のAPIキーを作成し、APIの支払い・利用権限を設定します。必要な権限に絞った、このアプリ専用のプロジェクト／キーを推奨します。
 2. 画面の課金・送信・保存に同意し、キーを登録します。キーの有効性は添削時に確認します。
@@ -111,6 +110,17 @@ AUTH_ALLOWED_GITHUB_LOGINS="github-login-1,github-login-2"
 実装は `domain/practice` → `application/practice`（ポート・ユースケース）→ `infrastructure/practice`（OpenAI・端末保存）を分離し、`composition/practice-container.ts` からAPIを構成しています。API成功系はモック応答で単体／E2E検証し、テストで有料の外部APIは呼びません。
 
 開発用PostgreSQLはDockerホストの `127.0.0.1` にだけ公開されます。`.env` はGit管理対象外です。秘密情報をコミットせず、公開・漏洩した可能性がある場合は該当する認証情報を直ちに失効・再発行してください。
+
+## LINEでの添削・翻訳
+
+自分のLINE（公式アカウントとの1対1トーク）に送った文を、Vercel上でOpenAI API（`gpt-5-mini`）が処理し、同じトークに返信して学習ノートに保存します。MacやCodexは不要です。
+
+- ひらがな・カタカナを含む日本語の文は、中国語（簡体字）に翻訳します。返信は「元の文」「中国語訳」「ヒント」で、ノートには「翻訳」として保存されます。
+- 漢字を含むそれ以外の文は、中国語として添削します。返信は「元の文」「添削後」「ヒント」です。
+- 500文字を超える文は上限を通知し、生成も保存もしません。コマンドはありません（`/battery`・開発モードは廃止しました）。
+- webhookの返答後に同じ関数の中で処理し（`after()`）、取り残しは次のwebhookと、Vercel Cron（1日1回、`GET /api/line/drain`）が拾い直します。
+
+必要な環境変数は `LINE_INTEGRATION_ENABLED`・`LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`LINE_BOT_USER_ID`・`LINE_ALLOWED_USER_ID`・`OPENAI_API_KEY`、そして `/api/line/drain` を保護する `CRON_SECRET`（`openssl rand -hex 32` で生成した32文字以上の値）です。`OPENAI_API_BASE_URL` と `LINE_API_BASE_URL` はE2Eテスト専用（ループバックのアドレスだけを受け付けます）で、本番では設定しません。設定手順、v0.12.0への切り替え（Macのworkerの停止など）、失敗時の扱いは [`docs/line-integration.md`](docs/line-integration.md) を参照してください。
 
 ## ChatGPT会話機能の設定
 
@@ -236,13 +246,14 @@ Desktop Chromiumとモバイル幅（Pixel 7 / Chromium）の両方で検証し�
 - OpenAIキー未設定時のチャット利用拒否
 - 会話の終了・DB保存・再保存・端末バックアップの復元・ダウンロード・他人の会話の閲覧／上書き拒否（AI応答はモック）
 - 会話ノートの日付一覧・日別一覧・詳細・前後移動・JST日付境界・無効なURL・ゲストと他人からの非表示
+- LINEの署名付きwebhook・重複排除・日本語の翻訳と中文の添削・生成失敗の返信・同時受信・Cronでの取り残しの処理（OpenAIとLINEは `127.0.0.1:3108` / `3109` の偽サーバー）
 - Typle用リストの抽出・管理者限定表示・互換JSON出力・先頭20件の表示・存在しない連携の404
 
 DBは`127.0.0.1:55439/zhuelog_e2e`に固定され、`compose.e2e.yaml`の専用コンテナだけを使用します。
 各テスト前にこのDBの学習データを初期化します。ポート55439を別のDBに割り当てないでください。
 通常の`DATABASE_URL`、実際のOAuth情報、OpenAIキーは使用しません。
 管理者セッションはテスト側で実行ごとのランダムな秘密鍵を使って作成します。本番コードに認証バイパスは追加していません。
-GitHub OAuthの外部ログインとOpenAIの実API通信は、このE2Eの対象外です。
+GitHub OAuthの外部ログインとOpenAI・LINEの実API通信は、このE2Eの対象外です。
 
 失敗時のスクリーンショット・トレースは`test-results/`、HTMLレポートは`playwright-report/`に出力されます（Git管理外）。
 `pnpm exec playwright show-report`で結果を確認できます。GitHub Actionsにも同じE2Eを追加しています。

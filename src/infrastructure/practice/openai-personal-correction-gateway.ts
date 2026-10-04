@@ -6,22 +6,10 @@ import {
 } from "@ffpf-zhuelog/core/domain/learning/chinese-correction";
 import { PersonalCorrectionError } from "@ffpf-zhuelog/core/domain/practice/personal-correction";
 import { PersonalRequestLimiter } from "./personal-request-limiter";
-import { readLimitedBody } from "../http/read-limited-body";
+import { readOutputText } from "../openai/responses";
 
 // Fixed on the server; clients never choose the model.
 const PERSONAL_CORRECTION_MODEL = "gpt-5-mini";
-
-const responseSchema = z.object({
-  status: z.literal("completed"),
-  output: z.array(
-    z.object({
-      type: z.string(),
-      content: z
-        .array(z.object({ type: z.string(), text: z.string().optional() }))
-        .optional(),
-    }),
-  ),
-});
 
 export class OpenAiPersonalCorrectionGateway implements PersonalCorrectionGateway {
   constructor(
@@ -74,20 +62,7 @@ export class OpenAiPersonalCorrectionGateway implements PersonalCorrectionGatewa
               : "unavailable",
         );
       }
-      const payload = responseSchema.parse(
-        JSON.parse(
-          (await readLimitedBody(response, 128 * 1024)).toString("utf8"),
-        ),
-      );
-      const contents = payload.output
-        .filter((item) => item.type === "message")
-        .flatMap((item) => item.content ?? []);
-      if (contents.some((item) => item.type === "refusal"))
-        throw new PersonalCorrectionError("unavailable");
-      const text = contents
-        .filter((item) => item.type === "output_text")
-        .map((item) => item.text ?? "")
-        .join("");
+      const text = await readOutputText(response);
       const correction = correctionSchema.parse(JSON.parse(text));
       // Also reject a provider unexpectedly returning the credential verbatim.
       if (JSON.stringify(correction).includes(apiKey))

@@ -1,3 +1,4 @@
+import type { LearningKind } from "@ffpf-zhuelog/core/domain/learning/entities/learning-entry";
 import { CsvParseLearningParser } from "../csv/csv-parse-learning-parser";
 
 // Split only for presentation. Keep punctuation and closing quotes, and do
@@ -42,13 +43,16 @@ function pairedCorrection(correctedText: string, pinyin: string): string {
 
 // Render only at the LINE boundary. The durable CSV and saved learning note
 // remain unchanged. Keep this deterministic so retries have identical text.
-export function formatLineLearningReply(csv: string): string {
+export function formatLineLearningReply(
+  csv: string,
+  kind: LearningKind,
+): string {
   const entries = new CsvParseLearningParser().parse(csv);
   if (entries.length !== 1) throw new Error("INVALID_LINE_REPLY");
   const entry = entries[0];
   const sections = [
     `【元の文】\n${entry.originalText}`,
-    `【添削後】\n${pairedCorrection(entry.correctedText, entry.pinyin)}`,
+    `【${kind === "translation" ? "中国語訳" : "添削後"}】\n${pairedCorrection(entry.correctedText, entry.pinyin)}`,
   ];
   if (entry.hints.length) {
     sections.push(

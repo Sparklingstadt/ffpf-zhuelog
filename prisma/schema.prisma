@@ -17,6 +17,7 @@ model ImportBatch {
 
 model LearningEntry {
   id            String      @id @default(cuid())
+  kind          String      @default("correction")
   originalText  String
   correctedText String
   pinyin        String

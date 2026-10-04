@@ -7,6 +7,7 @@ import { createTypleExport, extractTypleWords } from "../src/typle-word-list";
 function entry(overrides: Partial<LearningEntry> = {}): LearningEntry {
   return {
     id: "entry-1",
+    kind: "correction",
     originalText: "这个菜很好吃。",
     correctedText: "这道菜很好吃。",
     pinyin: "Zhè dào cài hěn hǎochī.",
@@ -102,4 +103,32 @@ test("creates the v1 saved-list shape accepted by typle-r", () => {
   assert.equal(payload.lists[0].name, "学习録から復習");
   assert.deepEqual(payload.lists[0].records, []);
   assert.equal(payload.lists[0].createdAt, "2026-09-25T01:02:03.000Z");
+});
+
+test("takes only hint terms found in the translation from translation notes", () => {
+  const words = extractTypleWords([
+    entry({
+      kind: "translation",
+      originalText: "今日は忙しいです。",
+      correctedText: "今天我很忙。",
+      pinyin: "Jīntiān wǒ hěn máng.",
+      hints: [
+        { id: "hint-1", content: "「忙しい」は「忙」で表します", position: 0 },
+      ],
+    }),
+    entry({
+      id: "entry-2",
+      kind: "translation",
+      originalText: "手紙を書きました。",
+      correctedText: "我写了信。",
+      pinyin: "Wǒ xiě le xìn.",
+      hints: [
+        { id: "hint-2", content: "「手紙」は中国語で「信」です", position: 0 },
+      ],
+    }),
+  ]);
+  assert.deepEqual(
+    words.map((word) => word.display),
+    ["忙", "信"],
+  );
 });

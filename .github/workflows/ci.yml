@@ -27,10 +27,6 @@ jobs:
       - run: pnpm audit
       - run: pnpm run typecheck
       - run: pnpm run lint
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: workers/line/go.mod
-          cache-dependency-path: workers/line/go.mod
       - run: pnpm run test:unit
       - run: pnpm run build
 

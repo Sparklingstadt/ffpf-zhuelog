@@ -6,7 +6,7 @@ import {
   LINE_JOB_STATUSES,
   type LineJob,
 } from "@ffpf-zhuelog/core/domain/line/line-learning";
-import { routeDevelopmentMessage } from "@ffpf-zhuelog/core/domain/line/development-routing";
+import { LEARNING_KINDS } from "@ffpf-zhuelog/core/domain/learning/entities/learning-entry";
 import { toLineJob } from "../src/infrastructure/persistence/prisma/mappers/line-job-mapper";
 
 // The newest migration that (re)defines a CHECK constraint is the DB's truth.
@@ -39,24 +39,11 @@ test("job kinds and statuses match the database CHECK constraints", () => {
   );
 });
 
-test("development routing only produces storable kinds and statuses", () => {
-  const now = new Date("2026-10-04T00:00:00Z");
-  const off = { expiresAt: null, lastEventAt: new Date(0) };
-  const on = {
-    expiresAt: new Date(now.getTime() + 60_000),
-    lastEventAt: new Date(0),
-  };
-  for (const session of [off, on])
-    for (const text of ["/dev", "/devend", "English", "中文", "/battery"])
-      for (const receivedAt of [now, new Date(-1)]) {
-        const { job } = routeDevelopmentMessage(
-          { originalText: text, receivedAt },
-          session,
-          now,
-        );
-        assert.ok(LINE_JOB_KINDS.includes(job.kind), job.kind);
-        assert.ok(LINE_JOB_STATUSES.includes(job.status), job.status);
-      }
+test("learning kinds match the database CHECK constraint", () => {
+  assert.deepEqual(
+    [...LEARNING_KINDS].sort(),
+    checkedValues("LearningEntry_kind_check"),
+  );
 });
 
 test("job kind and status are checked by the type system", () => {

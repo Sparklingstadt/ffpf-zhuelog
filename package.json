@@ -1,6 +1,6 @@
 {
   "name": "@ffpf-zhuelog/web",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
@@ -8,9 +8,6 @@
   "scripts": {
     "dev": "next dev",
     "dev:codex": "CHAT_PROVIDER=codex-local next dev --hostname 127.0.0.1",
-    "line:worker": "NODE_ENV=development CHAT_PROVIDER=codex-local ./build/line-worker",
-    "line:worker:build": "cd workers/line && go build -trimpath -o ../../build/line-worker .",
-    "test:worker": "node scripts/test-unit.mjs --worker",
     "test:unit": "node scripts/test-unit.mjs",
     "build": "next build",
     "start": "next start",

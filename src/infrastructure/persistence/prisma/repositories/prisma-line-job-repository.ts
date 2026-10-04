@@ -1,17 +1,24 @@
 import { randomUUID } from "node:crypto";
 import type { LineJobRepository } from "@ffpf-zhuelog/core/domain/line/repositories/line-job-repository";
 import {
+  ACTIVE_LINE_JOB_KINDS,
   lineTextTooLongReply,
   type LineInput,
   type LineJob,
-  type LineJobKind,
   type LineJobStatus,
 } from "@ffpf-zhuelog/core/domain/line/line-learning";
 import type { LearningEntryDraft } from "@ffpf-zhuelog/core/domain/learning/entities/learning-entry";
 import { getPrismaClient } from "../prisma-client";
 import { toLineJob } from "../mappers/line-job-mapper";
-import { routeDevelopmentMessage } from "@ffpf-zhuelog/core/domain/line/development-routing";
-import type { GenerationFailureCode } from "@ffpf-zhuelog/core/domain/line/generation-failure";
+import {
+  formatGenerationFailure,
+  type GenerationFailureCode,
+} from "@ffpf-zhuelog/core/domain/line/generation-failure";
+
+// Corrections and translations are generated; they alone save notes and
+// carry generation failure codes.
+const isGenerated = (kind: LineJob["kind"]) =>
+  kind === "correction" || kind === "translation";
 
 const leaseWhere = (job: LineJob) => ({
   id: job.id,
@@ -33,56 +40,6 @@ export class PrismaLineJobRepository implements LineJobRepository {
   async enqueue(inputs: LineInput[]) {
     if (!inputs.length) return;
     const prisma = getPrismaClient();
-    // Mode changes and the durable reply/issue inbox are one transaction.
-    // Deduplicate before changing mode, including old /dev redeliveries.
-    if (inputs.some((input) => input.kind === "development-input")) {
-      for (const input of [...inputs].sort(
-        (a, b) => a.receivedAt.getTime() - b.receivedAt.getTime(),
-      )) {
-        for (let attempt = 0; ; attempt++) {
-          try {
-            await prisma.$transaction(
-              async (tx) => {
-                if (
-                  await tx.lineLearningJob.findUnique({
-                    where: { eventId: input.eventId },
-                  })
-                )
-                  return;
-                if (input.kind !== "development-input") {
-                  await tx.lineLearningJob.create({ data: jobData(input) });
-                  return;
-                }
-                const session = await tx.lineDevelopmentSession.upsert({
-                  where: { userId: input.userId },
-                  update: {},
-                  create: { userId: input.userId, lastEventAt: new Date(0) },
-                });
-                const routed = routeDevelopmentMessage(input, session);
-                await tx.lineDevelopmentSession.update({
-                  where: { userId: input.userId },
-                  data: routed.session,
-                });
-                await tx.lineLearningJob.create({
-                  data: {
-                    ...input,
-                    ...routed.job,
-                    retryKey: randomUUID(),
-                  },
-                });
-              },
-              { isolationLevel: "Serializable" },
-            );
-            break;
-          } catch (error) {
-            const code = (error as { code?: string }).code;
-            if (attempt >= 3 || !["P2034", "P2002"].includes(code ?? ""))
-              throw error;
-          }
-        }
-      }
-      return;
-    }
     // Unique event IDs also deduplicate webhook redeliveries after success.
     await prisma.lineLearningJob.createMany({
       data: inputs.map(jobData),
@@ -92,24 +49,37 @@ export class PrismaLineJobRepository implements LineJobRepository {
 
   async claim(
     userId: string,
-    supportsBattery = false,
-    supportsDevelopment = false,
+    phase: "any" | "deliver" = "any",
   ): Promise<LineJob | null> {
     const prisma = getPrismaClient();
     const now = new Date();
-    const kinds: LineJobKind[] = [
-      "correction",
-      "text-too-long",
-      ...(supportsBattery ? (["battery"] as const) : []),
-      ...(supportsDevelopment ? (["dev-issue", "dev-reply"] as const) : []),
-    ];
+    const swept = {
+      userId,
+      kind: { in: [...ACTIVE_LINE_JOB_KINDS] },
+      availableAt: { lte: now },
+    };
+    // Generation failures always reply: an exhausted correction or
+    // translation becomes a failure reply for the next claim to deliver.
+    for (const kind of ["correction", "translation"] as const) {
+      await prisma.lineLearningJob.updateMany({
+        where: {
+          ...swept,
+          kind,
+          status: { in: ["PENDING", "GENERATING"] satisfies LineJobStatus[] },
+          generationTries: { gte: 3 },
+        },
+        data: {
+          status: "READY",
+          leaseToken: null,
+          availableAt: now,
+          replyText: formatGenerationFailure("OPENAI_REQUEST_FAILED", kind),
+          failureCode: "OPENAI_REQUEST_FAILED",
+        },
+      });
+    }
     await prisma.lineLearningJob.updateMany({
       where: {
-        userId,
-        kind: {
-          in: kinds,
-        },
-        availableAt: { lte: now },
+        ...swept,
         OR: [
           {
             status: {
@@ -133,16 +103,16 @@ export class PrismaLineJobRepository implements LineJobRepository {
       const job = await prisma.lineLearningJob.findFirst({
         where: {
           userId,
-          kind: {
-            in: kinds,
-          },
+          kind: { in: [...ACTIVE_LINE_JOB_KINDS] },
           status: {
-            in: [
-              "PENDING",
-              "GENERATING",
-              "READY",
-              "SENDING",
-            ] satisfies LineJobStatus[],
+            in: (phase === "deliver"
+              ? ["READY", "SENDING"]
+              : [
+                  "PENDING",
+                  "GENERATING",
+                  "READY",
+                  "SENDING",
+                ]) satisfies LineJobStatus[],
           },
           availableAt: { lte: now },
         },
@@ -201,10 +171,10 @@ export class PrismaLineJobRepository implements LineJobRepository {
   }
 
   async saveResult(job: LineJob, draft: LearningEntryDraft, csv: string) {
-    if (job.kind !== "correction") return false;
+    if (!isGenerated(job.kind)) return false;
     return getPrismaClient().$transaction(async (tx) => {
       const locked = await tx.lineLearningJob.updateMany({
-        where: { ...leaseWhere(job), kind: "correction" },
+        where: { ...leaseWhere(job), kind: job.kind },
         data: {
           status: "READY",
           leaseToken: null,
@@ -220,10 +190,11 @@ export class PrismaLineJobRepository implements LineJobRepository {
       const entry = await tx.learningEntry.create({
         data: {
           batchId: batch.id,
+          kind: draft.kind ?? "correction",
           originalText: draft.originalText,
           correctedText: draft.correctedText,
           pinyin: draft.pinyin,
-          // Group by when LINE accepted the user's message, not when the Mac woke.
+          // Group by when LINE accepted the user's message, not when it was processed.
           createdAt: job.receivedAt,
           hints: {
             create: draft.hints.map((content, position) => ({
@@ -246,12 +217,8 @@ export class PrismaLineJobRepository implements LineJobRepository {
     text: string,
     failureCode?: GenerationFailureCode,
   ) {
-    if (
-      job.kind === "correction"
-        ? !failureCode
-        : job.kind !== "battery" && job.kind !== "dev-issue"
-    )
-      return false;
+    // Only a failed correction or translation is answered with a saved reply.
+    if (!isGenerated(job.kind) || !failureCode) return false;
     const result = await getPrismaClient().lineLearningJob.updateMany({
       where: { ...leaseWhere(job), kind: job.kind },
       data: {
@@ -263,11 +230,12 @@ export class PrismaLineJobRepository implements LineJobRepository {
       },
     });
     const saved = result.count === 1;
-    // Only corrections carry a failure code. Log the code, never the text.
+    // Log the code, never the text.
     if (saved && failureCode)
       console.warn(
         JSON.stringify({
           event: "line_correction_failed",
+          kind: job.kind,
           at: new Date().toISOString(),
           jobId: job.id,
           code: failureCode,
@@ -276,24 +244,13 @@ export class PrismaLineJobRepository implements LineJobRepository {
     return saved;
   }
 
-  async beginIssue(job: LineJob) {
-    if (job.kind !== "dev-issue") return false;
-    // A single-use publication permit. After a timeout/crash, only read-back
-    // reconciliation is allowed, never a second GitHub create request.
-    const result = await getPrismaClient().lineLearningJob.updateMany({
-      where: { ...leaseWhere(job), kind: "dev-issue", issueAttempted: false },
-      data: { issueAttempted: true },
-    });
-    return result.count === 1;
-  }
-
   async finishDelivery(job: LineJob) {
     await getPrismaClient().lineLearningJob.updateMany({
       where: leaseWhere(job),
       data: {
         status: "SENT",
         leaseToken: null,
-        ...(job.kind === "correction" && job.replyText
+        ...(isGenerated(job.kind) && job.replyText
           ? {}
           : { failureCode: null }),
       },
@@ -310,7 +267,7 @@ export class PrismaLineJobRepository implements LineJobRepository {
         status:
           permanent || exhausted ? "FAILED" : generating ? "PENDING" : "READY",
         leaseToken: null,
-        ...(job.kind === "correction" && job.replyText
+        ...(isGenerated(job.kind) && job.replyText
           ? {}
           : { failureCode: code }),
         availableAt: new Date(Date.now() + 30_000 * 2 ** tries),

@@ -12,6 +12,7 @@ import {
 
 const entry: LearningEntry = {
   id: "entry-1",
+  kind: "correction",
   originalText: "我去学校。",
   correctedText: "我去了学校。",
   pinyin: "Wǒ qù le xuéxiào.",

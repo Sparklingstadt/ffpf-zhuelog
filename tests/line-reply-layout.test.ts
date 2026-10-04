@@ -6,21 +6,27 @@ import { CsvParseLearningParser } from "../src/infrastructure/csv/csv-parse-lear
 
 test("issue 11 pairs each corrected sentence with its pinyin while leaving stored CSV untouched", () => {
   const original = "我喜欢学习Chinese\n我am日本人";
-  const { csv, draft } = makeLineLearningResult(original, {
+  const { csv, draft } = makeLineLearningResult("correction", original, {
     correctedText: "我喜欢学习汉语。我是个日本人。",
     pinyin: "Wǒ xǐhuān xuéxí Hànyǔ. Wǒ shì ge Rìběnrén.",
     hints: ["汉语=中国語", "日本人=Rìběnrén"],
   });
   assert.equal(
-    formatLineLearningReply(csv),
+    formatLineLearningReply(csv, "correction"),
     [
       `【元の文】\n${original}`,
       "【添削後】\n我喜欢学习汉语。\nWǒ xǐhuān xuéxí Hànyǔ.\n我是个日本人。\nWǒ shì ge Rìběnrén.",
       "【ヒント】\n1. 汉语=中国語\n2. 日本人=Rìběnrén",
     ].join("\n\n"),
   );
-  assert.deepEqual(new CsvParseLearningParser().parse(csv), [draft]);
-  assert.equal(formatLineLearningReply(csv), formatLineLearningReply(csv));
+  // The CSV carries no kind; it is set from the job when the entry is saved.
+  const { kind, ...stored } = draft;
+  assert.equal(kind, "correction");
+  assert.deepEqual(new CsvParseLearningParser().parse(csv), [stored]);
+  assert.equal(
+    formatLineLearningReply(csv, "correction"),
+    formatLineLearningReply(csv, "correction"),
+  );
 });
 
 for (const [name, chinese, pinyin, expected] of [
@@ -51,13 +57,13 @@ for (const [name, chinese, pinyin, expected] of [
   ["more pinyin sentences", "你好。", "Nǐ. Hǎo.", "你好。\nNǐ. Hǎo."],
 ] as const)
   test(`LINE sentence layout: ${name}`, () => {
-    const { csv } = makeLineLearningResult("原文", {
+    const { csv } = makeLineLearningResult("correction", "原文", {
       correctedText: chinese,
       pinyin,
       hints: ["ヒント"],
     });
     assert.ok(
-      formatLineLearningReply(csv).includes(
+      formatLineLearningReply(csv, "correction").includes(
         `【添削後】\n${expected}\n\n【ヒント】`,
       ),
     );

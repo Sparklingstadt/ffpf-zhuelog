@@ -1,13 +1,9 @@
-import { createHmac } from "node:crypto";
-import { test, expect, asAdmin } from "./fixtures";
-import { authSecret, lineTestConfig } from "./environment";
+import { createHmac, randomUUID } from "node:crypto";
+import type { APIRequestContext } from "@playwright/test";
+import { test, expect } from "./fixtures";
+import { cronSecret, lineStubUrl, lineTestConfig } from "./environment";
 
-const correction = {
-  correctedText: "今天我很忙。",
-  pinyin: "Jīntiān wǒ hěn máng.",
-  hints: ["忙=máng=忙しい", "今天=今日"],
-};
-function payload(id = "event1") {
+function payload(id = "event1", text = "今天我busy。") {
   return JSON.stringify({
     destination: lineTestConfig.botId,
     events: [
@@ -17,7 +13,7 @@ function payload(id = "event1") {
         webhookEventId: id,
         timestamp: Date.now(),
         source: { type: "user", userId: lineTestConfig.userId },
-        message: { type: "text", text: "今天我busy。" },
+        message: { type: "text", text },
       },
     ],
   });
@@ -25,330 +21,260 @@ function payload(id = "event1") {
 const signature = (body: string) =>
   createHmac("sha256", lineTestConfig.secret).update(body).digest("base64");
 
-test("LINE signed webhook -> leased correction -> one note and durable CSV outbox", async ({
+const sendWebhook = (request: APIRequestContext, id: string, text: string) => {
+  const body = payload(id, text);
+  return request.post("/api/line/webhook", {
+    data: body,
+    headers: {
+      "x-line-signature": signature(body),
+      "Content-Type": "application/json",
+    },
+  });
+};
+
+type Push = { to: string; messages: { type: string; text: string }[] };
+const pushedTexts = async (request: APIRequestContext) =>
+  ((await (await request.get(`${lineStubUrl}/__pushes`)).json()) as Push[]).map(
+    (push) => push.messages[0].text,
+  );
+
+// The stubs keep their state across tests: start each test with an empty log.
+test.beforeEach(async ({ request }) => {
+  expect((await request.delete(`${lineStubUrl}/__pushes`)).status()).toBe(204);
+});
+
+const jobStatuses = (db: import("pg").Client) => async () =>
+  (
+    await db.query(
+      'SELECT status FROM "LineLearningJob" ORDER BY "createdAt", "eventId"',
+    )
+  ).rows.map((row) => row.status);
+
+test("LINE webhook rejects unsigned requests and deduplicates a redelivery", async ({
   request,
-  page,
   db,
-  context,
 }) => {
   const body = payload();
-  const send = () =>
-    request.post("/api/line/webhook", {
-      data: body,
-      headers: {
-        "x-line-signature": signature(body),
-        "Content-Type": "application/json",
-      },
-    });
   expect(
     (await request.post("/api/line/webhook", { data: body })).status(),
   ).toBe(401);
-  expect(
-    (
-      await request.post("/api/line/worker", { data: { action: "claim" } })
-    ).status(),
-  ).toBe(401);
-  expect((await send()).status()).toBe(200);
-  expect((await send()).status()).toBe(200);
+  expect((await sendWebhook(request, "event1", "今天我busy。")).status()).toBe(
+    200,
+  );
+  expect((await sendWebhook(request, "event1", "今天我busy。")).status()).toBe(
+    200,
+  );
+  await expect
+    .poll(async () => {
+      const { rows } = await db.query(
+        'SELECT status FROM "LineLearningJob" WHERE "eventId" = $1',
+        ["event1"],
+      );
+      return rows.map((row) => row.status);
+    })
+    .toEqual(["SENT"]);
   expect(
     (await db.query('SELECT count(*)::int AS count FROM "LineLearningJob"'))
       .rows[0].count,
   ).toBe(1);
-  const worker = (data: unknown) =>
-    request.post("/api/line/worker", {
-      data,
-      headers: { Authorization: `Bearer ${authSecret()}` },
-    });
-  const claims = await Promise.all([
-    worker({ action: "claim" }),
-    worker({ action: "claim" }),
-  ]);
-  const jobs = (await Promise.all(claims.map((result) => result.json())))
-    .map((result) => result.job)
-    .filter(Boolean);
-  expect(jobs).toHaveLength(1);
-  const job = jobs[0];
-  expect(job.phase).toBe("generate");
-  const complete = {
-    action: "complete",
-    id: job.id,
-    leaseToken: job.leaseToken,
-    correction,
-  };
-  expect((await worker(complete)).status()).toBe(200);
-  expect((await worker(complete)).status()).toBe(409);
-  const stored = (
-    await db.query('SELECT status, csv, "entryId" FROM "LineLearningJob"')
-  ).rows[0];
-  expect(stored.status).toBe("READY");
-  expect(stored.csv).toContain('"今天我busy。","今天我很忙。"');
-  expect(stored.entryId).toBeTruthy();
   expect(
     (await db.query('SELECT count(*)::int AS count FROM "LearningEntry"'))
       .rows[0].count,
   ).toBe(1);
-  await asAdmin(context);
-  await page.goto("/");
-  await expect(
-    page.getByText(correction.pinyin, { exact: true }),
-  ).toBeVisible();
-  await page.getByRole("link", { name: "この日の一覧" }).click();
-  await expect(
-    page.getByText(correction.correctedText, { exact: true }),
-  ).toBeVisible();
-  const delivery = (await (await worker({ action: "claim" })).json()).job;
-  expect(delivery.phase).toBe("deliver");
-  expect(delivery.originalText).toBeUndefined();
-  // Deliberately do NOT call deliver against LINE; unit tests mock its HTTP API.
+  expect(await pushedTexts(request)).toHaveLength(1);
 });
 
-test("expired leases are reclaimed and stale workers cannot import", async ({
+test("former commands and non-Chinese text are not queued", async ({
   request,
   db,
 }) => {
-  const body = payload("reclaim");
-  await request.post("/api/line/webhook", {
-    data: body,
-    headers: { "x-line-signature": signature(body) },
-  });
-  const worker = (data: unknown) =>
-    request.post("/api/line/worker", {
-      data,
-      headers: { Authorization: `Bearer ${authSecret()}` },
-    });
-  const first = (await (await worker({ action: "claim" })).json()).job;
-  await db.query(
-    'UPDATE "LineLearningJob" SET "availableAt" = NOW() - INTERVAL \'1 second\'',
-  );
-  const second = (await (await worker({ action: "claim" })).json()).job;
-  expect(second.leaseToken).not.toBe(first.leaseToken);
-  expect(
-    (
-      await worker({
-        action: "complete",
-        id: first.id,
-        leaseToken: first.leaseToken,
-        correction,
-      })
-    ).status(),
-  ).toBe(409);
-  expect(
-    (
-      await worker({
-        action: "complete",
-        id: second.id,
-        leaseToken: second.leaseToken,
-        correction,
-      })
-    ).status(),
-  ).toBe(200);
-});
-
-test("owner battery command is deduplicated, capability-gated and never creates a learning note", async ({
-  request,
-  db,
-}) => {
-  const envelope = JSON.parse(payload("battery-command"));
-  envelope.events[0].message.text = "/battery";
-  const body = JSON.stringify(envelope);
-  const send = () =>
-    request.post("/api/line/webhook", {
-      data: body,
-      headers: { "x-line-signature": signature(body) },
-    });
-  expect((await send()).status()).toBe(200);
-  expect((await send()).status()).toBe(200);
+  for (const [index, text] of [
+    "/battery",
+    "/dev",
+    "/devend",
+    "Hello",
+  ].entries()) {
+    const body = payload(`ignored-${index}`, text);
+    expect(
+      (
+        await request.post("/api/line/webhook", {
+          data: body,
+          headers: { "x-line-signature": signature(body) },
+        })
+      ).status(),
+    ).toBe(200);
+  }
   expect(
     (await db.query('SELECT count(*)::int AS count FROM "LineLearningJob"'))
       .rows[0].count,
-  ).toBe(1);
-  const worker = (data: unknown) =>
-    request.post("/api/line/worker", {
-      data,
-      headers: { Authorization: `Bearer ${authSecret()}` },
-    });
-  expect((await (await worker({ action: "claim" })).json()).job).toBeNull();
-  const claims = await Promise.all([
-    worker({ action: "claim", capabilities: ["battery"] }),
-    worker({ action: "claim", capabilities: ["battery"] }),
-  ]);
-  const jobs = (await Promise.all(claims.map((value) => value.json())))
-    .map((value) => value.job)
-    .filter(Boolean);
-  expect(jobs).toHaveLength(1);
-  const first = jobs[0];
-  expect(first.phase).toBe("battery");
-  expect(first.originalText).toBeUndefined();
-  expect(
-    (
-      await worker({
-        action: "complete",
-        id: first.id,
-        leaseToken: first.leaseToken,
-        correction,
-      })
-    ).status(),
-  ).toBe(409);
-  const report = {
-    available: true,
-    percent: 76,
-    state: "discharging",
-    powerSource: "battery",
-    remainingMinutes: 163,
-    checkedAt: new Date().toISOString(),
-  };
-  const complete = {
-    action: "complete-battery",
-    id: first.id,
-    leaseToken: first.leaseToken,
-    report,
-  };
-  expect(
-    (
-      await worker({ ...complete, report: { ...report, percent: 101 } })
-    ).status(),
-  ).toBe(400);
-  await db.query(
-    'UPDATE "LineLearningJob" SET "availableAt" = NOW() - INTERVAL \'1 second\'',
-  );
-  const second = (
-    await (await worker({ action: "claim", capabilities: ["battery"] })).json()
-  ).job;
-  expect(second.leaseToken).not.toBe(first.leaseToken);
-  expect((await worker(complete)).status()).toBe(409);
-  const fresh = { ...complete, leaseToken: second.leaseToken };
-  expect((await worker(fresh)).status()).toBe(200);
-  expect((await worker(fresh)).status()).toBe(409);
-  const stored = (
-    await db.query(
-      'SELECT kind, status, csv, "replyText", "entryId" FROM "LineLearningJob"',
-    )
-  ).rows[0];
-  expect(stored.kind).toBe("battery");
-  expect(stored.status).toBe("READY");
-  expect(stored.csv).toBeNull();
-  expect(stored.entryId).toBeNull();
-  expect(stored.replyText).toContain("残量：76%");
-  expect(stored.replyText).toContain("取得時刻：");
-  expect(
-    (await db.query('SELECT count(*)::int AS count FROM "LearningEntry"'))
-      .rows[0].count,
   ).toBe(0);
-  expect(
-    (await db.query('SELECT count(*)::int AS count FROM "ImportBatch"')).rows[0]
-      .count,
-  ).toBe(0);
-  expect((await (await worker({ action: "claim" })).json()).job).toBeNull();
-  const delivery = (
-    await (await worker({ action: "claim", capabilities: ["battery"] })).json()
-  ).job;
-  expect(delivery.phase).toBe("deliver");
-  // Actual LINE delivery is verified separately; unit tests mock the HTTP API.
-});
-
-test("failed correction persists a notification without a note and rejects stale completion", async ({
-  request,
-  db,
-}) => {
-  const body = payload("failed-correction");
-  await request.post("/api/line/webhook", {
-    data: body,
-    headers: { "x-line-signature": signature(body) },
-  });
-  const worker = (data: unknown) =>
-    request.post("/api/line/worker", {
-      data,
-      headers: { Authorization: `Bearer ${authSecret()}` },
-    });
-  const job = (await (await worker({ action: "claim" })).json()).job;
-  const failure = {
-    action: "fail",
-    id: job.id,
-    leaseToken: job.leaseToken,
-    code: "CODEX_TIMEOUT",
-  };
-  expect((await worker({ ...failure, code: "raw-secret" })).status()).toBe(400);
-  expect((await worker(failure)).status()).toBe(200);
-  expect((await worker(failure)).status()).toBe(409);
-  expect(
-    (
-      await worker({
-        action: "complete",
-        id: job.id,
-        leaseToken: job.leaseToken,
-        correction,
-      })
-    ).status(),
-  ).toBe(409);
-  const stored = (
-    await db.query(
-      'SELECT status, csv, "replyText", "failureCode", "entryId" FROM "LineLearningJob"',
-    )
-  ).rows[0];
-  expect(stored.status).toBe("READY");
-  expect(stored.failureCode).toBe("CODEX_TIMEOUT");
-  expect(stored.replyText).toContain("添削できませんでした");
-  expect(stored.replyText).not.toContain("今天我busy");
-  expect(stored.csv).toBeNull();
-  expect(stored.entryId).toBeNull();
-  expect(
-    (await db.query('SELECT count(*)::int AS count FROM "LearningEntry"'))
-      .rows[0].count,
-  ).toBe(0);
-  const delivery = (await (await worker({ action: "claim" })).json()).job;
-  expect(delivery.phase).toBe("deliver");
-  expect(delivery.originalText).toBeUndefined();
-  // Delivery is unit-tested with a fake messenger; never send real LINE in E2E.
+  expect(await pushedTexts(request)).toEqual([]);
 });
 
 test("oversized message is answered with the limit notice, never generated or stored", async ({
   request,
   db,
 }) => {
-  const body = JSON.stringify({
-    destination: lineTestConfig.botId,
-    events: [
-      {
-        type: "message",
-        mode: "active",
-        webhookEventId: "too-long",
-        timestamp: Date.now(),
-        source: { type: "user", userId: lineTestConfig.userId },
-        message: { type: "text", text: "字".repeat(501) },
-      },
-    ],
-  });
   expect(
-    (
-      await request.post("/api/line/webhook", {
-        data: body,
-        headers: { "x-line-signature": signature(body) },
-      })
-    ).status(),
+    (await sendWebhook(request, "too-long", "字".repeat(501))).status(),
   ).toBe(200);
+  await expect.poll(jobStatuses(db)).toEqual(["SENT"]);
+  expect(await pushedTexts(request)).toHaveLength(1);
+  expect((await pushedTexts(request))[0]).toContain("500文字");
   const stored = (
     await db.query(
       'SELECT kind, status, "originalText", "replyText", csv FROM "LineLearningJob"',
     )
   ).rows[0];
   expect(stored.kind).toBe("text-too-long");
-  expect(stored.status).toBe("READY");
+  expect(stored.status).toBe("SENT");
   expect(stored.originalText).toBe("");
   expect(stored.replyText).toContain("500文字");
   expect(stored.csv).toBeNull();
-  const job = (
-    await (
-      await request.post("/api/line/worker", {
-        data: { action: "claim" },
-        headers: { Authorization: `Bearer ${authSecret()}` },
-      })
-    ).json()
-  ).job;
-  expect(job.phase).toBe("deliver");
-  expect(job.originalText).toBeUndefined();
   expect(
     (await db.query('SELECT count(*)::int AS count FROM "LearningEntry"'))
       .rows[0].count,
   ).toBe(0);
-  // Delivery is unit-tested with a fake messenger; never send real LINE in E2E.
+});
+
+test("Japanese text is translated, saved as a translation note and replied", async ({
+  request,
+  db,
+}) => {
+  expect(
+    (await sendWebhook(request, "ja-1", "今日は忙しいです。")).status(),
+  ).toBe(200);
+  await expect.poll(jobStatuses(db)).toEqual(["SENT"]);
+  const entries = (
+    await db.query(
+      'SELECT kind, "originalText", "correctedText" FROM "LearningEntry"',
+    )
+  ).rows;
+  expect(entries).toEqual([
+    {
+      kind: "translation",
+      originalText: "今日は忙しいです。",
+      correctedText: "今天我很忙。",
+    },
+  ]);
+  const texts = await pushedTexts(request);
+  expect(texts).toHaveLength(1);
+  expect(texts[0]).toContain("【中国語訳】");
+  expect(texts[0]).toContain("今天我很忙。");
+  expect(texts[0]).not.toContain("【添削後】");
+});
+
+test("Chinese text is corrected and replied", async ({ request, db }) => {
+  expect((await sendWebhook(request, "zh-1", "今天我busy。")).status()).toBe(
+    200,
+  );
+  await expect.poll(jobStatuses(db)).toEqual(["SENT"]);
+  expect(
+    (await db.query('SELECT kind, "originalText" FROM "LearningEntry"')).rows,
+  ).toEqual([{ kind: "correction", originalText: "今天我busy。" }]);
+  const texts = await pushedTexts(request);
+  expect(texts).toHaveLength(1);
+  expect(texts[0]).toContain("【添削後】");
+  expect(texts[0]).not.toContain("【中国語訳】");
+});
+
+test("a failed generation replies without a note", async ({ request, db }) => {
+  expect(
+    (await sendWebhook(request, "fail-1", "これは失敗します。")).status(),
+  ).toBe(200);
+  await expect.poll(jobStatuses(db)).toEqual(["SENT"]);
+  expect(
+    (await db.query('SELECT count(*)::int AS count FROM "LearningEntry"'))
+      .rows[0].count,
+  ).toBe(0);
+  const texts = await pushedTexts(request);
+  expect(texts).toHaveLength(1);
+  expect(texts[0]).toContain("できませんでした");
+});
+
+test("two webhooks at once produce one note and one reply each", async ({
+  request,
+  db,
+}) => {
+  const responses = await Promise.all([
+    sendWebhook(request, "both-1", "今日は忙しいです。"),
+    sendWebhook(request, "both-2", "今天我busy。"),
+  ]);
+  expect(responses.map((response) => response.status())).toEqual([200, 200]);
+  await expect.poll(jobStatuses(db)).toEqual(["SENT", "SENT"]);
+  expect(
+    (await db.query('SELECT kind FROM "LearningEntry" ORDER BY kind')).rows.map(
+      (row) => row.kind,
+    ),
+  ).toEqual(["correction", "translation"]);
+  const texts = await pushedTexts(request);
+  expect(texts).toHaveLength(2);
+  expect(texts.filter((text) => text.includes("【中国語訳】"))).toHaveLength(1);
+  expect(texts.filter((text) => text.includes("【添削後】"))).toHaveLength(1);
+});
+
+test("the drain route requires the cron secret and picks up leftovers", async ({
+  request,
+  db,
+}) => {
+  await db.query(
+    `INSERT INTO "LineLearningJob"
+       (id, kind, "eventId", "userId", "originalText", "receivedAt", status, "availableAt", "retryKey")
+     VALUES ($1, 'correction', 'leftover-1', $2, '今天我busy。', NOW(), 'PENDING', NOW() - interval '1 minute', $3)`,
+    [randomUUID(), lineTestConfig.userId, randomUUID()],
+  );
+  expect((await request.get("/api/line/drain")).status()).toBe(401);
+  expect(
+    (
+      await request.get("/api/line/drain", {
+        headers: { Authorization: "Bearer wrong-secret" },
+      })
+    ).status(),
+  ).toBe(401);
+  expect(await jobStatuses(db)()).toEqual(["PENDING"]);
+  expect(await pushedTexts(request)).toEqual([]);
+
+  const response = await request.get("/api/line/drain", {
+    headers: { Authorization: `Bearer ${cronSecret}` },
+  });
+  expect(response.status()).toBe(200);
+  expect((await response.json()).processed).toBeGreaterThan(0);
+  await expect.poll(jobStatuses(db)).toEqual(["SENT"]);
+  const texts = await pushedTexts(request);
+  expect(texts).toHaveLength(1);
+  expect(texts[0]).toContain("【添削後】");
+});
+
+test("a job whose generation attempts ran out is answered with a failure reply", async ({
+  request,
+  db,
+}) => {
+  await db.query(
+    `INSERT INTO "LineLearningJob"
+       (id, kind, "eventId", "userId", "originalText", "receivedAt", status, "availableAt", "generationTries", "retryKey")
+     VALUES ($1, 'correction', 'exhausted-1', $2, '今天我busy。', NOW(), 'GENERATING', NOW() - interval '1 minute', 3, $3)`,
+    [randomUUID(), lineTestConfig.userId, randomUUID()],
+  );
+  const response = await request.get("/api/line/drain", {
+    headers: { Authorization: `Bearer ${cronSecret}` },
+  });
+  expect(response.status()).toBe(200);
+  await expect.poll(jobStatuses(db)).toEqual(["SENT"]);
+  const texts = await pushedTexts(request);
+  expect(texts).toHaveLength(1);
+  expect(texts[0]).toContain("できませんでした");
+  expect(texts[0]).toContain("OPENAI_REQUEST_FAILED");
+  const job = (
+    await db.query(
+      'SELECT "failureCode", "generationTries" FROM "LineLearningJob"',
+    )
+  ).rows[0];
+  expect(job).toEqual({
+    failureCode: "OPENAI_REQUEST_FAILED",
+    generationTries: 3,
+  });
+  expect(
+    (await db.query('SELECT count(*)::int AS count FROM "LearningEntry"'))
+      .rows[0].count,
+  ).toBe(0);
 });

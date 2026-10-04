@@ -1,4 +1,4 @@
-# LINE連携（Business / Codex）
+# LINE連携（Vercel + OpenAI）
 
 ## 現在の範囲
 
@@ -8,122 +8,132 @@ Webhookは `https://ffpf-zhuelog.vercel.app/api/line/webhook`。LINE管理画面
 本番だけで連携を有効化し、自分のLINEユーザーID1名を許可しています。ローカルWebアプリのWebhookは無効のままです。
 標準の応答メッセージはOFF、Webhookの利用・再送はON。トークンはGit対象外のローカル設定とVercelの本番用秘密設定に保存しています。
 新しい環境へ導入する場合は、下記手順に従って別途設定してください（`.env.example` は無効のままです）。
-Codex App Serverは実験的なインターフェースです。本連携も個人用の試作として扱い、安定稼働を保証する本番機能ではありません。
+
+v0.12.0 から、添削と翻訳はすべて Vercel の中で OpenAI API を使って生成します。Mac や Codex は不要で、Mac が止まっていても返信が届きます。
 
 ## 処理の流れ
 
 ```text
 自分のLINE（公式アカウントとの1対1トーク）
-  → 公開Webアプリ /api/line/webhook：署名・送信者検証 → DBに処理待ちを保存
-  ← このMacのworkerがHTTPSで取得（待機中は15秒間隔、Macへの着信ポート不要）
-  → ログイン済みCodex Business / gpt-5.6-sol：添削・ピン音・ヒントを生成
-  → /api/line/worker：結果を検証 → 学習ノートと返信用CSVを同時保存
-  → LINE Push API：保存済みCSVを見出し・改行付きの文章に整形し、自分のトークへ送信
+  → POST /api/line/webhook（Vercel、最長60秒）：署名・送信者検証 → 本文を振り分け → DBに処理待ちを保存 → 200を返す
+  → 200のあと after() で、同じ関数の中で処理を続ける（締め切りは開始から約50秒）
+      ・OpenAI Responses API（gpt-5-mini）：添削または翻訳、ピン音、ヒントを生成
+      ・結果を検証 → 学習ノートと返信用CSVを同時保存
+      ・LINE Push API：保存済みCSVを見出し・改行付きの文章に整形し、自分のトークへ送信
+  → GET /api/line/drain（Vercel Cron、1日1回）：取り残したジョブを拾い直す
 ```
 
-Macが停止・スリープ中はDBで待機し、worker再起動後に再開します。
-添削結果の保存が成功したら、15秒待たずに次のジョブを取得し、配送へ進みます。配送完了後も次のジョブをすぐ確認します。待機するのはキューが空の場合、エラーや結果不明・lease競合の場合です。保存と配送の順序、lease・再送キーによる重複防止は維持します。
-アプリがMacを呼び出す構成ではないので、localhostやCodexの外部公開・トンネルは不要です。
-VercelではCodexを実行しません。既存Webチャットのローカル限定条件も解除しません。
+本文は次のように振り分けます。
 
-## 添削失敗の通知（2026-09-26実装）
+| 本文                                 | 処理                             |
+| ------------------------------------ | -------------------------------- |
+| 501文字以上                          | 上限の通知（生成も保存もしない） |
+| ひらがな・カタカナを含む（日本語）   | 翻訳：中国語（簡体字）に訳す     |
+| 上記以外で漢字を含む                 | 添削：今までどおり               |
+| それ以外（`Hello`・`/battery` など） | 無視（ジョブも返信もなし）       |
 
-Go workerはCodexのバージョン一致を要求せず、実際に添削を試します。ログイン種別・モデル・ツール禁止・タイムアウト・回答形式の検証は継続します。
+コマンドはありません。`/battery` と開発モード（`/dev`・`/devend`）は廃止しました。送っても無視されます。
 
-添削が失敗した場合は原因コードと日本語の説明をLINEジョブの返信欄へ保存し、通常の再送キー付き配送で本人へ通知します。学習ノートは作成せず、生成の自動再試行もしません。復旧後は本人が文を再送します。通知の配送は従来の回数制限・23時間の配送期限を適用します。
+取り残しは、次のwebhookの処理と、Vercel Cron（`vercel.json`、毎日 0:00 UTC）で拾い直します。ジョブのリース（2分）が切れると、次の処理が引き継ぎます。Vercel Cron は `Authorization: Bearer ${CRON_SECRET}` を付けて `/api/line/drain` を呼び、値が一致しなければ何もしません（401）。
 
-Macのログには日時・ジョブID・原因コード、サーバーログには同じ情報を構造化して記録します。通知送信後もジョブの原因コードを保持します。生のプロバイダーエラー、トークン、入力文は通知・エラーログに含めません。通信断やMac停止中は即時通知できません。
-
-APIは `claim` の応答で `failureNotifications: true` を宣言します。旧APIにはworkerが従来形式の失敗報告を送り、サーバー更新が必要な旨をログへ記録します。導入はWeb/API更新後にGo workerを再起動します。DBマイグレーションは不要です。
+**Cronが1日1回であることの影響：** 締め切りまでに処理しきれなかったジョブや、LINE配送が一時的に失敗して待ち時間に入ったジョブは、次のLINEメッセージか毎日0:00 UTCのCronまで待つため、返信が最大で約24時間遅れることがあります。また、一時的に失敗した配送を初回の配送開始から23時間より後に再送することになった場合は、二重送信を防ぐために停止します（`DELIVERY_WINDOW_EXPIRED`）。この稀な場合は返信が届きません。
 
 ## 使い方・制限
 
-- 自分の1対1トークで `/battery` と送ると、Macのバッテリー残量・充電状態・電源・取得時刻（日本時間）を返します。OSが推定時間を返した場合は目安も表示します。前後の空白は無視しますが、引数や他のスラッシュコマンドは実行しません。
-- `/battery` はAI・APIキー・学習ノート・インポート履歴を使いません。返信の再送に備えて、本人用のLINEジョブに返信テキストを保存します。ゲスト向けのノート一覧には表示しません。Push配信枠は通常のLINE返信と同様に消費します。
-- Macがスリープ・電源OFF・ログアウト中は取得できず、ワーカー再開後の状態を返信します。返信の「取得時刻」を確認してください。バッテリー非搭載・非macOS・読み取り失敗時は、取得できない旨を返します。
-- 読み取りはMacワーカー内の `/usr/bin/pmset -g batt` 固定実行のみ。シェルや任意の引数は使わず、5秒の制限を設けています。Webhookの署名・本人制限・ジョブlease・再送キーは添削と共通です。
-- 1メッセージを1ノートとして保存。最初は漢字を含む500文字以内のテキストが対象です。グループ、画像、音声、許可されていないユーザー、その他イベントは処理しません。
-- 500文字を超えるテキストは添削・Issue登録・保存をせず、「500文字以内に分けて送ってください」と返信します。本文はDBに残しません。添削結果がLINEの文字数上限を超えた場合も、ノートを保存せずに失敗を返信します（エラーコード `CORRECTION_TOO_LONG`）。
-- LINEには「元の文」「添削後」「ヒント」の見出しで返信します。添削文は文ごとにピンインを直下に配置し、ヒントは1〜5個を番号付きで表示します（Issue #11）。文とピンインの区切り数が一致しない場合は誤った対応付けを避け、添削文全体の直下にピンイン全体を表示します。
-- 内部では `"最初の文","添削後の文","ピン音","ヒント1","ヒント2",...` のヘッダーなしCSVを引き続き保存します。表示の整形によって学習ノートの内容は変わりません。
-- CSVはプログラムでエスケープします。AI出力を直接SQLやCSVとして実行しません。原文はAI出力ではなく保存済みのLINE本文から取得します。
+- 自分の1対1トークに文を送ると、1メッセージにつき1件の学習ノートを保存し、同じ内容をLINEへ返信します。グループ、画像、音声、許可されていないユーザー、その他のイベントは処理しません。
+- **日本語の文（ひらがな・カタカナを含む）は中国語に訳します。** 返信は「元の文」「中国語訳」「ヒント」の見出しです。ノートには「翻訳」として保存され、Webの学習ノートでは差分の色分けをせず「中国語訳」として表示します。
+- **漢字を含むそれ以外の文は添削します。** 返信は「元の文」「添削後」「ヒント」の見出しです。添削文は文ごとにピンインを直下に配置し、ヒントは1〜5個を番号付きで表示します。文とピンインの区切り数が一致しない場合は誤った対応付けを避け、全体の直下にピンイン全体を表示します。
+- 500文字を超えるテキストは生成・保存をせず、「500文字以内に分けて送ってください」と返信します。本文はDBに残しません。結果がLINEの文字数上限（5,000文字）を超えた場合も、ノートを保存せずに失敗を返信します（エラーコード `CORRECTION_TOO_LONG`）。
+- 内部では `"最初の文","添削後の文","ピン音","ヒント1","ヒント2",...` のヘッダーなしCSVを保存します。翻訳も同じ形で、「最初の文」が日本語の原文、「添削後の文」が中国語訳です。表示の整形によって学習ノートの内容は変わりません。
+- CSVはプログラムでエスケープします。AI出力を直接SQLやCSVとして実行しません。原文はAI出力ではなく保存済みのLINE本文から取得します。入力の文は指示ではなくデータとしてOpenAIに渡し、結果は決められた形かを検証します。
 - 日付別一覧はLINE送信日時（既存画面と同じJST表示）で分類します。登録後にWeb画面を再読み込みすると表示されます。
 - **既存アプリの仕様に合わせ、登録したノートはゲストからも閲覧できます。** 非公開にしたい内容は送らないでください。LINE上で送信取消しても本アプリの保存済みノートは自動削除されません。
-- メッセージはLINE、アプリのDB、OpenAIを経由します。チャネルシークレット・アクセストークン・workerトークンや本文をログに出しません。
-- BusinessのCodex利用枠を消費します。OpenAI APIや別モデルへの自動切り替えはありません。
-- 添削結果の返信はReply APIではなくPush APIを使用し、**LINE公式アカウントの配信枠**を消費します。友だち追加が必要です。受理成功でもブロック等で端末に表示されない場合があります。
+- メッセージはLINE、アプリのDB、OpenAIを経由します。OpenAIには `store: false` を指定しますが、OpenAI側のあらゆるログの不保持を保証しません。ログにはジョブIDと原因コードだけを出し、本文・生成結果・チャネルシークレット・アクセストークン・APIキーは出しません。
+- 生成は `gpt-5-mini` に固定です（クライアントからは選べません）。OpenAIの利用料金は `OPENAI_API_KEY` のプロジェクトに発生します。呼び出しは通常1メッセージにつき1回です（生成の途中で関数が打ち切られた場合に限り、同じメッセージを最大3回まで生成し直します。「重複・失敗時の扱い」を参照）。500文字の上限と送信者の制限が費用の目安になります。
+- 返信はReply APIではなくPush APIを使用し、**LINE公式アカウントの配信枠**を消費します。友だち追加が必要です。受理成功でもブロック等で端末に表示されない場合があります。
 - 生のCSVを表計算ソフトで開く場合は数式として評価させず、文字列としてインポートしてください。
+
+## 失敗時の通知
+
+生成に失敗した場合は、原因コードと日本語の説明を返信します。「添削できませんでした」または「翻訳できませんでした」のあとに理由とコードが続きます。学習ノートは作成せず、生成の自動再試行もしません（二重課金を防ぐため）。復旧後は本人が文を再送します。
+
+| コード                    | 意味                             |
+| ------------------------- | -------------------------------- |
+| `OPENAI_TIMEOUT`          | 20秒以内に生成できなかった       |
+| `OPENAI_AUTH_FAILED`      | APIキーが無効、または権限がない  |
+| `OPENAI_RATE_LIMITED`     | 利用制限（レート・上限）に達した |
+| `OPENAI_INVALID_RESPONSE` | 結果が決められた形ではなかった   |
+| `OPENAI_REQUEST_FAILED`   | その他の通信・サーバーエラー     |
+| `CORRECTION_TOO_LONG`     | 結果がLINEの文字数上限を超えた   |
+
+LINEへの送信が一時的に失敗した場合は、同じ再送キー（`X-Line-Retry-Key`）で次の処理の機会に再送します。
 
 ## 必要な設定
 
 専用のLINE公式アカウントを用意すると、既存ボットのWebhookを上書きせずに運用できます。
 
-| 変数                        | 役割                                                | 設定先                   |
-| --------------------------- | --------------------------------------------------- | ------------------------ |
-| `LINE_INTEGRATION_ENABLED`  | 準備完了後だけ `true`                               | Webサーバー              |
-| `LINE_CHANNEL_SECRET`       | Webhookの署名検証                                   | Webサーバーのみ          |
-| `LINE_CHANNEL_ACCESS_TOKEN` | 添削結果のPush送信                                  | Webサーバーのみ          |
-| `LINE_BOT_USER_ID`          | 受信先の公式アカウントのユーザーID（Uから始まる値） | Webサーバーのみ          |
-| `LINE_ALLOWED_USER_ID`      | 利用を許可する自分のLINEユーザーID（1人）           | Webサーバーのみ          |
-| `LINE_WORKER_TOKEN`         | worker専用認証キー（下記で生成する64桁hex）         | WebサーバーとMacで同じ値 |
-| `LINE_WORKER_URL`           | 公開アプリのHTTPS origin（パスなし）                | Macのみ                  |
+| 変数                        | 役割                                                | 設定先          |
+| --------------------------- | --------------------------------------------------- | --------------- |
+| `LINE_INTEGRATION_ENABLED`  | 準備完了後だけ `true`                               | Webサーバー     |
+| `LINE_CHANNEL_SECRET`       | Webhookの署名検証                                   | Webサーバーのみ |
+| `LINE_CHANNEL_ACCESS_TOKEN` | 返信のPush送信                                      | Webサーバーのみ |
+| `LINE_BOT_USER_ID`          | 受信先の公式アカウントのユーザーID（Uから始まる値） | Webサーバーのみ |
+| `LINE_ALLOWED_USER_ID`      | 利用を許可する自分のLINEユーザーID（1人）           | Webサーバーのみ |
+| `OPENAI_API_KEY`            | 添削・翻訳の生成（Webのチャットと共通）             | Webサーバーのみ |
+| `CRON_SECRET`               | Vercel Cronの認証（下記で生成する値）               | Webサーバーのみ |
 
 LINE DevelopersのチャネルID、チャネルシークレット、チャネルアクセストークン、公式アカウントのID、自分のユーザーIDはそれぞれ別物です。トークン類はチャットやGitに貼らず、Vercel環境変数／gitignore済みの `.env.local` に保存してください。
 
-workerキーの生成（生成結果を秘密として扱ってください）：
+`CRON_SECRET` は**32文字以上**にしてください。これより短い値は未設定と同じに扱い、`/api/line/drain` は常に401を返します。次のコマンドで生成します（生成結果を秘密として扱ってください）：
 
 ```sh
 openssl rand -hex 32
 ```
+
+Vercelに `CRON_SECRET` を設定すると、Vercel Cronが `Authorization: Bearer <値>` を付けて `/api/line/drain` を呼びます。未設定、または32文字未満のままでは、このルートは常に401を返します。
+
+### テスト専用の環境変数
+
+`OPENAI_API_BASE_URL` と `LINE_API_BASE_URL` は、E2Eテストが偽のOpenAI／LINEサーバーへ接続するための設定です。`http://127.0.0.1`・`http://localhost`・`http://[::1]`（ポート指定可）のループバックだけを受け付け、それ以外の値はエラーになります。**本番では設定しないでください。** 無効な値（ループバック以外）を設定してもwebhookは200を返し続けますが、そのあとの処理（drain）がすべて失敗してログに `LINE_DRAIN_FAILED` が出続け、ジョブがたまっていきます。設定しなければ、`https://api.openai.com` と `https://api.line.me` に接続します。
 
 ## 新しい環境で有効化する順序（公開・本番変更の承認が必要）
 
 1. LINE Official Account Managerの「設定」→「Messaging API」で有効化。LINE Developers側で対応するチャネルを確認します。
 2. LINE Developersの「チャネル基本設定」でChannel secretと自分のユーザーIDを確認。「Messaging API設定」でChannel access tokenを発行します。公式アカウントのユーザーIDはBot情報取得API `GET /v2/bot/info` の `userId` です。別用途の既存トークンは勝手に再発行しないでください。
 3. 公開対象のアプリとDBを確認し、バックアップ後に `pnpm run db:deploy` で追加マイグレーションを適用、アプリをデプロイします。現在のローカル `.env` を使って本番操作を行うのではなく、対象環境を明示してください。
-4. Webサーバーに上表の変数を設定し、最後に `LINE_INTEGRATION_ENABLED=true` にします。GitHubログイン認証とは別に、Webhookは署名、workerは専用Bearerトークンで認証します。
+4. Webサーバーに上表の変数を設定し、最後に `LINE_INTEGRATION_ENABLED=true` にします。Webhookは署名、Cronは `CRON_SECRET` で認証します。
 5. Webhook URLを `https://公開アプリのホスト/api/line/webhook` に設定し「検証」。署名が正しく `events: []` なら200を返します。「Webhookの利用」と再送を有効化。不要な自動応答はOFFにします。
-6. Macの `.env.local` に `LINE_WORKER_URL` と `LINE_WORKER_TOKEN` を設定。CodexでBusinessログイン済みであることを確認し、以下を実行します。
+6. 公式アカウントを友だち追加し、短い中文と短い日本語を送信。添削と中国語訳の返信、Webの学習ノート一覧・日付別一覧を確認します。
 
-```sh
-codex login status
-pnpm run line:worker:build
-pnpm run line:worker
-```
+## v0.12.0への切り替えの手順（Macのworkerからの移行）
 
-手動起動ではこのコマンドを起動している間だけ動きます。停止はCtrl+C。1回だけ処理する診断用コマンドは `pnpm run line:worker --once` です。
+1. 本番DBにマイグレーション `20261005090000_learning_kind_and_translation` を適用する（`pnpm run db:deploy`、内部では `prisma migrate deploy`）。デプロイより先に行ってください。
+2. Vercelに `CRON_SECRET` を設定する。
+3. mainにマージする（Vercelに自動でデプロイされる）。
+4. MacのLaunchAgent `jp.ffpf.zhuelog.line-worker` を止める。止め忘れても、worker APIはなくなったので二重には処理されません。
 
-ワーカーは `workers/line/` のGo実装です。Go 1.27以降でビルドし、`build/line-worker` を直接実行します（常駐にNode.js/npm/tsxは不要、外部Go依存もありません）。WebアプリとAPI・DBは従来のTypeScriptのままです。添削モデル・ポーリング間隔・再送制御は変えません。
+   ```sh
+   launchctl bootout gui/$(id -u)/jp.ffpf.zhuelog.line-worker
+   ```
 
-運用中のMacには本人の承認でLaunchAgent `jp.ffpf.zhuelog.line-worker` を登録しています。ログイン時に自動起動し、終了時は自動再起動します。設定は `~/Library/LaunchAgents/jp.ffpf.zhuelog.line-worker.plist`、ログは `~/Library/Logs/ffpf-zhuelog/` にあり、Gitには含めません。`ProgramArguments` はビルドしたGoバイナリの絶対パス1つ、`WorkingDirectory` はこのリポジトリです。環境には `NODE_ENV=development`、`CHAT_PROVIDER=codex-local`、検証済み `CODEX_LOCAL_BIN` の絶対パスを設定します。macOSの「書類」フォルダーに置く場合、新しい実行ファイルへのアクセス許可を求められることがあります。電源・スリープ設定は変更していません。
+   不要になった `~/Library/LaunchAgents/jp.ffpf.zhuelog.line-worker.plist` と、Macの `.env.local` にある `LINE_WORKER_URL`・`LINE_WORKER_TOKEN` も削除できます。
 
-Goワーカーは、OSの環境変数 → `.env.development.local` → `.env.local` → `.env.development` → `.env` の優先順で、ワーカー用の設定だけを読み込みます。DB接続情報やLINEチャネルシークレットは読み込みません。設定値は1行のリテラル（引用符・コメント・`export` 可）にしてください。Next.jsの `$VARIABLE` 展開・複数行の値には対応せず、対象設定に含まれる場合は安全のため起動を拒否します。`pnpm run line:worker --check` は設定確認のみで、通信しません。`--once` は実際に1件取得・処理するため、本番での単なる疎通確認には使わないでください。
+5. 不要になった `LINE_WORKER_TOKEN`・`LINE_DEV_MODE_ENABLED` をVercelから削除する（残しても害はありません）。
+6. 本人のLINEから短い日本語と中文を送り、中国語訳・添削が返ることを確認する。
 
-検証は `pnpm run test:worker`（Go vet・race detector付きテスト）、`pnpm run test:unit`（上記に加えGoバイナリのビルドと既存TypeScript契約テスト）です。通常のテストは模擬Codex／GitHub／LINE APIのみを使います。ビルド済みファイルはGitに含めません。更新時は常駐サービスを停止し、旧バイナリとplistを退避してから新しいバイナリに切り替えます。旧版へ戻す場合は退避した両方を戻し、同じLaunchAgentを再登録してください。新旧ワーカーの二重起動は避けてください。
-
-常駐中は手動ワーカーを二重起動しないでください。状態確認は `launchctl print gui/$(id -u)/jp.ffpf.zhuelog.line-worker`、停止は `launchctl bootout gui/$(id -u)/jp.ffpf.zhuelog.line-worker`、再登録は `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/jp.ffpf.zhuelog.line-worker.plist` です。
-
-`/battery` の導入順は、追加DBマイグレーション → Vercel更新 → Macワーカー更新です。新しいワーカーだけが `capabilities: ["battery"]` を宣言するため、更新前のワーカーにはバッテリーの生成・配送ジョブを割り当てません。ロールバック時も追加カラムは削除せず保持します。旧サーバーへのロールバック中はワーカーを停止してください。
-
-7. 公式アカウントを友だち追加し、短い中文を送信。改行付きの添削返信とWebノート一覧・日付別一覧の両方を確認します。
+ロールバックするときは、追加した列・制約は削除せずそのまま残します（旧版は新しい列を使いません）。過去のジョブ行・開発モードの表・`/battery` の履歴は削除しておらず、コードからは参照しません。
 
 ## 重複・失敗時の扱い
 
 - LINE `webhookEventId` の一意制約で再送を重複登録しません。
-- workerは2分のleaseを取得します。古いworkerの完了通知は拒否し、同時処理を防ぎます。
+- 処理は2分のリース（`leaseToken`）を取得して行います。古い処理の完了通知は拒否し、同時処理を防ぎます。締め切りで途中だったジョブは、リースが切れたあとに次の処理が拾い直します。
 - ノート作成とCSV保存は1つのDBトランザクション。返信失敗でも作成済みノートを重複させません。
-- 生成は最大3回、配送は最大5回。失敗時は待ち時間を増やし、上限後は `FAILED` になります。
+- 生成の失敗は再試行せず、失敗の返信にします（1メッセージにつきOpenAIの呼び出しは1回）。処理が途中で止まった（関数の打ち切りなど）場合に限り、リースが切れたあとに最大3回まで引き継いで生成し直します。それでも終わらなければ、ユーザーに失敗の返信（`OPENAI_REQUEST_FAILED`）を送ります。配送は最大5回で、失敗時は待ち時間を増やし、上限後は `FAILED`（`ATTEMPTS_EXHAUSTED`）になります。
 - LINE配送は保存済みCSVから同じ文章を組み立て、宛先・同じ `X-Line-Retry-Key` を再利用します。受理済みの409は成功扱いにします。24時間の重複防止期限を越えないよう、初回配送開始から23時間後は自動再送を停止します。5,000文字を超える返信は切り捨てず配送を失敗扱いにします。
-- DBの `LineLearningJob.status` / `failureCode` を管理者が確認できます。状態は `PENDING → GENERATING → READY → SENDING → SENT`、または `FAILED`。開発モード外で処理しない入力は、再送の重複防止のため `IGNORED`（本文なし）で残します。配信時の `failureCode` は、LINEの重複防止期間（24時間）に近づいて送信を止めた場合が `DELIVERY_WINDOW_EXPIRED`、送る内容が欠けた壊れたレコードの場合が `DELIVERY_STATE_INVALID` です。`SENT` はLINE API受理を表し端末閲覧を保証しません。
-- 利用制限、認証エラー、入力不正、長すぎるAI回答等は自動でAPI課金に逃がしません。`FAILED` のリセットは原因と送信済みの可能性を確認してから行います。
+- DBの `LineLearningJob.status` / `failureCode` を管理者が確認できます。状態は `PENDING → GENERATING → READY → SENDING → SENT`、または `FAILED`。配信時の `failureCode` は、LINEの重複防止期間（24時間）に近づいて送信を止めた場合が `DELIVERY_WINDOW_EXPIRED`、送る内容が欠けた壊れたレコードの場合が `DELIVERY_STATE_INVALID` です。`SENT` はLINE API受理を表し端末閲覧を保証しません。
+- 利用制限、認証エラー、入力不正、長すぎるAI回答等は自動で再試行しません。`FAILED` のリセットは原因と送信済みの可能性を確認してから行います。
 
 ## 検証
-
-2026-09-24の本番確認では、実際にLINEで送信した中文2件について、Business/Codexでの添削、CSVのLINE API受理（`SENT`）、学習ノートの自動登録、JSTの日付別一覧への表示まで確認済みです。
-2件とも生成・配送は各1回で、原文を含むCSVを既存パーサーで読み戻せることも確認しています。
-端末への表示・通知はLINE側の状態にも依存します。
-返信表示の変更では、見出し・改行・番号付きヒント、CSVの保持、文字数上限と不正データの送信拒否も確認しています。単体テスト21件（Mac workerの実起動テストを含む）、E2E38件、Lint・型チェックが通過しています。
-本番ログには既存の `DATABASE_URL` の `sslmode=require` に関する将来の仕様変更警告がありますが、接続・登録・配送の失敗はありません。LINE設定とは別に、現在の証明書検証を維持する `verify-full` への本番設定統一を検討してください。
 
 ```sh
 pnpm run test:unit
@@ -131,7 +141,7 @@ pnpm run test:e2e
 pnpm run test:e2e:stop
 ```
 
-単体テストはLINEのHTTP通信をモック。E2Eは固定の隔離PostgreSQLを使い、署名付き受信・再送・並行claim・lease回収・ノート登録・画面表示を検証します。実LINE送信は行いません。
+単体テストはOpenAIとLINEのHTTP通信をモックします。E2Eは固定の隔離PostgreSQLと、手元で立てる偽のOpenAI（`127.0.0.1:3108`）・偽のLINE（`127.0.0.1:3109`）を使い、署名付き受信・再送・日本語の翻訳・中文の添削・生成失敗の返信・同時受信・Cronでの拾い直し・ノート登録を、本番ビルドのサーバーで検証します。実際のLINEとOpenAIには一切接続しません。
 
 ## 公式資料
 
@@ -139,29 +149,5 @@ pnpm run test:e2e:stop
 - [Webhook受信と再送](https://developers.line.biz/en/docs/messaging-api/receiving-messages/)
 - [LINE APIの安全な再試行](https://developers.line.biz/en/docs/messaging-api/retrying-api-request/)
 - [メッセージ送信と配信数](https://developers.line.biz/en/docs/messaging-api/sending-messages/)
-- [Codex App Server](https://learn.chatgpt.com/docs/app-server)
-
-# LINE開発モード（/dev・/devend）
-
-- 本人の1対1トークで `/dev` を送ると開発モードを開始。公開先と注意事項の返信を確認してから改善案を送ります。
-- 以降のテキスト（500文字以内）は1通につき1件、`Sparklingstadt/ffpf-zhuelog` の公開Issueに登録し、URLをLINEへ返信します。日本語・英語・中文に対応します。
-- タイトルは先頭行、本文は原文を保持します。AIによる仕様補完・コード変更・コミット・リリースは行いません。個人情報や秘密情報を投稿しないでください。
-- `/devend` で終了し、通常の中文添削へ戻ります。既に受け付けたIssueは終了後も処理されます。モードはDBに保存され、Mac再起動をまたいで維持されます。
-- 誤公開防止のため開始から24時間で自動終了。期限切れ後の最初の文は添削にもIssueにも回さず、期限切れを通知します。
-- `/battery` はモードに関係なく従来どおり動作します。他のスラッシュコマンドは無視します。
-- 開発モードでは学習ノート・インポート履歴を作成しません。専用の非公開ジョブとモード状態のみDBに保持します。
-- Mac停止・スリープ中は受付状態を保存し、起動後に処理・返信します。モード操作そのものはWebhook受信時に確定します。順序が逆転した古いメッセージは公開せず、再送を案内します（遅れた `/devend` は安全のため終了を優先）。
-
-## 有効化手順
-
-1. DBのバックアップ後、`20260925010000_line_development_mode` までのマイグレーションを対象DBに適用する。
-2. 新サーバーをデプロイする。Vercel側の `LINE_DEV_MODE_ENABLED` はまだ `false` にする。
-3. MacのGitHub CLIに対象リポジトリのIssue作成権限でログインする（`gh auth login --hostname github.com`）。`LINE_GH_BIN` は既定で `/opt/homebrew/bin/gh`。GitHub認証情報はMacでのみ使用し、Vercelへ登録しない。
-4. Macを新しいコードに更新し、Mac側で `LINE_DEV_ISSUES_ENABLED=true` を設定してワーカーを再起動する。旧サーバーは新capabilityを受け付けないため、サーバーの更新を先に行う。
-5. Vercel側の `LINE_DEV_MODE_ENABLED=true` を設定して再デプロイし、本人のLINEから確認する。公開Issueを作る本番テストには公開してよい文だけを使う。
-
-機能停止時はサーバー側の受付フラグとMac側の実行フラグを両方無効にしてください。DBの追加列・テーブルは残せます。サーバーの受付だけ止めても受付済みのIssueは処理されます。
-
-GitHubへの作成前にDB上の一度限りの作成許可を消費します。レスポンス喪失・再起動時はIssue本文の専用マーカーで既存Issueを照合し、POSTを自動再実行しません。結果不明の場合はLINEに確認案内を返すため、一覧を確認してから必要に応じて再送してください。照合は検索インデックスを使わず、open/closed両方の直近最大1,000件が対象です。GitHubやDBの障害時に「必ず作れる」保証より重複公開防止を優先します。
-
-GitHub API仕様: [Issue API](https://docs.github.com/en/rest/issues/issues#create-an-issue)、[ローカルCLI認証](https://cli.github.com/manual/gh_auth_token)。
+- [OpenAI Responses API](https://developers.openai.com/api/reference/responses/overview)
+- [Vercel Cron Jobs](https://vercel.com/docs/cron-jobs)
