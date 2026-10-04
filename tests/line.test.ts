@@ -385,6 +385,46 @@ test("invalid or oversized LINE replies fail before contacting LINE", async () =
   }
 });
 
+test("a delivery without content or a first attempt is not reported as expired", async () => {
+  const base: LineJob = {
+    kind: "correction",
+    replyText: null,
+    id: "broken-job",
+    eventId: "broken-event",
+    userId: config.userId,
+    originalText: "原文",
+    receivedAt: new Date(),
+    status: "SENDING",
+    leaseToken: randomUUID(),
+    csv: '"CSV"',
+    retryKey: randomUUID(),
+    firstDeliveryAt: new Date(),
+    generationTries: 1,
+    deliveryTries: 1,
+  };
+  for (const job of [
+    { ...base, csv: null },
+    { ...base, kind: "battery" as const },
+    { ...base, firstDeliveryAt: null },
+  ]) {
+    const jobs = repo();
+    const failures: [boolean, string][] = [];
+    jobs.leased = async () => job;
+    jobs.fail = async (_job, permanent, code) => {
+      failures.push([permanent, code]);
+    };
+    const service = new ProcessLineLearning(jobs, {
+      push: async () => assert.fail("must not send"),
+      pushText: async () => assert.fail("must not send"),
+    });
+    assert.equal(
+      await service.deliver(job.id, job.leaseToken!, config.userId),
+      true,
+    );
+    assert.deepEqual(failures, [[true, "DELIVERY_STATE_INVALID"]]);
+  }
+});
+
 test("expired outbox stops without sending; retry reuses persisted CSV", async () => {
   const jobs = repo();
   let sends = 0;
