@@ -1,4 +1,4 @@
-import type { CsvLearningParser } from "../../../application/learning/ports/csv-learning-parser";
+import type { CsvLearningParser } from "../ports/csv-learning-parser";
 import type { LearningEntryRepository } from "../../../domain/learning/repositories/learning-entry-repository";
 
 export class ImportLearningCsv {
