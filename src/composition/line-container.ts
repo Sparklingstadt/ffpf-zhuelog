@@ -20,6 +20,9 @@ export function createLineContainer() {
           ),
           new OpenAiLineLearningGenerator(process.env.OPENAI_API_KEY ?? ""),
           config.userId,
+          Date.now,
+          // The job ID only: the error may carry message text or row data.
+          (jobId) => console.error("LINE_JOB_FAILED", jobId),
         )
       : null;
   return { config, jobs, createDrain };

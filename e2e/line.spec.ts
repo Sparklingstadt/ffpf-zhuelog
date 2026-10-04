@@ -43,6 +43,13 @@ test.beforeEach(async ({ request }) => {
   expect((await request.delete(`${lineStubUrl}/__pushes`)).status()).toBe(204);
 });
 
+const jobStatuses = (db: import("pg").Client) => async () =>
+  (
+    await db.query(
+      'SELECT status FROM "LineLearningJob" ORDER BY "createdAt", "eventId"',
+    )
+  ).rows.map((row) => row.status);
+
 test("LINE webhook rejects unsigned requests and deduplicates a redelivery", async ({
   request,
   db,
@@ -111,7 +118,8 @@ test("oversized message is answered with the limit notice, never generated or st
   expect(
     (await sendWebhook(request, "too-long", "字".repeat(501))).status(),
   ).toBe(200);
-  await expect.poll(async () => (await pushedTexts(request)).length).toBe(1);
+  await expect.poll(jobStatuses(db)).toEqual(["SENT"]);
+  expect(await pushedTexts(request)).toHaveLength(1);
   expect((await pushedTexts(request))[0]).toContain("500文字");
   const stored = (
     await db.query(
@@ -128,13 +136,6 @@ test("oversized message is answered with the limit notice, never generated or st
       .rows[0].count,
   ).toBe(0);
 });
-
-const jobStatuses = (db: import("pg").Client) => async () =>
-  (
-    await db.query(
-      'SELECT status FROM "LineLearningJob" ORDER BY "createdAt", "eventId"',
-    )
-  ).rows.map((row) => row.status);
 
 test("Japanese text is translated, saved as a translation note and replied", async ({
   request,
@@ -242,4 +243,38 @@ test("the drain route requires the cron secret and picks up leftovers", async ({
   const texts = await pushedTexts(request);
   expect(texts).toHaveLength(1);
   expect(texts[0]).toContain("【添削後】");
+});
+
+test("a job whose generation attempts ran out is answered with a failure reply", async ({
+  request,
+  db,
+}) => {
+  await db.query(
+    `INSERT INTO "LineLearningJob"
+       (id, kind, "eventId", "userId", "originalText", "receivedAt", status, "availableAt", "generationTries", "retryKey")
+     VALUES ($1, 'correction', 'exhausted-1', $2, '今天我busy。', NOW(), 'GENERATING', NOW() - interval '1 minute', 3, $3)`,
+    [randomUUID(), lineTestConfig.userId, randomUUID()],
+  );
+  const response = await request.get("/api/line/drain", {
+    headers: { Authorization: `Bearer ${cronSecret}` },
+  });
+  expect(response.status()).toBe(200);
+  await expect.poll(jobStatuses(db)).toEqual(["SENT"]);
+  const texts = await pushedTexts(request);
+  expect(texts).toHaveLength(1);
+  expect(texts[0]).toContain("できませんでした");
+  expect(texts[0]).toContain("OPENAI_REQUEST_FAILED");
+  const job = (
+    await db.query(
+      'SELECT "failureCode", "generationTries" FROM "LineLearningJob"',
+    )
+  ).rows[0];
+  expect(job).toEqual({
+    failureCode: "OPENAI_REQUEST_FAILED",
+    generationTries: 3,
+  });
+  expect(
+    (await db.query('SELECT count(*)::int AS count FROM "LearningEntry"'))
+      .rows[0].count,
+  ).toBe(0);
 });

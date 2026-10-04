@@ -6,12 +6,20 @@ export const LINE_DRAIN_BUDGET_MS = 50_000;
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
+// `openssl rand -hex 32` makes 64 characters; anything under 32 is too guessable
+// for a public endpoint and is treated as not configured.
+export const MIN_CRON_SECRET_LENGTH = 32;
+
 export async function handleLineDrain(
   request: Request,
   secret: string | undefined,
   createDrain: () => Pick<DrainLineJobs, "execute"> | null,
 ) {
-  if (!verifyBearerToken(request.headers.get("authorization"), secret))
+  if (
+    !secret ||
+    secret.length < MIN_CRON_SECRET_LENGTH ||
+    !verifyBearerToken(request.headers.get("authorization"), secret)
+  )
     return Response.json(
       { error: "UNAUTHORIZED" },
       { status: 401, headers: NO_STORE },

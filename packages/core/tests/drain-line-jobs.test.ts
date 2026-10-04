@@ -133,6 +133,7 @@ function setup(
   generator: Partial<LineLearningGenerator> = {},
   push?: LineMessenger["push"],
 ) {
+  const errors: string[] = [];
   const clock = { now: 1_000_000 };
   const jobs = new FakeJobs();
   const calls: string[] = [];
@@ -166,8 +167,9 @@ function setup(
     fullGenerator,
     USER,
     () => clock.now,
+    (jobId) => errors.push(jobId),
   );
-  return { clock, jobs, calls, pushes, drain };
+  return { clock, jobs, calls, pushes, drain, errors };
 }
 
 test("jobs are generated and delivered oldest first", async () => {
@@ -258,11 +260,12 @@ test("a temporary delivery failure stays queued", async () => {
 });
 
 test("a save failure after generation replies with a failure and moves on", async () => {
-  const { clock, jobs, calls, pushes, drain } = setup();
+  const { clock, jobs, calls, pushes, drain, errors } = setup();
   jobs.add("correction", "PENDING", "a");
   jobs.add("correction", "PENDING", "b");
   jobs.throwOnSave.add("a");
   await drain.execute(clock.now + 120_000);
+  assert.deepEqual(errors, ["a"]);
   assert.deepEqual(calls, ["correct:text-a", "correct:text-b"]);
   assert.deepEqual(jobs.failCodes, ["a:OPENAI_INVALID_RESPONSE"]);
   assert.equal(pushes.length, 2);
@@ -276,19 +279,23 @@ test("a save failure after generation replies with a failure and moves on", asyn
 test("a delivery error does not stop the drain", async () => {
   const delivered: string[] = [];
   let first = true;
-  const { clock, jobs, drain } = setup({}, async (_user, _csv, _kind, key) => {
-    if (first) {
-      first = false;
-      throw new Error("network");
-    }
-    delivered.push(key);
-    return "accepted";
-  });
+  const { clock, jobs, drain, errors } = setup(
+    {},
+    async (_user, _csv, _kind, key) => {
+      if (first) {
+        first = false;
+        throw new Error("network");
+      }
+      delivered.push(key);
+      return "accepted";
+    },
+  );
   jobs.add("correction", "READY", "a");
   jobs.add("correction", "READY", "b");
   const processed = await drain.execute(clock.now + 120_000);
   assert.deepEqual(delivered, ["retry-b"]);
   assert.equal(processed, 2);
+  assert.deepEqual(errors, ["a"]);
 });
 
 test("claim errors propagate", async () => {

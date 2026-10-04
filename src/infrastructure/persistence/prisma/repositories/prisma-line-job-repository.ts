@@ -10,7 +10,10 @@ import {
 import type { LearningEntryDraft } from "@ffpf-zhuelog/core/domain/learning/entities/learning-entry";
 import { getPrismaClient } from "../prisma-client";
 import { toLineJob } from "../mappers/line-job-mapper";
-import type { GenerationFailureCode } from "@ffpf-zhuelog/core/domain/line/generation-failure";
+import {
+  formatGenerationFailure,
+  type GenerationFailureCode,
+} from "@ffpf-zhuelog/core/domain/line/generation-failure";
 
 // Corrections and translations are generated; they alone save notes and
 // carry generation failure codes.
@@ -50,11 +53,33 @@ export class PrismaLineJobRepository implements LineJobRepository {
   ): Promise<LineJob | null> {
     const prisma = getPrismaClient();
     const now = new Date();
+    const swept = {
+      userId,
+      kind: { in: [...ACTIVE_LINE_JOB_KINDS] },
+      availableAt: { lte: now },
+    };
+    // Generation failures always reply: an exhausted correction or
+    // translation becomes a failure reply for the next claim to deliver.
+    for (const kind of ["correction", "translation"] as const) {
+      await prisma.lineLearningJob.updateMany({
+        where: {
+          ...swept,
+          kind,
+          status: { in: ["PENDING", "GENERATING"] satisfies LineJobStatus[] },
+          generationTries: { gte: 3 },
+        },
+        data: {
+          status: "READY",
+          leaseToken: null,
+          availableAt: now,
+          replyText: formatGenerationFailure("OPENAI_REQUEST_FAILED", kind),
+          failureCode: "OPENAI_REQUEST_FAILED",
+        },
+      });
+    }
     await prisma.lineLearningJob.updateMany({
       where: {
-        userId,
-        kind: { in: [...ACTIVE_LINE_JOB_KINDS] },
-        availableAt: { lte: now },
+        ...swept,
         OR: [
           {
             status: {
@@ -169,7 +194,7 @@ export class PrismaLineJobRepository implements LineJobRepository {
           originalText: draft.originalText,
           correctedText: draft.correctedText,
           pinyin: draft.pinyin,
-          // Group by when LINE accepted the user's message, not when the Mac woke.
+          // Group by when LINE accepted the user's message, not when it was processed.
           createdAt: job.receivedAt,
           hints: {
             create: draft.hints.map((content, position) => ({

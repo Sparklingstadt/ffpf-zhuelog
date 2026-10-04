@@ -3,6 +3,8 @@ import { test } from "node:test";
 import { createLineContainer } from "../src/composition/line-container";
 import { handleLineDrain } from "../src/presentation/controllers/line-drain-controller";
 
+const SECRET = "s".repeat(32);
+
 function request(authorization?: string) {
   return new Request("https://example.test/api/line/drain", {
     headers: authorization ? { authorization } : {},
@@ -21,8 +23,8 @@ function fakeDrain(processed = 3) {
 
 test("drain requires the cron secret", async () => {
   for (const [header, secret] of [
-    [undefined, "s3cret"],
-    ["Bearer wrong", "s3cret"],
+    [undefined, SECRET],
+    ["Bearer wrong", SECRET],
     ["Bearer ", undefined],
   ] as const) {
     const drain = fakeDrain();
@@ -40,8 +42,8 @@ test("drain requires the cron secret", async () => {
   const drain = fakeDrain(7);
   const before = Date.now();
   const response = await handleLineDrain(
-    request("Bearer s3cret"),
-    "s3cret",
+    request(`Bearer ${SECRET}`),
+    SECRET,
     () => drain,
   );
   const after = Date.now();
@@ -53,12 +55,27 @@ test("drain requires the cron secret", async () => {
   assert.ok(drain.deadlines[0] <= after + 50_000);
 
   const disabled = await handleLineDrain(
-    request("Bearer s3cret"),
-    "s3cret",
+    request(`Bearer ${SECRET}`),
+    SECRET,
     () => null,
   );
   assert.equal(disabled.status, 503);
   assert.equal(disabled.headers.get("cache-control"), "no-store");
+});
+
+test("a cron secret shorter than 32 characters is treated as unset", async () => {
+  const short = "s".repeat(31);
+  let created = 0;
+  const response = await handleLineDrain(
+    request(`Bearer ${short}`),
+    short,
+    () => {
+      created++;
+      return fakeDrain();
+    },
+  );
+  assert.equal(response.status, 401);
+  assert.equal(created, 0);
 });
 
 test("a failing drain answers 503 without leaking the error", async () => {
@@ -69,8 +86,8 @@ test("a failing drain answers 503 without leaking the error", async () => {
   };
   try {
     const response = await handleLineDrain(
-      request("Bearer s3cret"),
-      "s3cret",
+      request(`Bearer ${SECRET}`),
+      SECRET,
       () => ({
         execute: async () => {
           throw new Error("secret row data");
@@ -94,8 +111,8 @@ test("a drain that cannot be created answers 503 and logs only the code", async 
   };
   try {
     const response = await handleLineDrain(
-      request("Bearer s3cret"),
-      "s3cret",
+      request(`Bearer ${SECRET}`),
+      SECRET,
       () => {
         throw new Error("INVALID_TEST_ENDPOINT https://evil.test");
       },

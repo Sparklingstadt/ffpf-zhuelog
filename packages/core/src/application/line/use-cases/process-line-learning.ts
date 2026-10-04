@@ -58,7 +58,7 @@ export class ProcessLineLearning {
       return true;
     }
     // LINE guarantees retry-key deduplication for 24h. Never send beyond that
-    // window after an ambiguous response, even if this Mac was asleep.
+    // window after an ambiguous response, even if processing was delayed.
     if (Date.now() - job.firstDeliveryAt.getTime() >= 23 * 60 * 60 * 1000) {
       await this.jobs.fail(job, true, "DELIVERY_WINDOW_EXPIRED");
       return true;

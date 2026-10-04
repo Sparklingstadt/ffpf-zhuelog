@@ -15,11 +15,15 @@ export class DrainLineJobs {
     private readonly generator: LineLearningGenerator,
     private readonly userId: string,
     private readonly now: () => number = Date.now,
+    // Told which job failed, never why: errors may carry row data. The core
+    // has no logger, so the composition root decides how to record it.
+    private readonly onJobError: (jobId: string) => void = () => {},
   ) {}
 
   // Processes jobs until none is left or the deadline (epoch ms) passes.
-  // Returns how many were generated or delivered. A failure in one job never
-  // stops the others; only claim errors propagate, for the caller to report.
+  // Returns how many jobs were claimed and handled, including ones whose
+  // processing failed. A failure in one job never stops the others; only
+  // claim errors propagate, for the caller to report.
   async execute(deadline: number) {
     let processed = 0;
     while (this.now() < deadline) {
@@ -34,6 +38,7 @@ export class DrainLineJobs {
         else await this.process.deliver(job.id, token, this.userId);
       } catch {
         // The lease expires and the repository retries or fails the job.
+        this.onJobError(job.id);
       }
       processed++;
     }
@@ -62,6 +67,7 @@ export class DrainLineJobs {
     try {
       await this.process.complete(job.id, token, this.userId, output);
     } catch {
+      this.onJobError(job.id);
       // Reply with a failure instead of regenerating: one OpenAI call per message.
       await this.process.generationFailed(
         job.id,

@@ -6,6 +6,7 @@ import {
   LINE_JOB_STATUSES,
   type LineJob,
 } from "@ffpf-zhuelog/core/domain/line/line-learning";
+import { LEARNING_KINDS } from "@ffpf-zhuelog/core/domain/learning/entities/learning-entry";
 import { toLineJob } from "../src/infrastructure/persistence/prisma/mappers/line-job-mapper";
 
 // The newest migration that (re)defines a CHECK constraint is the DB's truth.
@@ -35,6 +36,13 @@ test("job kinds and statuses match the database CHECK constraints", () => {
   assert.deepEqual(
     [...LINE_JOB_STATUSES].sort(),
     checkedValues("LineLearningJob_status_check"),
+  );
+});
+
+test("learning kinds match the database CHECK constraint", () => {
+  assert.deepEqual(
+    [...LEARNING_KINDS].sort(),
+    checkedValues("LearningEntry_kind_check"),
   );
 });
 
