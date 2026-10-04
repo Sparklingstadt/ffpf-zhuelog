@@ -728,3 +728,36 @@ test("the LINE messenger formats translation pushes with the translation heading
     "accepted",
   );
 });
+
+test("Japanese text is queued for translation", async () => {
+  const jobs = repo();
+  let inputs: LineInput[] = [];
+  jobs.enqueue = async (value) => {
+    inputs = value;
+  };
+  const texts = [
+    "今日は忙しい。",
+    "我喜欢アニメ",
+    "今天很忙。",
+    "あ".repeat(501),
+    "/今日は",
+  ];
+  const events = texts.map((text, i) => ({
+    ...event,
+    webhookEventId: `jp-${i}`,
+    message: { type: "text", text },
+  }));
+  assert.equal(
+    (await handleLineWebhook(webhook(events), config, jobs)).status,
+    200,
+  );
+  assert.deepEqual(
+    inputs.map((input) => [input.eventId, input.kind, input.originalText]),
+    [
+      ["jp-0", "translation", "今日は忙しい。"],
+      ["jp-1", "translation", "我喜欢アニメ"],
+      ["jp-2", "correction", "今天很忙。"],
+      ["jp-3", "text-too-long", ""],
+    ],
+  );
+});

@@ -7,6 +7,9 @@ import {
 } from "@/infrastructure/line/security";
 import type { getLineConfig } from "@/infrastructure/line/config";
 
+// Kana means Japanese (translated to Chinese); Han alone is Chinese (corrected).
+const KANA = /[\p{Script=Hiragana}\p{Script=Katakana}]/u;
+const HAN = /\p{Script=Han}/u;
 const envelopeSchema = z.object({
   destination: z.string(),
   events: z.array(z.unknown()).max(100),
@@ -59,21 +62,27 @@ export async function handleLineWebhook(
     if (!parsed.success || parsed.data.source.userId !== config.userId)
       return [];
     const data = parsed.data;
+    const text = data.message.text;
+    const hasKana = KANA.test(text);
     if (
-      data.message.text.startsWith("/") ||
-      !/\p{Script=Han}/u.test(data.message.text) ||
+      text.startsWith("/") ||
+      !(hasKana || HAN.test(text)) ||
       data.timestamp > Date.now() + 60_000 ||
       Date.now() - data.timestamp > 7 * 86400_000
     )
       return [];
-    const tooLong = data.message.text.length > LINE_TEXT_LIMIT;
+    const tooLong = text.length > LINE_TEXT_LIMIT;
     return [
       {
-        kind: tooLong ? ("text-too-long" as const) : ("correction" as const),
+        kind: tooLong
+          ? ("text-too-long" as const)
+          : hasKana
+            ? ("translation" as const)
+            : ("correction" as const),
         eventId: data.webhookEventId,
         userId: data.source.userId,
         // Never store text that is not processed.
-        originalText: tooLong ? "" : data.message.text,
+        originalText: tooLong ? "" : text,
         receivedAt: new Date(data.timestamp),
       },
     ];
