@@ -1,7 +1,5 @@
-import type {
-  LineJobRepository,
-  LineMessenger,
-} from "../ports/line-job-repository";
+import type { LineJobRepository } from "../../../domain/line/repositories/line-job-repository";
+import type { LineMessenger } from "../ports/line-messenger";
 import {
   makeLineLearningResult,
   type LineJobKind,

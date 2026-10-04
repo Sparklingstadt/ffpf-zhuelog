@@ -10,7 +10,7 @@ import {
   makeDevelopmentIssue,
 } from "@ffpf-zhuelog/core/domain/line/development-mode";
 import { handleLineWebhook } from "../src/presentation/controllers/line-webhook-controller";
-import type { LineJobRepository } from "@ffpf-zhuelog/core/application/line/ports/line-job-repository";
+import type { LineJobRepository } from "@ffpf-zhuelog/core/domain/line/repositories/line-job-repository";
 import { routeDevelopmentMessage } from "@ffpf-zhuelog/core/domain/line/development-routing";
 
 test("domain routing keeps mode changes independent of persistence and expires safely", () => {

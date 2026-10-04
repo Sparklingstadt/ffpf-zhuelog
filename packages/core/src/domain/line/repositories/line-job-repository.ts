@@ -33,16 +33,3 @@ export interface LineJobRepository {
   finishDelivery(job: LineJob): Promise<void>;
   fail(job: LineJob, permanent: boolean, code: string): Promise<void>;
 }
-
-export interface LineMessenger {
-  pushText(
-    userId: string,
-    text: string,
-    retryKey: string,
-  ): Promise<"accepted" | "retry" | "rejected">;
-  push(
-    userId: string,
-    csv: string,
-    retryKey: string,
-  ): Promise<"accepted" | "retry" | "rejected">;
-}

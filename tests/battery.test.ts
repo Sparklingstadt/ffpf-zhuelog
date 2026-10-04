@@ -12,10 +12,8 @@ import {
 import { handleLineWebhook } from "../src/presentation/controllers/line-webhook-controller";
 import { handleLineWorker } from "../src/presentation/controllers/line-worker-controller";
 import { ProcessLineLearning } from "@ffpf-zhuelog/core/application/line/use-cases/process-line-learning";
-import type {
-  LineJobRepository,
-  LineMessenger,
-} from "@ffpf-zhuelog/core/application/line/ports/line-job-repository";
+import type { LineJobRepository } from "@ffpf-zhuelog/core/domain/line/repositories/line-job-repository";
+import type { LineMessenger } from "@ffpf-zhuelog/core/application/line/ports/line-messenger";
 import type {
   LineJob,
   LineInput,
