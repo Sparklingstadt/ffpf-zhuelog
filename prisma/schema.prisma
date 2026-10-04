@@ -68,3 +68,26 @@ model LineDevelopmentSession {
   expiresAt   DateTime?
   lastEventAt DateTime
 }
+
+// Admin chat transcripts saved explicitly from /chat.
+model ConversationNote {
+  id        String                @id @default(cuid())
+  title     String
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+  messages  ConversationMessage[]
+
+  @@index([createdAt])
+}
+
+model ConversationMessage {
+  id       String           @id @default(cuid())
+  role     String
+  content  String
+  position Int
+  noteId   String
+  note     ConversationNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@unique([noteId, position])
+  @@index([noteId])
+}

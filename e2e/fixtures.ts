@@ -24,6 +24,9 @@ export const test = base.extend<{ db: Client }>({
         await db.query(
           'TRUNCATE "Hint", "LearningEntry", "ImportBatch" CASCADE',
         );
+        await db.query(
+          'TRUNCATE "ConversationMessage", "ConversationNote" CASCADE',
+        );
         await provide(db);
       } finally {
         await db.end();

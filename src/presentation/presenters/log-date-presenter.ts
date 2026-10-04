@@ -1,9 +1,9 @@
 import type { LogDate } from "@ffpf-zhuelog/core/domain/learning/value-objects/log-date";
 import { getTokyoDateParts } from "@ffpf-zhuelog/core/domain/learning/value-objects/log-date";
 
-export function getLogDateHref(date: Date | LogDate) {
+export function getLogDateHref(date: Date | LogDate, basePath = "/logs") {
   const value = date instanceof Date ? getTokyoDateParts(date) : date;
-  return `/logs/${value.year}/${value.month}/${value.day}`;
+  return `${basePath}/${value.year}/${value.month}/${value.day}`;
 }
 
 export function formatLogDate(date: LogDate) {

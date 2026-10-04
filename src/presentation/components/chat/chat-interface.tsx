@@ -3,6 +3,8 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import {
+  BookmarkCheck,
+  BookmarkPlus,
   Bot,
   Eraser,
   LoaderCircle,
@@ -10,8 +12,21 @@ import {
   Square,
   Sparkles,
 } from "lucide-react";
-import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import {
+  FormEvent,
+  KeyboardEvent,
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 
+import type { LearningChatMessage } from "@ffpf-zhuelog/core/domain/chat/entities/chat-message";
+import {
+  saveConversationNoteAction,
+  type SaveConversationResult,
+} from "@/presentation/actions/save-conversation-note-action";
 import { ChatMessage } from "@/presentation/components/chat/chat-message";
 import {
   Alert,
@@ -52,17 +67,83 @@ export function ChatInterface({
   const { messages, sendMessage, status, stop, setMessages, error } = useChat({
     transport,
   });
+  const [savedNote, setSavedNote] = useState<{
+    noteId: string;
+    messageCount: number;
+  } | null>(null);
+  const [saveResult, setSaveResult] = useState<SaveConversationResult | null>(
+    null,
+  );
+  const [isSaving, startSaving] = useTransition();
   const isBusy = status === "submitted" || status === "streaming";
+
+  const chatMessages = messages.map(
+    (message): LearningChatMessage & { id: string } => ({
+      id: message.id,
+      role: message.role === "user" ? "user" : "assistant",
+      text: message.parts
+        .filter((part) => part.type === "text")
+        .map((part) => part.text)
+        .join(""),
+    }),
+  );
+  const noteMessages: LearningChatMessage[] = chatMessages
+    .filter((message) => message.text.trim())
+    .map(({ role, text }) => ({ role, text }));
+  const isSaved = savedNote?.messageCount === noteMessages.length;
+  const canSave =
+    !isBusy &&
+    !isSaving &&
+    !isSaved &&
+    noteMessages.some((message) => message.role === "user") &&
+    noteMessages.some((message) => message.role === "assistant");
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, status]);
+  }, [messages, status, saveResult]);
 
   function submitText(text: string) {
     const nextMessage = text.trim();
     if (!configured || isBusy || !nextMessage) return;
     setInput("");
+    setSaveResult(null);
     void sendMessage({ text: nextMessage });
+  }
+
+  function saveNote() {
+    if (!canSave) return;
+    const snapshot = noteMessages;
+    startSaving(async () => {
+      try {
+        const result = await saveConversationNoteAction({
+          noteId: savedNote?.noteId,
+          messages: snapshot,
+        });
+        if (result.status === "success")
+          setSavedNote({
+            noteId: result.noteId,
+            messageCount: snapshot.length,
+          });
+        setSaveResult(result);
+      } catch {
+        setSaveResult({
+          status: "error",
+          message: "通信に失敗しました。もう一度お試しください。",
+        });
+      }
+    });
+  }
+
+  function clearConversation() {
+    if (
+      noteMessages.length > 0 &&
+      !isSaved &&
+      !window.confirm("保存していない会話があります。消去しますか？")
+    )
+      return;
+    setMessages([]);
+    setSavedNote(null);
+    setSaveResult(null);
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -83,7 +164,7 @@ export function ChatInterface({
 
   return (
     <Card className="min-h-[42rem] gap-0 py-0 shadow-sm">
-      <CardHeader className="flex flex-row items-center justify-between gap-4 border-b py-4">
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b py-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <Bot className="size-4" />
@@ -91,20 +172,44 @@ export function ChatInterface({
           <div className="min-w-0">
             <p className="font-medium">中国語学習アシスタント</p>
             <p className="text-xs text-muted-foreground">
-              {modelName} · アプリには会話履歴を保存しません
+              {modelName} · 保存した会話は会話ノートで見返せます
             </p>
           </div>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => setMessages([])}
-          disabled={messages.length === 0 || isBusy}
-        >
-          <Eraser />
-          クリア
-        </Button>
+        <div className="ml-auto flex items-center gap-1">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={saveNote}
+            disabled={!canSave}
+          >
+            {isSaving ? (
+              <LoaderCircle className="animate-spin" />
+            ) : isSaved ? (
+              <BookmarkCheck />
+            ) : (
+              <BookmarkPlus />
+            )}
+            {isSaving
+              ? "保存中…"
+              : isSaved
+                ? "保存済み"
+                : savedNote
+                  ? "ノートを更新"
+                  : "会話ノートに保存"}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={clearConversation}
+            disabled={messages.length === 0 || isBusy || isSaving}
+          >
+            <Eraser />
+            クリア
+          </Button>
+        </div>
       </CardHeader>
 
       <CardContent className="flex min-h-0 flex-1 flex-col px-0">
@@ -164,8 +269,12 @@ export function ChatInterface({
               </div>
             </div>
           ) : (
-            messages.map((message) => (
-              <ChatMessage key={message.id} message={message} />
+            chatMessages.map((message) => (
+              <ChatMessage
+                key={message.id}
+                role={message.role}
+                text={message.text}
+              />
             ))
           )}
 
@@ -187,6 +296,30 @@ export function ChatInterface({
                   ? error.message
                   : "APIキーや通信状態を確認して、もう一度お試しください。"}
               </AlertDescription>
+            </Alert>
+          ) : null}
+
+          {saveResult?.status === "success" ? (
+            <Alert>
+              <BookmarkCheck />
+              <AlertTitle>会話ノートに保存しました</AlertTitle>
+              <AlertDescription>
+                <p>
+                  {saveResult.message}
+                  続きを話したあとに「ノートを更新」を押すと、同じノートに上書き保存します。
+                </p>
+                <Link
+                  href={saveResult.href}
+                  className="font-medium text-foreground underline underline-offset-4"
+                >
+                  この日の会話ノートを開く
+                </Link>
+              </AlertDescription>
+            </Alert>
+          ) : saveResult?.status === "error" ? (
+            <Alert variant="destructive">
+              <AlertTitle>会話ノートに保存できませんでした</AlertTitle>
+              <AlertDescription>{saveResult.message}</AlertDescription>
             </Alert>
           ) : null}
           <div ref={endRef} />

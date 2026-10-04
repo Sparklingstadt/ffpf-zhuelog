@@ -7,6 +7,9 @@ test("unauthenticated pages redirect to signin", async ({ page }) => {
     "/logs/2026/9/20",
     "/logs/2026/9/20/1",
     "/chat",
+    "/conversations",
+    "/conversations/2026/10/4",
+    "/conversations/2026/10/4/1",
     "/practice",
     "/integrations/typle",
   ]) {
