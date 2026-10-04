@@ -10,7 +10,6 @@ import {
 import type { LearningEntryDraft } from "@ffpf-zhuelog/core/domain/learning/entities/learning-entry";
 import { getPrismaClient } from "../prisma-client";
 import { toLineJob } from "../mappers/line-job-mapper";
-import { routeDevelopmentMessage } from "@ffpf-zhuelog/core/domain/line/development-routing";
 import type { GenerationFailureCode } from "@ffpf-zhuelog/core/domain/line/generation-failure";
 
 const leaseWhere = (job: LineJob) => ({
@@ -33,56 +32,6 @@ export class PrismaLineJobRepository implements LineJobRepository {
   async enqueue(inputs: LineInput[]) {
     if (!inputs.length) return;
     const prisma = getPrismaClient();
-    // Mode changes and the durable reply/issue inbox are one transaction.
-    // Deduplicate before changing mode, including old /dev redeliveries.
-    if (inputs.some((input) => input.kind === "development-input")) {
-      for (const input of [...inputs].sort(
-        (a, b) => a.receivedAt.getTime() - b.receivedAt.getTime(),
-      )) {
-        for (let attempt = 0; ; attempt++) {
-          try {
-            await prisma.$transaction(
-              async (tx) => {
-                if (
-                  await tx.lineLearningJob.findUnique({
-                    where: { eventId: input.eventId },
-                  })
-                )
-                  return;
-                if (input.kind !== "development-input") {
-                  await tx.lineLearningJob.create({ data: jobData(input) });
-                  return;
-                }
-                const session = await tx.lineDevelopmentSession.upsert({
-                  where: { userId: input.userId },
-                  update: {},
-                  create: { userId: input.userId, lastEventAt: new Date(0) },
-                });
-                const routed = routeDevelopmentMessage(input, session);
-                await tx.lineDevelopmentSession.update({
-                  where: { userId: input.userId },
-                  data: routed.session,
-                });
-                await tx.lineLearningJob.create({
-                  data: {
-                    ...input,
-                    ...routed.job,
-                    retryKey: randomUUID(),
-                  },
-                });
-              },
-              { isolationLevel: "Serializable" },
-            );
-            break;
-          } catch (error) {
-            const code = (error as { code?: string }).code;
-            if (attempt >= 3 || !["P2034", "P2002"].includes(code ?? ""))
-              throw error;
-          }
-        }
-      }
-      return;
-    }
     // Unique event IDs also deduplicate webhook redeliveries after success.
     await prisma.lineLearningJob.createMany({
       data: inputs.map(jobData),
@@ -90,19 +39,10 @@ export class PrismaLineJobRepository implements LineJobRepository {
     });
   }
 
-  async claim(
-    userId: string,
-    supportsBattery = false,
-    supportsDevelopment = false,
-  ): Promise<LineJob | null> {
+  async claim(userId: string): Promise<LineJob | null> {
     const prisma = getPrismaClient();
     const now = new Date();
-    const kinds: LineJobKind[] = [
-      "correction",
-      "text-too-long",
-      ...(supportsBattery ? (["battery"] as const) : []),
-      ...(supportsDevelopment ? (["dev-issue", "dev-reply"] as const) : []),
-    ];
+    const kinds: LineJobKind[] = ["correction", "text-too-long"];
     await prisma.lineLearningJob.updateMany({
       where: {
         userId,
@@ -246,12 +186,8 @@ export class PrismaLineJobRepository implements LineJobRepository {
     text: string,
     failureCode?: GenerationFailureCode,
   ) {
-    if (
-      job.kind === "correction"
-        ? !failureCode
-        : job.kind !== "battery" && job.kind !== "dev-issue"
-    )
-      return false;
+    // Only a failed correction is answered with a saved reply.
+    if (job.kind !== "correction" || !failureCode) return false;
     const result = await getPrismaClient().lineLearningJob.updateMany({
       where: { ...leaseWhere(job), kind: job.kind },
       data: {
@@ -274,17 +210,6 @@ export class PrismaLineJobRepository implements LineJobRepository {
         }),
       );
     return saved;
-  }
-
-  async beginIssue(job: LineJob) {
-    if (job.kind !== "dev-issue") return false;
-    // A single-use publication permit. After a timeout/crash, only read-back
-    // reconciliation is allowed, never a second GitHub create request.
-    const result = await getPrismaClient().lineLearningJob.updateMany({
-      where: { ...leaseWhere(job), kind: "dev-issue", issueAttempted: false },
-      data: { issueAttempted: true },
-    });
-    return result.count === 1;
   }
 
   async finishDelivery(job: LineJob) {

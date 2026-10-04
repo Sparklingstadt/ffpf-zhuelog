@@ -11,11 +11,11 @@ import type {
 } from "@ffpf-zhuelog/core/domain/line/line-learning";
 import { CsvParseLearningParser } from "../src/infrastructure/csv/csv-parse-learning-parser";
 import {
+  verifyBearerToken,
   verifyLineSignature,
   readLimitedBody,
 } from "../src/infrastructure/line/security";
 import { handleLineWebhook } from "../src/presentation/controllers/line-webhook-controller";
-import { handleLineWorker } from "../src/presentation/controllers/line-worker-controller";
 import { ProcessLineLearning } from "@ffpf-zhuelog/core/application/line/use-cases/process-line-learning";
 import type { LineJobRepository } from "@ffpf-zhuelog/core/domain/line/repositories/line-job-repository";
 import { LinePushMessenger } from "../src/infrastructure/line/line-messenger";
@@ -26,7 +26,6 @@ const config = {
   accessToken: "test-token",
   userId: `U${"1".repeat(32)}`,
   botId: `U${"2".repeat(32)}`,
-  workerToken: "a".repeat(64),
 };
 const correction = {
   correctedText: '我说："你好"。\n今天很好。',
@@ -44,7 +43,6 @@ const event = {
 const repo = (): LineJobRepository => ({
   enqueue: async () => {},
   claim: async () => null,
-  beginIssue: async () => false,
   leased: async () => null,
   saveResult: async () => true,
   saveReply: async () => true,
@@ -166,26 +164,51 @@ test("ignore strangers, groups, images, oversized non-Chinese text, stale events
   assert.equal(count, 0);
 });
 
-test("oversized text that would be processed is queued as a reply without its content", async () => {
-  for (const [text, lineConfig] of [
-    ["字".repeat(501), config],
-    ["a".repeat(501), { ...config, developmentEnabled: true }],
-  ] as const) {
+test("webhook ignores former commands and non-Chinese text", async () => {
+  for (const legacy of [config, { ...config, developmentEnabled: true }]) {
     const jobs = repo();
-    let inputs: LineInput[] = [];
+    let count = -1;
     jobs.enqueue = async (value) => {
-      inputs = value;
+      count = value.length;
     };
-    const events = [{ ...event, message: { type: "text", text } }];
+    const events = ["/battery", "/dev", "/devend", "Hello"].map((text, i) => ({
+      ...event,
+      webhookEventId: `legacy-${i}`,
+      message: { type: "text", text },
+    }));
     assert.equal(
-      (await handleLineWebhook(webhook(events), lineConfig, jobs)).status,
+      (await handleLineWebhook(webhook(events), legacy, jobs)).status,
       200,
     );
-    assert.equal(inputs.length, 1);
-    assert.equal(inputs[0].kind, "text-too-long");
-    assert.equal(inputs[0].originalText, "");
-    assert.equal(inputs[0].eventId, event.webhookEventId);
+    assert.equal(count, 0);
   }
+});
+
+test("bearer tokens never match an empty secret", () => {
+  assert.equal(verifyBearerToken("Bearer ", ""), false);
+  assert.equal(verifyBearerToken("Bearer undefined", undefined), false);
+  assert.equal(verifyBearerToken(null, "s3cret"), false);
+  assert.equal(verifyBearerToken("Bearer s3cret", "s3cret"), true);
+  assert.equal(verifyBearerToken("Bearer other!", "s3cret"), false);
+});
+
+test("oversized text that would be processed is queued as a reply without its content", async () => {
+  const jobs = repo();
+  let inputs: LineInput[] = [];
+  jobs.enqueue = async (value) => {
+    inputs = value;
+  };
+  const events = [
+    { ...event, message: { type: "text", text: "字".repeat(501) } },
+  ];
+  assert.equal(
+    (await handleLineWebhook(webhook(events), config, jobs)).status,
+    200,
+  );
+  assert.equal(inputs.length, 1);
+  assert.equal(inputs[0].kind, "text-too-long");
+  assert.equal(inputs[0].originalText, "");
+  assert.equal(inputs[0].eventId, event.webhookEventId);
 });
 
 test("text-too-long jobs are delivered as the limit notice", async () => {
@@ -270,53 +293,6 @@ test("a correction too long for LINE is replied to as a failure, never retried s
   assert.equal(saved?.code, "CORRECTION_TOO_LONG");
   assert.match(saved!.text, /短く/);
   assert.ok(!saved!.text.includes("復旧後"));
-});
-
-test("worker rejects missing credentials and arbitrary payload fields", async () => {
-  const jobs = repo();
-  const service = new ProcessLineLearning(jobs, {
-    push: async () => "accepted",
-    pushText: async () => "accepted",
-  });
-  const request = (body: unknown, auth = true) =>
-    new Request("https://example.test", {
-      method: "POST",
-      body: JSON.stringify(body),
-      headers: auth ? { authorization: `Bearer ${config.workerToken}` } : {},
-    });
-  assert.equal(
-    (
-      await handleLineWorker(
-        request({ action: "claim" }, false),
-        config,
-        jobs,
-        service,
-      )
-    ).status,
-    401,
-  );
-  assert.equal(
-    (
-      await handleLineWorker(
-        request({ action: "claim", userId: "stranger" }),
-        config,
-        jobs,
-        service,
-      )
-    ).status,
-    400,
-  );
-  assert.equal(
-    (
-      await handleLineWorker(
-        request({ action: "claim" }),
-        config,
-        jobs,
-        service,
-      )
-    ).status,
-    200,
-  );
 });
 
 test("push uses stable retry key, accepts documented 409, sanitizes failures", async () => {
@@ -549,55 +525,4 @@ test("correction failure is persisted before text delivery, with bounded retry a
   assert.equal(failures, 1);
   assert.equal(deliveries, 2);
   assert.ok(finished);
-});
-
-test("worker failure API rejects raw errors and forwards only allowed codes", async () => {
-  const jobs = repo();
-  const service = new ProcessLineLearning(jobs, {
-    push: async () => "accepted",
-    pushText: async () => "accepted",
-  });
-  let received: string | undefined;
-  const claim = await handleLineWorker(
-    new Request("https://example.test/api/line/worker", {
-      method: "POST",
-      headers: { authorization: `Bearer ${config.workerToken}` },
-      body: JSON.stringify({ action: "claim" }),
-    }),
-    config,
-    jobs,
-    service,
-  );
-  assert.equal((await claim.json()).failureNotifications, true);
-  service.generationFailed = async (_id, _token, _user, code) => {
-    received = code;
-    return true;
-  };
-  const send = (extra: object) =>
-    handleLineWorker(
-      new Request("https://example.test/api/line/worker", {
-        method: "POST",
-        headers: { authorization: `Bearer ${config.workerToken}` },
-        body: JSON.stringify({
-          action: "fail",
-          id: "job",
-          leaseToken: randomUUID(),
-          ...extra,
-        }),
-      }),
-      config,
-      jobs,
-      service,
-    );
-  assert.equal((await send({ code: "secret-token" })).status, 400);
-  // Server-only: the worker never measures the LINE result length.
-  assert.equal((await send({ code: "CORRECTION_TOO_LONG" })).status, 400);
-  assert.equal(
-    (await send({ code: "CODEX_TIMEOUT", error: "private text" })).status,
-    400,
-  );
-  assert.equal(received, undefined);
-  assert.equal((await send({ code: "CODEX_TIMEOUT" })).status, 200);
-  assert.equal(received, "CODEX_TIMEOUT");
-  assert.equal((await send({})).status, 200); // Older workers remain compatible.
 });

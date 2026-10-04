@@ -65,9 +65,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     authorized({ auth: session, request }) {
       const pathname = request.nextUrl.pathname;
       const isPublicRoute =
-        // These exact endpoints enforce LINE HMAC / worker Bearer auth themselves.
+        // This exact endpoint enforces LINE HMAC auth itself.
         pathname === "/api/line/webhook" ||
-        pathname === "/api/line/worker" ||
         pathname === "/signin" ||
         pathname.startsWith("/api/auth/");
       const permitted =

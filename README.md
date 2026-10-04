@@ -23,7 +23,6 @@ pnpm workspaces のモノレポです。ルートの Next.js アプリ（`@ffpf-
 ├── packages/
 │   ├── core/                     # @ffpf-zhuelog/core
 │   └── typle-integrate-plugin/   # @ffpf-zhuelog/typle-integrate-plugin
-└── workers/line/                 # Go製のLINEワーカー
 ```
 
 コードは依存関係が内側へ向くよう、機能別の関心事を層に分けています。

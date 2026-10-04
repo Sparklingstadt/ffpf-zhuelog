@@ -12,7 +12,11 @@ export function verifyLineSignature(
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
-export function verifyWorkerToken(header: string | null, secret: string) {
+export function verifyBearerToken(
+  header: string | null,
+  secret: string | undefined,
+) {
+  if (!secret) return false;
   const actual = Buffer.from(header || "");
   const expected = Buffer.from(`Bearer ${secret}`);
   return actual.length === expected.length && timingSafeEqual(actual, expected);

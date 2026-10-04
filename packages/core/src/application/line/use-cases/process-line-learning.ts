@@ -4,20 +4,13 @@ import {
   makeLineLearningResult,
   type LineJobKind,
 } from "../../../domain/line/line-learning";
-import { formatBatteryReply } from "../../../domain/line/battery-report";
-import { formatIssueReply } from "../../../domain/line/development-mode";
 import {
   formatGenerationFailure,
   type GenerationFailureCode,
 } from "../../../domain/line/generation-failure";
 
 // Jobs whose reply is plain text; corrections send their CSV unless they failed.
-const TEXT_REPLY_KINDS: readonly LineJobKind[] = [
-  "battery",
-  "dev-issue",
-  "dev-reply",
-  "text-too-long",
-];
+const TEXT_REPLY_KINDS: readonly LineJobKind[] = ["text-too-long"];
 
 export class ProcessLineLearning {
   constructor(
@@ -47,17 +40,6 @@ export class ProcessLineLearning {
       );
     }
     return this.jobs.saveResult(job, result.draft, result.csv);
-  }
-
-  async completeBattery(
-    id: string,
-    token: string,
-    userId: string,
-    report: unknown,
-  ) {
-    const job = await this.jobs.leased(id, token, userId, "GENERATING");
-    if (!job || job.kind !== "battery") return false;
-    return this.jobs.saveReply(job, formatBatteryReply(report));
   }
 
   async deliver(id: string, token: string, userId: string) {
@@ -90,23 +72,6 @@ export class ProcessLineLearning {
     else
       await this.jobs.fail(job, outcome === "rejected", "LINE_DELIVERY_FAILED");
     return true;
-  }
-
-  async beginIssue(id: string, token: string, userId: string) {
-    const job = await this.jobs.leased(id, token, userId, "GENERATING");
-    if (!job || job.kind !== "dev-issue") return null;
-    return { allowed: await this.jobs.beginIssue(job) };
-  }
-
-  async completeIssue(
-    id: string,
-    token: string,
-    userId: string,
-    result: unknown,
-  ) {
-    const job = await this.jobs.leased(id, token, userId, "GENERATING");
-    if (!job || job.kind !== "dev-issue") return false;
-    return this.jobs.saveReply(job, formatIssueReply(result));
   }
 
   async generationFailed(

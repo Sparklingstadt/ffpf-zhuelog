@@ -8,12 +8,7 @@ import type { GenerationFailureCode } from "../../../domain/line/generation-fail
 
 export interface LineJobRepository {
   enqueue(inputs: LineInput[]): Promise<void>;
-  claim(
-    userId: string,
-    supportsBattery?: boolean,
-    supportsDevelopment?: boolean,
-  ): Promise<LineJob | null>;
-  beginIssue(job: LineJob): Promise<boolean>;
+  claim(userId: string): Promise<LineJob | null>;
   leased(
     id: string,
     token: string,

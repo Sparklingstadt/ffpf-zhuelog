@@ -59,16 +59,9 @@ export async function handleLineWebhook(
     if (!parsed.success || parsed.data.source.userId !== config.userId)
       return [];
     const data = parsed.data;
-    const battery = data.message.text === "/battery";
-    const development =
-      config.developmentEnabled &&
-      (!data.message.text.startsWith("/") ||
-        ["/dev", "/devend"].includes(data.message.text));
     if (
-      (!battery &&
-        !development &&
-        (data.message.text.startsWith("/") ||
-          !/\p{Script=Han}/u.test(data.message.text))) ||
+      data.message.text.startsWith("/") ||
+      !/\p{Script=Han}/u.test(data.message.text) ||
       data.timestamp > Date.now() + 60_000 ||
       Date.now() - data.timestamp > 7 * 86400_000
     )
@@ -76,13 +69,7 @@ export async function handleLineWebhook(
     const tooLong = data.message.text.length > LINE_TEXT_LIMIT;
     return [
       {
-        kind: tooLong
-          ? ("text-too-long" as const)
-          : battery
-            ? ("battery" as const)
-            : development
-              ? ("development-input" as const)
-              : ("correction" as const),
+        kind: tooLong ? ("text-too-long" as const) : ("correction" as const),
         eventId: data.webhookEventId,
         userId: data.source.userId,
         // Never store text that is not processed.

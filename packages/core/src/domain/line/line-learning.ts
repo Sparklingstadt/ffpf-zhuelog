@@ -7,10 +7,12 @@ export {
   CORRECTION_INSTRUCTIONS as LINE_CORRECTION_INSTRUCTIONS,
 } from "../learning/chinese-correction";
 export type { Correction } from "../learning/chinese-correction";
-// Matches the 500-character limit of corrections and development issues.
+// Matches the 500-character limit of corrections.
 export const LINE_TEXT_LIMIT = 500;
 export const lineTextTooLongReply = `メッセージが${LINE_TEXT_LIMIT}文字を超えているため、処理しませんでした。${LINE_TEXT_LIMIT}文字以内に分けて送ってください。\n学習ノートには保存していません。`;
 // Mirrors the LineLearningJob CHECK constraints; a test keeps them in sync.
+// "battery", "dev-issue" and "dev-reply" are legacy: old rows may still hold
+// them, but new code neither creates nor claims them.
 export const LINE_JOB_KINDS = [
   "correction",
   "battery",
@@ -27,14 +29,14 @@ export const LINE_JOB_STATUSES = [
   "SENDING",
   "SENT",
   "FAILED",
-  // Kept only to deduplicate redeliveries; never claimed.
+  // Legacy (development mode): such rows only deduplicate redeliveries and
+  // are never claimed.
   "IGNORED",
 ] as const;
 export type LineJobStatus = (typeof LINE_JOB_STATUSES)[number];
 export const lineJobStatusSchema = z.enum(LINE_JOB_STATUSES);
 export type LineInput = {
-  // Development input becomes dev-issue, dev-reply or correction when routed.
-  kind: Exclude<LineJobKind, "dev-issue" | "dev-reply"> | "development-input";
+  kind: "correction" | "text-too-long";
   eventId: string;
   userId: string;
   originalText: string;
