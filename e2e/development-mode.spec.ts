@@ -206,3 +206,41 @@ test("delayed messages, concurrent redelivery and expiry do not publish private 
     ).rows[0].count,
   ).toBe(0);
 });
+
+test("non-Chinese text outside dev mode is recorded as ignored, never processed", async ({
+  request,
+  db,
+}) => {
+  const body = JSON.stringify({
+    destination: lineTestConfig.botId,
+    events: [
+      {
+        type: "message",
+        mode: "active",
+        webhookEventId: "ignored",
+        timestamp: Date.now(),
+        source: { type: "user", userId: lineTestConfig.userId },
+        message: { type: "text", text: "Hello" },
+      },
+    ],
+  });
+  const response = await request.post("/api/line/webhook", {
+    data: body,
+    headers: {
+      "x-line-signature": createHmac("sha256", lineTestConfig.secret)
+        .update(body)
+        .digest("base64"),
+    },
+  });
+  expect(response.status()).toBe(200);
+  // The row only deduplicates redeliveries; its text is never kept.
+  const rows = (
+    await db.query('SELECT status, "originalText" FROM "LineLearningJob"')
+  ).rows;
+  expect(rows).toEqual([{ status: "IGNORED", originalText: "" }]);
+  const claim = await request.post("/api/line/worker", {
+    data: { action: "claim", capabilities: ["development"] },
+    headers: { Authorization: `Bearer ${authSecret()}` },
+  });
+  expect((await claim.json()).job).toBeNull();
+});

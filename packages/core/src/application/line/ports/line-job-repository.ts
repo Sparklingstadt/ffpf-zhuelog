@@ -1,5 +1,9 @@
 import type { LearningEntryDraft } from "../../../domain/learning/entities/learning-entry";
-import type { LineInput, LineJob } from "../../../domain/line/line-learning";
+import type {
+  LineInput,
+  LineJob,
+  LineJobStatus,
+} from "../../../domain/line/line-learning";
 import type { GenerationFailureCode } from "../../../domain/line/generation-failure";
 
 export interface LineJobRepository {
@@ -14,7 +18,7 @@ export interface LineJobRepository {
     id: string,
     token: string,
     userId: string,
-    status: string,
+    status: LineJobStatus,
   ): Promise<LineJob | null>;
   saveResult(
     job: LineJob,

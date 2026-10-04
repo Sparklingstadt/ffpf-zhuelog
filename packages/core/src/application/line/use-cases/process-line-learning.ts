@@ -2,13 +2,24 @@ import type {
   LineJobRepository,
   LineMessenger,
 } from "../ports/line-job-repository";
-import { makeLineLearningResult } from "../../../domain/line/line-learning";
+import {
+  makeLineLearningResult,
+  type LineJobKind,
+} from "../../../domain/line/line-learning";
 import { formatBatteryReply } from "../../../domain/line/battery-report";
 import { formatIssueReply } from "../../../domain/line/development-mode";
 import {
   formatGenerationFailure,
   type GenerationFailureCode,
 } from "../../../domain/line/generation-failure";
+
+// Jobs whose reply is plain text; corrections send their CSV unless they failed.
+const TEXT_REPLY_KINDS: readonly LineJobKind[] = [
+  "battery",
+  "dev-issue",
+  "dev-reply",
+  "text-too-long",
+];
 
 export class ProcessLineLearning {
   constructor(
@@ -55,9 +66,7 @@ export class ProcessLineLearning {
     const job = await this.jobs.leased(id, token, userId, "SENDING");
     if (!job) return false;
     const textReply =
-      ["battery", "dev-issue", "dev-reply", "text-too-long"].includes(
-        job.kind,
-      ) ||
+      TEXT_REPLY_KINDS.includes(job.kind) ||
       (job.kind === "correction" && Boolean(job.replyText));
     // LINE guarantees retry-key deduplication for 24h. Never send beyond that
     // window after an ambiguous response, even if this Mac was asleep.

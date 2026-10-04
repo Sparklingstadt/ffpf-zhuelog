@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { LearningEntryDraft } from "../learning/entities/learning-entry";
 import { correctionSchema } from "../learning/chinese-correction";
 
@@ -9,17 +10,40 @@ export type { Correction } from "../learning/chinese-correction";
 // Matches the 500-character limit of corrections and development issues.
 export const LINE_TEXT_LIMIT = 500;
 export const lineTextTooLongReply = `メッセージが${LINE_TEXT_LIMIT}文字を超えているため、処理しませんでした。${LINE_TEXT_LIMIT}文字以内に分けて送ってください。\n学習ノートには保存していません。`;
+// Mirrors the LineLearningJob CHECK constraints; a test keeps them in sync.
+export const LINE_JOB_KINDS = [
+  "correction",
+  "battery",
+  "dev-issue",
+  "dev-reply",
+  "text-too-long",
+] as const;
+export type LineJobKind = (typeof LINE_JOB_KINDS)[number];
+export const lineJobKindSchema = z.enum(LINE_JOB_KINDS);
+export const LINE_JOB_STATUSES = [
+  "PENDING",
+  "GENERATING",
+  "READY",
+  "SENDING",
+  "SENT",
+  "FAILED",
+  // Kept only to deduplicate redeliveries; never claimed.
+  "IGNORED",
+] as const;
+export type LineJobStatus = (typeof LINE_JOB_STATUSES)[number];
+export const lineJobStatusSchema = z.enum(LINE_JOB_STATUSES);
 export type LineInput = {
-  kind: "correction" | "battery" | "development-input" | "text-too-long";
+  // Development input becomes dev-issue, dev-reply or correction when routed.
+  kind: Exclude<LineJobKind, "dev-issue" | "dev-reply"> | "development-input";
   eventId: string;
   userId: string;
   originalText: string;
   receivedAt: Date;
 };
 export type LineJob = Omit<LineInput, "kind"> & {
-  kind: string;
+  kind: LineJobKind;
   id: string;
-  status: string;
+  status: LineJobStatus;
   leaseToken: string | null;
   csv: string | null;
   replyText: string | null;

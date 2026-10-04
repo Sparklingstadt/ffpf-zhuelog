@@ -1,4 +1,5 @@
 import { developmentStartedReply } from "./development-mode";
+import type { LineJobKind, LineJobStatus } from "./line-learning";
 
 export function routeDevelopmentMessage(
   input: { originalText: string; receivedAt: Date },
@@ -7,8 +8,8 @@ export function routeDevelopmentMessage(
 ) {
   let expiresAt = session.expiresAt;
   let replyText: string | null = null;
-  let kind = "dev-reply";
-  let status = "READY";
+  let kind: LineJobKind = "dev-reply";
+  let status: LineJobStatus = "READY";
   if (input.originalText === "/devend") {
     expiresAt = null;
     replyText =

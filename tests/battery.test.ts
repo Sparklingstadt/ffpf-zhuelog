@@ -288,7 +288,7 @@ test("worker capabilities, validation and cross-kind completion fail closed", as
 
 test("battery delivery reuses persisted text and retry key without making a note", async () => {
   const jobs = repo();
-  const battery = {
+  const battery: LineJob = {
     ...job(),
     status: "SENDING",
     firstDeliveryAt: new Date(),
