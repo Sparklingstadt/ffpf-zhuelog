@@ -58,7 +58,7 @@ src/
 
 ## 起動方法
 
-前提: Node.js 22以上、Docker Desktop
+前提: Node.js 24 または 26、Docker Desktop
 
 ```bash
 cp .env.example .env
@@ -222,7 +222,7 @@ pnpm run db:seed
 
 ## Playwright E2E
 
-Node.js 22以降と、起動済みのDocker（Compose v2）が必要です。
+Node.js 24 または 26 と、起動済みのDocker（Compose v2）が必要です。
 
 ```bash
 pnpm install --frozen-lockfile
@@ -276,5 +276,5 @@ GitHub OAuthの外部ログインとOpenAI・LINEの実API通信は、このE2E�
 
 ## pnpm移行の回帰テスト
 
-`pnpm install --frozen-lockfile` 後、`pnpm run test:regression` で既存機能の検証を実行します。GitHub Actions では同じ内容を CI ワークフローが並列で実行します（`verify` を Node 22 と、本番の Vercel と同じ Node 24 で、`e2e` を Node 24 で実行）。
+`pnpm install --frozen-lockfile` 後、`pnpm run test:regression` で既存機能の検証を実行します。GitHub Actions では同じ内容を CI ワークフローが並列で実行します（`verify` を本番の Vercel と同じ Node 24 と、次の版の Node 26 で、`e2e` を Node 24 で実行）。`package.json` の `engines` は `24.x || 26.x` で、Vercel はこの中で対応している一番新しい版を使います。
 ブラウザーテストの前に `pnpm exec playwright install chromium` を実行してください。Webの回帰テストは本番ビルドを使い、既存サーバーを再利用しません。

@@ -21,7 +21,7 @@ updates:
       - dependency-name: eslint
         versions: ["10.x"] # eslint-plugin-react does not yet support ESLint 10.
       - dependency-name: "@types/node"
-        update-types: ["version-update:semver-major"] # Match minimum runtime: Node 22.
+        update-types: ["version-update:semver-major"] # Match minimum runtime: Node 24.
 
   - package-ecosystem: github-actions
     directory: "/"
