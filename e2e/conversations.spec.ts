@@ -1,42 +1,53 @@
 import type { Client } from "pg";
 import { asAdmin, asGuest, expect, test } from "./fixtures";
 
-async function seedNote(
+async function seedConversation(
   db: Client,
-  id: string,
+  id: number,
+  ownerId: string,
   createdAt: string,
   title: string,
-  messages: [role: "user" | "assistant", content: string][],
+  messages: [role: "user" | "assistant", text: string][],
 ) {
   await db.query(
-    `INSERT INTO "ConversationNote" ("id", "title", "createdAt", "updatedAt")
-     VALUES ($1, $2, $3, $3)`,
-    [id, title, createdAt],
+    `INSERT INTO "ChatConversation"
+       ("id", "ownerId", "title", "modelName", "ended", "messages", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, 'gpt-6.1-sol', false, $4, $5, $5)`,
+    [
+      `00000000-0000-4000-8000-${String(id).padStart(12, "0")}`,
+      ownerId,
+      title,
+      JSON.stringify(
+        messages.map(([role, text], index) => ({
+          id: `m${index}`,
+          role,
+          text,
+        })),
+      ),
+      createdAt,
+    ],
   );
-  for (const [position, [role, content]] of messages.entries()) {
-    await db.query(
-      `INSERT INTO "ConversationMessage" ("id", "role", "content", "position", "noteId")
-       VALUES ($1, $2, $3, $4, $5)`,
-      [`${id}-${position}`, role, content, position, id],
-    );
-  }
 }
 
-test("admin browses saved conversation notes by JST date", async ({
+test("admin browses own saved conversations by JST date", async ({
   page,
   context,
   db,
 }) => {
   // 2026-10-03 15:30 UTC is already 2026-10-04 in JST.
-  await seedNote(db, "conversation-1", "2026-10-03T15:30:00Z", "会話1", [
+  await seedConversation(db, 1, "10001", "2026-10-03T15:30:00Z", "会話1", [
     ["user", "我昨天去图书馆了。自然ですか？"],
     ["assistant", "「我昨天去了图书馆。」のほうが自然です。"],
   ]);
-  await seedNote(db, "conversation-2", "2026-10-04T02:00:00Z", "会話2", [
+  await seedConversation(db, 2, "10001", "2026-10-04T02:00:00Z", "会話2", [
     ["user", "你好"],
     ["assistant", "你好！今天想聊什么？"],
     ["user", "天气"],
     ["assistant", "今天天气怎么样？"],
+  ]);
+  await seedConversation(db, 3, "20002", "2026-10-04T03:00:00Z", "他人の会話", [
+    ["user", "秘密"],
+    ["assistant", "了解"],
   ]);
   await asAdmin(context);
 
@@ -50,6 +61,7 @@ test("admin browses saved conversation notes by JST date", async ({
     page.getByRole("heading", { name: "2026年10月4日" }),
   ).toBeVisible();
   await expect(page.getByText("4件のメッセージ")).toBeVisible();
+  await expect(page.getByText("他人の会話")).toHaveCount(0);
 
   await page.getByRole("link", { name: /会話1/ }).click();
   await expect(page).toHaveURL(/\/conversations\/2026\/10\/4\/1$/);
@@ -77,7 +89,7 @@ test("admin browses saved conversation notes by JST date", async ({
 });
 
 test("conversation notes are hidden from guests", async ({ page, db }) => {
-  await seedNote(db, "private", "2026-10-04T02:00:00Z", "非公開の会話", [
+  await seedConversation(db, 1, "10001", "2026-10-04T02:00:00Z", "非公開", [
     ["user", "秘密"],
     ["assistant", "了解"],
   ]);
@@ -87,18 +99,11 @@ test("conversation notes are hidden from guests", async ({ page, db }) => {
     await page.goto(path);
     await expect(page).toHaveURL(/\/$/);
   }
-  await expect(page.getByText("非公開の会話")).toHaveCount(0);
+  await expect(page.getByText("非公開")).toHaveCount(0);
 });
 
-test("admin starts with no conversation notes and nothing to save", async ({
-  page,
-  context,
-}) => {
+test("admin starts with no conversation notes", async ({ page, context }) => {
   await asAdmin(context);
   await page.goto("/conversations");
   await expect(page.getByText("まだ会話ノートがありません")).toBeVisible();
-  await page.goto("/chat");
-  await expect(
-    page.getByRole("button", { name: "会話ノートに保存" }),
-  ).toBeDisabled();
 });

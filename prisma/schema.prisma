@@ -69,25 +69,19 @@ model LineDevelopmentSession {
   lastEventAt DateTime
 }
 
-// Admin chat transcripts saved explicitly from /chat.
-model ConversationNote {
-  id        String                @id @default(cuid())
+// Admin chat history, private to the saving GitHub account. Browsed by date
+// at /conversations like learning notes.
+model ChatConversation {
+  id        String   @id
+  ownerId   String
   title     String
-  createdAt DateTime              @default(now())
-  updatedAt DateTime              @updatedAt
-  messages  ConversationMessage[]
+  modelName String
+  ended     Boolean
+  messages  Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@index([createdAt])
-}
-
-model ConversationMessage {
-  id       String           @id @default(cuid())
-  role     String
-  content  String
-  position Int
-  noteId   String
-  note     ConversationNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
-
-  @@unique([noteId, position])
-  @@index([noteId])
+  @@unique([id, ownerId])
+  @@index([ownerId, updatedAt])
+  @@index([ownerId, createdAt])
 }

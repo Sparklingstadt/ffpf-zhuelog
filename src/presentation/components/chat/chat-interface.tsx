@@ -1,32 +1,23 @@
 "use client";
 
+import { conversationDraftSchema } from "@ffpf-zhuelog/core/domain/chat/conversation";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import {
-  BookmarkCheck,
-  BookmarkPlus,
   Bot,
-  Eraser,
+  Download,
+  Save,
+  Plus,
   LoaderCircle,
   Send,
   Square,
   Sparkles,
 } from "lucide-react";
-import Link from "next/link";
-import {
-  FormEvent,
-  KeyboardEvent,
-  useEffect,
-  useRef,
-  useState,
-  useTransition,
-} from "react";
+import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 
-import type { LearningChatMessage } from "@ffpf-zhuelog/core/domain/chat/entities/chat-message";
-import {
-  saveConversationNoteAction,
-  type SaveConversationResult,
-} from "@/presentation/actions/save-conversation-note-action";
+import { useConversationHistory } from "./use-conversation-history";
+import { ConversationHistory } from "./conversation-history";
+
 import { ChatMessage } from "@/presentation/components/chat/chat-message";
 import {
   Alert,
@@ -55,95 +46,59 @@ type ChatInterfaceProps = {
   configured: boolean;
   modelName: string;
   localCodex?: boolean;
+  ownerId?: string;
 };
 
 export function ChatInterface({
   configured,
   modelName,
   localCodex = false,
+  ownerId,
 }: ChatInterfaceProps) {
   const [input, setInput] = useState("");
+  const [limitError, setLimitError] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
   const { messages, sendMessage, status, stop, setMessages, error } = useChat({
     transport,
   });
-  const [savedNote, setSavedNote] = useState<{
-    noteId: string;
-    messageCount: number;
-  } | null>(null);
-  const [saveResult, setSaveResult] = useState<SaveConversationResult | null>(
-    null,
-  );
-  const [isSaving, startSaving] = useTransition();
   const isBusy = status === "submitted" || status === "streaming";
-
-  const chatMessages = messages.map(
-    (message): LearningChatMessage & { id: string } => ({
-      id: message.id,
-      role: message.role === "user" ? "user" : "assistant",
-      text: message.parts
-        .filter((part) => part.type === "text")
-        .map((part) => part.text)
-        .join(""),
-    }),
+  const history = useConversationHistory(
+    ownerId,
+    modelName,
+    messages,
+    setMessages,
+    isBusy,
   );
-  const noteMessages: LearningChatMessage[] = chatMessages
-    .filter((message) => message.text.trim())
-    .map(({ role, text }) => ({ role, text }));
-  const isSaved = savedNote?.messageCount === noteMessages.length;
-  const canSave =
-    !isBusy &&
-    !isSaving &&
-    !isSaved &&
-    noteMessages.some((message) => message.role === "user") &&
-    noteMessages.some((message) => message.role === "assistant");
+  const closed = Boolean(history.current?.ended || history.viewing);
+  const blocked = isBusy || history.saving || history.loading || !history.ready;
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, status, saveResult]);
+  }, [messages, status]);
 
   function submitText(text: string) {
     const nextMessage = text.trim();
-    if (!configured || isBusy || !nextMessage) return;
-    setInput("");
-    setSaveResult(null);
-    void sendMessage({ text: nextMessage });
-  }
-
-  function saveNote() {
-    if (!canSave) return;
-    const snapshot = noteMessages;
-    startSaving(async () => {
-      try {
-        const result = await saveConversationNoteAction({
-          noteId: savedNote?.noteId,
-          messages: snapshot,
-        });
-        if (result.status === "success")
-          setSavedNote({
-            noteId: result.noteId,
-            messageCount: snapshot.length,
-          });
-        setSaveResult(result);
-      } catch {
-        setSaveResult({
-          status: "error",
-          message: "通信に失敗しました。もう一度お試しください。",
-        });
-      }
-    });
-  }
-
-  function clearConversation() {
+    if (!configured || blocked || closed || !nextMessage) return;
+    const current = history.current;
     if (
-      noteMessages.length > 0 &&
-      !isSaved &&
-      !window.confirm("保存していない会話があります。消去しますか？")
-    )
+      current &&
+      (current.messages.length >= 39 ||
+        !conversationDraftSchema.safeParse({
+          ...current,
+          messages: [
+            ...current.messages,
+            { id: crypto.randomUUID(), role: "user", text: nextMessage },
+          ],
+        }).success)
+    ) {
+      setLimitError(
+        "会話の上限に達しました。保存・ダウンロードしてから、新しい会話を始めてください。",
+      );
       return;
-    setMessages([]);
-    setSavedNote(null);
-    setSaveResult(null);
+    }
+    setLimitError("");
+    setInput("");
+    void sendMessage({ text: nextMessage });
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -164,7 +119,7 @@ export function ChatInterface({
 
   return (
     <Card className="min-h-[42rem] gap-0 py-0 shadow-sm">
-      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b py-4">
+      <CardHeader className="flex flex-col items-start justify-between gap-4 border-b py-4 sm:flex-row">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <Bot className="size-4" />
@@ -172,47 +127,90 @@ export function ChatInterface({
           <div className="min-w-0">
             <p className="font-medium">中国語学習アシスタント</p>
             <p className="text-xs text-muted-foreground">
-              {modelName} · 保存した会話は会話ノートで見返せます
+              {history.current?.modelName ?? modelName} ·{" "}
+              {history.isSaved ? "DB保存済み" : "DBへは保存ボタンで保存"}
             </p>
           </div>
         </div>
-        <div className="ml-auto flex items-center gap-1">
+        <div className="flex flex-wrap justify-end gap-2">
           <Button
             type="button"
             variant="outline"
             size="sm"
-            onClick={saveNote}
-            disabled={!canSave}
+            disabled={
+              !messages.length || closed || history.saving || history.loading
+            }
+            onClick={() => {
+              stop();
+              history.end();
+              setInput("");
+            }}
           >
-            {isSaving ? (
-              <LoaderCircle className="animate-spin" />
-            ) : isSaved ? (
-              <BookmarkCheck />
-            ) : (
-              <BookmarkPlus />
-            )}
-            {isSaving
-              ? "保存中…"
-              : isSaved
-                ? "保存済み"
-                : savedNote
-                  ? "ノートを更新"
-                  : "会話ノートに保存"}
+            <Square />
+            会話を終える
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={
+              !messages.length || blocked || !ownerId || history.isSaved
+            }
+            onClick={() => void history.save()}
+          >
+            <Save />
+            {history.saving ? "保存中…" : "会話を保存する"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!messages.length || blocked}
+            onClick={history.download}
+          >
+            <Download />
+            端末にダウンロード
           </Button>
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            onClick={clearConversation}
-            disabled={messages.length === 0 || isBusy || isSaving}
+            disabled={blocked}
+            onClick={() => {
+              history.startNew();
+              setLimitError("");
+              setInput("");
+            }}
           >
-            <Eraser />
-            クリア
+            <Plus />
+            新しい会話
           </Button>
         </div>
       </CardHeader>
 
       <CardContent className="flex min-h-0 flex-1 flex-col px-0">
+        <div className="space-y-2 px-4 pt-4 text-sm sm:px-6" role="status">
+          {!ownerId ? (
+            <p>
+              履歴保存には、一度ログアウトしてGitHubでログインし直してください。
+            </p>
+          ) : null}
+          {history.backupError ? (
+            <p className="text-destructive">{history.backupError}</p>
+          ) : ownerId && history.current?.messages.length ? (
+            <p className="text-muted-foreground">
+              LocalStorageに自動バックアップします（最新20会話・合計1MiBまで）。
+            </p>
+          ) : null}
+          {history.historyError ? (
+            <p className="text-destructive">{history.historyError}</p>
+          ) : null}
+          {history.notice ? <p>{history.notice}</p> : null}
+          {limitError ? <p className="text-destructive">{limitError}</p> : null}
+          {closed ? (
+            <p>この会話は閲覧のみです。「新しい会話」で練習を始められます。</p>
+          ) : null}
+        </div>
         {localCodex ? (
           <div className="p-4 sm:px-6">
             <Alert>
@@ -260,7 +258,7 @@ export function ChatInterface({
                     type="button"
                     variant="outline"
                     className="h-auto justify-start whitespace-normal px-4 py-3 text-left leading-5"
-                    disabled={!configured || isBusy}
+                    disabled={!configured || blocked || closed}
                     onClick={() => submitText(starter)}
                   >
                     {starter}
@@ -269,11 +267,14 @@ export function ChatInterface({
               </div>
             </div>
           ) : (
-            chatMessages.map((message) => (
+            messages.map((message) => (
               <ChatMessage
                 key={message.id}
-                role={message.role}
-                text={message.text}
+                role={message.role === "user" ? "user" : "assistant"}
+                text={message.parts
+                  .filter((part) => part.type === "text")
+                  .map((part) => part.text)
+                  .join("")}
               />
             ))
           )}
@@ -298,33 +299,15 @@ export function ChatInterface({
               </AlertDescription>
             </Alert>
           ) : null}
-
-          {saveResult?.status === "success" ? (
-            <Alert>
-              <BookmarkCheck />
-              <AlertTitle>会話ノートに保存しました</AlertTitle>
-              <AlertDescription>
-                <p>
-                  {saveResult.message}
-                  続きを話したあとに「ノートを更新」を押すと、同じノートに上書き保存します。
-                </p>
-                <Link
-                  href={saveResult.href}
-                  className="font-medium text-foreground underline underline-offset-4"
-                >
-                  この日の会話ノートを開く
-                </Link>
-              </AlertDescription>
-            </Alert>
-          ) : saveResult?.status === "error" ? (
-            <Alert variant="destructive">
-              <AlertTitle>会話ノートに保存できませんでした</AlertTitle>
-              <AlertDescription>{saveResult.message}</AlertDescription>
-            </Alert>
-          ) : null}
           <div ref={endRef} />
         </div>
       </CardContent>
+
+      <ConversationHistory
+        history={history.history}
+        disabled={blocked}
+        onOpen={(id) => void history.open(id)}
+      />
 
       <CardFooter className="block border-t bg-card p-4 sm:p-5">
         <form onSubmit={handleSubmit} className="space-y-3">
@@ -338,7 +321,7 @@ export function ChatInterface({
                 : "OpenAI APIキーの設定後に利用できます"
             }
             maxLength={MAX_INPUT_LENGTH}
-            disabled={!configured || isBusy}
+            disabled={!configured || blocked || closed}
             aria-label="ChatGPTへのメッセージ"
             className="min-h-24 resize-y"
           />
@@ -352,7 +335,10 @@ export function ChatInterface({
                 停止
               </Button>
             ) : (
-              <Button type="submit" disabled={!configured || !input.trim()}>
+              <Button
+                type="submit"
+                disabled={!configured || blocked || closed || !input.trim()}
+              >
                 <Send />
                 送信
               </Button>

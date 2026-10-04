@@ -20,12 +20,11 @@ export const test = base.extend<{ db: Client }>({
         const { rows } = await db.query("SELECT current_database() AS name");
         if (rows[0].name !== "zhuelog_e2e")
           throw new Error("Refusing to reset a non-E2E database");
-        await db.query('TRUNCATE "LineLearningJob", "LineDevelopmentSession"');
         await db.query(
-          'TRUNCATE "Hint", "LearningEntry", "ImportBatch" CASCADE',
+          'TRUNCATE "LineLearningJob", "LineDevelopmentSession", "ChatConversation"',
         );
         await db.query(
-          'TRUNCATE "ConversationMessage", "ConversationNote" CASCADE',
+          'TRUNCATE "Hint", "LearningEntry", "ImportBatch" CASCADE',
         );
         await provide(db);
       } finally {
@@ -44,7 +43,7 @@ export async function asAdmin(context: BrowserContext) {
     salt: cookieName,
     maxAge: 3600,
     token: {
-      sub: "e2e-admin",
+      sub: "10001",
       name: "E2E Admin",
       role: "admin",
       githubLogin: "e2e-admin",

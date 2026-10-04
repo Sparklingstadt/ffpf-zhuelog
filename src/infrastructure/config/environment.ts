@@ -1,9 +1,9 @@
 export function isAuthConfigured() {
   return Boolean(
     process.env.AUTH_SECRET &&
-      process.env.AUTH_GITHUB_ID &&
-      process.env.AUTH_GITHUB_SECRET &&
-      process.env.AUTH_ALLOWED_GITHUB_LOGINS,
+    process.env.AUTH_GITHUB_ID &&
+    process.env.AUTH_GITHUB_SECRET &&
+    process.env.AUTH_ALLOWED_GITHUB_LOGINS,
   );
 }
 
@@ -12,5 +12,5 @@ export function isOpenAiConfigured() {
 }
 
 export function getOpenAiModelName() {
-  return process.env.OPENAI_MODEL?.trim() || "gpt-5-mini";
+  return process.env.OPENAI_MODEL?.trim() || "gpt-6.1-sol";
 }

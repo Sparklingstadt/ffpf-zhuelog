@@ -8,9 +8,10 @@ import {
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { conversationUseCases } from "@/composition/conversation-container";
+import { conversationNoteUseCases } from "@/composition/conversation-container";
 import { getCurrentAdminUser } from "@/composition/identity-container";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
+import { ReauthNotice } from "@/presentation/components/chat/reauth-notice";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
@@ -25,7 +26,11 @@ export default async function ConversationsPage() {
   const user = await getCurrentAdminUser();
   if (!user) redirect("/signin?callbackUrl=/conversations");
 
-  const dates = await conversationUseCases.listConversationDates.execute();
+  const dates = user.githubId
+    ? await conversationNoteUseCases.listConversationDates.execute(
+        user.githubId,
+      )
+    : [];
 
   return (
     <main className="min-h-screen bg-background">
@@ -40,7 +45,7 @@ export default async function ConversationsPage() {
                 会話ノート
               </h1>
               <p className="mt-2 text-sm text-muted-foreground">
-                ChatGPTとの会話練習を保存した日から一覧を開けます。
+                ChatGPTとの会話練習を保存した日から一覧を開けます。自分が保存した会話だけが表示されます。
               </p>
             </div>
           </div>
@@ -59,13 +64,15 @@ export default async function ConversationsPage() {
           </div>
         </header>
 
-        {dates.length === 0 ? (
+        {!user.githubId ? (
+          <ReauthNotice />
+        ) : dates.length === 0 ? (
           <Card className="border-dashed py-12 text-center shadow-none">
             <CardContent>
               <MessagesSquare className="mx-auto size-7 text-muted-foreground" />
               <p className="mt-3 font-medium">まだ会話ノートがありません</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                会話練習の画面で「会話ノートに保存」を押すと、ここに追加されます。
+                会話練習の画面で「会話を保存する」を押すと、ここに追加されます。
               </p>
             </CardContent>
           </Card>

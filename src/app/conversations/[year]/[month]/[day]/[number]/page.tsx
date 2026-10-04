@@ -2,7 +2,7 @@ import { ArrowLeft, CalendarDays, MessagesSquare } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { conversationUseCases } from "@/composition/conversation-container";
+import { conversationNoteUseCases } from "@/composition/conversation-container";
 import { getCurrentAdminUser } from "@/composition/identity-container";
 import {
   parseLogDate,
@@ -10,6 +10,8 @@ import {
 } from "@ffpf-zhuelog/core/domain/learning/value-objects/log-date";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { ChatMessage } from "@/presentation/components/chat/chat-message";
+import { ConversationDownloadButton } from "@/presentation/components/chat/conversation-download-button";
+import { ReauthNotice } from "@/presentation/components/chat/reauth-notice";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
@@ -34,16 +36,20 @@ export default async function ConversationDetailPage({
   const date = parseLogDate(year, month, day);
   const noteNumber = parseLogNumber(number);
   if (!date || !noteNumber) notFound();
+  if (!user.githubId) return <ReauthPage />;
 
-  const result = await conversationUseCases.getDailyConversation.execute(
+  const result = await conversationNoteUseCases.getDailyConversation.execute(
+    user.githubId,
     date,
     noteNumber,
   );
   if (!result) notFound();
-  const { note, total } = result;
+  const { conversation: note, total } = result;
+  const createdAt = new Date(note.createdAt);
+  const updatedAt = new Date(note.updatedAt);
 
   const dateHref = `/conversations/${date.year}/${date.month}/${date.day}`;
-  const updated = note.updatedAt.getTime() - note.createdAt.getTime() >= 1_000;
+  const updated = updatedAt.getTime() - createdAt.getTime() >= 1_000;
 
   return (
     <main className="min-h-screen bg-background">
@@ -74,22 +80,27 @@ export default async function ConversationDetailPage({
         </header>
 
         <Card className="gap-0 py-0 shadow-xs">
-          <div className="space-y-1 border-b px-5 py-4 sm:px-6">
-            <h2 className="break-words font-medium">{note.title}</h2>
-            <p className="text-xs text-muted-foreground">
-              保存：
-              <time dateTime={note.createdAt.toISOString()}>
-                {formatTokyoDateTime(note.createdAt)}
-              </time>
-              {updated ? (
-                <>
-                  {" · 更新："}
-                  <time dateTime={note.updatedAt.toISOString()}>
-                    {formatTokyoDateTime(note.updatedAt)}
-                  </time>
-                </>
-              ) : null}
-            </p>
+          <div className="flex flex-col gap-3 border-b px-5 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
+            <div className="min-w-0 space-y-1">
+              <h2 className="break-words font-medium">{note.title}</h2>
+              <p className="text-xs text-muted-foreground">
+                保存：
+                <time dateTime={note.createdAt}>
+                  {formatTokyoDateTime(createdAt)}
+                </time>
+                {updated ? (
+                  <>
+                    {" · 更新："}
+                    <time dateTime={note.updatedAt}>
+                      {formatTokyoDateTime(updatedAt)}
+                    </time>
+                  </>
+                ) : null}
+                {` · ${note.modelName}`}
+                {note.ended ? " · 終了済み" : null}
+              </p>
+            </div>
+            <ConversationDownloadButton conversation={note} />
           </div>
           <CardContent className="space-y-5 px-4 py-6 sm:px-6">
             {note.messages.map((message) => (
@@ -123,6 +134,16 @@ export default async function ConversationDetailPage({
             </Button>
           ) : null}
         </nav>
+      </div>
+    </main>
+  );
+}
+
+function ReauthPage() {
+  return (
+    <main className="min-h-screen bg-background">
+      <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+        <ReauthNotice />
       </div>
     </main>
   );

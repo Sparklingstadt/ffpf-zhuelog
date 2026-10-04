@@ -1,4 +1,4 @@
-import type { ConversationNoteRepository } from "../../../domain/conversation/repositories/conversation-note-repository";
+import type { ConversationNoteRepository } from "../../../domain/chat/repositories/conversation-note-repository";
 import {
   getTokyoDateRange,
   type LogDate,
@@ -7,8 +7,9 @@ import {
 export class GetDailyConversation {
   constructor(private readonly repository: ConversationNoteRepository) {}
 
-  execute(date: LogDate, noteNumber: number) {
+  execute(ownerId: string, date: LogDate, noteNumber: number) {
     return this.repository.getByDateAndNumber(
+      ownerId,
       getTokyoDateRange(date),
       noteNumber,
     );

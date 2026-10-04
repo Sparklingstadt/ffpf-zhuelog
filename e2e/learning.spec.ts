@@ -1,3 +1,4 @@
+import { baseURL } from "./environment";
 import { asAdmin, asGuest, expect, test, upload } from "./fixtures";
 
 test("unauthenticated pages redirect to signin", async ({ page }) => {
@@ -295,12 +296,16 @@ test("guest navigates date, detail and adjacent notes with JST grouping", async 
   }
 });
 
-test("admin chat is disabled without an API key", async ({ page, context }) => {
+test("admin chat validates input before contacting the provider", async ({
+  page,
+  context,
+}) => {
   await asAdmin(context);
   await page.goto("/chat");
   await expect(page.getByRole("heading", { name: "会話練習" })).toBeVisible();
   const response = await page.request.post("/api/chat", {
+    headers: { origin: baseURL },
     data: { messages: [] },
   });
-  expect(response.status()).toBe(503);
+  expect(response.status()).toBe(400);
 });

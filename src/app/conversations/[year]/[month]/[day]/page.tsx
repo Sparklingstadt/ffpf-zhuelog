@@ -2,10 +2,11 @@ import { ArrowLeft, ChevronRight, Clock3, MessagesSquare } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { conversationUseCases } from "@/composition/conversation-container";
+import { conversationNoteUseCases } from "@/composition/conversation-container";
 import { getCurrentAdminUser } from "@/composition/identity-container";
 import { parseLogDate } from "@ffpf-zhuelog/core/domain/learning/value-objects/log-date";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
+import { ReauthNotice } from "@/presentation/components/chat/reauth-notice";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
@@ -30,7 +31,12 @@ export default async function ConversationDatePage({
   const date = parseLogDate(year, month, day);
   if (!date) notFound();
 
-  const notes = await conversationUseCases.listDailyConversations.execute(date);
+  const notes = user.githubId
+    ? await conversationNoteUseCases.listDailyConversations.execute(
+        user.githubId,
+        date,
+      )
+    : [];
   const dateHref = `/conversations/${date.year}/${date.month}/${date.day}`;
 
   return (
@@ -60,7 +66,9 @@ export default async function ConversationDatePage({
           </div>
         </header>
 
-        {notes.length === 0 ? (
+        {!user.githubId ? (
+          <ReauthNotice />
+        ) : notes.length === 0 ? (
           <Card className="border-dashed py-12 text-center shadow-none">
             <CardContent>
               <MessagesSquare className="mx-auto size-7 text-muted-foreground" />
@@ -85,11 +93,12 @@ export default async function ConversationDatePage({
                       <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                         <span className="inline-flex items-center gap-1">
                           <Clock3 className="size-3.5" />
-                          <time dateTime={note.createdAt.toISOString()}>
-                            {formatTokyoDateTime(note.createdAt)}
+                          <time dateTime={note.createdAt}>
+                            {formatTokyoDateTime(new Date(note.createdAt))}
                           </time>
                         </span>
                         <span>{note.messageCount}件のメッセージ</span>
+                        {note.ended ? <span>終了済み</span> : null}
                       </p>
                     </div>
                     <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
