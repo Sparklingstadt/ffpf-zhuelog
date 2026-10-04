@@ -100,7 +100,7 @@ export async function handleLineWorker(
                       : "generate"
                   : "deliver",
               ...(job.status === "GENERATING" &&
-              ["correction", "dev-issue"].includes(job.kind)
+              (job.kind === "correction" || job.kind === "dev-issue")
                 ? { originalText: job.originalText }
                 : {}),
             }

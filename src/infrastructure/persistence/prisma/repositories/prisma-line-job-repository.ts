@@ -4,9 +4,12 @@ import {
   lineTextTooLongReply,
   type LineInput,
   type LineJob,
+  type LineJobKind,
+  type LineJobStatus,
 } from "@ffpf-zhuelog/core/domain/line/line-learning";
 import type { LearningEntryDraft } from "@ffpf-zhuelog/core/domain/learning/entities/learning-entry";
 import { getPrismaClient } from "../prisma-client";
+import { toLineJob } from "../mappers/line-job-mapper";
 import { routeDevelopmentMessage } from "@ffpf-zhuelog/core/domain/line/development-routing";
 import type { GenerationFailureCode } from "@ffpf-zhuelog/core/domain/line/generation-failure";
 
@@ -94,11 +97,11 @@ export class PrismaLineJobRepository implements LineJobRepository {
   ): Promise<LineJob | null> {
     const prisma = getPrismaClient();
     const now = new Date();
-    const kinds = [
+    const kinds: LineJobKind[] = [
       "correction",
       "text-too-long",
-      ...(supportsBattery ? ["battery"] : []),
-      ...(supportsDevelopment ? ["dev-issue", "dev-reply"] : []),
+      ...(supportsBattery ? (["battery"] as const) : []),
+      ...(supportsDevelopment ? (["dev-issue", "dev-reply"] as const) : []),
     ];
     await prisma.lineLearningJob.updateMany({
       where: {
@@ -109,10 +112,15 @@ export class PrismaLineJobRepository implements LineJobRepository {
         availableAt: { lte: now },
         OR: [
           {
-            status: { in: ["PENDING", "GENERATING"] },
+            status: {
+              in: ["PENDING", "GENERATING"] satisfies LineJobStatus[],
+            },
             generationTries: { gte: 3 },
           },
-          { status: { in: ["READY", "SENDING"] }, deliveryTries: { gte: 5 } },
+          {
+            status: { in: ["READY", "SENDING"] satisfies LineJobStatus[] },
+            deliveryTries: { gte: 5 },
+          },
         ],
       },
       data: {
@@ -128,13 +136,21 @@ export class PrismaLineJobRepository implements LineJobRepository {
           kind: {
             in: kinds,
           },
-          status: { in: ["PENDING", "GENERATING", "READY", "SENDING"] },
+          status: {
+            in: [
+              "PENDING",
+              "GENERATING",
+              "READY",
+              "SENDING",
+            ] satisfies LineJobStatus[],
+          },
           availableAt: { lte: now },
         },
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       });
       if (!job) return null;
-      const generating = ["PENDING", "GENERATING"].includes(job.status);
+      const generating =
+        job.status === "PENDING" || job.status === "GENERATING";
       const leaseToken = randomUUID();
       const claimed = await prisma.lineLearningJob.updateMany({
         where: {
@@ -156,23 +172,32 @@ export class PrismaLineJobRepository implements LineJobRepository {
         },
       });
       if (claimed.count)
-        return prisma.lineLearningJob.findUniqueOrThrow({
-          where: { id: job.id },
-        });
+        return toLineJob(
+          await prisma.lineLearningJob.findUniqueOrThrow({
+            where: { id: job.id },
+          }),
+        );
     }
     return null;
   }
 
-  leased(id: string, token: string, userId: string, status: string) {
-    return getPrismaClient().lineLearningJob.findFirst({
-      where: {
-        id,
-        leaseToken: token,
-        userId,
-        status,
-        availableAt: { gt: new Date() },
-      },
-    });
+  async leased(
+    id: string,
+    token: string,
+    userId: string,
+    status: LineJobStatus,
+  ) {
+    return toLineJob(
+      await getPrismaClient().lineLearningJob.findFirst({
+        where: {
+          id,
+          leaseToken: token,
+          userId,
+          status,
+          availableAt: { gt: new Date() },
+        },
+      }),
+    );
   }
 
   async saveResult(job: LineJob, draft: LearningEntryDraft, csv: string) {
@@ -224,7 +249,7 @@ export class PrismaLineJobRepository implements LineJobRepository {
     if (
       job.kind === "correction"
         ? !failureCode
-        : !["battery", "dev-issue"].includes(job.kind)
+        : job.kind !== "battery" && job.kind !== "dev-issue"
     )
       return false;
     const result = await getPrismaClient().lineLearningJob.updateMany({
