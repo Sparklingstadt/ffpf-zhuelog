@@ -9,18 +9,20 @@ Webhookは `https://ffpf-zhuelog.vercel.app/api/line/webhook`。LINE管理画面
 標準の応答メッセージはOFF、Webhookの利用・再送はON。トークンはGit対象外のローカル設定とVercelの本番用秘密設定に保存しています。
 新しい環境へ導入する場合は、下記手順に従って別途設定してください（`.env.example` は無効のままです）。
 
-v0.12.0 から、添削と翻訳はすべて Vercel の中で OpenAI API を使って生成します。Mac や Codex は不要で、Mac が止まっていても返信が届きます。
+2026-10-04: LINE連携をCloud Runへ移しました。Webhookは `https://zhuelog-z65vkelwcq-an.a.run.app/api/line/webhook`、取り残しはCloud Schedulerが拾い直します。トークン類はGoogle CloudのSecret Managerに保存しています。Vercelでは `LINE_INTEGRATION_ENABLED=false` にし、Vercel Cronは廃止しました（手順は [`cloud-run.md`](cloud-run.md)）。
+
+v0.12.0 から、添削と翻訳はすべてサーバーの中で OpenAI API を使って生成します。Mac や Codex は不要で、Mac が止まっていても返信が届きます。
 
 ## 処理の流れ
 
 ```text
 自分のLINE（公式アカウントとの1対1トーク）
-  → POST /api/line/webhook（Vercel、最長60秒）：署名・送信者検証 → 本文を振り分け → DBに処理待ちを保存 → 200を返す
+  → POST /api/line/webhook（Cloud Run）：署名・送信者検証 → 本文を振り分け → DBに処理待ちを保存 → 200を返す
   → 200のあと after() で、同じ関数の中で処理を続ける（締め切りは開始から約50秒）
       ・OpenAI Responses API（gpt-5-mini）：添削または翻訳、ピン音、ヒントを生成
       ・結果を検証 → 学習ノートと返信用CSVを同時保存
       ・LINE Push API：保存済みCSVを見出し・改行付きの文章に整形し、自分のトークへ送信
-  → GET /api/line/drain（Vercel Cron、30分おき）：取り残したジョブを拾い直す
+  → GET /api/line/drain（Cloud Scheduler、30分おき）：取り残したジョブを拾い直す
 ```
 
 本文は次のように振り分けます。
@@ -34,9 +36,9 @@ v0.12.0 から、添削と翻訳はすべて Vercel の中で OpenAI API を使�
 
 コマンドはありません。`/battery` と開発モード（`/dev`・`/devend`）は廃止しました。送っても無視されます。
 
-取り残しは、次のwebhookの処理と、Vercel Cron（`vercel.json`、30分おき）で拾い直します（Cloud Runでは代わりにCloud Schedulerを使います。[`cloud-run.md`](cloud-run.md) を参照）。ジョブのリース（2分）が切れると、次の処理が引き継ぎます。Vercel Cron は `Authorization: Bearer ${CRON_SECRET}` を付けて `/api/line/drain` を呼び、値が一致しなければ何もしません（401）。
+取り残しは、次のwebhookの処理と、Cloud Scheduler（`scripts/enable-line-cloud-run.sh` で設定、30分おき）で拾い直します（[`cloud-run.md`](cloud-run.md) を参照）。ジョブのリース（2分）が切れると、次の処理が引き継ぎます。Cloud Scheduler は `Authorization: Bearer ${CRON_SECRET}` を付けて `/api/line/drain` を呼び、値が一致しなければ何もしません（401）。
 
-**Cronの間隔（30分）の理由と影響：** 締め切りまでに処理しきれなかったジョブや、LINE配送が一時的に失敗して待ち時間に入ったジョブは、次のLINEメッセージかCronまで待つため、返信が最大で約30分遅れることがあります。Cronの間隔を短くしすぎないのは、DB（Neon の無料プラン）の計算時間の枠（月100 CU時間）を守るためです。Neonは使われないと5分で止まり、Cronのたびに起動します。30分おきなら起きている時間は全体の約6分の1（月30 CU時間ほど）です。5分おきにするとほぼ常時起動になり、枠を超えます。Vercel の Pro プランが前提です（無料プランのCronは1日1回まで）。一時的に失敗した配送を初回の配送開始から23時間より後に再送することになった場合は、二重送信を防ぐために停止します（`DELIVERY_WINDOW_EXPIRED`）が、30分おきのCronではこの状況はほぼ起きません。
+**Cronの間隔（30分）の理由と影響：** 締め切りまでに処理しきれなかったジョブや、LINE配送が一時的に失敗して待ち時間に入ったジョブは、次のLINEメッセージかCronまで待つため、返信が最大で約30分遅れることがあります。Cronの間隔を短くしすぎないのは、DB（Neon の無料プラン）の計算時間の枠（月100 CU時間）を守るためです。Neonは使われないと5分で止まり、Cronのたびに起動します。30分おきなら起きている時間は全体の約6分の1（月30 CU時間ほど）です。5分おきにするとほぼ常時起動になり、枠を超えます。一時的に失敗した配送を初回の配送開始から23時間より後に再送することになった場合は、二重送信を防ぐために停止します（`DELIVERY_WINDOW_EXPIRED`）が、30分おきのCronではこの状況はほぼ起きません。
 
 ## 使い方・制限
 
@@ -80,7 +82,7 @@ LINEへの送信が一時的に失敗した場合は、同じ再送キー（`X-L
 | `LINE_BOT_USER_ID`          | 受信先の公式アカウントのユーザーID（Uから始まる値） | Webサーバーのみ |
 | `LINE_ALLOWED_USER_ID`      | 利用を許可する自分のLINEユーザーID（1人）           | Webサーバーのみ |
 | `OPENAI_API_KEY`            | 添削・翻訳の生成（Webのチャットと共通）             | Webサーバーのみ |
-| `CRON_SECRET`               | Vercel Cronの認証（下記で生成する値）               | Webサーバーのみ |
+| `CRON_SECRET`               | Cloud Schedulerの認証（下記で生成する値）           | Webサーバーのみ |
 
 LINE DevelopersのチャネルID、チャネルシークレット、チャネルアクセストークン、公式アカウントのID、自分のユーザーIDはそれぞれ別物です。トークン類はチャットやGitに貼らず、Vercel環境変数／gitignore済みの `.env.local` に保存してください。
 
@@ -90,7 +92,7 @@ LINE DevelopersのチャネルID、チャネルシークレット、チャネル
 openssl rand -hex 32
 ```
 
-Vercelに `CRON_SECRET` を設定すると、Vercel Cronが `Authorization: Bearer <値>` を付けて `/api/line/drain` を呼びます。未設定、または32文字未満のままでは、このルートは常に401を返します。
+Cloud Runに `CRON_SECRET` を設定すると、Cloud Schedulerが `Authorization: Bearer <値>` を付けて `/api/line/drain` を呼びます（`enable-line-cloud-run.sh` が自動で作って両方に設定します）。未設定、または32文字未満のままでは、このルートは常に401を返します。
 
 ### テスト専用の環境変数
 
@@ -150,4 +152,4 @@ pnpm run test:e2e:stop
 - [LINE APIの安全な再試行](https://developers.line.biz/en/docs/messaging-api/retrying-api-request/)
 - [メッセージ送信と配信数](https://developers.line.biz/en/docs/messaging-api/sending-messages/)
 - [OpenAI Responses API](https://developers.openai.com/api/reference/responses/overview)
-- [Vercel Cron Jobs](https://vercel.com/docs/cron-jobs)
+- [Cloud Scheduler](https://cloud.google.com/scheduler/docs)

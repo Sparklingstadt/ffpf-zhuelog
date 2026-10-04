@@ -40,7 +40,7 @@ cd ffpf-zhuelog && git pull && ./scripts/enable-line-cloud-run.sh
 2. 自分のLINEから文を送り、返信が届くことを確認する
 3. Vercelの `LINE_INTEGRATION_ENABLED` を `false` にして再デプロイする
 
-この順番なら、切り替えの間に届いたメッセージも取りこぼしません。LINEが無効な側はwebhookに503を返し、LINEが再送します。VercelとCloud Runが同じDBを使っている間は、どちらのCronも同じジョブを拾えます。ただしジョブはリース（2分）で排他しているので、二重には処理しません。Vercel側を無効にしたあとも、Vercel Cronは30分おきに `/api/line/drain` を呼び、503を受け取ります。害はありません。
+この順番なら、切り替えの間に届いたメッセージも取りこぼしません。LINEが無効な側はwebhookに503を返し、LINEが再送します。VercelとCloud Runが同じDBを使っている間は、どちらのCronも同じジョブを拾えます。ただしジョブはリース（2分）で排他しているので、二重には処理しません。切り替えたら、`vercel.json` のVercel Cronは外してください（このリポジトリでは外し済みです）。残すと、無効になったVercelの `/api/line/drain` を30分おきに呼び、503を受け取り続けます。
 
 手作業ですべて設定する場合は、以下の手順に従ってください。
 
@@ -52,12 +52,12 @@ cd ffpf-zhuelog && git pull && ./scripts/enable-line-cloud-run.sh
 
 ## Vercelとの違い
 
-| 項目                         | Vercel                       | Cloud Run                                                                                          |
-| ---------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------- |
-| Auth.jsの公開URL             | 自動で判定                   | **`AUTH_URL` が必須**（例: `https://zhuelog-xxxx.asia-northeast1.run.app`）                        |
-| LINEの取り残しを拾うCron     | Vercel Cron（`vercel.json`） | **Cloud Scheduler** から `GET /api/line/drain` を呼ぶ                                              |
-| webhook後の処理（`after()`） | 関数の中で続けて実行         | 応答後もCPUを使えるよう **`--no-cpu-throttling`** を指定する                                       |
-| `maxDuration`（60秒）        | 有効                         | 無視される。上限はCloud Runのリクエストタイムアウト（既定300秒）。LINE処理は独自に約50秒で打ち切る |
+| 項目                         | Vercel                                 | Cloud Run                                                                                          |
+| ---------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Auth.jsの公開URL             | 自動で判定                             | **`AUTH_URL` が必須**（例: `https://zhuelog-xxxx.asia-northeast1.run.app`）                        |
+| LINEの取り残しを拾うCron     | Vercel Cron（`vercel.json`、廃止済み） | **Cloud Scheduler** から `GET /api/line/drain` を呼ぶ                                              |
+| webhook後の処理（`after()`） | 関数の中で続けて実行                   | 応答後もCPUを使えるよう **`--no-cpu-throttling`** を指定する                                       |
+| `maxDuration`（60秒）        | 有効                                   | 無視される。上限はCloud Runのリクエストタイムアウト（既定300秒）。LINE処理は独自に約50秒で打ち切る |
 
 `AUTH_URL` を設定しないと、本番環境ではAuth.jsがホストを信頼せず、ログインが `UntrustedHost` で失敗します。設定すると、ログイン画面へのリダイレクト・OAuthのコールバックURL・CSPの `upgrade-insecure-requests` もこのURLを基準にします。
 
