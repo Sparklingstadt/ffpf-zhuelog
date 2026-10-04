@@ -10,3 +10,9 @@ allowBuilds:
   "lefthook": true
   "prisma": true
   "unrs-resolver": true
+auditConfig:
+  ignoreGhsas:
+    # braces <=3.0.3 stack-exhaustion DoS: no patched version yet. Only reached
+    # through build-time tooling (shadcn, eslint-config-next via fast-glob).
+    # Remove once a fixed braces is released and `pnpm update` picks it up.
+    - GHSA-vfj7-8cjw-p6xm
