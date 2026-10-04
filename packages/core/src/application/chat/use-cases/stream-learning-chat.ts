@@ -1,4 +1,4 @@
-import type { LearningChatGateway } from "../../../application/chat/ports/learning-chat-gateway";
+import type { LearningChatGateway } from "../ports/learning-chat-gateway";
 import type { LearningChatMessage } from "../../../domain/chat/entities/chat-message";
 
 const SYSTEM_PROMPT = `あなたは中国語学習アプリ「学习録」の会話パートナーです。

@@ -18,8 +18,9 @@ export function parseLogDate(
 ): LogDate | null {
   if (
     !/^\d{4}$/.test(year) ||
-    !/^\d{1,2}$/.test(month) ||
-    !/^\d{1,2}$/.test(day)
+    // No leading zeros: /2026/4/10 is the only URL for a day.
+    !/^[1-9]\d?$/.test(month) ||
+    !/^[1-9]\d?$/.test(day)
   ) {
     return null;
   }

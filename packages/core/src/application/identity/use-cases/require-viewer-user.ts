@@ -1,4 +1,4 @@
-import type { CurrentUserProvider } from "../../../application/identity/ports/current-user-provider";
+import type { CurrentUserProvider } from "../ports/current-user-provider";
 
 export class RequireViewerUser {
   constructor(private readonly currentUserProvider: CurrentUserProvider) {}

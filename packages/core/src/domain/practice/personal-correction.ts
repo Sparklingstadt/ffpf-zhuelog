@@ -18,7 +18,7 @@ export type PersonalCorrectionRequest = z.infer<
 // Explicit allowlist: credentials can never be serialized into history.
 export const personalCorrectionRecordSchema = correctionSchema
   .extend({
-    id: z.string().uuid(),
+    id: z.uuid(),
     originalText: z.string().min(1).max(500),
     createdAt: z.iso.datetime(),
   })
