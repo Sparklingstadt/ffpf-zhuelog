@@ -123,10 +123,20 @@ export function extractTypleWords(
   const words = new Map<string, TypleWord>();
 
   for (const entry of entries) {
-    const terms = [
-      ...entry.hints.flatMap((hint) => termsFromHint(hint.content)),
-      ...correctedTerms(entry.originalText, entry.correctedText),
-    ];
+    const hintTerms = entry.hints.flatMap((hint) =>
+      termsFromHint(hint.content),
+    );
+    // A translation note's original is Japanese, so diffing it against the
+    // Chinese translation would add the whole sentence. Hints may also quote
+    // Japanese words (kanji-only ones look Chinese), so keep only the terms
+    // that actually appear in the translation.
+    const terms =
+      entry.kind === "translation"
+        ? hintTerms.filter((term) => entry.correctedText.includes(term))
+        : [
+            ...hintTerms,
+            ...correctedTerms(entry.originalText, entry.correctedText),
+          ];
 
     for (const term of terms) {
       if (words.has(term)) continue;
