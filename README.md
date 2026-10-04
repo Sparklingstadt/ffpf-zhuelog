@@ -118,7 +118,7 @@ AUTH_ALLOWED_GITHUB_LOGINS="github-login-1,github-login-2"
 - ひらがな・カタカナを含む日本語の文は、中国語（簡体字）に翻訳します。返信は「元の文」「中国語訳」「ヒント」で、ノートには「翻訳」として保存されます。
 - 漢字を含むそれ以外の文は、中国語として添削します。返信は「元の文」「添削後」「ヒント」です。
 - 500文字を超える文は上限を通知し、生成も保存もしません。コマンドはありません（`/battery`・開発モードは廃止しました）。
-- webhookの返答後に同じ関数の中で処理し（`after()`）、取り残しは次のwebhookと、Vercel Cron（1日1回、`GET /api/line/drain`）が拾い直します。
+- webhookの返答後に同じ関数の中で処理し（`after()`）、取り残しは次のwebhookと、Vercel Cron（30分おき、`GET /api/line/drain`）が拾い直します。
 
 必要な環境変数は `LINE_INTEGRATION_ENABLED`・`LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`LINE_BOT_USER_ID`・`LINE_ALLOWED_USER_ID`・`OPENAI_API_KEY`、そして `/api/line/drain` を保護する `CRON_SECRET`（`openssl rand -hex 32` で生成した32文字以上の値）です。`OPENAI_API_BASE_URL` と `LINE_API_BASE_URL` はE2Eテスト専用（ループバックのアドレスだけを受け付けます）で、本番では設定しません。設定手順、v0.12.0への切り替え（Macのworkerの停止など）、失敗時の扱いは [`docs/line-integration.md`](docs/line-integration.md) を参照してください。
 
