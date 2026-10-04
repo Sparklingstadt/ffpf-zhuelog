@@ -2,6 +2,23 @@
 
 Vercelと同じアプリを、Google Cloud RunでもDockerコンテナとして動かせます。Vercelへのデプロイはこれまでどおりで、この手順はVercelの設定を変えません。
 
+## Cloud Shellでまとめてデプロイする（Web画面のみ）
+
+LINE連携はVercelに残し、Web画面だけをCloud Runで動かす場合は、[Cloud Shell](https://shell.cloud.google.com/)で次を実行します。課金を有効にしたGoogle Cloudプロジェクトが必要です。
+
+```sh
+git clone https://github.com/Sparklingstadt/ffpf-zhuelog.git
+cd ffpf-zhuelog && ./scripts/deploy-cloud-run.sh
+```
+
+`scripts/deploy-cloud-run.sh` は、下の手順1・3（APIの有効化、Secret Managerへの登録、デプロイ、`AUTH_URL` の設定）を行います。`DATABASE_URL` などの秘密情報は、聞かれたときに入力します（画面には表示されません）。`AUTH_SECRET` は自動で作ります。GitHubのOAuth Appは最後に表示されるコールバックURLで作り、スクリプトをもう一度実行して設定します。それまではゲストとしてログインできます。登録済みの秘密情報はそのまま使い、空欄にした項目は今の値のままなので、何度実行しても構いません。
+
+- LINEは無効（`LINE_INTEGRATION_ENABLED=false`）のままで、Cloud SchedulerとCPUの常時割り当て（`--no-cpu-throttling`）も設定しません（どちらもLINE用です）。
+- `DATABASE_URL` にVercelと同じDBを指定すると、VercelとCloud Runが同じデータを使います。マイグレーションは適用済みなので不要です。別のDBを使う場合は、先に手順2を行ってください。
+- 実行中の操作では、既定のサービスアカウント（`<プロジェクト番号>-compute@developer.gserviceaccount.com`）に、ソースからのビルド権限（`roles/run.builder`）と、登録したシークレットの読み取り権限を付与します。
+
+LINEもCloud Runに移す場合は、以下の手順に従ってください。
+
 ## 仕組み
 
 - ルートの `Dockerfile` で、Next.jsの `standalone` 出力（`.next/standalone/server.js`）を使う実行用イメージを作ります。`standalone` 出力はビルド時に `NEXT_OUTPUT=standalone` を指定したときだけ有効で、Vercelと E2E の `next start` は従来の出力のままです。
