@@ -65,8 +65,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const pathname = request.nextUrl.pathname;
       const isPublicRoute =
         // These exact endpoints enforce their own auth: LINE HMAC for the
-        // webhook, the CRON_SECRET bearer token for the cron drain (Vercel Cron
-        // or Cloud Scheduler).
+        // webhook, the CRON_SECRET bearer token for the Cloud Scheduler drain.
         pathname === "/api/line/webhook" ||
         pathname === "/api/line/drain" ||
         pathname === "/signin" ||
