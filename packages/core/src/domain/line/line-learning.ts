@@ -1,6 +1,10 @@
 import { z } from "zod";
-import type { LearningEntryDraft } from "../learning/entities/learning-entry";
+import type {
+  LearningEntryDraft,
+  LearningKind,
+} from "../learning/entities/learning-entry";
 import { correctionSchema } from "../learning/chinese-correction";
+import { translationSchema } from "../learning/chinese-translation";
 
 export {
   correctionSchema,
@@ -62,19 +66,30 @@ export type LineJob = Omit<LineInput, "kind"> & {
   deliveryTries: number;
 };
 
+function fromTranslation(output: unknown) {
+  const { translatedText, pinyin, hints } = translationSchema.parse(output);
+  return { correctedText: translatedText, pinyin, hints };
+}
+
 export function makeLineLearningResult(
+  kind: LearningKind,
   originalText: string,
-  correction: unknown,
+  output: unknown,
 ) {
-  const parsed = correctionSchema.parse(correction);
-  const draft: LearningEntryDraft = { originalText, ...parsed };
-  // Quote every cell, preserving commas, quotes and embedded newlines.
-  const csv = [
+  // A translation is stored like a correction: its text goes in correctedText.
+  const { correctedText, pinyin, hints } =
+    kind === "translation"
+      ? fromTranslation(output)
+      : correctionSchema.parse(output);
+  const draft: LearningEntryDraft = {
     originalText,
-    parsed.correctedText,
-    parsed.pinyin,
-    ...parsed.hints,
-  ]
+    correctedText,
+    pinyin,
+    hints,
+    kind,
+  };
+  // Quote every cell, preserving commas, quotes and embedded newlines.
+  const csv = [originalText, correctedText, pinyin, ...hints]
     .map((cell) => `"${cell.replaceAll('"', '""')}"`)
     .join(",");
   if (csv.length > 4900) throw new Error("CSV_TOO_LONG");

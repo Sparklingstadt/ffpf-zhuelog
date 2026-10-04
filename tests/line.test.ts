@@ -66,21 +66,28 @@ function webhook(events: unknown[] = [event], signature = true) {
 
 test("CSV round trips through existing importer, including quotes/newlines/variable hints", () => {
   const { csv, draft } = makeLineLearningResult(
+    "correction",
     '你好，"朋友"\n再见',
     correction,
   );
-  assert.deepEqual(new CsvParseLearningParser().parse(csv), [draft]);
+  // The CSV carries no kind; it is set from the job when the entry is saved.
+  const { kind, ...stored } = draft;
+  assert.equal(kind, "correction");
+  assert.deepEqual(new CsvParseLearningParser().parse(csv), [stored]);
   assert.throws(() =>
-    makeLineLearningResult("原文", { ...correction, pinyin: "" }),
+    makeLineLearningResult("correction", "原文", { ...correction, pinyin: "" }),
   );
   assert.throws(() =>
-    makeLineLearningResult("原文", {
+    makeLineLearningResult("correction", "原文", {
       ...correction,
       hints: Array(6).fill("多い"),
     }),
   );
   assert.throws(() =>
-    makeLineLearningResult("原文", { ...correction, originalText: "置換禁止" }),
+    makeLineLearningResult("correction", "原文", {
+      ...correction,
+      originalText: "置換禁止",
+    }),
   );
 });
 
@@ -296,7 +303,7 @@ test("a correction too long for LINE is replied to as a failure, never retried s
 });
 
 test("push uses stable retry key, accepts documented 409, sanitizes failures", async () => {
-  const { csv } = makeLineLearningResult("你好", correction);
+  const { csv } = makeLineLearningResult("correction", "你好", correction);
   for (const [status, acceptedId, expected] of [
     [200, false, "accepted"],
     [409, true, "accepted"],
@@ -323,6 +330,7 @@ test("push uses stable retry key, accepts documented 409, sanitizes failures", a
 
 test("LINE reply uses readable sections and numbered hints without changing the stored CSV", () => {
   const { csv, draft } = makeLineLearningResult(
+    "correction",
     '你好，"朋友"\n再见',
     correction,
   );
@@ -335,8 +343,11 @@ test("LINE reply uses readable sections and numbered hints without changing the 
     ].join("\n\n"),
   );
   assert.equal(formatLineLearningReply(csv), formatLineLearningReply(csv));
-  assert.deepEqual(new CsvParseLearningParser().parse(csv), [draft]);
-  const largest = makeLineLearningResult("字".repeat(500), {
+  // The CSV carries no kind; it is set from the job when the entry is saved.
+  const { kind, ...stored } = draft;
+  assert.equal(kind, "correction");
+  assert.deepEqual(new CsvParseLearningParser().parse(csv), [stored]);
+  const largest = makeLineLearningResult("correction", "字".repeat(500), {
     correctedText: "字".repeat(1000),
     pinyin: "a".repeat(1600),
     hints: Array(5).fill("字".repeat(200)),
@@ -348,7 +359,7 @@ test("invalid or oversized LINE replies fail before contacting LINE", async () =
   const sender = new LinePushMessenger("secret", async () => {
     assert.fail("must not contact LINE");
   });
-  const { csv } = makeLineLearningResult("原文", correction);
+  const { csv } = makeLineLearningResult("correction", "原文", correction);
   for (const invalid of [
     '"broken',
     `${csv}\n${csv}`,
@@ -493,7 +504,7 @@ test("correction failure is persisted before text delivery, with bounded retry a
     pushText: async (user, text, key) => {
       assert.equal(user, config.userId);
       assert.equal(key, job.retryKey);
-      assert.match(text, /CODEX_TIMEOUT/);
+      assert.match(text, /OPENAI_TIMEOUT/);
       assert.ok(!text.includes(job.originalText));
       return ++deliveries === 1 ? "retry" : "accepted";
     },
@@ -503,18 +514,18 @@ test("correction failure is persisted before text delivery, with bounded retry a
       job.id,
       job.leaseToken!,
       config.userId,
-      "CODEX_TIMEOUT",
+      "OPENAI_TIMEOUT",
     ),
     true,
   );
-  assert.equal(savedCode, "CODEX_TIMEOUT");
+  assert.equal(savedCode, "OPENAI_TIMEOUT");
   assert.equal(deliveries, 0);
   assert.equal(
     await service.generationFailed(
       job.id,
       job.leaseToken!,
       config.userId,
-      "CODEX_TIMEOUT",
+      "OPENAI_TIMEOUT",
     ),
     false,
   );

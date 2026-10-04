@@ -28,14 +28,18 @@ export class ProcessLineLearning {
     if (!job || job.kind !== "correction") return false;
     let result: ReturnType<typeof makeLineLearningResult>;
     try {
-      result = makeLineLearningResult(job.originalText, correction);
+      result = makeLineLearningResult(
+        "correction",
+        job.originalText,
+        correction,
+      );
     } catch (error) {
       // Retrying cannot shorten the result, so reply instead of failing silently.
       if (!(error instanceof Error && error.message === "CSV_TOO_LONG"))
         throw error;
       return this.jobs.saveReply(
         job,
-        formatGenerationFailure("CORRECTION_TOO_LONG"),
+        formatGenerationFailure("CORRECTION_TOO_LONG", "correction"),
         "CORRECTION_TOO_LONG",
       );
     }
@@ -78,12 +82,16 @@ export class ProcessLineLearning {
     id: string,
     token: string,
     userId: string,
-    code: GenerationFailureCode = "CODEX_REQUEST_FAILED",
+    code: GenerationFailureCode = "OPENAI_REQUEST_FAILED",
   ) {
     const job = await this.jobs.leased(id, token, userId, "GENERATING");
     if (!job) return false;
     if (job.kind === "correction")
-      return this.jobs.saveReply(job, formatGenerationFailure(code), code);
+      return this.jobs.saveReply(
+        job,
+        formatGenerationFailure(code, "correction"),
+        code,
+      );
     await this.jobs.fail(job, false, "GENERATION_FAILED");
     return true;
   }
