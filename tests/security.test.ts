@@ -148,7 +148,9 @@ test("chat validates origin, body and message roles before the provider and hide
   const gateway = {
     execute() {
       calls++;
-      return new Response("ok");
+      return (async function* () {
+        yield "ok";
+      })();
     },
   };
   const messages = [

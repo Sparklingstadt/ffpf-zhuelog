@@ -5,10 +5,13 @@ import type {
   LearningChatGateway,
   LearningChatRequest,
 } from "@ffpf-zhuelog/core/application/chat/ports/learning-chat-gateway";
+import { LearningChatError } from "@ffpf-zhuelog/core/domain/chat/learning-chat-error";
 import { getOpenAiModelName } from "@/infrastructure/config/environment";
 
+const FAILURE = "ChatGPTから応答を受信できませんでした。";
+
 export class OpenAiLearningChatGateway implements LearningChatGateway {
-  stream(request: LearningChatRequest): Response {
+  async *stream(request: LearningChatRequest): AsyncIterable<string> {
     const messages: ModelMessage[] = request.messages.map((message) => ({
       role: message.role,
       content: message.text,
@@ -24,10 +27,15 @@ export class OpenAiLearningChatGateway implements LearningChatGateway {
       onError: () => console.error("LEARNING_CHAT_PROVIDER_ERROR"),
       providerOptions: { openai: { store: false, reasoningEffort: "medium" } },
     });
-
-    return result.toUIMessageStreamResponse({
-      headers: { "Cache-Control": "no-store" },
-      onError: () => "ChatGPTから応答を受信できませんでした。",
-    });
+    // textStream hides errors, so read every event and keep only the text.
+    try {
+      for await (const part of result.stream) {
+        if (part.type === "text-delta") yield part.text;
+        else if (part.type === "error") throw new LearningChatError(FAILURE);
+      }
+    } catch (error) {
+      if (error instanceof LearningChatError) throw error;
+      throw new LearningChatError(FAILURE);
+    }
   }
 }

@@ -7,6 +7,10 @@ import {
   isLocalChatRequest,
 } from "../src/infrastructure/chat/codex-local-policy";
 import { CodexLocalLearningChatGateway } from "../src/infrastructure/chat/codex-local-learning-chat-gateway";
+import {
+  LearningChatBusyError,
+  LearningChatError,
+} from "@ffpf-zhuelog/core/domain/chat/learning-chat-error";
 
 function setup(t: TestContext) {
   const original = { ...process.env };
@@ -135,7 +139,13 @@ test("abort stops an active child and pre-abort starts none", async (t) => {
   }
 });
 
-test("UI stream is valid SSE and concurrent requests are rejected", async (t) => {
+async function collect(pieces: AsyncIterable<string>) {
+  let text = "";
+  for await (const piece of pieces) text += piece;
+  return text;
+}
+
+test("answers stream as text and concurrent requests are rejected", async (t) => {
   setup(t);
   const gateway = new CodexLocalLearningChatGateway();
   const input = {
@@ -144,12 +154,12 @@ test("UI stream is valid SSE and concurrent requests are rejected", async (t) =>
     maxOutputTokens: 1600,
   };
   const first = gateway.stream(input);
-  assert.equal(gateway.stream(input).status, 429);
-  const body = await first.text();
-  assert.match(body, /text-delta/);
-  assert.match(body, /你好/);
-  assert.match(body, /\[DONE\]/);
-  const aborted = gateway.stream({ ...input, signal: AbortSignal.abort() });
-  assert.equal(aborted.status, 200);
-  await aborted.text();
+  assert.throws(() => gateway.stream(input), LearningChatBusyError);
+  assert.equal(await collect(first), "你好（nǐ hǎo）");
+  // The slot is free again once the turn ends, even when it fails.
+  await assert.rejects(
+    collect(gateway.stream({ ...input, signal: AbortSignal.abort() })),
+    LearningChatError,
+  );
+  assert.equal(await collect(gateway.stream(input)), "你好（nǐ hǎo）");
 });
