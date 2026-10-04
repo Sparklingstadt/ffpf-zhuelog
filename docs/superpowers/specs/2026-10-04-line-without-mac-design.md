@@ -70,7 +70,7 @@ GET /api/line/drain（Vercel Cron、1日1回、CRON_SECRET で認証）
   - `translate(text, signal): Promise<Translation>`
   - 失敗は `LineGenerationError`（コード付き）で表す
 - **`DrainLineJobs`**（新規のユースケース）：締め切りまでジョブを取得し、生成・保存・送信を行う。保存と送信は `ProcessLineLearning` を使う。
-- **`ProcessLineLearning`**：バッテリーと開発モードの処理を削除し、翻訳の保存（`completeTranslation`）を追加する。生成の失敗は、添削と翻訳の両方で失敗の返信にする。
+- **`ProcessLineLearning`**：バッテリーと開発モードの処理を削除し、`complete` がジョブの種類に応じて翻訳も保存するようにする。生成の失敗は、添削と翻訳の両方で失敗の返信にする。
 - **`LineJobRepository.claim(userId)`**：機能ごとの真偽値の引数（`supportsBattery`・`supportsDevelopment`）をなくす。
 - **ジョブの種類**：新しく作る種類は `correction`・`translation`・`text-too-long`。`battery`・`dev-issue`・`dev-reply` と状態 `IGNORED` は、DB の CHECK 制約との一致のために「昔の種類」として残すが、作成も取得もしない。
 - **翻訳の形**：`translationSchema`（中国語訳 1000文字以内、ピン音 1600文字以内、ヒント 200文字以内を1〜5個）と、翻訳用の指示文。入力はデータとして扱い、文中の指示には従わせない。
@@ -80,7 +80,7 @@ GET /api/line/drain（Vercel Cron、1日1回、CRON_SECRET で認証）
 
 ### 5.2 アプリ（`src`）
 
-- **`OpenAiLineLearningGenerator`**（新規）：Responses API を `fetch` で呼ぶ。`store: false`、45秒で打ち切り、再試行なし。結果は zod で検証する。
+- **`OpenAiLineLearningGenerator`**（新規）：Responses API を `fetch` で呼ぶ。`store: false`、20秒で打ち切り、再試行なし。結果は zod で検証する。1回の処理（約50秒）で複数件を処理できるよう、残り時間が20秒を切ったら新しい生成は始めず、次の処理に回す。
 - **webhook のコントローラー**：振り分けに翻訳を追加し、開発モードの扱いを削除する。ルートで `after()` から `DrainLineJobs` を呼ぶ。
 - **`/api/line/drain`**（新規）：Vercel Cron 用。`Authorization: Bearer ${CRON_SECRET}` を検証する。`vercel.json` に1日1回の Cron を登録する。
 - **返信の整形**：翻訳は【元の文】【中国語訳】【ヒント】。中国語とピン音は文ごとに並べる（添削と同じ）。
