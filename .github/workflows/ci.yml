@@ -10,11 +10,11 @@ permissions:
 
 jobs:
   verify:
-    # 22 is the minimum in package.json engines; 24 is the Vercel runtime.
+    # The engines range: 24 is the Vercel runtime, 26 is the next one (and local dev).
     strategy:
       fail-fast: false
       matrix:
-        node: [22, 24]
+        node: [24, 26]
     name: verify (${{ matrix.node }})
     runs-on: ubuntu-latest
     timeout-minutes: 15

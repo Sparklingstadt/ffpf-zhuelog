@@ -42,3 +42,10 @@ TypeScript 7 / ESLint 10 は、Next.js側の対応と、その設定が実際に
 - [actions/setup-node](https://github.com/actions/setup-node)
 - [typescript-eslintの対応バージョン](https://typescript-eslint.io/users/dependency-versions/)
 - [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react)
+
+## 2026-10-05 の整理
+
+| 対象          | 判断                                            | 理由                                                                                                                                        |
+| ------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Node の対応版 | `engines` を `24.x \|\| 26.x`、CI を 24 / 26 に | `>=22.13.0` だと Vercel が新しいメジャー版へ自動で上げ、CI で試していない版で本番が動く。22 を使う環境はなく、本番は 24、開発の Mac は 26。 |
+| @types/node   | Node 24 用（`^24`）へ更新                       | 型は最低の実行環境に合わせる（#5 と同じ考え方）。最低が 24 になったため。                                                                   |
