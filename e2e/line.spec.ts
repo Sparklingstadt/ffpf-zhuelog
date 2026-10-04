@@ -300,3 +300,55 @@ test("failed correction persists a notification without a note and rejects stale
   expect(delivery.originalText).toBeUndefined();
   // Delivery is unit-tested with a fake messenger; never send real LINE in E2E.
 });
+
+test("oversized message is answered with the limit notice, never generated or stored", async ({
+  request,
+  db,
+}) => {
+  const body = JSON.stringify({
+    destination: lineTestConfig.botId,
+    events: [
+      {
+        type: "message",
+        mode: "active",
+        webhookEventId: "too-long",
+        timestamp: Date.now(),
+        source: { type: "user", userId: lineTestConfig.userId },
+        message: { type: "text", text: "字".repeat(501) },
+      },
+    ],
+  });
+  expect(
+    (
+      await request.post("/api/line/webhook", {
+        data: body,
+        headers: { "x-line-signature": signature(body) },
+      })
+    ).status(),
+  ).toBe(200);
+  const stored = (
+    await db.query(
+      'SELECT kind, status, "originalText", "replyText", csv FROM "LineLearningJob"',
+    )
+  ).rows[0];
+  expect(stored.kind).toBe("text-too-long");
+  expect(stored.status).toBe("READY");
+  expect(stored.originalText).toBe("");
+  expect(stored.replyText).toContain("500文字");
+  expect(stored.csv).toBeNull();
+  const job = (
+    await (
+      await request.post("/api/line/worker", {
+        data: { action: "claim" },
+        headers: { Authorization: `Bearer ${authSecret()}` },
+      })
+    ).json()
+  ).job;
+  expect(job.phase).toBe("deliver");
+  expect(job.originalText).toBeUndefined();
+  expect(
+    (await db.query('SELECT count(*)::int AS count FROM "LearningEntry"'))
+      .rows[0].count,
+  ).toBe(0);
+  // Delivery is unit-tested with a fake messenger; never send real LINE in E2E.
+});

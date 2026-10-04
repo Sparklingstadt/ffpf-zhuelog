@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { LineJobRepository } from "@ffpf-zhuelog/core/application/line/ports/line-job-repository";
+import { LINE_TEXT_LIMIT } from "@ffpf-zhuelog/core/domain/line/line-learning";
 import {
   readLimitedBody,
   verifyLineSignature,
@@ -18,7 +19,8 @@ const eventSchema = z.object({
   source: z.object({ type: z.literal("user"), userId: z.string() }),
   message: z.object({
     type: z.literal("text"),
-    text: z.string().trim().min(1).max(500),
+    // LINE's own limit; longer than LINE_TEXT_LIMIT is answered, not processed.
+    text: z.string().trim().min(1).max(5000),
   }),
 });
 
@@ -71,16 +73,20 @@ export async function handleLineWebhook(
       Date.now() - data.timestamp > 7 * 86400_000
     )
       return [];
+    const tooLong = data.message.text.length > LINE_TEXT_LIMIT;
     return [
       {
-        kind: battery
-          ? ("battery" as const)
-          : development
-            ? ("development-input" as const)
-            : ("correction" as const),
+        kind: tooLong
+          ? ("text-too-long" as const)
+          : battery
+            ? ("battery" as const)
+            : development
+              ? ("development-input" as const)
+              : ("correction" as const),
         eventId: data.webhookEventId,
         userId: data.source.userId,
-        originalText: data.message.text,
+        // Never store text that is not processed.
+        originalText: tooLong ? "" : data.message.text,
         receivedAt: new Date(data.timestamp),
       },
     ];

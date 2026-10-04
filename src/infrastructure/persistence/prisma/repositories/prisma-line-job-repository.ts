@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { LineJobRepository } from "@ffpf-zhuelog/core/application/line/ports/line-job-repository";
-import type {
-  LineInput,
-  LineJob,
+import {
+  lineTextTooLongReply,
+  type LineInput,
+  type LineJob,
 } from "@ffpf-zhuelog/core/domain/line/line-learning";
 import type { LearningEntryDraft } from "@ffpf-zhuelog/core/domain/learning/entities/learning-entry";
 import { getPrismaClient } from "../prisma-client";
@@ -14,6 +15,15 @@ const leaseWhere = (job: LineJob) => ({
   leaseToken: job.leaseToken,
   status: job.status,
   availableAt: { gt: new Date() },
+});
+
+// Oversized text is answered directly: no generation, only the notice.
+const jobData = (input: LineInput) => ({
+  ...input,
+  retryKey: randomUUID(),
+  ...(input.kind === "text-too-long"
+    ? { status: "READY", replyText: lineTextTooLongReply }
+    : {}),
 });
 
 export class PrismaLineJobRepository implements LineJobRepository {
@@ -37,9 +47,7 @@ export class PrismaLineJobRepository implements LineJobRepository {
                 )
                   return;
                 if (input.kind !== "development-input") {
-                  await tx.lineLearningJob.create({
-                    data: { ...input, retryKey: randomUUID() },
-                  });
+                  await tx.lineLearningJob.create({ data: jobData(input) });
                   return;
                 }
                 const session = await tx.lineDevelopmentSession.upsert({
@@ -74,7 +82,7 @@ export class PrismaLineJobRepository implements LineJobRepository {
     }
     // Unique event IDs also deduplicate webhook redeliveries after success.
     await prisma.lineLearningJob.createMany({
-      data: inputs.map((input) => ({ ...input, retryKey: randomUUID() })),
+      data: inputs.map(jobData),
       skipDuplicates: true,
     });
   }
@@ -88,6 +96,7 @@ export class PrismaLineJobRepository implements LineJobRepository {
     const now = new Date();
     const kinds = [
       "correction",
+      "text-too-long",
       ...(supportsBattery ? ["battery"] : []),
       ...(supportsDevelopment ? ["dev-issue", "dev-reply"] : []),
     ];
