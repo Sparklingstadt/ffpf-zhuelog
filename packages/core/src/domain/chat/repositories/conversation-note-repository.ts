@@ -1,5 +1,5 @@
 import type { Conversation, ConversationSummary } from "../conversation";
-import type { DateRange } from "../../learning/value-objects/log-date";
+import type { DateRange } from "../../calendar/value-objects/log-date";
 
 export type ConversationNoteSummary = ConversationSummary & {
   messageCount: number;

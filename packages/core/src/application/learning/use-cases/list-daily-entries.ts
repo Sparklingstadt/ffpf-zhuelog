@@ -2,7 +2,7 @@ import type { LearningEntryRepository } from "../../../domain/learning/repositor
 import {
   getTokyoDateRange,
   type LogDate,
-} from "../../../domain/learning/value-objects/log-date";
+} from "../../../domain/calendar/value-objects/log-date";
 
 export class ListDailyEntries {
   constructor(private readonly repository: LearningEntryRepository) {}

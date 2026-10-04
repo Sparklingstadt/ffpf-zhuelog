@@ -2,7 +2,7 @@ import type {
   LearningEntry,
   LearningEntryDraft,
 } from "../../../domain/learning/entities/learning-entry";
-import type { DateRange } from "../../../domain/learning/value-objects/log-date";
+import type { DateRange } from "../../../domain/calendar/value-objects/log-date";
 
 export type RecentLearningEntries = {
   entries: LearningEntry[];

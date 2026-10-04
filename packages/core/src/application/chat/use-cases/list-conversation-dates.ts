@@ -1,5 +1,5 @@
 import type { ConversationNoteRepository } from "../../../domain/chat/repositories/conversation-note-repository";
-import { ListLogDates } from "../../learning/use-cases/list-log-dates";
+import { ListLogDates } from "../../calendar/use-cases/list-log-dates";
 
 export class ListConversationDates {
   constructor(private readonly repository: ConversationNoteRepository) {}

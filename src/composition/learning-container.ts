@@ -1,7 +1,7 @@
 import { GetDailyEntry } from "@ffpf-zhuelog/core/application/learning/use-cases/get-daily-entry";
 import { ImportLearningCsv } from "@ffpf-zhuelog/core/application/learning/use-cases/import-learning-csv";
 import { ListDailyEntries } from "@ffpf-zhuelog/core/application/learning/use-cases/list-daily-entries";
-import { ListLogDates } from "@ffpf-zhuelog/core/application/learning/use-cases/list-log-dates";
+import { ListLogDates } from "@ffpf-zhuelog/core/application/calendar/use-cases/list-log-dates";
 import { ListRecentEntries } from "@ffpf-zhuelog/core/application/learning/use-cases/list-recent-entries";
 import { CsvParseLearningParser } from "@/infrastructure/csv/csv-parse-learning-parser";
 import { PrismaLearningEntryRepository } from "@/infrastructure/persistence/prisma/repositories/prisma-learning-entry-repository";

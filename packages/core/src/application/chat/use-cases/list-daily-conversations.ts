@@ -2,7 +2,7 @@ import type { ConversationNoteRepository } from "../../../domain/chat/repositori
 import {
   getTokyoDateRange,
   type LogDate,
-} from "../../../domain/learning/value-objects/log-date";
+} from "../../../domain/calendar/value-objects/log-date";
 
 export class ListDailyConversations {
   constructor(private readonly repository: ConversationNoteRepository) {}
