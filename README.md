@@ -53,9 +53,9 @@ src/
 
 連携の画面（`/integrations/<id>`）、出力API（`/api/integrations/<id>/export`）、管理者の確認はアプリ側が共通で用意します。プラグインは、学習ノートから表示内容と出力ファイルを作る処理だけを持ちます。
 
-1. `packages/<名前>-plugin/` を作り、`package.json` の `name` を `@ffpf-zhuelog/<名前>-plugin`、`exports` を `{ ".": "./src/index.ts" }`、`dependencies` を `{ "@ffpf-zhuelog/core": "*" }` にします。
+1. `packages/<名前>-plugin/` を作り、`package.json` の `name` を `@ffpf-zhuelog/<名前>-plugin`、`exports` を `{ ".": "./src/index.ts" }`、`dependencies` を `{ "@ffpf-zhuelog/core": "workspace:*" }` にします。
 2. `src/index.ts` で、`@ffpf-zhuelog/core/integration` の `defineIntegration` を使って連携を定義し、default export します。`id` は英小文字・数字・ハイフンで、40文字以内です。
-3. ルートの `package.json` の `dependencies` に追加して `pnpm install` を実行し、`src/composition/integration-container.ts` の `createIntegrationRegistry([...])` に加えます。
+3. ルートの `package.json` の `dependencies` に `"@ffpf-zhuelog/<名前>-plugin": "workspace:*"` を追加して `pnpm install` を実行し、`src/composition/integration-container.ts` の `createIntegrationRegistry([...])` に加えます。
 
 ## 起動方法
 
