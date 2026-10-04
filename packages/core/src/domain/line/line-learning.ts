@@ -15,9 +15,16 @@ export const lineTextTooLongReply = `メッセージが${LINE_TEXT_LIMIT}文字�
 // them, but new code neither creates nor claims them.
 export const LINE_JOB_KINDS = [
   "correction",
+  "translation",
   "battery",
   "dev-issue",
   "dev-reply",
+  "text-too-long",
+] as const;
+// The kinds new code creates and claims.
+export const ACTIVE_LINE_JOB_KINDS = [
+  "correction",
+  "translation",
   "text-too-long",
 ] as const;
 export type LineJobKind = (typeof LINE_JOB_KINDS)[number];
@@ -36,7 +43,7 @@ export const LINE_JOB_STATUSES = [
 export type LineJobStatus = (typeof LINE_JOB_STATUSES)[number];
 export const lineJobStatusSchema = z.enum(LINE_JOB_STATUSES);
 export type LineInput = {
-  kind: "correction" | "text-too-long";
+  kind: (typeof ACTIVE_LINE_JOB_KINDS)[number];
   eventId: string;
   userId: string;
   originalText: string;

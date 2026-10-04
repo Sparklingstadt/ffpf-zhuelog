@@ -53,7 +53,11 @@ export function LearningEntryCard({
   linkLabel = "ノートを開く",
   defaultOpen = true,
 }: LearningEntryCardProps) {
-  const diff = diffCorrection(entry.originalText, entry.correctedText);
+  const translation = entry.kind === "translation";
+  // A translation has no differences to show: skip the diff entirely.
+  const diff = translation
+    ? null
+    : diffCorrection(entry.originalText, entry.correctedText);
   const hasHints = entry.hints.length > 0;
   return (
     <Card
@@ -65,10 +69,17 @@ export function LearningEntryCard({
           <span className="shrink-0 font-mono text-xs text-muted-foreground">
             {numberLabel}
           </span>
-          <span lang="zh-Hans" className="min-w-0 flex-1 truncate font-medium">
+          <span
+            lang={translation ? "ja" : "zh-Hans"}
+            className="min-w-0 flex-1 truncate font-medium"
+          >
             {entry.originalText}
           </span>
-          {diff.changeCount > 0 ? (
+          {!diff ? (
+            <Badge variant="secondary" className="font-normal">
+              翻訳
+            </Badge>
+          ) : diff.changeCount > 0 ? (
             <Badge className="bg-primary/12 font-normal text-primary">
               {diff.changeCount}箇所を添削
             </Badge>
@@ -98,24 +109,34 @@ export function LearningEntryCard({
           >
             <div className="min-w-0 space-y-4 p-5 sm:p-6">
               <div className="space-y-1.5">
-                <p className={sectionLabelClassName}>添削前</p>
+                <p className={sectionLabelClassName}>
+                  {diff ? "添削前" : "日本語"}
+                </p>
                 <p
-                  lang="zh-Hans"
+                  lang={diff ? "zh-Hans" : "ja"}
                   className="text-base leading-7 text-muted-foreground"
                 >
-                  <DiffText segments={diff.original} />
+                  {diff ? (
+                    <DiffText segments={diff.original} />
+                  ) : (
+                    entry.originalText
+                  )}
                 </p>
               </div>
               <div className="space-y-1.5">
                 <p className="flex items-center gap-1.5 text-xs font-medium tracking-wider text-primary">
                   <span className="size-1.5 rounded-full bg-primary" />
-                  添削後
+                  {diff ? "添削後" : "中国語訳"}
                 </p>
                 <p
                   lang="zh-Hans"
                   className="text-xl leading-9 font-medium sm:text-[1.375rem]"
                 >
-                  <DiffText segments={diff.corrected} />
+                  {diff ? (
+                    <DiffText segments={diff.corrected} />
+                  ) : (
+                    entry.correctedText
+                  )}
                 </p>
                 <p className="text-sm text-muted-foreground">{entry.pinyin}</p>
               </div>
@@ -144,7 +165,7 @@ export function LearningEntryCard({
           </CardContent>
           <CardFooter className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2.5">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-              {diff.changeCount > 0 ? (
+              {diff && diff.changeCount > 0 ? (
                 <span className="flex items-center gap-3" aria-hidden="true">
                   <span className={deletedClassName}>削除</span>
                   <span className={insertedClassName}>追加</span>

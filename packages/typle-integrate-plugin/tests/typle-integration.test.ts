@@ -7,6 +7,7 @@ import typle from "@ffpf-zhuelog/typle-integrate-plugin";
 function entry(overrides: Partial<LearningEntry> = {}): LearningEntry {
   return {
     id: "entry-1",
+    kind: "correction",
     originalText: "这个菜很好吃。",
     correctedText: "这道菜很好吃。",
     pinyin: "Zhè dào cài hěn hǎochī.",

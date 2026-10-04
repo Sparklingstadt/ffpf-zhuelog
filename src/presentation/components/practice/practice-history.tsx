@@ -60,6 +60,7 @@ export function PracticeHistory({
           numberLabel={`#${records.length - index}`}
           entry={{
             ...record,
+            kind: "correction",
             createdAt: new Date(record.createdAt),
             hints: record.hints.map((content, position) => ({
               id: `${record.id}-${position}`,
