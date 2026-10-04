@@ -4,13 +4,19 @@ import {
   makeLineLearningResult,
   type LineJobKind,
 } from "../../../domain/line/line-learning";
+import type { LearningKind } from "../../../domain/learning/entities/learning-entry";
 import {
   formatGenerationFailure,
   type GenerationFailureCode,
 } from "../../../domain/line/generation-failure";
 
-// Jobs whose reply is plain text; corrections send their CSV unless they failed.
+// Jobs whose reply is always plain text.
 const TEXT_REPLY_KINDS: readonly LineJobKind[] = ["text-too-long"];
+
+// Jobs that produce a learning note; they send their CSV unless they failed.
+function noteKind(kind: LineJobKind): LearningKind | null {
+  return kind === "correction" || kind === "translation" ? kind : null;
+}
 
 export class ProcessLineLearning {
   constructor(
@@ -18,28 +24,20 @@ export class ProcessLineLearning {
     private readonly messenger: LineMessenger,
   ) {}
 
-  async complete(
-    id: string,
-    token: string,
-    userId: string,
-    correction: unknown,
-  ) {
+  async complete(id: string, token: string, userId: string, output: unknown) {
     const job = await this.jobs.leased(id, token, userId, "GENERATING");
-    if (!job || job.kind !== "correction") return false;
+    const kind = job && noteKind(job.kind);
+    if (!job || !kind) return false;
     let result: ReturnType<typeof makeLineLearningResult>;
     try {
-      result = makeLineLearningResult(
-        "correction",
-        job.originalText,
-        correction,
-      );
+      result = makeLineLearningResult(kind, job.originalText, output);
     } catch (error) {
       // Retrying cannot shorten the result, so reply instead of failing silently.
       if (!(error instanceof Error && error.message === "CSV_TOO_LONG"))
         throw error;
       return this.jobs.saveReply(
         job,
-        formatGenerationFailure("CORRECTION_TOO_LONG", "correction"),
+        formatGenerationFailure("CORRECTION_TOO_LONG", kind),
         "CORRECTION_TOO_LONG",
       );
     }
@@ -49,14 +47,10 @@ export class ProcessLineLearning {
   async deliver(id: string, token: string, userId: string) {
     const job = await this.jobs.leased(id, token, userId, "SENDING");
     if (!job) return false;
+    const kind = noteKind(job.kind);
     const textReply =
-      TEXT_REPLY_KINDS.includes(job.kind) ||
-      (job.kind === "correction" && Boolean(job.replyText));
-    const content = textReply
-      ? job.replyText
-      : job.kind === "correction"
-        ? job.csv
-        : null;
+      TEXT_REPLY_KINDS.includes(job.kind) || (kind && Boolean(job.replyText));
+    const content = textReply ? job.replyText : kind ? job.csv : null;
     // A SENDING job always has content and a first attempt; anything else is
     // a broken record, which retrying cannot repair.
     if (!content || !job.firstDeliveryAt) {
@@ -69,9 +63,10 @@ export class ProcessLineLearning {
       await this.jobs.fail(job, true, "DELIVERY_WINDOW_EXPIRED");
       return true;
     }
-    const outcome = textReply
-      ? await this.messenger.pushText(job.userId, content, job.retryKey)
-      : await this.messenger.push(job.userId, content, job.retryKey);
+    const outcome =
+      textReply || !kind
+        ? await this.messenger.pushText(job.userId, content, job.retryKey)
+        : await this.messenger.push(job.userId, content, kind, job.retryKey);
     if (outcome === "accepted") await this.jobs.finishDelivery(job);
     else
       await this.jobs.fail(job, outcome === "rejected", "LINE_DELIVERY_FAILED");
@@ -86,10 +81,11 @@ export class ProcessLineLearning {
   ) {
     const job = await this.jobs.leased(id, token, userId, "GENERATING");
     if (!job) return false;
-    if (job.kind === "correction")
+    const kind = noteKind(job.kind);
+    if (kind)
       return this.jobs.saveReply(
         job,
-        formatGenerationFailure(code, "correction"),
+        formatGenerationFailure(code, kind),
         code,
       );
     await this.jobs.fail(job, false, "GENERATION_FAILED");

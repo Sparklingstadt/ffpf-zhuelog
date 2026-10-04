@@ -12,7 +12,7 @@ test("issue 11 pairs each corrected sentence with its pinyin while leaving store
     hints: ["汉语=中国語", "日本人=Rìběnrén"],
   });
   assert.equal(
-    formatLineLearningReply(csv),
+    formatLineLearningReply(csv, "correction"),
     [
       `【元の文】\n${original}`,
       "【添削後】\n我喜欢学习汉语。\nWǒ xǐhuān xuéxí Hànyǔ.\n我是个日本人。\nWǒ shì ge Rìběnrén.",
@@ -23,7 +23,10 @@ test("issue 11 pairs each corrected sentence with its pinyin while leaving store
   const { kind, ...stored } = draft;
   assert.equal(kind, "correction");
   assert.deepEqual(new CsvParseLearningParser().parse(csv), [stored]);
-  assert.equal(formatLineLearningReply(csv), formatLineLearningReply(csv));
+  assert.equal(
+    formatLineLearningReply(csv, "correction"),
+    formatLineLearningReply(csv, "correction"),
+  );
 });
 
 for (const [name, chinese, pinyin, expected] of [
@@ -60,7 +63,7 @@ for (const [name, chinese, pinyin, expected] of [
       hints: ["ヒント"],
     });
     assert.ok(
-      formatLineLearningReply(csv).includes(
+      formatLineLearningReply(csv, "correction").includes(
         `【添削後】\n${expected}\n\n【ヒント】`,
       ),
     );

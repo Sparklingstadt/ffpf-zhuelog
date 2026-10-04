@@ -1,4 +1,5 @@
 import type { LineMessenger } from "@ffpf-zhuelog/core/application/line/ports/line-messenger";
+import type { LearningKind } from "@ffpf-zhuelog/core/domain/learning/entities/learning-entry";
 import { formatLineLearningReply } from "./line-reply-formatter";
 
 export class LinePushMessenger implements LineMessenger {
@@ -7,10 +8,15 @@ export class LinePushMessenger implements LineMessenger {
     private readonly fetcher: typeof fetch = fetch,
   ) {}
 
-  async push(userId: string, csv: string, retryKey: string) {
+  async push(
+    userId: string,
+    csv: string,
+    kind: LearningKind,
+    retryKey: string,
+  ) {
     let text: string;
     try {
-      text = formatLineLearningReply(csv);
+      text = formatLineLearningReply(csv, kind);
     } catch {
       return "rejected" as const;
     }

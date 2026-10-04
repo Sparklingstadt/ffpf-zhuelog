@@ -317,14 +317,19 @@ test("push uses stable retry key, accepts documented 409, sanitizes failures", a
       assert.equal(new Headers(init?.headers).get("X-Line-Retry-Key"), key);
       assert.deepEqual(JSON.parse(String(init?.body)), {
         to: config.userId,
-        messages: [{ type: "text", text: formatLineLearningReply(csv) }],
+        messages: [
+          { type: "text", text: formatLineLearningReply(csv, "correction") },
+        ],
       });
       return new Response(null, {
         status,
         headers: acceptedId ? { "x-line-accepted-request-id": "request" } : {},
       });
     });
-    assert.equal(await sender.push(config.userId, csv, key), expected);
+    assert.equal(
+      await sender.push(config.userId, csv, "correction", key),
+      expected,
+    );
   }
 });
 
@@ -335,14 +340,17 @@ test("LINE reply uses readable sections and numbered hints without changing the 
     correction,
   );
   assert.equal(
-    formatLineLearningReply(csv),
+    formatLineLearningReply(csv, "correction"),
     [
       '【元の文】\n你好，"朋友"\n再见',
       '【添削後】\n我说："你好"。\n今天很好。\nNǐ hǎo, jīntiān hěn hǎo.',
       '【ヒント】\n1. 说=話す\n2. 引用符 " と改行\nのテスト',
     ].join("\n\n"),
   );
-  assert.equal(formatLineLearningReply(csv), formatLineLearningReply(csv));
+  assert.equal(
+    formatLineLearningReply(csv, "correction"),
+    formatLineLearningReply(csv, "correction"),
+  );
   // The CSV carries no kind; it is set from the job when the entry is saved.
   const { kind, ...stored } = draft;
   assert.equal(kind, "correction");
@@ -352,7 +360,7 @@ test("LINE reply uses readable sections and numbered hints without changing the 
     pinyin: "a".repeat(1600),
     hints: Array(5).fill("字".repeat(200)),
   });
-  assert.ok(formatLineLearningReply(largest.csv).length <= 5000);
+  assert.ok(formatLineLearningReply(largest.csv, "correction").length <= 5000);
 });
 
 test("invalid or oversized LINE replies fail before contacting LINE", async () => {
@@ -366,7 +374,7 @@ test("invalid or oversized LINE replies fail before contacting LINE", async () =
     `"${"字".repeat(5000)}","添削","pinyin"`,
   ]) {
     assert.equal(
-      await sender.push(config.userId, invalid, randomUUID()),
+      await sender.push(config.userId, invalid, "correction", randomUUID()),
       "rejected",
     );
   }
@@ -445,9 +453,10 @@ test("expired outbox stops without sending; retry reuses persisted CSV", async (
     pushText: async () => {
       assert.fail("must not send plain text for corrections");
     },
-    push: async (_user, csv, key) => {
+    push: async (_user, csv, kind, key) => {
       sends++;
       assert.equal(csv, job.csv);
+      assert.equal(kind, "correction");
       assert.equal(key, job.retryKey);
       return "accepted";
     },
@@ -536,4 +545,186 @@ test("correction failure is persisted before text delivery, with bounded retry a
   assert.equal(failures, 1);
   assert.equal(deliveries, 2);
   assert.ok(finished);
+});
+
+const translation = {
+  translatedText: "今天我很忙。",
+  pinyin: "Jīntiān wǒ hěn máng.",
+  hints: ["忙=忙しい"],
+};
+const translationJob = (over: Partial<LineJob> = {}): LineJob => ({
+  kind: "translation",
+  id: "translation-job",
+  eventId: "translation-event",
+  userId: config.userId,
+  originalText: "今日は忙しいです。",
+  receivedAt: new Date(),
+  status: "GENERATING",
+  leaseToken: randomUUID(),
+  csv: null,
+  replyText: null,
+  retryKey: randomUUID(),
+  firstDeliveryAt: null,
+  generationTries: 1,
+  deliveryTries: 0,
+  ...over,
+});
+
+test("translation jobs are saved as translation notes", async () => {
+  const jobs = repo();
+  const job = translationJob();
+  let draft: unknown;
+  jobs.leased = async () => job;
+  jobs.saveResult = async (_job, saved) => {
+    draft = saved;
+    return true;
+  };
+  jobs.saveReply = async () => assert.fail("must save a note, not a reply");
+  const service = new ProcessLineLearning(jobs, {
+    push: async () => assert.fail("must not send"),
+    pushText: async () => assert.fail("must not send"),
+  });
+  assert.equal(
+    await service.complete(job.id, job.leaseToken!, config.userId, translation),
+    true,
+  );
+  assert.deepEqual(draft, {
+    originalText: job.originalText,
+    correctedText: translation.translatedText,
+    pinyin: translation.pinyin,
+    hints: translation.hints,
+    kind: "translation",
+  });
+});
+
+test("translation failures reply without a note", async () => {
+  const jobs = repo();
+  const job = translationJob();
+  let reply: { text: string; code?: string } | undefined;
+  jobs.leased = async () => job;
+  jobs.saveResult = async () => assert.fail("must not save a learning note");
+  jobs.fail = async () => assert.fail("must reply instead of failing");
+  jobs.saveReply = async (_job, text, code) => {
+    reply = { text, code };
+    return true;
+  };
+  const service = new ProcessLineLearning(jobs, {
+    push: async () => assert.fail("must not send"),
+    pushText: async () => assert.fail("must not send"),
+  });
+  assert.equal(
+    await service.generationFailed(
+      job.id,
+      job.leaseToken!,
+      config.userId,
+      "OPENAI_TIMEOUT",
+    ),
+    true,
+  );
+  assert.ok(reply!.text.startsWith("翻訳できませんでした。"));
+  assert.equal(reply!.code, "OPENAI_TIMEOUT");
+});
+
+test("a translation too long for LINE is replied to as a failure", async () => {
+  const jobs = repo();
+  const job = translationJob({ originalText: `${'"'.repeat(499)}字` });
+  let reply: { text: string; code?: string } | undefined;
+  jobs.leased = async () => job;
+  jobs.saveResult = async () => assert.fail("must not save a learning note");
+  jobs.saveReply = async (_job, text, code) => {
+    reply = { text, code };
+    return true;
+  };
+  const service = new ProcessLineLearning(jobs, {
+    push: async () => assert.fail("must not send"),
+    pushText: async () => assert.fail("must not send"),
+  });
+  assert.equal(
+    await service.complete(job.id, job.leaseToken!, config.userId, {
+      translatedText: `${'"'.repeat(999)}字`,
+      pinyin: "a".repeat(1600),
+      hints: ['"'.repeat(200)],
+    }),
+    true,
+  );
+  assert.equal(reply?.code, "CORRECTION_TOO_LONG");
+  assert.ok(reply!.text.startsWith("翻訳できませんでした。"));
+});
+
+test("translation jobs are delivered as CSV with their kind, or as their failure text", async () => {
+  for (const [over, via] of [
+    [{ csv: '"CSV"' }, "push"],
+    [{ csv: null, replyText: "翻訳できませんでした。" }, "pushText"],
+  ] as const) {
+    const jobs = repo();
+    const job = translationJob({
+      ...over,
+      status: "SENDING",
+      firstDeliveryAt: new Date(),
+    });
+    const calls: unknown[][] = [];
+    let finished = false;
+    jobs.leased = async () => job;
+    jobs.fail = async (_job, _permanent, code) => assert.fail(code);
+    jobs.finishDelivery = async () => {
+      finished = true;
+    };
+    const service = new ProcessLineLearning(jobs, {
+      push: async (...args) => {
+        calls.push(["push", ...args]);
+        return "accepted";
+      },
+      pushText: async (...args) => {
+        calls.push(["pushText", ...args]);
+        return "accepted";
+      },
+    });
+    assert.equal(
+      await service.deliver(job.id, job.leaseToken!, config.userId),
+      true,
+    );
+    assert.ok(finished);
+    assert.deepEqual(
+      calls,
+      via === "push"
+        ? [["push", config.userId, '"CSV"', "translation", job.retryKey]]
+        : [["pushText", config.userId, job.replyText, job.retryKey]],
+    );
+  }
+});
+
+test("translation replies use the translation heading", () => {
+  const { csv } = makeLineLearningResult(
+    "translation",
+    "今日は忙しいです。",
+    translation,
+  );
+  const text = formatLineLearningReply(csv, "translation");
+  assert.ok(text.includes("【中国語訳】\n今天我很忙。\nJīntiān wǒ hěn máng."));
+  assert.ok(!text.includes("【添削後】"));
+  assert.ok(text.includes("【元の文】\n今日は忙しいです。"));
+  assert.ok(text.includes("【ヒント】\n1. 忙=忙しい"));
+  const corrected = formatLineLearningReply(
+    makeLineLearningResult("correction", "你好", correction).csv,
+    "correction",
+  );
+  assert.ok(corrected.includes("【添削後】"));
+  assert.ok(!corrected.includes("【中国語訳】"));
+});
+
+test("the LINE messenger formats translation pushes with the translation heading", async () => {
+  const { csv } = makeLineLearningResult(
+    "translation",
+    "今日は忙しいです。",
+    translation,
+  );
+  const sender = new LinePushMessenger("secret", async (_url, init) => {
+    const { messages } = JSON.parse(String(init?.body));
+    assert.ok(messages[0].text.includes("【中国語訳】"));
+    return new Response(null, { status: 200 });
+  });
+  assert.equal(
+    await sender.push(config.userId, csv, "translation", randomUUID()),
+    "accepted",
+  );
 });
