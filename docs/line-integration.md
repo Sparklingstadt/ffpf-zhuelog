@@ -34,7 +34,7 @@ v0.12.0 から、添削と翻訳はすべて Vercel の中で OpenAI API を使�
 
 コマンドはありません。`/battery` と開発モード（`/dev`・`/devend`）は廃止しました。送っても無視されます。
 
-取り残しは、次のwebhookの処理と、Vercel Cron（`vercel.json`、30分おき）で拾い直します。ジョブのリース（2分）が切れると、次の処理が引き継ぎます。Vercel Cron は `Authorization: Bearer ${CRON_SECRET}` を付けて `/api/line/drain` を呼び、値が一致しなければ何もしません（401）。
+取り残しは、次のwebhookの処理と、Vercel Cron（`vercel.json`、30分おき）で拾い直します（Cloud Runでは代わりにCloud Schedulerを使います。[`cloud-run.md`](cloud-run.md) を参照）。ジョブのリース（2分）が切れると、次の処理が引き継ぎます。Vercel Cron は `Authorization: Bearer ${CRON_SECRET}` を付けて `/api/line/drain` を呼び、値が一致しなければ何もしません（401）。
 
 **Cronの間隔（30分）の理由と影響：** 締め切りまでに処理しきれなかったジョブや、LINE配送が一時的に失敗して待ち時間に入ったジョブは、次のLINEメッセージかCronまで待つため、返信が最大で約30分遅れることがあります。Cronの間隔を短くしすぎないのは、DB（Neon の無料プラン）の計算時間の枠（月100 CU時間）を守るためです。Neonは使われないと5分で止まり、Cronのたびに起動します。30分おきなら起きている時間は全体の約6分の1（月30 CU時間ほど）です。5分おきにするとほぼ常時起動になり、枠を超えます。Vercel の Pro プランが前提です（無料プランのCronは1日1回まで）。一時的に失敗した配送を初回の配送開始から23時間より後に再送することになった場合は、二重送信を防ぐために停止します（`DELIVERY_WINDOW_EXPIRED`）が、30分おきのCronではこの状況はほぼ起きません。
 

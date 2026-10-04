@@ -70,6 +70,10 @@ pnpm run dev
 
 ブラウザで <http://localhost:3000> を開きます。
 
+## Cloud Runへのデプロイ
+
+本番はVercelですが、ルートの `Dockerfile` でGoogle Cloud Runにもデプロイできます。Cloud Runでは `AUTH_URL`（公開URL）の設定、`--no-cpu-throttling`、Vercel Cronの代わりのCloud Schedulerが必要です。手順は [`docs/cloud-run.md`](docs/cloud-run.md) を参照してください。
+
 ## 認証・認可の設定
 
 GitHubの **Settings → Developer settings → OAuth Apps** でOAuth Appを作成します。

@@ -16,6 +16,9 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // The Dockerfile (Cloud Run) runs the self-contained server.js; Vercel and
+  // the E2E `next start` keep the default output.
+  output: process.env.NEXT_OUTPUT === "standalone" ? "standalone" : undefined,
   outputFileTracingExcludes: {
     "/*": [
       ".env*",
