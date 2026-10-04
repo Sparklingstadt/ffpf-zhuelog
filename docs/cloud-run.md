@@ -2,9 +2,11 @@
 
 Vercelと同じアプリを、Google Cloud RunでもDockerコンテナとして動かせます。Vercelへのデプロイはこれまでどおりで、この手順はVercelの設定を変えません。
 
-## Cloud Shellでまとめてデプロイする（Web画面のみ）
+## Cloud Shellでまとめてデプロイする
 
-LINE連携はVercelに残し、Web画面だけをCloud Runで動かす場合は、[Cloud Shell](https://shell.cloud.google.com/)で次を実行します。課金を有効にしたGoogle Cloudプロジェクトが必要です。
+### Web画面
+
+[Cloud Shell](https://shell.cloud.google.com/)で次を実行します。課金を有効にしたGoogle Cloudプロジェクトが必要です。
 
 ```sh
 git clone https://github.com/Sparklingstadt/ffpf-zhuelog.git
@@ -13,11 +15,34 @@ cd ffpf-zhuelog && ./scripts/deploy-cloud-run.sh
 
 `scripts/deploy-cloud-run.sh` は、下の手順1・3（APIの有効化、Secret Managerへの登録、デプロイ、`AUTH_URL` の設定）を行います。`DATABASE_URL` などの秘密情報は、聞かれたときに入力します（画面には表示されません）。`AUTH_SECRET` は自動で作ります。GitHubのOAuth Appは最後に表示されるコールバックURLで作り、スクリプトをもう一度実行して設定します。それまではゲストとしてログインできます。登録済みの秘密情報はそのまま使い、空欄にした項目は今の値のままなので、何度実行しても構いません。
 
-- LINEは無効（`LINE_INTEGRATION_ENABLED=false`）のままで、Cloud SchedulerとCPUの常時割り当て（`--no-cpu-throttling`）も設定しません（どちらもLINE用です）。
+- LINEの設定は変えません（初回はLINE連携が無効の状態です）。Cloud SchedulerとCPUの常時割り当て（`--no-cpu-throttling`）も、LINE用なのでここでは設定しません。
 - `DATABASE_URL` にVercelと同じDBを指定すると、VercelとCloud Runが同じデータを使います。マイグレーションは適用済みなので不要です。別のDBを使う場合は、先に手順2を行ってください。
 - 実行中の操作では、既定のサービスアカウント（`<プロジェクト番号>-compute@developer.gserviceaccount.com`）に、ソースからのビルド権限（`roles/run.builder`）と、登録したシークレットの読み取り権限を付与します。
 
-LINEもCloud Runに移す場合は、以下の手順に従ってください。
+### LINE連携を移す
+
+Web画面のデプロイ後に、Cloud Shellで次を実行します。
+
+```sh
+cd ffpf-zhuelog && git pull && ./scripts/enable-line-cloud-run.sh
+```
+
+`scripts/enable-line-cloud-run.sh` は、下の手順5と、手順3のLINE部分を行います。
+
+- LINEのチャネルシークレット・チャネルアクセストークン・`OPENAI_API_KEY` を聞かれたら入力し、Secret Managerに登録します。値はVercelの環境変数、またはLINE Developersからコピーします。チャネルアクセストークンは再発行しないでください（Vercelで使っているトークンが無効になります）。
+- `CRON_SECRET` は自動で作ります。公式アカウントのユーザーIDは、チャネルアクセストークンを使ってLINEのAPIから取得します。あなたのLINEユーザーIDだけを入力します。
+- サービスにLINEの設定を加え、`--no-cpu-throttling` にします。
+- Cloud Schedulerで30分おきに `/api/line/drain` を呼ぶジョブを作り、このURLが200を返すことを確認します。
+
+最後に表示される手順に従って、手作業で切り替えます。
+
+1. LINE DevelopersでWebhook URLを `<Cloud RunのURL>/api/line/webhook` に変え、「検証」を押す
+2. 自分のLINEから文を送り、返信が届くことを確認する
+3. Vercelの `LINE_INTEGRATION_ENABLED` を `false` にして再デプロイする
+
+この順番なら、切り替えの間に届いたメッセージも取りこぼしません。LINEが無効な側はwebhookに503を返し、LINEが再送します。VercelとCloud Runが同じDBを使っている間は、どちらのCronも同じジョブを拾えます。ただしジョブはリース（2分）で排他しているので、二重には処理しません。Vercel側を無効にしたあとも、Vercel Cronは30分おきに `/api/line/drain` を呼び、503を受け取ります。害はありません。
+
+手作業ですべて設定する場合は、以下の手順に従ってください。
 
 ## 仕組み
 
