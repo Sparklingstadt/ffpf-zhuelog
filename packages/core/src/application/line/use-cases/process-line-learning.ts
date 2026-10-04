@@ -24,8 +24,20 @@ export class ProcessLineLearning {
   ) {
     const job = await this.jobs.leased(id, token, userId, "GENERATING");
     if (!job || job.kind !== "correction") return false;
-    const { draft, csv } = makeLineLearningResult(job.originalText, correction);
-    return this.jobs.saveResult(job, draft, csv);
+    let result: ReturnType<typeof makeLineLearningResult>;
+    try {
+      result = makeLineLearningResult(job.originalText, correction);
+    } catch (error) {
+      // Retrying cannot shorten the result, so reply instead of failing silently.
+      if (!(error instanceof Error && error.message === "CSV_TOO_LONG"))
+        throw error;
+      return this.jobs.saveReply(
+        job,
+        formatGenerationFailure("CORRECTION_TOO_LONG"),
+        "CORRECTION_TOO_LONG",
+      );
+    }
+    return this.jobs.saveResult(job, result.draft, result.csv);
   }
 
   async completeBattery(
@@ -43,7 +55,9 @@ export class ProcessLineLearning {
     const job = await this.jobs.leased(id, token, userId, "SENDING");
     if (!job) return false;
     const textReply =
-      ["battery", "dev-issue", "dev-reply"].includes(job.kind) ||
+      ["battery", "dev-issue", "dev-reply", "text-too-long"].includes(
+        job.kind,
+      ) ||
       (job.kind === "correction" && Boolean(job.replyText));
     // LINE guarantees retry-key deduplication for 24h. Never send beyond that
     // window after an ambiguous response, even if this Mac was asleep.

@@ -8,6 +8,8 @@ export const generationFailureSchema = z.enum([
   "CODEX_SAFETY_REJECTED",
   "CODEX_INVALID_RESPONSE",
   "CODEX_REQUEST_FAILED",
+  // Set by the server, never by the worker: the result exceeds LINE's limit.
+  "CORRECTION_TOO_LONG",
 ]);
 export type GenerationFailureCode = z.infer<typeof generationFailureSchema>;
 
@@ -20,8 +22,13 @@ const reasons: Record<GenerationFailureCode, string> = {
     "Codexの応答が許可された処理範囲を外れたため停止しました。",
   CODEX_INVALID_RESPONSE: "Codexの回答を添削結果として読み取れませんでした。",
   CODEX_REQUEST_FAILED: "Codexで添削を完了できませんでした。",
+  CORRECTION_TOO_LONG: "添削結果がLINEで送れる長さを超えました。",
 };
 
 export function formatGenerationFailure(code: GenerationFailureCode) {
-  return `添削できませんでした。\n${reasons[code]}\n学習ノートは保存していません。復旧後にもう一度送信してください。\nエラーコード: ${code}`;
+  const retry =
+    code === "CORRECTION_TOO_LONG"
+      ? "文を短く分けて送信してください。"
+      : "復旧後にもう一度送信してください。";
+  return `添削できませんでした。\n${reasons[code]}\n学習ノートは保存していません。${retry}\nエラーコード: ${code}`;
 }

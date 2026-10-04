@@ -6,8 +6,11 @@ export {
   CORRECTION_INSTRUCTIONS as LINE_CORRECTION_INSTRUCTIONS,
 } from "../learning/chinese-correction";
 export type { Correction } from "../learning/chinese-correction";
+// Matches the 500-character limit of corrections and development issues.
+export const LINE_TEXT_LIMIT = 500;
+export const lineTextTooLongReply = `メッセージが${LINE_TEXT_LIMIT}文字を超えているため、処理しませんでした。${LINE_TEXT_LIMIT}文字以内に分けて送ってください。\n学習ノートには保存していません。`;
 export type LineInput = {
-  kind: "correction" | "battery" | "development-input";
+  kind: "correction" | "battery" | "development-input" | "text-too-long";
   eventId: string;
   userId: string;
   originalText: string;

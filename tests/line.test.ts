@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { createHmac, randomUUID } from "node:crypto";
 import { test } from "node:test";
-import { makeLineLearningResult } from "@ffpf-zhuelog/core/domain/line/line-learning";
+import {
+  lineTextTooLongReply,
+  makeLineLearningResult,
+} from "@ffpf-zhuelog/core/domain/line/line-learning";
 import type {
   LineInput,
   LineJob,
@@ -141,7 +144,7 @@ test("disabled/unsigned webhooks cannot reach the queue", async () => {
   );
 });
 
-test("ignore strangers, groups, images, oversized text, stale events and standby", async () => {
+test("ignore strangers, groups, images, oversized non-Chinese text, stale events and standby", async () => {
   const jobs = repo();
   let count = -1;
   jobs.enqueue = async (value) => {
@@ -151,7 +154,8 @@ test("ignore strangers, groups, images, oversized text, stale events and standby
     { ...event, source: { type: "user", userId: "stranger" } },
     { ...event, source: { type: "group", userId: config.userId } },
     { ...event, message: { type: "image" } },
-    { ...event, message: { type: "text", text: "字".repeat(501) } },
+    { ...event, message: { type: "text", text: "a".repeat(501) } },
+    { ...event, message: { type: "text", text: "字".repeat(5001) } },
     { ...event, timestamp: 0 },
     { ...event, mode: "standby" },
   ];
@@ -160,6 +164,112 @@ test("ignore strangers, groups, images, oversized text, stale events and standby
     200,
   );
   assert.equal(count, 0);
+});
+
+test("oversized text that would be processed is queued as a reply without its content", async () => {
+  for (const [text, lineConfig] of [
+    ["字".repeat(501), config],
+    ["a".repeat(501), { ...config, developmentEnabled: true }],
+  ] as const) {
+    const jobs = repo();
+    let inputs: LineInput[] = [];
+    jobs.enqueue = async (value) => {
+      inputs = value;
+    };
+    const events = [{ ...event, message: { type: "text", text } }];
+    assert.equal(
+      (await handleLineWebhook(webhook(events), lineConfig, jobs)).status,
+      200,
+    );
+    assert.equal(inputs.length, 1);
+    assert.equal(inputs[0].kind, "text-too-long");
+    assert.equal(inputs[0].originalText, "");
+    assert.equal(inputs[0].eventId, event.webhookEventId);
+  }
+});
+
+test("text-too-long jobs are delivered as the limit notice", async () => {
+  const jobs = repo();
+  let finished = false;
+  const job: LineJob = {
+    kind: "text-too-long",
+    id: "too-long-job",
+    eventId: "too-long-event",
+    userId: config.userId,
+    originalText: "",
+    receivedAt: new Date(),
+    status: "SENDING",
+    leaseToken: randomUUID(),
+    csv: null,
+    replyText: lineTextTooLongReply,
+    retryKey: randomUUID(),
+    firstDeliveryAt: new Date(),
+    generationTries: 0,
+    deliveryTries: 1,
+  };
+  jobs.leased = async () => job;
+  jobs.fail = async (_job, _permanent, code) => assert.fail(code);
+  jobs.finishDelivery = async () => {
+    finished = true;
+  };
+  const sent: string[] = [];
+  const service = new ProcessLineLearning(jobs, {
+    push: async () => assert.fail("must not send CSV"),
+    pushText: async (_user, text) => {
+      sent.push(text);
+      return "accepted";
+    },
+  });
+  assert.equal(
+    await service.deliver(job.id, job.leaseToken!, config.userId),
+    true,
+  );
+  assert.deepEqual(sent, [lineTextTooLongReply]);
+  assert.match(lineTextTooLongReply, /500文字/);
+  assert.ok(finished);
+});
+
+test("a correction too long for LINE is replied to as a failure, never retried silently", async () => {
+  const jobs = repo();
+  const job: LineJob = {
+    kind: "correction",
+    id: "long-result",
+    eventId: "long-result-event",
+    userId: config.userId,
+    // Quotes double in CSV, so a valid 500-character message can overflow.
+    originalText: `${'"'.repeat(499)}字`,
+    receivedAt: new Date(),
+    status: "GENERATING",
+    leaseToken: randomUUID(),
+    csv: null,
+    replyText: null,
+    retryKey: randomUUID(),
+    firstDeliveryAt: null,
+    generationTries: 1,
+    deliveryTries: 0,
+  };
+  let saved: { text: string; code?: string } | undefined;
+  jobs.leased = async () => job;
+  jobs.saveResult = async () => assert.fail("must not save a learning note");
+  jobs.saveReply = async (_job, text, code) => {
+    saved = { text, code };
+    return true;
+  };
+  const service = new ProcessLineLearning(jobs, {
+    push: async () => assert.fail("must not send"),
+    pushText: async () => assert.fail("must not send"),
+  });
+  assert.equal(
+    await service.complete(job.id, job.leaseToken!, config.userId, {
+      correctedText: `${'"'.repeat(999)}字`,
+      pinyin: "a".repeat(1600),
+      hints: ['"'.repeat(200)],
+    }),
+    true,
+  );
+  assert.equal(saved?.code, "CORRECTION_TOO_LONG");
+  assert.match(saved!.text, /短く/);
+  assert.ok(!saved!.text.includes("復旧後"));
 });
 
 test("worker rejects missing credentials and arbitrary payload fields", async () => {
@@ -440,6 +550,8 @@ test("worker failure API rejects raw errors and forwards only allowed codes", as
       service,
     );
   assert.equal((await send({ code: "secret-token" })).status, 400);
+  // Server-only: the worker never measures the LINE result length.
+  assert.equal((await send({ code: "CORRECTION_TOO_LONG" })).status, 400);
   assert.equal(
     (await send({ code: "CODEX_TIMEOUT", error: "private text" })).status,
     400,

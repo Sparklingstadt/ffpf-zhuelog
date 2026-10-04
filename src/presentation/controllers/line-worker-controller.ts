@@ -52,7 +52,7 @@ const commandSchema = z.discriminatedUnion("action", [
     .object({
       action: z.literal("fail"),
       ...identity,
-      code: generationFailureSchema.optional(),
+      code: generationFailureSchema.exclude(["CORRECTION_TOO_LONG"]).optional(),
     })
     .strict(),
 ]);
