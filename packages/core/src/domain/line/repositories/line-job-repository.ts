@@ -8,7 +8,8 @@ import type { GenerationFailureCode } from "../../../domain/line/generation-fail
 
 export interface LineJobRepository {
   enqueue(inputs: LineInput[]): Promise<void>;
-  claim(userId: string): Promise<LineJob | null>;
+  // "deliver" claims only READY and SENDING jobs, leaving generation untouched.
+  claim(userId: string, phase?: "any" | "deliver"): Promise<LineJob | null>;
   leased(
     id: string,
     token: string,

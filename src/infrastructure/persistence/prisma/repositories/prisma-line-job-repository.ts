@@ -44,7 +44,10 @@ export class PrismaLineJobRepository implements LineJobRepository {
     });
   }
 
-  async claim(userId: string): Promise<LineJob | null> {
+  async claim(
+    userId: string,
+    phase: "any" | "deliver" = "any",
+  ): Promise<LineJob | null> {
     const prisma = getPrismaClient();
     const now = new Date();
     await prisma.lineLearningJob.updateMany({
@@ -77,12 +80,14 @@ export class PrismaLineJobRepository implements LineJobRepository {
           userId,
           kind: { in: [...ACTIVE_LINE_JOB_KINDS] },
           status: {
-            in: [
-              "PENDING",
-              "GENERATING",
-              "READY",
-              "SENDING",
-            ] satisfies LineJobStatus[],
+            in: (phase === "deliver"
+              ? ["READY", "SENDING"]
+              : [
+                  "PENDING",
+                  "GENERATING",
+                  "READY",
+                  "SENDING",
+                ]) satisfies LineJobStatus[],
           },
           availableAt: { lte: now },
         },
