@@ -5,6 +5,7 @@ import {
   Eye,
   Languages,
   MessageCircle,
+  MessagesSquare,
   Puzzle,
   Sparkles,
 } from "lucide-react";
@@ -109,6 +110,11 @@ export default async function Home() {
                   <Button asChild variant="outline" size="sm">
                     <Link href="/chat">
                       <MessageCircle /> ChatGPTと話す
+                    </Link>
+                  </Button>
+                  <Button asChild variant="outline" size="sm">
+                    <Link href="/conversations">
+                      <MessagesSquare /> 会話ノート
                     </Link>
                   </Button>
                 </>

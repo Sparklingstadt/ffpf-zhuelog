@@ -5,7 +5,7 @@
 | PR      | 判断                                       | 理由                                                                                                                                      |
 | ------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | #1 / #2 | checkout / setup-node を v7 にまとめて更新 | GitHub-hosted runnerで検証する。checkout の既存失敗は古いベースのlockfile不整合であり、Action自体の失敗ではなかった。                     |
-| #3 / #7 | React / React DOM を同時に 19.3.0 に更新   | React DOM 19.3.0 は React ^19.3.0 を要求するため、個別更新では pnpm install --frozen-lockfile が失敗する。                                                        |
+| #3 / #7 | React / React DOM を同時に 19.3.0 に更新   | React DOM 19.3.0 は React ^19.3.0 を要求するため、個別更新では pnpm install --frozen-lockfile が失敗する。                                |
 | #4      | TypeScript 7 を保留                        | typescript-eslint 8.70.x の対応範囲は >=4.8.4 <6.1.0。既存CIで「typescript-eslint does not support TS 7.0」となった。                     |
 | #5      | Node 26用の型ではなく Node 22用へ更新      | package.json の最低実行環境とCIは Node 22。型だけを26にすると、実行環境にないAPIを型チェックが許容してしまう。                            |
 | #6      | ESLint 10 を保留                           | eslint-config-next 経由の eslint-plugin-react 7.37.5 は ESLint 9まで対応。既存CIで react/display-name の getFilename 呼び出しが失敗した。 |
@@ -26,6 +26,14 @@
 TypeScript 7 / ESLint 10 は、Next.js側の対応と、その設定が実際に読み込むプラグインのpeerDependencies・移行手順を再確認してから `.github/dependabot.yml` の該当ignoreを削除する。単体パッケージのリリースだけでは解除しない。
 
 この保留は互換性判断であり、安全性を保証するものではない。Dependabotの脆弱性アラートと `pnpm audit` は継続して確認する。保留範囲の更新がセキュリティ修正に必要になった場合は、互換性修正も含めて優先対応する。
+
+## pnpm auditの一時的な除外
+
+修正版がまだ公開されていない脆弱性に限り、`pnpm-workspace.yaml` の `auditConfig.ignoreGhsas` で一時的に除外する。除外するときは、影響範囲（実行時に読み込まれるか）と解除条件をコメントに書く。
+
+| GHSA                                                                     | パッケージ     | 理由                                                                                                                                    | 解除条件                                                 |
+| ------------------------------------------------------------------------ | -------------- | --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) | braces <=3.0.3 | 修正版が未公開。shadcn・eslint-config-next（fast-glob経由）のビルド時ツールだけが使い、アプリ実行時には読み込まれない（2026-10-04追加） | 修正版の公開後、`pnpm update` で取り込み、除外を削除する |
 
 ## 参考
 

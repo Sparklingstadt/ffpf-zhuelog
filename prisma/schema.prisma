@@ -68,3 +68,20 @@ model LineDevelopmentSession {
   expiresAt   DateTime?
   lastEventAt DateTime
 }
+
+// Admin chat history, private to the saving GitHub account. Browsed by date
+// at /conversations like learning notes.
+model ChatConversation {
+  id        String   @id
+  ownerId   String
+  title     String
+  modelName String
+  ended     Boolean
+  messages  Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([id, ownerId])
+  @@index([ownerId, updatedAt])
+  @@index([ownerId, createdAt])
+}

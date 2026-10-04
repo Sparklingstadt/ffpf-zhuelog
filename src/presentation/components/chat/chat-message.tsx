@@ -1,18 +1,11 @@
-import type { UIMessage } from "ai";
 import { Bot, CircleUserRound } from "lucide-react";
 
+import type { LearningChatMessage } from "@ffpf-zhuelog/core/domain/chat/entities/chat-message";
 import { cn } from "@/presentation/lib/utils";
 
-type ChatMessageProps = {
-  message: UIMessage;
-};
-
-export function ChatMessage({ message }: ChatMessageProps) {
-  const isUser = message.role === "user";
-  const text = message.parts
-    .filter((part) => part.type === "text")
-    .map((part) => part.text)
-    .join("");
+// Shared by the live chat and saved conversation notes.
+export function ChatMessage({ role, text }: LearningChatMessage) {
+  const isUser = role === "user";
 
   if (!text) return null;
 
@@ -24,10 +17,16 @@ export function ChatMessage({ message }: ChatMessageProps) {
       <div
         className={cn(
           "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full",
-          isUser ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
+          isUser
+            ? "bg-primary text-primary-foreground"
+            : "bg-muted text-muted-foreground",
         )}
       >
-        {isUser ? <CircleUserRound className="size-4" /> : <Bot className="size-4" />}
+        {isUser ? (
+          <CircleUserRound className="size-4" />
+        ) : (
+          <Bot className="size-4" />
+        )}
       </div>
       <div
         className={cn(

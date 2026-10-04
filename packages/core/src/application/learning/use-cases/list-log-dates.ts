@@ -11,7 +11,10 @@ export type LogDateSummary = {
 };
 
 export class ListLogDates {
-  constructor(private readonly repository: LearningEntryRepository) {}
+  // Shared by learning and conversation notes: both are grouped by JST date.
+  constructor(
+    private readonly repository: Pick<LearningEntryRepository, "listCreatedAt">,
+  ) {}
 
   async execute(): Promise<LogDateSummary[]> {
     const timestamps = await this.repository.listCreatedAt();

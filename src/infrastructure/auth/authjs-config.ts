@@ -55,6 +55,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     session({ session, token }) {
       session.user.githubLogin =
         typeof token.githubLogin === "string" ? token.githubLogin : "";
+      session.user.githubId =
+        typeof token.sub === "string" && /^\d+$/.test(token.sub)
+          ? token.sub
+          : undefined;
       session.user.role = resolveSessionRole(token.role, token.githubLogin);
       return session;
     },

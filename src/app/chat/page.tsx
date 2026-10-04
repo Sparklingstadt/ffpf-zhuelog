@@ -1,4 +1,9 @@
-import { ArrowLeft, Languages, MessageCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  Languages,
+  MessageCircle,
+  MessagesSquare,
+} from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -45,7 +50,7 @@ export default async function ChatPage() {
                 会話練習
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-                ChatGPTと中国語を練習し、表現・文法・語彙についてその場で質問できます。
+                ChatGPTと中国語を練習し、表現・文法・語彙についてその場で質問できます。残したい会話は会話ノートに保存できます。
               </p>
             </div>
           </div>
@@ -55,13 +60,20 @@ export default async function ChatPage() {
                 <ArrowLeft /> 学習ノートへ
               </Link>
             </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/conversations">
+                <MessagesSquare /> 会話ノート
+              </Link>
+            </Button>
             <AuthControls user={user} />
           </div>
         </header>
 
         <ChatInterface
+          key={user.githubId ?? user.githubLogin}
+          ownerId={user.githubId}
           configured={configured}
-          modelName={modelName}
+          modelName={localCodex ? modelName : `${modelName} · 推論: 中`}
           localCodex={localCodex}
         />
       </div>

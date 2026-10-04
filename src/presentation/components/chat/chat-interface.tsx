@@ -1,16 +1,22 @@
 "use client";
 
+import { conversationDraftSchema } from "@ffpf-zhuelog/core/domain/chat/conversation";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import {
   Bot,
-  Eraser,
+  Download,
+  Save,
+  Plus,
   LoaderCircle,
   Send,
   Square,
   Sparkles,
 } from "lucide-react";
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
+
+import { useConversationHistory } from "./use-conversation-history";
+import { ConversationHistory } from "./conversation-history";
 
 import { ChatMessage } from "@/presentation/components/chat/chat-message";
 import {
@@ -40,19 +46,31 @@ type ChatInterfaceProps = {
   configured: boolean;
   modelName: string;
   localCodex?: boolean;
+  ownerId?: string;
 };
 
 export function ChatInterface({
   configured,
   modelName,
   localCodex = false,
+  ownerId,
 }: ChatInterfaceProps) {
   const [input, setInput] = useState("");
+  const [limitError, setLimitError] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
   const { messages, sendMessage, status, stop, setMessages, error } = useChat({
     transport,
   });
   const isBusy = status === "submitted" || status === "streaming";
+  const history = useConversationHistory(
+    ownerId,
+    modelName,
+    messages,
+    setMessages,
+    isBusy,
+  );
+  const closed = Boolean(history.current?.ended || history.viewing);
+  const blocked = isBusy || history.saving || history.loading || !history.ready;
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -60,7 +78,25 @@ export function ChatInterface({
 
   function submitText(text: string) {
     const nextMessage = text.trim();
-    if (!configured || isBusy || !nextMessage) return;
+    if (!configured || blocked || closed || !nextMessage) return;
+    const current = history.current;
+    if (
+      current &&
+      (current.messages.length >= 39 ||
+        !conversationDraftSchema.safeParse({
+          ...current,
+          messages: [
+            ...current.messages,
+            { id: crypto.randomUUID(), role: "user", text: nextMessage },
+          ],
+        }).success)
+    ) {
+      setLimitError(
+        "会話の上限に達しました。保存・ダウンロードしてから、新しい会話を始めてください。",
+      );
+      return;
+    }
+    setLimitError("");
     setInput("");
     void sendMessage({ text: nextMessage });
   }
@@ -83,7 +119,7 @@ export function ChatInterface({
 
   return (
     <Card className="min-h-[42rem] gap-0 py-0 shadow-sm">
-      <CardHeader className="flex flex-row items-center justify-between gap-4 border-b py-4">
+      <CardHeader className="flex flex-col items-start justify-between gap-4 border-b py-4 sm:flex-row">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <Bot className="size-4" />
@@ -91,23 +127,90 @@ export function ChatInterface({
           <div className="min-w-0">
             <p className="font-medium">中国語学習アシスタント</p>
             <p className="text-xs text-muted-foreground">
-              {modelName} · アプリには会話履歴を保存しません
+              {history.current?.modelName ?? modelName} ·{" "}
+              {history.isSaved ? "DB保存済み" : "DBへは保存ボタンで保存"}
             </p>
           </div>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => setMessages([])}
-          disabled={messages.length === 0 || isBusy}
-        >
-          <Eraser />
-          クリア
-        </Button>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={
+              !messages.length || closed || history.saving || history.loading
+            }
+            onClick={() => {
+              stop();
+              history.end();
+              setInput("");
+            }}
+          >
+            <Square />
+            会話を終える
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={
+              !messages.length || blocked || !ownerId || history.isSaved
+            }
+            onClick={() => void history.save()}
+          >
+            <Save />
+            {history.saving ? "保存中…" : "会話を保存する"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!messages.length || blocked}
+            onClick={history.download}
+          >
+            <Download />
+            端末にダウンロード
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={blocked}
+            onClick={() => {
+              history.startNew();
+              setLimitError("");
+              setInput("");
+            }}
+          >
+            <Plus />
+            新しい会話
+          </Button>
+        </div>
       </CardHeader>
 
       <CardContent className="flex min-h-0 flex-1 flex-col px-0">
+        <div className="space-y-2 px-4 pt-4 text-sm sm:px-6" role="status">
+          {!ownerId ? (
+            <p>
+              履歴保存には、一度ログアウトしてGitHubでログインし直してください。
+            </p>
+          ) : null}
+          {history.backupError ? (
+            <p className="text-destructive">{history.backupError}</p>
+          ) : ownerId && history.current?.messages.length ? (
+            <p className="text-muted-foreground">
+              LocalStorageに自動バックアップします（最新20会話・合計1MiBまで）。
+            </p>
+          ) : null}
+          {history.historyError ? (
+            <p className="text-destructive">{history.historyError}</p>
+          ) : null}
+          {history.notice ? <p>{history.notice}</p> : null}
+          {limitError ? <p className="text-destructive">{limitError}</p> : null}
+          {closed ? (
+            <p>この会話は閲覧のみです。「新しい会話」で練習を始められます。</p>
+          ) : null}
+        </div>
         {localCodex ? (
           <div className="p-4 sm:px-6">
             <Alert>
@@ -155,7 +258,7 @@ export function ChatInterface({
                     type="button"
                     variant="outline"
                     className="h-auto justify-start whitespace-normal px-4 py-3 text-left leading-5"
-                    disabled={!configured || isBusy}
+                    disabled={!configured || blocked || closed}
                     onClick={() => submitText(starter)}
                   >
                     {starter}
@@ -165,7 +268,14 @@ export function ChatInterface({
             </div>
           ) : (
             messages.map((message) => (
-              <ChatMessage key={message.id} message={message} />
+              <ChatMessage
+                key={message.id}
+                role={message.role === "user" ? "user" : "assistant"}
+                text={message.parts
+                  .filter((part) => part.type === "text")
+                  .map((part) => part.text)
+                  .join("")}
+              />
             ))
           )}
 
@@ -193,6 +303,12 @@ export function ChatInterface({
         </div>
       </CardContent>
 
+      <ConversationHistory
+        history={history.history}
+        disabled={blocked}
+        onOpen={(id) => void history.open(id)}
+      />
+
       <CardFooter className="block border-t bg-card p-4 sm:p-5">
         <form onSubmit={handleSubmit} className="space-y-3">
           <Textarea
@@ -205,7 +321,7 @@ export function ChatInterface({
                 : "OpenAI APIキーの設定後に利用できます"
             }
             maxLength={MAX_INPUT_LENGTH}
-            disabled={!configured || isBusy}
+            disabled={!configured || blocked || closed}
             aria-label="ChatGPTへのメッセージ"
             className="min-h-24 resize-y"
           />
@@ -219,7 +335,10 @@ export function ChatInterface({
                 停止
               </Button>
             ) : (
-              <Button type="submit" disabled={!configured || !input.trim()}>
+              <Button
+                type="submit"
+                disabled={!configured || blocked || closed || !input.trim()}
+              >
                 <Send />
                 送信
               </Button>
