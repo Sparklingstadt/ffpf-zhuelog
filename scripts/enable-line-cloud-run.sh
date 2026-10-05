@@ -4,9 +4,9 @@
 #
 #   cd ffpf-zhuelog && git pull && ./scripts/enable-line-cloud-run.sh
 #
-# Enables LINE on the Cloud Run service, keeps the CPU allocated after a
-# response (for the webhook's after()), schedules /api/line/drain every 30
-# minutes and checks that the drain answers. The LINE webhook URL is switched
+# Enables LINE on the Cloud Run service, lets the webhook hand each drain to
+# Cloud Tasks (so the CPU is billed only while a request runs), schedules
+# /api/line/drain every 30 minutes and checks that the drain answers. The LINE webhook URL is switched
 # by hand afterwards. Safe to re-run.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -14,7 +14,7 @@ source scripts/cloud-run-common.sh
 
 echo "== APIを有効化しています"
 gcloud services enable run.googleapis.com secretmanager.googleapis.com \
-  cloudscheduler.googleapis.com
+  cloudscheduler.googleapis.com cloudtasks.googleapis.com
 
 URL="$(service_url 2>/dev/null || true)"
 [[ -n "$URL" ]] || {
@@ -56,10 +56,26 @@ while true; do
   echo "   形式が違います。"
 done
 
+echo "== Cloud Tasks のキュー（webhookから添削・翻訳を呼ぶ）を用意しています"
+# One drain at a time (a running drain picks up new jobs anyway), and a few
+# retries if the drain itself fails.
+queue=(zhuelog-line-drain --location "$REGION" --max-concurrent-dispatches 1
+  --max-attempts 3 --min-backoff 10s)
+if gcloud tasks queues describe zhuelog-line-drain --location "$REGION" >/dev/null 2>&1; then
+  gcloud tasks queues update "${queue[@]}" --quiet >/dev/null
+else
+  gcloud tasks queues create "${queue[@]}" --quiet >/dev/null
+fi
+gcloud tasks queues add-iam-policy-binding zhuelog-line-drain --location "$REGION" \
+  --member "serviceAccount:$RUNTIME_SA" --role roles/cloudtasks.enqueuer >/dev/null
+queue_name="projects/$PROJECT/locations/$REGION/queues/zhuelog-line-drain"
+
 echo "== Cloud Run でLINE連携を有効にしています"
+# --cpu-throttling: request-based billing. Work after a response would stall,
+# which is why the webhook hands the drain to Cloud Tasks.
 gcloud run services update "$SERVICE" --region "$REGION" \
-  --no-cpu-throttling \
-  --update-env-vars "LINE_INTEGRATION_ENABLED=true,LINE_BOT_USER_ID=$bot_id,LINE_ALLOWED_USER_ID=$user_id" \
+  --cpu-throttling \
+  --update-env-vars "LINE_INTEGRATION_ENABLED=true,LINE_BOT_USER_ID=$bot_id,LINE_ALLOWED_USER_ID=$user_id,LINE_DRAIN_TASKS_QUEUE=$queue_name" \
   --update-secrets "LINE_CHANNEL_SECRET=zhuelog-LINE_CHANNEL_SECRET:latest,LINE_CHANNEL_ACCESS_TOKEN=zhuelog-LINE_CHANNEL_ACCESS_TOKEN:latest,OPENAI_API_KEY=zhuelog-OPENAI_API_KEY:latest,CRON_SECRET=zhuelog-CRON_SECRET:latest" \
   --quiet >/dev/null
 

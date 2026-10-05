@@ -1,5 +1,9 @@
 import { DrainLineJobs } from "@ffpf-zhuelog/core/application/line/use-cases/drain-line-jobs";
 import { ProcessLineLearning } from "@ffpf-zhuelog/core/application/line/use-cases/process-line-learning";
+import {
+  CloudTasksDrainTrigger,
+  getDrainTasksConfig,
+} from "@/infrastructure/line/cloud-tasks-drain-trigger";
 import { getLineConfig } from "@/infrastructure/line/config";
 import { LinePushMessenger } from "@/infrastructure/line/line-messenger";
 import { OpenAiLineLearningGenerator } from "@/infrastructure/line/openai-line-learning-generator";
@@ -25,5 +29,10 @@ export function createLineContainer() {
           (jobId) => console.error("LINE_JOB_FAILED", jobId),
         )
       : null;
-  return { config, jobs, createDrain };
+  // Cloud Run only: Vercel and the E2E server keep draining in after().
+  const createDrainTrigger = () => {
+    const tasks = config ? getDrainTasksConfig() : null;
+    return tasks ? new CloudTasksDrainTrigger(tasks) : null;
+  };
+  return { config, jobs, createDrain, createDrainTrigger };
 }

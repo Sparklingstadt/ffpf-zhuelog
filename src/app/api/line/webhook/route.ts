@@ -6,9 +6,16 @@ import { handleLineWebhook } from "@/presentation/controllers/line-webhook-contr
 export const runtime = "nodejs";
 export const maxDuration = 60;
 export async function POST(request: Request) {
-  const { config, jobs, createDrain } = createLineContainer();
+  const { config, jobs, createDrain, createDrainTrigger } =
+    createLineContainer();
   const response = await handleLineWebhook(request, config, jobs);
   if (response.status === 200 && config) {
+    const trigger = createDrainTrigger();
+    if (trigger) {
+      if (await trigger.enqueue()) return response;
+      // after() still tries; the scheduled drain picks up whatever it misses.
+      console.error("LINE_DRAIN_ENQUEUE_FAILED");
+    }
     const deadline = Date.now() + LINE_DRAIN_BUDGET_MS;
     after(async () => {
       try {

@@ -11,6 +11,11 @@ test("Cloud Scheduler sweeps LINE leftovers every 30 minutes", () => {
   );
   assert.match(script, /--schedule '\*\/30 \* \* \* \*'/);
   assert.match(script, /--http-method GET --uri "\$URL\/api\/line\/drain"/);
+  // Request-based billing: the webhook hands the drain to Cloud Tasks instead
+  // of keeping the CPU allocated for after().
+  assert.match(script, /--cpu-throttling/);
+  assert.doesNotMatch(script, /--no-cpu-throttling/);
+  assert.match(script, /LINE_DRAIN_TASKS_QUEUE=\$queue_name/);
   // The schedule must be a real GET route.
   const route = readFileSync(
     new URL("../src/app/api/line/drain/route.ts", import.meta.url),

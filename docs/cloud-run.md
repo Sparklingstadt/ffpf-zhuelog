@@ -15,7 +15,7 @@ cd ffpf-zhuelog && ./scripts/deploy-cloud-run.sh
 
 `scripts/deploy-cloud-run.sh` は、下の手順1・3（APIの有効化、Secret Managerへの登録、デプロイ、`AUTH_URL` の設定）を行います。`DATABASE_URL` などの秘密情報は、聞かれたときに入力します（画面には表示されません）。`AUTH_SECRET` は自動で作ります。GitHubのOAuth Appは最後に表示されるコールバックURLで作り、スクリプトをもう一度実行して設定します。それまではゲストとしてログインできます。登録済みの秘密情報はそのまま使い、空欄にした項目は今の値のままなので、何度実行しても構いません。
 
-- LINEの設定は変えません（初回はLINE連携が無効の状態です）。Cloud SchedulerとCPUの常時割り当て（`--no-cpu-throttling`）も、LINE用なのでここでは設定しません。
+- LINEの設定は変えません（初回はLINE連携が無効の状態です）。Cloud SchedulerとCloud Tasksも、LINE用なのでここでは設定しません。
 - `DATABASE_URL` にVercelと同じDBを指定すると、VercelとCloud Runが同じデータを使います。マイグレーションは適用済みなので不要です。別のDBを使う場合は、先に手順2を行ってください。
 - 実行中の操作では、既定のサービスアカウント（`<プロジェクト番号>-compute@developer.gserviceaccount.com`）に、ソースからのビルド権限（`roles/run.builder`）と、登録したシークレットの読み取り権限を付与します。
 
@@ -31,7 +31,8 @@ cd ffpf-zhuelog && git pull && ./scripts/enable-line-cloud-run.sh
 
 - LINEのチャネルシークレット・チャネルアクセストークン・`OPENAI_API_KEY` を聞かれたら入力し、Secret Managerに登録します。値はVercelの環境変数、またはLINE Developersからコピーします。チャネルアクセストークンは再発行しないでください（Vercelで使っているトークンが無効になります）。
 - `CRON_SECRET` は自動で作ります。公式アカウントのユーザーIDは、チャネルアクセストークンを使ってLINEのAPIから取得します。あなたのLINEユーザーIDだけを入力します。
-- サービスにLINEの設定を加え、`--no-cpu-throttling` にします。
+- Cloud Tasksのキュー `zhuelog-line-drain` を作り、サービスアカウントにタスクを追加する権限（`roles/cloudtasks.enqueuer`）を付けます。
+- サービスにLINEの設定とキュー名（`LINE_DRAIN_TASKS_QUEUE`）を加え、`--cpu-throttling`（リクエストベースの課金）にします。
 - Cloud Schedulerで30分おきに `/api/line/drain` を呼ぶジョブを作り、このURLが200を返すことを確認します。
 
 最後に表示される手順に従って、手作業で切り替えます。
@@ -52,16 +53,18 @@ cd ffpf-zhuelog && git pull && ./scripts/enable-line-cloud-run.sh
 
 ## Vercelとの違い
 
-| 項目                         | Vercel                                 | Cloud Run                                                                                          |
-| ---------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Auth.jsの公開URL             | 自動で判定                             | **`AUTH_URL` が必須**（例: `https://zhuelog-xxxx.asia-northeast1.run.app`）                        |
-| LINEの取り残しを拾うCron     | Vercel Cron（`vercel.json`、廃止済み） | **Cloud Scheduler** から `GET /api/line/drain` を呼ぶ                                              |
-| webhook後の処理（`after()`） | 関数の中で続けて実行                   | 応答後もCPUを使えるよう **`--no-cpu-throttling`** を指定する                                       |
-| `maxDuration`（60秒）        | 有効                                   | 無視される。上限はCloud Runのリクエストタイムアウト（既定300秒）。LINE処理は独自に約50秒で打ち切る |
+| 項目                     | Vercel                                 | Cloud Run                                                                                          |
+| ------------------------ | -------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Auth.jsの公開URL         | 自動で判定                             | **`AUTH_URL` が必須**（例: `https://zhuelog-xxxx.asia-northeast1.run.app`）                        |
+| LINEの取り残しを拾うCron | Vercel Cron（`vercel.json`、廃止済み） | **Cloud Scheduler** から `GET /api/line/drain` を呼ぶ                                              |
+| webhook後の処理          | `after()` で関数の中で続けて実行       | **Cloud Tasks** に `GET /api/line/drain` を頼み、別のリクエストとして処理する                      |
+| `maxDuration`（60秒）    | 有効                                   | 無視される。上限はCloud Runのリクエストタイムアウト（既定300秒）。LINE処理は独自に約50秒で打ち切る |
 
 `AUTH_URL` を設定しないと、本番環境ではAuth.jsがホストを信頼せず、ログインが `UntrustedHost` で失敗します。設定すると、ログイン画面へのリダイレクト・OAuthのコールバックURL・CSPの `upgrade-insecure-requests` もこのURLを基準にします。
 
-`after()` は応答を返したあとに動くため、Cloud Runの既定（リクエスト処理中だけCPUを割り当てる）では極端に遅くなり、LINEの返信はCronが拾うまで遅れます。`--no-cpu-throttling`（インスタンスベースの課金）にしてください。
+Cloud Runの既定（リクエストベースの課金）では、CPUはリクエストの処理中にしか割り当てられません。応答を返したあとに動く `after()` は極端に遅くなり、LINEの返信はCronが拾うまで遅れます。一方、`--no-cpu-throttling`（インスタンスベースの課金）にすると、インスタンスが起きている間ずっと課金されます。30分おきのCloud Schedulerで起きたインスタンスは15分ほど残るため、無料枠を超えて月に約18ドルかかりました。
+
+そこで、`LINE_DRAIN_TASKS_QUEUE`（`projects/<プロジェクト>/locations/<リージョン>/queues/<キュー>`）を設定したサービスでは、webhookは処理待ちを保存したあと、Cloud Tasksに「`AUTH_URL` の `/api/line/drain` を `CRON_SECRET` 付きで呼ぶ」タスクを追加してから200を返します。添削・翻訳はCloud Tasksからのリクエストの中で動くので、CPUはその間だけ使われ、課金もその間だけです。タスクの追加にはメタデータサーバーから取るサービスアカウントのトークンを使うので、新しい秘密情報はいりません。追加に失敗したときは `after()` で試し、残りはCloud Schedulerが拾います。LINEはwebhookの応答を2秒しか待たないため、webhookの中で添削を終えることはできません。
 
 ## 前提
 
@@ -106,7 +109,6 @@ gcloud run deploy zhuelog \
   --source . \
   --region asia-northeast1 \
   --allow-unauthenticated \
-  --no-cpu-throttling \
   --max-instances 1 \
   --set-env-vars "AUTH_GITHUB_ID=<OAuth AppのClient ID>,AUTH_ALLOWED_GITHUB_LOGINS=<ログイン名>,OPENAI_MODEL=gpt-6.1-sol,LINE_INTEGRATION_ENABLED=true,LINE_BOT_USER_ID=<U...>,LINE_ALLOWED_USER_ID=<U...>" \
   --set-secrets "DATABASE_URL=zhuelog-DATABASE_URL:latest,AUTH_SECRET=zhuelog-AUTH_SECRET:latest,AUTH_GITHUB_SECRET=zhuelog-AUTH_GITHUB_SECRET:latest,OPENAI_API_KEY=zhuelog-OPENAI_API_KEY:latest,LINE_CHANNEL_SECRET=zhuelog-LINE_CHANNEL_SECRET:latest,LINE_CHANNEL_ACCESS_TOKEN=zhuelog-LINE_CHANNEL_ACCESS_TOKEN:latest,CRON_SECRET=zhuelog-CRON_SECRET:latest"

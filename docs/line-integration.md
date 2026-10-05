@@ -18,7 +18,8 @@ v0.12.0 から、添削と翻訳はすべてサーバーの中で OpenAI API を
 ```text
 自分のLINE（公式アカウントとの1対1トーク）
   → POST /api/line/webhook（Cloud Run）：署名・送信者検証 → 本文を振り分け → DBに処理待ちを保存 → 200を返す
-  → 200のあと after() で、同じ関数の中で処理を続ける（締め切りは開始から約50秒）
+  → 200の前に Cloud Tasks へ GET /api/line/drain を頼む（Vercel・E2Eでは 200 のあと after() で同じ関数の中で処理する）
+  → GET /api/line/drain（Cloud Tasks）：ジョブを処理する（締め切りは開始から約50秒）
       ・OpenAI Responses API（gpt-5-mini）：添削または翻訳、ピン音、ヒントを生成
       ・結果を検証 → 学習ノートと返信用CSVを同時保存
       ・LINE Push API：保存済みCSVを見出し・改行付きの文章に整形し、自分のトークへ送信
@@ -74,15 +75,16 @@ LINEへの送信が一時的に失敗した場合は、同じ再送キー（`X-L
 
 専用のLINE公式アカウントを用意すると、既存ボットのWebhookを上書きせずに運用できます。
 
-| 変数                        | 役割                                                | 設定先          |
-| --------------------------- | --------------------------------------------------- | --------------- |
-| `LINE_INTEGRATION_ENABLED`  | 準備完了後だけ `true`                               | Webサーバー     |
-| `LINE_CHANNEL_SECRET`       | Webhookの署名検証                                   | Webサーバーのみ |
-| `LINE_CHANNEL_ACCESS_TOKEN` | 返信のPush送信                                      | Webサーバーのみ |
-| `LINE_BOT_USER_ID`          | 受信先の公式アカウントのユーザーID（Uから始まる値） | Webサーバーのみ |
-| `LINE_ALLOWED_USER_ID`      | 利用を許可する自分のLINEユーザーID（1人）           | Webサーバーのみ |
-| `OPENAI_API_KEY`            | 添削・翻訳の生成（Webのチャットと共通）             | Webサーバーのみ |
-| `CRON_SECRET`               | Cloud Schedulerの認証（下記で生成する値）           | Webサーバーのみ |
+| 変数                        | 役割                                                   | 設定先          |
+| --------------------------- | ------------------------------------------------------ | --------------- |
+| `LINE_INTEGRATION_ENABLED`  | 準備完了後だけ `true`                                  | Webサーバー     |
+| `LINE_CHANNEL_SECRET`       | Webhookの署名検証                                      | Webサーバーのみ |
+| `LINE_CHANNEL_ACCESS_TOKEN` | 返信のPush送信                                         | Webサーバーのみ |
+| `LINE_BOT_USER_ID`          | 受信先の公式アカウントのユーザーID（Uから始まる値）    | Webサーバーのみ |
+| `LINE_ALLOWED_USER_ID`      | 利用を許可する自分のLINEユーザーID（1人）              | Webサーバーのみ |
+| `OPENAI_API_KEY`            | 添削・翻訳の生成（Webのチャットと共通）                | Webサーバーのみ |
+| `CRON_SECRET`               | Cloud Scheduler・Cloud Tasksの認証（下記で生成する値） | Webサーバーのみ |
+| `LINE_DRAIN_TASKS_QUEUE`    | Cloud Runのみ。drainを頼むCloud Tasksのキュー名        | Webサーバーのみ |
 
 LINE DevelopersのチャネルID、チャネルシークレット、チャネルアクセストークン、公式アカウントのID、自分のユーザーIDはそれぞれ別物です。トークン類はチャットやGitに貼らず、Vercel環境変数／gitignore済みの `.env.local` に保存してください。
 
