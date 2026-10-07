@@ -1,5 +1,6 @@
 import { CalendarDays, ChevronDown, Clock3 } from "lucide-react";
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import type { LearningEntry } from "@ffpf-zhuelog/core/domain/learning/entities/learning-entry";
 import { Badge } from "@/presentation/components/ui/badge";
@@ -21,6 +22,8 @@ type LearningEntryCardProps = {
   href?: string;
   linkLabel?: string;
   defaultOpen?: boolean;
+  // Extra controls at the right of the footer, such as the trash buttons.
+  actions?: ReactNode;
 };
 
 const deletedClassName =
@@ -52,6 +55,7 @@ export function LearningEntryCard({
   href,
   linkLabel = "ノートを開く",
   defaultOpen = true,
+  actions,
 }: LearningEntryCardProps) {
   const translation = entry.kind === "translation";
   // A translation has no differences to show: skip the diff entirely.
@@ -179,12 +183,17 @@ export function LearningEntryCard({
                 {formatTokyoDateTime(entry.createdAt)} JST
               </time>
             </div>
-            {href ? (
-              <Button asChild variant="ghost" size="sm" className="ml-auto">
-                <Link href={href}>
-                  <CalendarDays /> {linkLabel}
-                </Link>
-              </Button>
+            {href || actions ? (
+              <div className="ml-auto flex flex-wrap items-start justify-end gap-2">
+                {actions}
+                {href ? (
+                  <Button asChild variant="ghost" size="sm">
+                    <Link href={href}>
+                      <CalendarDays /> {linkLabel}
+                    </Link>
+                  </Button>
+                ) : null}
+              </div>
             ) : null}
           </CardFooter>
         </div>

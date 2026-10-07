@@ -1,4 +1,4 @@
-import { ArrowLeft, CalendarDays, Languages } from "lucide-react";
+import { ArrowLeft, CalendarDays, Languages, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
@@ -11,7 +11,9 @@ import {
 } from "@ffpf-zhuelog/core/domain/calendar/value-objects/log-date";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { ReauthNotice } from "@/presentation/components/chat/reauth-notice";
+import { trashLearningEntryAction } from "@/presentation/actions/note-trash-actions";
 import { LearningEntryCard } from "@/presentation/components/learning/learning-entry-card";
+import { NoteActionForm } from "@/presentation/components/records/note-action-form";
 import { RecordOwnerControls } from "@/presentation/components/records/record-owner-controls";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
@@ -113,6 +115,24 @@ export default async function LogDetailPage({
           numberLabel={`#${entryNumber}`}
           defaultOpen
         />
+
+        {/* Only your own notes: an admin viewing someone else reads only. */}
+        {owner.kind === "self" ? (
+          <div className="flex justify-end">
+            <NoteActionForm
+              action={trashLearningEntryAction}
+              fields={{
+                id: entry.id,
+                year: String(date.year),
+                month: String(date.month),
+                day: String(date.day),
+              }}
+              label="ゴミ箱に入れる"
+              pendingLabel="移動中…"
+              icon={<Trash2 />}
+            />
+          </div>
+        ) : null}
 
         <nav
           className="flex items-center justify-between gap-3"

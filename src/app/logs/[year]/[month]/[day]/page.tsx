@@ -10,6 +10,10 @@ import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { ReauthNotice } from "@/presentation/components/chat/reauth-notice";
 import { LearningEntryCard } from "@/presentation/components/learning/learning-entry-card";
 import { RecordOwnerControls } from "@/presentation/components/records/record-owner-controls";
+import {
+  TrashLink,
+  TrashNotice,
+} from "@/presentation/components/records/trash-notice";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
@@ -26,15 +30,19 @@ export const dynamic = "force-dynamic";
 
 type LogDatePageProps = {
   params: Promise<{ year: string; month: string; day: string }>;
-  searchParams: Promise<{ user?: string | string[] }>;
+  searchParams: Promise<{
+    user?: string | string[];
+    trashed?: string | string[];
+  }>;
 };
 
 export default async function LogDatePage({
   params,
   searchParams,
 }: LogDatePageProps) {
+  const query = await searchParams;
   const { user, owner } = await getRecordOwner(
-    requestedRecordOwner((await searchParams).user),
+    requestedRecordOwner(query.user),
   );
   if (!user || (owner.kind === "denied" && owner.reason === "unauthenticated"))
     redirect("/signin");
@@ -79,12 +87,17 @@ export default async function LogDatePage({
                 <ArrowLeft /> 日付一覧へ
               </Link>
             </Button>
+            {owner.kind === "self" ? <TrashLink href="/logs/trash" /> : null}
             <AuthControls user={user} />
           </div>
         </header>
 
         {view ? (
           <RecordOwnerControls owner={owner} view={view} path={dateHref} />
+        ) : null}
+
+        {owner.kind === "self" && query.trashed === "1" ? (
+          <TrashNotice href="/logs/trash" />
         ) : null}
 
         {!hasNotes ? (
