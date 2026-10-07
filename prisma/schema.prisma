@@ -22,11 +22,14 @@ model LearningEntry {
   correctedText String
   pinyin        String
   createdAt     DateTime    @default(now())
+  // Set while the note is in its owner's trash.
+  deletedAt     DateTime?
   ownerId       String
   batchId       String
   batch         ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
   hints         Hint[]
   @@index([ownerId, createdAt])
+  @@index([ownerId, deletedAt])
   @@index([batchId])
 }
 
@@ -82,10 +85,13 @@ model ChatConversation {
   messages  Json
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  // Set while the conversation is in its owner's trash.
+  deletedAt DateTime?
 
   @@unique([id, ownerId])
   @@index([ownerId, updatedAt])
   @@index([ownerId, createdAt])
+  @@index([ownerId, deletedAt])
 }
 
 // Password sign-in for members. Managed by GitHub admins at /admin/accounts.

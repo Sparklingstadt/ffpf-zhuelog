@@ -34,6 +34,11 @@ function fakeRepository(entries: LearningEntry[], total = entries.length) {
     listCreatedAt: unused,
     listByDate: unused,
     getByDateAndNumber: unused,
+    trash: unused,
+    restore: unused,
+    purge: unused,
+    emptyTrash: unused,
+    listTrashed: unused,
   };
   return { repository, limits };
 }

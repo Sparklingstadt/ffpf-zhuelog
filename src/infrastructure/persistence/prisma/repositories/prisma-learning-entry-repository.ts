@@ -3,6 +3,7 @@ import type {
   DailyLearningEntry,
   LearningEntryRepository,
   RecentLearningEntries,
+  TrashedLearningEntries,
 } from "@ffpf-zhuelog/core/domain/learning/repositories/learning-entry-repository";
 import type { DateRange } from "@ffpf-zhuelog/core/domain/calendar/value-objects/log-date";
 import { getPrismaClient } from "@/infrastructure/persistence/prisma/prisma-client";
@@ -10,6 +11,7 @@ import { toLearningEntry } from "@/infrastructure/persistence/prisma/mappers/lea
 
 const hintsByPosition = { orderBy: { position: "asc" as const } };
 const oldestFirst = [{ createdAt: "asc" as const }, { id: "asc" as const }];
+const inTrash = { deletedAt: { not: null } };
 
 export class PrismaLearningEntryRepository implements LearningEntryRepository {
   async importBatch(
@@ -57,12 +59,12 @@ export class PrismaLearningEntryRepository implements LearningEntryRepository {
     const prisma = getPrismaClient();
     const [records, total] = await Promise.all([
       prisma.learningEntry.findMany({
-        where: { ownerId },
+        where: { ownerId, deletedAt: null },
         include: { hints: hintsByPosition },
         orderBy: { createdAt: "desc" },
         take: limit,
       }),
-      prisma.learningEntry.count({ where: { ownerId } }),
+      prisma.learningEntry.count({ where: { ownerId, deletedAt: null } }),
     ]);
 
     return { entries: records.map(toLearningEntry), total };
@@ -70,7 +72,7 @@ export class PrismaLearningEntryRepository implements LearningEntryRepository {
 
   async listCreatedAt(ownerId: string): Promise<Date[]> {
     const records = await getPrismaClient().learningEntry.findMany({
-      where: { ownerId },
+      where: { ownerId, deletedAt: null },
       select: { createdAt: true },
       orderBy: { createdAt: "desc" },
     });
@@ -79,7 +81,11 @@ export class PrismaLearningEntryRepository implements LearningEntryRepository {
 
   async listByDate(ownerId: string, range: DateRange) {
     const records = await getPrismaClient().learningEntry.findMany({
-      where: { ownerId, createdAt: { gte: range.start, lt: range.end } },
+      where: {
+        ownerId,
+        deletedAt: null,
+        createdAt: { gte: range.start, lt: range.end },
+      },
       include: { hints: hintsByPosition },
       orderBy: oldestFirst,
     });
@@ -94,6 +100,7 @@ export class PrismaLearningEntryRepository implements LearningEntryRepository {
     const prisma = getPrismaClient();
     const where = {
       ownerId,
+      deletedAt: null,
       createdAt: { gte: range.start, lt: range.end },
     };
     const total = await prisma.learningEntry.count({ where });
@@ -112,5 +119,59 @@ export class PrismaLearningEntryRepository implements LearningEntryRepository {
 
     if (!record || entryNumber > total) return null;
     return { entry: toLearningEntry(record), total };
+  }
+
+  async trash(ownerId: string, id: string) {
+    const { count } = await getPrismaClient().learningEntry.updateMany({
+      where: { id, ownerId, deletedAt: null },
+      data: { deletedAt: new Date() },
+    });
+    return count === 1;
+  }
+
+  async restore(ownerId: string, id: string) {
+    const { count } = await getPrismaClient().learningEntry.updateMany({
+      where: { id, ownerId, ...inTrash },
+      data: { deletedAt: null },
+    });
+    return count === 1;
+  }
+
+  async purge(ownerId: string, id: string) {
+    const { count } = await getPrismaClient().learningEntry.deleteMany({
+      where: { id, ownerId, ...inTrash },
+    });
+    return count === 1;
+  }
+
+  async emptyTrash(ownerId: string) {
+    const { count } = await getPrismaClient().learningEntry.deleteMany({
+      where: { ownerId, ...inTrash },
+    });
+    return count;
+  }
+
+  async listTrashed(
+    ownerId: string,
+    limit: number,
+  ): Promise<TrashedLearningEntries> {
+    const prisma = getPrismaClient();
+    const where = { ownerId, ...inTrash };
+    const [records, total] = await Promise.all([
+      prisma.learningEntry.findMany({
+        where,
+        include: { hints: hintsByPosition },
+        orderBy: [{ deletedAt: "desc" }, { id: "asc" }],
+        take: limit,
+      }),
+      prisma.learningEntry.count({ where }),
+    ]);
+    return {
+      entries: records.map((record) => ({
+        ...toLearningEntry(record),
+        deletedAt: record.deletedAt!,
+      })),
+      total,
+    };
   }
 }
