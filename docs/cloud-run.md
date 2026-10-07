@@ -119,7 +119,7 @@ gcloud run deploy zhuelog \
   --region asia-northeast1 \
   --allow-unauthenticated \
   --max-instances 1 \
-  --set-env-vars "AUTH_GITHUB_ID=<OAuth AppのClient ID>,AUTH_ALLOWED_GITHUB_LOGINS=<ログイン名>,OPENAI_MODEL=gpt-6.1-sol,LINE_INTEGRATION_ENABLED=true,LINE_BOT_USER_ID=<U...>,LINE_ALLOWED_USER_ID=<U...>" \
+  --set-env-vars "AUTH_GITHUB_ID=<OAuth AppのClient ID>,AUTH_ALLOWED_GITHUB_LOGINS=<ログイン名>,OPENAI_MODEL=gpt-6.1-sol,LINE_INTEGRATION_ENABLED=true,LINE_BOT_USER_ID=<U...>,LINE_ALLOWED_USER_ID=<U...>,LINE_NOTE_OWNER_ID=<持ち主ID>" \
   --set-secrets "DATABASE_URL=zhuelog-DATABASE_URL:latest,AUTH_SECRET=zhuelog-AUTH_SECRET:latest,AUTH_GITHUB_SECRET=zhuelog-AUTH_GITHUB_SECRET:latest,OPENAI_API_KEY=zhuelog-OPENAI_API_KEY:latest,LINE_CHANNEL_SECRET=zhuelog-LINE_CHANNEL_SECRET:latest,LINE_CHANNEL_ACCESS_TOKEN=zhuelog-LINE_CHANNEL_ACCESS_TOKEN:latest,CRON_SECRET=zhuelog-CRON_SECRET:latest"
 ```
 

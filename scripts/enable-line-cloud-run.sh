@@ -57,6 +57,14 @@ while true; do
   echo "   形式が違います。"
 done
 
+# LINE saves its learning notes under this account. The ID is the numeric
+# GitHub account ID, or password:<id> for a member account.
+while true; do
+  read -rp "LINEで追加する学習ノートの持ち主ID（GitHubアカウントの数字のID、またはメンバーの password:... のID）: " note_owner_id
+  [[ "$note_owner_id" =~ ^[0-9]+$ || "$note_owner_id" =~ ^password:[a-z0-9]{20,32}$ ]] && break
+  echo "   形式が違います。"
+done
+
 echo "== Cloud Tasks のキュー（webhookから添削・翻訳を呼ぶ）を用意しています"
 # One drain at a time (a running drain picks up new jobs anyway), and a few
 # retries if the drain itself fails.
@@ -76,7 +84,7 @@ echo "== Cloud Run でLINE連携を有効にしています"
 # which is why the webhook hands the drain to Cloud Tasks.
 gcloud run services update "$SERVICE" --region "$REGION" \
   --cpu-throttling \
-  --update-env-vars "LINE_INTEGRATION_ENABLED=true,LINE_BOT_USER_ID=$bot_id,LINE_ALLOWED_USER_ID=$user_id,LINE_DRAIN_TASKS_QUEUE=$queue_name" \
+  --update-env-vars "LINE_INTEGRATION_ENABLED=true,LINE_BOT_USER_ID=$bot_id,LINE_ALLOWED_USER_ID=$user_id,LINE_NOTE_OWNER_ID=$note_owner_id,LINE_DRAIN_TASKS_QUEUE=$queue_name" \
   --update-secrets "LINE_CHANNEL_SECRET=zhuelog-LINE_CHANNEL_SECRET:latest,LINE_CHANNEL_ACCESS_TOKEN=zhuelog-LINE_CHANNEL_ACCESS_TOKEN:latest,OPENAI_API_KEY=zhuelog-OPENAI_API_KEY:latest,CRON_SECRET=zhuelog-CRON_SECRET:latest" \
   --quiet >/dev/null
 

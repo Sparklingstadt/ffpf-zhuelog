@@ -7,7 +7,9 @@ export type GenerationFailureCode =
   | "OPENAI_INVALID_RESPONSE"
   | "OPENAI_REQUEST_FAILED"
   // Set by the server: the result exceeds LINE's limit.
-  | "CORRECTION_TOO_LONG";
+  | "CORRECTION_TOO_LONG"
+  // Set by the server: LINE_NOTE_OWNER_ID is missing or malformed.
+  | "NOTE_OWNER_MISSING";
 
 export class LineGenerationError extends Error {
   constructor(readonly code: GenerationFailureCode) {
@@ -22,6 +24,7 @@ const reasons: Record<GenerationFailureCode, string> = {
   OPENAI_INVALID_RESPONSE: "OpenAIの回答を結果として読み取れませんでした。",
   OPENAI_REQUEST_FAILED: "OpenAIで処理を完了できませんでした。",
   CORRECTION_TOO_LONG: "結果がLINEで送れる長さを超えました。",
+  NOTE_OWNER_MISSING: "学習ノートの保存先の設定を確認してください。",
 };
 
 const actions: Record<LearningKind, string> = {
@@ -36,6 +39,8 @@ export function formatGenerationFailure(
   const retry =
     code === "CORRECTION_TOO_LONG"
       ? "文を短く分けて送信してください。"
-      : "時間をおいてもう一度送信してください。";
+      : code === "NOTE_OWNER_MISSING"
+        ? "設定を直してからもう一度送信してください。"
+        : "時間をおいてもう一度送信してください。";
   return `${actions[kind]}できませんでした。\n${reasons[code]}\n学習ノートは保存していません。${retry}\nエラーコード: ${code}`;
 }

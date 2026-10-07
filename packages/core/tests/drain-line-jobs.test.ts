@@ -100,13 +100,15 @@ class FakeJobs implements LineJobRepository {
   private find(job: LineJob) {
     return this.jobs.find((j) => j.id === job.id)!;
   }
+  owners: string[] = [];
   async saveResult(
     job: LineJob,
-    _ownerId: string,
+    ownerId: string,
     _draft: unknown,
     csv: string,
   ) {
     if (this.throwOnSave.has(job.id)) throw new Error("db down");
+    this.owners.push(ownerId);
     Object.assign(this.find(job), { status: "READY", leaseToken: null, csv });
     this.saved.push(job.id);
     return true;
@@ -137,8 +139,10 @@ class FakeJobs implements LineJobRepository {
 function setup(
   generator: Partial<LineLearningGenerator> = {},
   push?: LineMessenger["push"],
+  noteOwnerId: string | null = "o1",
 ) {
   const errors: string[] = [];
+  const ownerMissing: string[] = [];
   const clock = { now: 1_000_000 };
   const jobs = new FakeJobs();
   const calls: string[] = [];
@@ -168,13 +172,15 @@ function setup(
   };
   const drain = new DrainLineJobs(
     jobs,
-    new ProcessLineLearning(jobs, messenger),
+    new ProcessLineLearning(jobs, messenger, noteOwnerId, () =>
+      ownerMissing.push("LINE_NOTE_OWNER_MISSING"),
+    ),
     fullGenerator,
     USER,
     () => clock.now,
     (jobId) => errors.push(jobId),
   );
-  return { clock, jobs, calls, pushes, drain, errors };
+  return { clock, jobs, calls, pushes, drain, errors, ownerMissing };
 }
 
 test("jobs are generated and delivered oldest first", async () => {
@@ -206,6 +212,44 @@ test("generation failures become failure replies", async () => {
   assert.ok(pushes[0].text.startsWith("翻訳できませんでした。"));
   assert.ok(pushes[0].text.includes("OPENAI_RATE_LIMITED"));
   assert.deepEqual(jobs.saved, []);
+});
+
+test("notes are saved under the note owner", async () => {
+  const { clock, jobs, drain } = setup();
+  jobs.add("correction", "PENDING", "a");
+  await drain.execute(clock.now + 120_000);
+  assert.deepEqual(jobs.owners, ["o1"]);
+});
+
+test("without a note owner each job gets a failure reply and the rest keep processing", async () => {
+  const { clock, jobs, calls, pushes, drain, errors, ownerMissing } = setup(
+    {},
+    undefined,
+    null,
+  );
+  jobs.add("correction", "PENDING", "a");
+  jobs.add("translation", "PENDING", "b");
+  await drain.execute(clock.now + 120_000);
+  assert.deepEqual(calls, ["correct:text-a", "translate:text-b"]);
+  assert.deepEqual(jobs.saved, []);
+  assert.deepEqual(jobs.failed, []);
+  assert.deepEqual(jobs.failCodes, [
+    "a:NOTE_OWNER_MISSING",
+    "b:NOTE_OWNER_MISSING",
+  ]);
+  assert.equal(pushes.length, 2);
+  assert.ok(pushes[0].text.startsWith("添削できませんでした。"));
+  assert.ok(pushes[1].text.startsWith("翻訳できませんでした。"));
+  assert.ok(pushes.every((p) => p.text.includes("NOTE_OWNER_MISSING")));
+  assert.deepEqual(ownerMissing, [
+    "LINE_NOTE_OWNER_MISSING",
+    "LINE_NOTE_OWNER_MISSING",
+  ]);
+  assert.deepEqual(errors, []);
+  assert.deepEqual(
+    jobs.jobs.map((j) => j.status),
+    ["SENT", "SENT"],
+  );
 });
 
 test("unexpected errors are reported generically", async () => {

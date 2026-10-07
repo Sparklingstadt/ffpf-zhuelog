@@ -22,6 +22,11 @@ export class ProcessLineLearning {
   constructor(
     private readonly jobs: LineJobRepository,
     private readonly messenger: LineMessenger,
+    // Whose learning notes LINE writes; null when LINE_NOTE_OWNER_ID is
+    // missing or malformed, which fails each job instead of disabling LINE.
+    private readonly noteOwnerId: string | null,
+    // Told only that the owner is missing, never anything about the job.
+    private readonly onNoteOwnerMissing: () => void = () => {},
   ) {}
 
   async complete(id: string, token: string, userId: string, output: unknown) {
@@ -41,8 +46,20 @@ export class ProcessLineLearning {
         "CORRECTION_TOO_LONG",
       );
     }
-    // TODO(Task 3): pass the real owner (LINE_NOTE_OWNER_ID) instead of "".
-    return this.jobs.saveResult(job, "", result.draft, result.csv);
+    if (!this.noteOwnerId) {
+      this.onNoteOwnerMissing();
+      return this.jobs.saveReply(
+        job,
+        formatGenerationFailure("NOTE_OWNER_MISSING", kind),
+        "NOTE_OWNER_MISSING",
+      );
+    }
+    return this.jobs.saveResult(
+      job,
+      this.noteOwnerId,
+      result.draft,
+      result.csv,
+    );
   }
 
   async deliver(id: string, token: string, userId: string) {
