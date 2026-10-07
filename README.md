@@ -50,7 +50,7 @@ src/
 
 ### 連携プラグインの追加
 
-連携の画面（`/integrations/<id>`）、出力API（`/api/integrations/<id>/export`）、管理者の確認はアプリ側が共通で用意します。プラグインは、学習ノートから表示内容と出力ファイルを作る処理だけを持ちます。
+連携の画面（`/integrations/<id>`）、出力API（`/api/integrations/<id>/export`）、管理者・メンバーの確認はアプリ側が共通で用意します。プラグインは、学習ノートから表示内容と出力ファイルを作る処理だけを持ちます。
 
 1. `packages/<名前>-plugin/` を作り、`package.json` の `name` を `@ffpf-zhuelog/<名前>-plugin`、`exports` を `{ ".": "./src/index.ts" }`、`dependencies` を `{ "@ffpf-zhuelog/core": "workspace:*" }` にします。
 2. `src/index.ts` で、`@ffpf-zhuelog/core/integration` の `defineIntegration` を使って連携を定義し、default export します。`id` は英小文字・数字・ハイフンで、40文字以内です。
@@ -97,7 +97,7 @@ AUTH_ALLOWED_GITHUB_LOGINS="github-login-1,github-login-2"
 ロールは4種類です。
 
 - **admin（管理者）**: GitHub認証で許可リストに載っているユーザー。共有ノートの投稿・CSVインポート・Typle連携・LINE連携とアカウント管理を使えます。
-- **member（メンバー）**: ID・パスワードでログインするアカウント。共有ノートの閲覧に加えて、ChatGPT会話（`/chat`）と自分の会話ノートを使えます。共有ノートへの投稿・CSVインポート・Typle連携・LINE連携とアカウント管理は使えません。
+- **member（メンバー）**: ID・パスワードでログインするアカウント。共有ノートの閲覧と本人のAPIキーでの添削に加えて、ChatGPT会話（`/chat`）、自分の会話ノート、CSVインポート、Typle連携を使えます。CSVインポートでは、全員が見る共有ノートに記録を追加できます。LINE連携とアカウント管理は使えません。
 - **guest（ゲスト）**: ログイン画面の「ゲストとして閲覧」。共有ノートの閲覧と本人のAPIキーでの添削だけです。
 - **revoked**: 許可リストから外れた管理者や、再設定・変更でセッションが失効したメンバー。どのページも使えず、ログイン画面に戻されます。
 
@@ -110,11 +110,20 @@ memberのアカウントは、GitHub管理者が `/admin/accounts` で作りま�
 - **パスワードの保存**: scrypt（N=2^15, r=8, p=1）でハッシュ化したものだけを保存します。平文はDBにもログにも残しません。
 - **会話ノートの公開範囲**: memberの保存した会話は、所有者 `password:<アカウントID>` に紐づき、本人だけが見られます。
 
-新しい環境変数はありません。ただしDBマイグレーション `20261007090000_password_accounts`（`PasswordAccount` テーブルの追加）が必要です。本番へデプロイする前に、`vercel env pull` で本番の `DATABASE_URL` を取得し、続けて `pnpm exec prisma migrate deploy` で本番DB（Neon）へ適用してください。適用前にデプロイすると、ログインとアカウント管理がエラーになります。
+新しい環境変数はありません。ただしDBマイグレーション `20261007090000_password_accounts`（`PasswordAccount` テーブルの追加）が必要です。本番へデプロイする前に、Vercelとリンク済みのmainのチェックアウトで、次の手順で本番DB（Neon）へ適用してください。`prisma.config.ts` は `.env` だけを読み込むので、`vercel env pull` だけでは本番の `DATABASE_URL` が使われません。`--environment=production` で取得したファイルを、`--env-file` で明示して渡します。
+
+```bash
+vercel env pull .env.production.local --environment=production --yes
+node --env-file=.env.production.local node_modules/prisma/build/index.js migrate status
+node --env-file=.env.production.local node_modules/prisma/build/index.js migrate deploy
+rm .env.production.local
+```
+
+適用前にデプロイすると、ID・パスワードでのログインと `/admin/accounts` だけがエラーになります。GitHubログインとゲストログインは影響を受けません。
 
 認可はProxyによるページ保護に加え、画面のServer ComponentとCSVインポートのServer Actionでも検証します。
 
-ログイン画面からは、GitHub認証を使わずゲストとしてログインすることもできます。ゲストは共有ノートと日付別ログの閲覧、および本人のAPIキーでの個人添削を利用できます。共有ノートへの投稿・CSVインポート・管理者用ChatGPT・LINE連携は引き続き管理者専用です。共有データの書き込み権限はServer ActionとAPI Routeでも検証します。
+ログイン画面からは、GitHub認証を使わずゲストとしてログインすることもできます。ゲストは共有ノートと日付別ログの閲覧、および本人のAPIキーでの個人添削を利用できます。共有ノートへの投稿・CSVインポート・ChatGPT・Typle連携は管理者・メンバー専用、LINE連携は管理者専用です。共有データの書き込み権限はServer ActionとAPI Routeでも検証します。
 
 ## 本人のAPIキーでの添削（BYOK）
 
@@ -155,7 +164,7 @@ OPENAI_API_KEY="sk-..."
 OPENAI_MODEL="gpt-6.1-sol"
 ```
 
-開発サーバーを再起動すると、GitHubで管理者ログインした後に `/chat` で会話できます。`OPENAI_MODEL` を省略した場合は `gpt-6.1-sol` を使用し、推論強度は `medium`（中）を明示して送信します。既存の `.env` や Vercel に `OPENAI_MODEL` が設定されている場合は、`gpt-6.1-sol` へ変更して再起動または再デプロイしてください。会話はストリーミングで表示されます。OpenAIへのリクエストでは会話の保存を無効化しています。
+開発サーバーを再起動すると、GitHubで管理者として、またはID・パスワードでメンバーとしてログインした後に `/chat` で会話できます。`OPENAI_MODEL` を省略した場合は `gpt-6.1-sol` を使用し、推論強度は `medium`（中）を明示して送信します。既存の `.env` や Vercel に `OPENAI_MODEL` が設定されている場合は、`gpt-6.1-sol` へ変更して再起動または再デプロイしてください。会話はストリーミングで表示されます。OpenAIへのリクエストでは会話の保存を無効化しています。
 
 ## 会話の保存と会話ノート
 
@@ -188,7 +197,7 @@ OPENAI_MODEL="gpt-6.1-sol"
 
 ## Typle用の復習リスト
 
-管理者はホームの「Typle用リスト」（`/integrations/typle`）から、学習ノートをTyple向けの復習リストへ変換できます。処理は連携プラグイン `@ffpf-zhuelog/typle-integrate-plugin`（`packages/typle-integrate-plugin/`）にあります。
+管理者とメンバーはホームの「Typle用リスト」（`/integrations/typle`）から、学習ノートをTyple向けの復習リストへ変換できます。処理は連携プラグイン `@ffpf-zhuelog/typle-integrate-plugin`（`packages/typle-integrate-plugin/`）にあります。
 
 - ヒント内の「引用語」と、添削によって追加された短い中国語を抽出します。
 - 3文字以下の語（图书馆など）は分割せず1語として扱います。語順を入れ替えただけの部分は、追加された語に数えません。
@@ -196,7 +205,7 @@ OPENAI_MODEL="gpt-6.1-sol"
 - 新しい学習ノートから最大1,000件、重複を除いて最大500語を扱います。
 - `/api/integrations/typle/export` から、`typle-r` v1保存形式のJSONをダウンロードできます。
 
-画面と出力APIは管理者専用です。現在の `typle-r` には外部JSONを読み込む画面がないため、現時点の連携範囲は自動抽出・プレビュー・互換JSON出力までです。Typleアカウントへ直接保存するには、`typle-r` 側にインポート導線を追加してください。
+画面と出力APIは管理者・メンバー専用です。現在の `typle-r` には外部JSONを読み込む画面がないため、現時点の連携範囲は自動抽出・プレビュー・互換JSON出力までです。Typleアカウントへ直接保存するには、`typle-r` 側にインポート導線を追加してください。
 
 ## 学習カードの表示
 
@@ -264,7 +273,7 @@ Desktop Chromiumとモバイル幅（Pixel 7 / Chromium）の両方で検証し�
 既存サーバーは再利用しません。通常の開発サーバーは停止してから実行してください（ビルド先の`.next`を共有します）。
 
 - 認証前のリダイレクト、ゲストログイン／ログアウト、外部URLへのリダイレクト拒否
-- ID・パスワードのアカウント（管理者による作成と一度きりのパスワード表示、memberのChatGPT利用、アカウント管理画面の拒否、ログイン失敗の共通メッセージ、5回失敗でのロック、再設定によるセッション失効、パスワード変更、会話ノートの非公開）
+- ID・パスワードのアカウント（管理者による作成、作成直後のパスワード表示（再表示できない旨の注記つき）、memberのChatGPT利用、アカウント管理画面の拒否、ログイン失敗の共通メッセージ、5回失敗でのロック、再設定によるセッション失効、パスワード変更、会話ノートの非公開）
 - ゲストのCSV操作・管理者用ChatGPT利用制限（古い管理者フォームからの投稿も拒否）
 - 本人のAPIキーでの添削、同意、端末履歴、キーの非永続化、DB非保存、モバイル表示
 - CSVの登録・リロード後の永続化・可変ヒント・BOM・引用符・改行・入力エラー
@@ -273,7 +282,7 @@ Desktop Chromiumとモバイル幅（Pixel 7 / Chromium）の両方で検証し�
 - 会話の終了・DB保存・再保存・端末バックアップの復元・ダウンロード・他人の会話の閲覧／上書き拒否（AI応答はモック）
 - 会話ノートの日付一覧・日別一覧・詳細・前後移動・JST日付境界・無効なURL・ゲストと他人からの非表示
 - LINEの署名付きwebhook・重複排除・日本語の翻訳と中文の添削・生成失敗の返信・同時受信・Cronでの取り残しの処理（OpenAIとLINEは `127.0.0.1:3108` / `3109` の偽サーバー）
-- Typle用リストの抽出・管理者限定表示・互換JSON出力・先頭20件の表示・存在しない連携の404
+- Typle用リストの抽出・管理者・メンバー限定表示・互換JSON出力・先頭20件の表示・存在しない連携の404
 
 DBは`127.0.0.1:55439/zhuelog_e2e`に固定され、`compose.e2e.yaml`の専用コンテナだけを使用します。
 各テスト前にこのDBの学習データを初期化します。ポート55439を別のDBに割り当てないでください。

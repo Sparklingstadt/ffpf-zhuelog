@@ -1,4 +1,3 @@
-import { AuthenticatePasswordAccount } from "@ffpf-zhuelog/core/application/identity/use-cases/authenticate-password-account";
 import { ChangeOwnPassword } from "@ffpf-zhuelog/core/application/identity/use-cases/change-own-password";
 import { CreatePasswordAccount } from "@ffpf-zhuelog/core/application/identity/use-cases/create-password-account";
 import { ListPasswordAccounts } from "@ffpf-zhuelog/core/application/identity/use-cases/list-password-accounts";
@@ -21,10 +20,6 @@ const requireMemberUser = new RequireMemberUser(currentUserProvider);
 const requireViewerUser = new RequireViewerUser(currentUserProvider);
 
 export const passwordAccountUseCases = {
-  authenticate: new AuthenticatePasswordAccount(
-    passwordAccountRepository,
-    passwordHasher,
-  ),
   create: new CreatePasswordAccount(passwordAccountRepository, passwordHasher),
   reset: new ResetPasswordAccountPassword(
     passwordAccountRepository,

@@ -105,8 +105,8 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
               <LockKeyhole />
               <AlertTitle>OAuth設定が必要です</AlertTitle>
               <AlertDescription>
-                GitHubでのログインには、READMEに従ってGitHub OAuth
-                Appと許可ユーザーを設定してください。IDとパスワードでのログインとゲスト閲覧は利用できます。
+                GitHubでのログインは現在利用できません。READMEに従ってGitHub
+                OAuth Appと許可ユーザーを設定してください。
               </AlertDescription>
             </Alert>
           ) : null}
@@ -170,7 +170,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
             <PracticeNotice />
           </div>
           <p className="text-center text-xs leading-5 text-muted-foreground">
-            ゲストは共有ノートへの投稿・CSVインポート・管理者用ChatGPT・LINE添削を利用できません。
+            ゲストは共有ノートへの投稿・CSVインポート・ChatGPT（管理者・メンバー専用）・LINE添削を利用できません。
             GitHub認証ではユーザー名・表示名・メールアドレス・プロフィール画像が利用されます。
             IDとパスワードのアカウントは管理者が発行します。
           </p>

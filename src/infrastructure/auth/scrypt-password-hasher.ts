@@ -91,10 +91,18 @@ export class ScryptPasswordHasher implements PasswordHasher {
   }
 
   async simulateVerify(password: string) {
-    this.dummyHash ??= this.hash(
+    const pending = (this.dummyHash ??= this.hash(
       randomBytes(GENERATED_PASSWORD_BYTES).toString("base64url"),
-    );
-    await this.verify(password, await this.dummyHash);
+    ));
+    let dummyHash: string;
+    try {
+      dummyHash = await pending;
+    } catch (error) {
+      // Do not keep a rejected promise: the next call builds a fresh one.
+      if (this.dummyHash === pending) this.dummyHash = undefined;
+      throw error;
+    }
+    await this.verify(password, dummyHash);
   }
 
   generate() {

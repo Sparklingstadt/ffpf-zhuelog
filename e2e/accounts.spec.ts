@@ -102,6 +102,7 @@ test("reset revokes existing member sessions", async ({
 
     await asAdmin(context);
     await page.goto("/admin/accounts");
+    page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: "パスワードを再設定" }).click();
     const newPassword = await readOutputPassword(page);
     expect(newPassword).not.toBe("member-password-1");

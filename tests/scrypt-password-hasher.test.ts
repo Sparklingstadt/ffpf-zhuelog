@@ -49,3 +49,18 @@ test("simulateVerify resolves", async () => {
   await assert.doesNotReject(hasher.simulateVerify("x"));
   await assert.doesNotReject(hasher.simulateVerify("y"));
 });
+
+test("simulateVerify retries after the cached dummy hash failed", async () => {
+  class FailsOnce extends ScryptPasswordHasher {
+    calls = 0;
+    override async hash(password: string) {
+      this.calls += 1;
+      if (this.calls === 1) throw new Error("transient");
+      return super.hash(password);
+    }
+  }
+  const flaky = new FailsOnce();
+  await assert.rejects(flaky.simulateVerify("x"), /transient/);
+  await assert.doesNotReject(flaky.simulateVerify("x"));
+  assert.equal(flaky.calls, 2);
+});

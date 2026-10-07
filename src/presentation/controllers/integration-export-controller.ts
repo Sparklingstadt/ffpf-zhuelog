@@ -10,13 +10,13 @@ function error(message: string, status: number) {
 export async function handleIntegrationExport(
   id: string,
   dependencies: {
-    isAdmin: () => Promise<boolean>;
+    isMember: () => Promise<boolean>;
     findIntegration: (id: string) => Integration | undefined;
     exportIntegration: Pick<ExportIntegration, "execute">;
   },
 ) {
-  if (!(await dependencies.isAdmin()))
-    return error("管理者としてログインしてください。", 403);
+  if (!(await dependencies.isMember()))
+    return error("管理者またはメンバーとしてログインしてください。", 403);
   const integration = dependencies.findIntegration(id);
   if (!integration) return error("連携が見つかりません。", 404);
 

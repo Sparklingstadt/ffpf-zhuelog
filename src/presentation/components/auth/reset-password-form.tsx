@@ -33,7 +33,19 @@ export function ResetPasswordForm({
   }, [state]);
 
   return (
-    <form ref={formRef} action={formAction} className="space-y-2">
+    <form
+      ref={formRef}
+      action={formAction}
+      onSubmit={(event) => {
+        if (
+          !window.confirm(
+            `${loginId} のパスワードを再設定します。ログイン中のセッションはすべて終了します。よろしいですか？`,
+          )
+        )
+          event.preventDefault();
+      }}
+      className="space-y-2"
+    >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
         <div className="min-w-0 flex-1 space-y-1">
           <Label htmlFor={inputId} className="text-xs">
