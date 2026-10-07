@@ -5,6 +5,10 @@ import {
   getDrainTasksConfig,
 } from "@/infrastructure/line/cloud-tasks-drain-trigger";
 import { getLineConfig } from "@/infrastructure/line/config";
+import {
+  DrainForwarder,
+  getDrainForwardConfig,
+} from "@/infrastructure/line/drain-forwarder";
 import { LinePushMessenger } from "@/infrastructure/line/line-messenger";
 import { OpenAiLineLearningGenerator } from "@/infrastructure/line/openai-line-learning-generator";
 import { PrismaLineJobRepository } from "@/infrastructure/persistence/prisma/repositories/prisma-line-job-repository";
@@ -34,5 +38,17 @@ export function createLineContainer() {
     const tasks = config ? getDrainTasksConfig() : null;
     return tasks ? new CloudTasksDrainTrigger(tasks) : null;
   };
-  return { config, jobs, createDrain, createDrainTrigger };
+  // Vercel only: with LINE disabled here, Vercel Cron's drain goes to Cloud
+  // Run. Never on a server that drains itself, so it cannot call itself.
+  const createDrainForwarder = () => {
+    const forward = config ? null : getDrainForwardConfig();
+    return forward ? new DrainForwarder(forward) : null;
+  };
+  return {
+    config,
+    jobs,
+    createDrain,
+    createDrainTrigger,
+    createDrainForwarder,
+  };
 }

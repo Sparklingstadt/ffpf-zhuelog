@@ -14,6 +14,7 @@ export async function handleLineDrain(
   request: Request,
   secret: string | undefined,
   createDrain: () => Pick<DrainLineJobs, "execute"> | null,
+  createForwarder: () => { forward(): Promise<Response> } | null = () => null,
 ) {
   if (
     !secret ||
@@ -26,11 +27,14 @@ export async function handleLineDrain(
     );
   try {
     const drain = createDrain();
-    if (!drain)
+    if (!drain) {
+      const forwarder = createForwarder();
+      if (forwarder) return await forwarder.forward();
       return Response.json(
         { error: "LINE_DISABLED" },
         { status: 503, headers: NO_STORE },
       );
+    }
     const processed = await drain.execute(Date.now() + LINE_DRAIN_BUDGET_MS);
     return Response.json({ processed }, { headers: NO_STORE });
   } catch {
