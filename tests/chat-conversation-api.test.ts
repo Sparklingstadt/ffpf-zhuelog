@@ -74,6 +74,33 @@ test("conversation save checks authentication, role, stable identity, origin and
   assert.equal(result.status, 200);
   assert.equal(result.headers.get("cache-control"), "no-store");
 });
+test("password members save conversations under their account identity; guests stay denied", async () => {
+  const member = {
+    githubLogin: "taro",
+    githubId: "password:ckxxxxxxxxxxxxxxxxxxxxxxx",
+    role: "member" as const,
+  };
+  let owner = "";
+  const result = await handleConversationSave(request(), member, {
+    ...repository,
+    save: async (savedOwner: string) => {
+      owner = savedOwner;
+      return input;
+    },
+  });
+  assert.equal(result.status, 200);
+  assert.equal(owner, "password:ckxxxxxxxxxxxxxxxxxxxxxxx");
+  assert.equal(
+    (
+      await handleConversationSave(
+        request(),
+        { ...member, role: "guest" },
+        repository,
+      )
+    ).status,
+    403,
+  );
+});
 test("conversation ownership collision is rejected without exposing content", async () => {
   const result = await handleConversationSave(request(), admin, {
     ...repository,

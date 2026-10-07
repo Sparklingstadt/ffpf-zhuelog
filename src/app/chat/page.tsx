@@ -7,7 +7,7 @@ import {
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { getCurrentAdminUser } from "@/composition/identity-container";
+import { getCurrentMemberUser } from "@/composition/identity-container";
 import {
   isOpenAiConfigured,
   getOpenAiModelName,
@@ -25,7 +25,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function ChatPage() {
-  const user = await getCurrentAdminUser();
+  const user = await getCurrentMemberUser();
   if (!user) redirect("/signin?callbackUrl=/chat");
 
   const localCodex = isCodexLocalRequested();

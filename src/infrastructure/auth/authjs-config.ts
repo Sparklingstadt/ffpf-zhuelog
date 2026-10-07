@@ -1,10 +1,24 @@
+import { AuthenticatePasswordAccount } from "@ffpf-zhuelog/core/application/identity/use-cases/authenticate-password-account";
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import GitHub from "next-auth/providers/github";
 
 import { isAllowedGitHubLogin } from "@/infrastructure/auth/github-login-policy";
-import { githubIdFromAccount, githubIdFromToken } from "./github-identity";
+import {
+  githubIdFromAccount,
+  githubIdFromToken,
+  passwordOwnerId,
+} from "./github-identity";
+import {
+  passwordAccountRepository,
+  passwordHasher,
+} from "./password-account-services";
 import { resolveSessionRole } from "./session-role-policy";
+
+const authenticatePasswordAccount = new AuthenticatePasswordAccount(
+  passwordAccountRepository,
+  passwordHasher,
+);
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
@@ -35,11 +49,37 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         };
       },
     }),
+    Credentials({
+      id: "password",
+      name: "Password",
+      credentials: { loginId: {}, password: {} },
+      // Wrong credentials return null (Auth.js reports CredentialsSignin).
+      // Infrastructure errors propagate so they are not mistaken for a wrong
+      // password. Never log the credentials.
+      async authorize(credentials) {
+        const account = await authenticatePasswordAccount.execute({
+          loginId: credentials.loginId,
+          password: credentials.password,
+        });
+        if (!account) return null;
+        return {
+          id: account.id,
+          name: account.displayName,
+          email: null,
+          image: null,
+          githubLogin: account.loginId,
+          role: "member",
+          accountId: account.id,
+          sessionVersion: account.sessionVersion,
+        };
+      },
+    }),
   ],
   pages: { signIn: "/signin" },
   callbacks: {
     signIn({ account, profile, user }) {
       if (account?.provider === "guest") return user.role === "guest";
+      if (account?.provider === "password") return user.role === "member";
       return (
         account?.provider === "github" &&
         typeof profile?.login === "string" &&
@@ -50,7 +90,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) {
         token.githubLogin = user.githubLogin;
         token.role = user.role;
-        token.githubId = githubIdFromAccount(account);
+        token.accountId = user.accountId;
+        token.sessionVersion = user.sessionVersion;
+        token.githubId =
+          passwordOwnerId(user.accountId) ?? githubIdFromAccount(account);
       }
       return token;
     },
@@ -59,6 +102,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         typeof token.githubLogin === "string" ? token.githubLogin : "";
       session.user.githubId = githubIdFromToken(token.githubId);
       session.user.role = resolveSessionRole(token.role, token.githubLogin);
+      session.user.accountId =
+        typeof token.accountId === "string" ? token.accountId : undefined;
+      session.user.sessionVersion =
+        typeof token.sessionVersion === "number"
+          ? token.sessionVersion
+          : undefined;
       return session;
     },
     authorized({ auth: session, request }) {
@@ -73,6 +122,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const permitted =
         isPublicRoute ||
         session?.user.role === "admin" ||
+        session?.user.role === "member" ||
         session?.user.role === "guest";
       if (permitted) return true;
       if (pathname.startsWith("/api/")) {

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { getCurrentAdminUser } from "@/composition/identity-container";
+import { getCurrentMemberUser } from "@/composition/identity-container";
 import { learningUseCases } from "@/composition/learning-container";
 import { csvImportErrorMessage } from "@ffpf-zhuelog/core/domain/learning/csv-validation-error";
 
@@ -17,7 +17,7 @@ export async function importLearningCsvAction(
   _previousState: ImportState,
   formData: FormData,
 ): Promise<ImportState> {
-  const user = await getCurrentAdminUser();
+  const user = await getCurrentMemberUser();
   if (!user) {
     return {
       status: "error",

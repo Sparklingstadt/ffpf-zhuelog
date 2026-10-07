@@ -1,4 +1,4 @@
-import { getCurrentAdminUser } from "@/composition/identity-container";
+import { getCurrentMemberUser } from "@/composition/identity-container";
 import {
   integrationUseCases,
   integrations,
@@ -18,7 +18,7 @@ export async function GET(
 ) {
   const { id } = await params;
   return handleIntegrationExport(id, {
-    isAdmin: async () => Boolean(await getCurrentAdminUser()),
+    isMember: async () => Boolean(await getCurrentMemberUser()),
     findIntegration: (integrationId) => integrations.find(integrationId),
     exportIntegration: integrationUseCases.exportIntegration,
   });

@@ -1,3 +1,4 @@
+import { isMemberRole } from "@ffpf-zhuelog/core/domain/identity/entities/authenticated-user";
 import { chatUseCases } from "@/composition/chat-container";
 import { getCurrentViewerUser } from "@/composition/identity-container";
 import { isOpenAiConfigured } from "@/infrastructure/config/environment";
@@ -15,7 +16,7 @@ export async function POST(request: Request) {
   if (!user) {
     return Response.json({ error: "認証が必要です。" }, { status: 401 });
   }
-  if (user.role !== "admin") {
+  if (!isMemberRole(user.role)) {
     return Response.json(
       { error: "ゲストはChatGPTを利用できません。" },
       { status: 403 },

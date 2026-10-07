@@ -9,7 +9,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { conversationNoteUseCases } from "@/composition/conversation-container";
-import { getCurrentAdminUser } from "@/composition/identity-container";
+import { getCurrentMemberUser } from "@/composition/identity-container";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { ReauthNotice } from "@/presentation/components/chat/reauth-notice";
 import { Badge } from "@/presentation/components/ui/badge";
@@ -23,7 +23,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function ConversationsPage() {
-  const user = await getCurrentAdminUser();
+  const user = await getCurrentMemberUser();
   if (!user) redirect("/signin?callbackUrl=/conversations");
 
   const dates = user.githubId

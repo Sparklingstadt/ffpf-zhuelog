@@ -9,7 +9,7 @@ type Dependencies = Parameters<typeof handleIntegrationExport>[1];
 
 function dependencies(overrides: Partial<Dependencies> = {}): Dependencies {
   return {
-    isAdmin: async () => true,
+    isMember: async () => true,
     findIntegration: (id) => (id === "sample" ? sampleIntegration : undefined),
     exportIntegration: {
       execute: async (): Promise<IntegrationFile | null> => null,
@@ -23,7 +23,7 @@ test("export API rejects non-admins before looking up the integration", async ()
   const response = await handleIntegrationExport(
     "sample",
     dependencies({
-      isAdmin: async () => false,
+      isMember: async () => false,
       findIntegration: () => {
         lookedUp = true;
         return sampleIntegration;
@@ -32,7 +32,7 @@ test("export API rejects non-admins before looking up the integration", async ()
   );
   assert.equal(response.status, 403);
   assert.deepEqual(await response.json(), {
-    error: "管理者としてログインしてください。",
+    error: "管理者またはメンバーとしてログインしてください。",
   });
   assert.equal(response.headers.get("cache-control"), "private, no-store");
   assert.equal(lookedUp, false);

@@ -7,6 +7,8 @@ export function resolveSessionRole(
   allowed?: string,
 ) {
   if (role === "guest") return "guest";
+  // Revocation of member accounts is checked against the DB elsewhere.
+  if (role === "member") return "member";
   return role === "admin" &&
     typeof login === "string" &&
     isAllowedGitHubLogin(login, allowed)

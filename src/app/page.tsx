@@ -12,6 +12,7 @@ import {
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { isMemberRole } from "@ffpf-zhuelog/core/domain/identity/entities/authenticated-user";
 import { getCurrentViewerUser } from "@/composition/identity-container";
 import { integrations } from "@/composition/integration-container";
 import { learningUseCases } from "@/composition/learning-container";
@@ -93,7 +94,7 @@ export default async function Home() {
                   <CalendarDays /> 日付から見る
                 </Link>
               </Button>
-              {user.role === "admin" ? (
+              {isMemberRole(user.role) ? (
                 <>
                   {integrations.list().map((integration) => (
                     <Button
@@ -178,7 +179,7 @@ export default async function Home() {
           </div>
 
           <aside className="order-1 lg:order-2 lg:sticky lg:top-8">
-            {user.role === "admin" ? (
+            {isMemberRole(user.role) ? (
               <Card>
                 <CardHeader>
                   <div className="mb-2 flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
