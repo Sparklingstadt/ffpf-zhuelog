@@ -3,7 +3,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { conversationNoteUseCases } from "@/composition/conversation-container";
-import { getCurrentMemberUser } from "@/composition/identity-container";
+import { getRecordOwner } from "@/composition/identity-container";
+import { loadRecordOwnerView } from "@/composition/record-owner-options";
 import {
   parseLogDate,
   parseLogNumber,
@@ -12,6 +13,7 @@ import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { ChatMessage } from "@/presentation/components/chat/chat-message";
 import { ConversationDownloadButton } from "@/presentation/components/chat/conversation-download-button";
 import { ReauthNotice } from "@/presentation/components/chat/reauth-notice";
+import { RecordOwnerControls } from "@/presentation/components/records/record-owner-controls";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
@@ -19,36 +21,50 @@ import {
   formatLogDate,
   formatTokyoDateTime,
 } from "@/presentation/presenters/log-date-presenter";
+import {
+  requestedRecordOwner,
+  withRecordOwner,
+} from "@/presentation/presenters/record-owner-href";
 
 export const dynamic = "force-dynamic";
 
 type ConversationDetailPageProps = {
   params: Promise<{ year: string; month: string; day: string; number: string }>;
+  searchParams: Promise<{ user?: string | string[] }>;
 };
 
 export default async function ConversationDetailPage({
   params,
+  searchParams,
 }: ConversationDetailPageProps) {
-  const user = await getCurrentMemberUser();
-  if (!user) redirect("/signin?callbackUrl=/conversations");
+  const { user, owner } = await getRecordOwner(
+    requestedRecordOwner((await searchParams).user),
+  );
+  if (!user || (owner.kind === "denied" && owner.reason === "unauthenticated"))
+    redirect("/signin?callbackUrl=/conversations");
+  if (owner.kind === "denied" && owner.reason === "guest") redirect("/");
 
   const { year, month, day, number } = await params;
   const date = parseLogDate(year, month, day);
   const noteNumber = parseLogNumber(number);
   if (!date || !noteNumber) notFound();
-  if (!user.githubId) return <ReauthPage />;
+  const dateHref = `/conversations/${date.year}/${date.month}/${date.day}`;
+  if (owner.kind === "redirect-self") redirect(`${dateHref}/${noteNumber}`);
+  if (owner.kind === "denied") return <ReauthPage />;
 
-  const result = await conversationNoteUseCases.getDailyConversation.execute(
-    user.githubId,
-    date,
-    noteNumber,
-  );
+  const [result, view] = await Promise.all([
+    conversationNoteUseCases.getDailyConversation.execute(
+      owner.ownerId,
+      date,
+      noteNumber,
+    ),
+    loadRecordOwnerView(user, owner),
+  ]);
   if (!result) notFound();
   const { conversation: note, total } = result;
   const createdAt = new Date(note.createdAt);
   const updatedAt = new Date(note.updatedAt);
 
-  const dateHref = `/conversations/${date.year}/${date.month}/${date.day}`;
   const updated = updatedAt.getTime() - createdAt.getTime() >= 1_000;
 
   return (
@@ -71,13 +87,17 @@ export default async function ConversationDetailPage({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline" size="sm">
-              <Link href={dateHref}>
+              <Link href={withRecordOwner(dateHref, owner)}>
                 <ArrowLeft /> この日の一覧へ
               </Link>
             </Button>
             <AuthControls user={user} />
           </div>
         </header>
+
+        {/* Switching owners lands on the day's list: the other person may
+            have fewer notes that day, so this number could be missing. */}
+        <RecordOwnerControls owner={owner} view={view} path={dateHref} />
 
         <Card className="gap-0 py-0 shadow-xs">
           <div className="flex flex-col gap-3 border-b px-5 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
@@ -119,7 +139,9 @@ export default async function ConversationDetailPage({
         >
           {noteNumber > 1 ? (
             <Button asChild variant="outline">
-              <Link href={`${dateHref}/${noteNumber - 1}`}>
+              <Link
+                href={withRecordOwner(`${dateHref}/${noteNumber - 1}`, owner)}
+              >
                 <ArrowLeft /> 前のノート
               </Link>
             </Button>
@@ -128,7 +150,9 @@ export default async function ConversationDetailPage({
           )}
           {noteNumber < total ? (
             <Button asChild variant="outline">
-              <Link href={`${dateHref}/${noteNumber + 1}`}>
+              <Link
+                href={withRecordOwner(`${dateHref}/${noteNumber + 1}`, owner)}
+              >
                 <CalendarDays /> 次のノート
               </Link>
             </Button>

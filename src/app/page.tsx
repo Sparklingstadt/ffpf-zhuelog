@@ -142,7 +142,7 @@ function HomeHeader({
                 </Link>
               </Button>
               <Button asChild variant="outline" size="sm">
-                <Link href="/conversations">
+                <Link href={withRecordOwner("/conversations", owner)}>
                   <MessagesSquare /> 会話ノート
                 </Link>
               </Button>
