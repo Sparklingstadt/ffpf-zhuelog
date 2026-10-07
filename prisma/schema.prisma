@@ -86,3 +86,16 @@ model ChatConversation {
   @@index([ownerId, updatedAt])
   @@index([ownerId, createdAt])
 }
+
+// Password sign-in for members. Managed by GitHub admins at /admin/accounts.
+model PasswordAccount {
+  id             String    @id @default(cuid())
+  loginId        String    @unique
+  displayName    String
+  passwordHash   String
+  sessionVersion Int       @default(0)
+  failedAttempts Int       @default(0)
+  lockedUntil    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
