@@ -15,7 +15,7 @@ export class ResetPasswordAccountPassword {
   async execute(
     accountId: string,
     password: unknown,
-  ): Promise<{ password: string; generated: boolean }> {
+  ): Promise<{ loginId: string; password: string; generated: boolean }> {
     const parsed = inputSchema.parse({ password });
     const account = await this.accounts.findById(accountId);
     if (!account) throw new PasswordAccountNotFoundError();
@@ -23,6 +23,6 @@ export class ResetPasswordAccountPassword {
     const generated = parsed.password === undefined;
     const next = parsed.password ?? this.hasher.generate();
     await this.accounts.setPassword(account.id, await this.hasher.hash(next));
-    return { password: next, generated };
+    return { loginId: account.loginId, password: next, generated };
   }
 }

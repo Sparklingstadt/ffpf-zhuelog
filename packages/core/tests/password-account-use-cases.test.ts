@@ -283,6 +283,7 @@ test("resetting a password bumps the session version and clears the lock", async
     "",
   );
   assert.deepEqual(result, {
+    loginId: account.loginId,
     password: "generated-password-1",
     generated: true,
   });
@@ -296,6 +297,7 @@ test("resetting a password bumps the session version and clears the lock", async
     "another long password",
   );
   assert.deepEqual(typed, {
+    loginId: account.loginId,
     password: "another long password",
     generated: false,
   });

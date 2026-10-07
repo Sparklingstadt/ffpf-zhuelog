@@ -14,6 +14,16 @@ const fieldMessages: Record<string, string> = {
   password: "パスワードは12〜128文字にしてください。",
 };
 
+// Errors the admin can act on (bad input, duplicate ID, missing account), as
+// opposed to unexpected failures such as a database outage.
+export function isExpectedAccountActionError(error: unknown): boolean {
+  return (
+    error instanceof ZodError ||
+    error instanceof LoginIdTakenError ||
+    error instanceof PasswordAccountNotFoundError
+  );
+}
+
 // The use cases validate with one z.object, so the first issue's path[0] names
 // the offending field. Anything unrecognised gets a generic message that never
 // echoes the error (it could carry input or infrastructure details).

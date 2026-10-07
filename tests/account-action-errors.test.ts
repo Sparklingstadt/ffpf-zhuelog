@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { z } from "zod";
+import { CreatePasswordAccount } from "@ffpf-zhuelog/core/application/identity/use-cases/create-password-account";
+import type { PasswordHasher } from "@ffpf-zhuelog/core/application/identity/ports/password-hasher";
+import type { PasswordAccountRepository } from "@ffpf-zhuelog/core/domain/identity/repositories/password-account-repository";
 import {
   displayNameSchema,
   loginIdSchema,
@@ -13,6 +16,7 @@ import {
 import {
   accountActionErrorMessage,
   accountActionFallbackMessage,
+  isExpectedAccountActionError,
 } from "../src/presentation/presenters/account-action-errors";
 
 const schema = z.object({
@@ -91,5 +95,53 @@ test("unknown errors get a generic message without leaking details", () => {
   assert.equal(
     accountActionErrorMessage(undefined),
     accountActionFallbackMessage,
+  );
+});
+
+test("only validation and account-state errors are classified as expected", () => {
+  const result = schema.safeParse({ ...valid, loginId: "A!" });
+  assert.ok(!result.success);
+  assert.equal(isExpectedAccountActionError(result.error), true);
+  assert.equal(isExpectedAccountActionError(new LoginIdTakenError()), true);
+  assert.equal(
+    isExpectedAccountActionError(new PasswordAccountNotFoundError()),
+    true,
+  );
+  assert.equal(isExpectedAccountActionError(new Error("db down")), false);
+  assert.equal(isExpectedAccountActionError("boom"), false);
+  assert.equal(isExpectedAccountActionError(undefined), false);
+});
+
+// Proves core's zod instance and the presenter's `instanceof ZodError` agree.
+test("a ZodError thrown by the real CreatePasswordAccount is recognised", async () => {
+  const unused = () => {
+    throw new Error("not reached");
+  };
+  const repo = {
+    findByLoginId: unused,
+    findById: unused,
+    list: unused,
+    create: unused,
+    reserveAttempt: unused,
+    clearFailures: unused,
+    setPassword: unused,
+  } as unknown as PasswordAccountRepository;
+  const hasher = {
+    hash: unused,
+    verify: unused,
+    simulateVerify: unused,
+    generate: () => "generated",
+  } as unknown as PasswordHasher;
+
+  const error = await new CreatePasswordAccount(repo, hasher)
+    .execute({ loginId: "A!", displayName: "Alice", password: "" })
+    .then(
+      () => assert.fail("expected a rejection"),
+      (e: unknown) => e,
+    );
+  assert.equal(isExpectedAccountActionError(error), true);
+  assert.equal(
+    accountActionErrorMessage(error),
+    "ログインIDは英小文字・数字・. _ - の3〜32文字にしてください。",
   );
 });

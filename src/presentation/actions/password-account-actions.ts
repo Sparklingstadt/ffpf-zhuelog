@@ -6,7 +6,10 @@ import {
   getCurrentAdminUser,
   passwordAccountUseCases,
 } from "@/composition/identity-container";
-import { accountActionErrorMessage } from "@/presentation/presenters/account-action-errors";
+import {
+  accountActionErrorMessage,
+  isExpectedAccountActionError,
+} from "@/presentation/presenters/account-action-errors";
 
 export type AccountActionState =
   | { status: "idle" }
@@ -28,24 +31,48 @@ function field(formData: FormData, name: string) {
   return typeof value === "string" ? value : "";
 }
 
+// Logs a fixed code only: the error, its message and the form data may carry
+// a plaintext password.
+function failure(error: unknown): AccountActionState {
+  if (!isExpectedAccountActionError(error)) {
+    console.error("PASSWORD_ACCOUNT_ACTION_FAILED");
+  }
+  return { status: "error", message: accountActionErrorMessage(error) };
+}
+
+// The mutation has already succeeded, and the one-time password must still
+// reach the admin, so a failed refresh is logged (code only) and ignored.
+function refreshAccountList() {
+  try {
+    revalidatePath("/admin/accounts");
+  } catch {
+    console.error("PASSWORD_ACCOUNT_REVALIDATE_FAILED");
+  }
+}
+
 export async function createPasswordAccountAction(
   _previousState: AccountActionState,
   formData: FormData,
 ): Promise<AccountActionState> {
   if (!(await getCurrentAdminUser())) return forbidden;
 
+  let result;
   try {
-    const { account, password, generated } =
-      await passwordAccountUseCases.create.execute({
-        loginId: field(formData, "loginId"),
-        displayName: field(formData, "displayName"),
-        password: field(formData, "password"),
-      });
-    revalidatePath("/admin/accounts");
-    return { status: "success", loginId: account.loginId, password, generated };
+    result = await passwordAccountUseCases.create.execute({
+      loginId: field(formData, "loginId"),
+      displayName: field(formData, "displayName"),
+      password: field(formData, "password"),
+    });
   } catch (error) {
-    return { status: "error", message: accountActionErrorMessage(error) };
+    return failure(error);
   }
+  refreshAccountList();
+  return {
+    status: "success",
+    loginId: result.account.loginId,
+    password: result.password,
+    generated: result.generated,
+  };
 }
 
 export async function resetPasswordAccountPasswordAction(
@@ -55,17 +82,15 @@ export async function resetPasswordAccountPasswordAction(
 ): Promise<AccountActionState> {
   if (!(await getCurrentAdminUser())) return forbidden;
 
+  let result;
   try {
-    const { password, generated } = await passwordAccountUseCases.reset.execute(
+    result = await passwordAccountUseCases.reset.execute(
       accountId,
       field(formData, "password"),
     );
-    // The login ID comes from the store, not from the (client-supplied) form.
-    const accounts = await passwordAccountUseCases.list.execute();
-    const loginId = accounts.find((a) => a.id === accountId)?.loginId ?? "";
-    revalidatePath("/admin/accounts");
-    return { status: "success", loginId, password, generated };
   } catch (error) {
-    return { status: "error", message: accountActionErrorMessage(error) };
+    return failure(error);
   }
+  refreshAccountList();
+  return { status: "success", ...result };
 }
