@@ -55,7 +55,7 @@ gcloud run deploy "$SERVICE" \
   --region "$REGION" \
   --allow-unauthenticated \
   --max-instances 1 \
-  "${env_flags[@]}" \
+  ${env_flags[@]+"${env_flags[@]}"} \
   --update-secrets "$secrets" \
   --quiet
 
