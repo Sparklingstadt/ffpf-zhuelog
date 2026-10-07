@@ -1,6 +1,5 @@
 "use server";
 
-import { AuthError } from "next-auth";
 import { redirect } from "next/navigation";
 
 import {
@@ -9,6 +8,7 @@ import {
   signInWithPassword,
   signOutCurrentUser,
 } from "@/composition/identity-container";
+import { passwordSignInFailureUrl } from "@/presentation/http/password-sign-in-failure";
 import { getSafeCallbackPath } from "@/presentation/http/safe-callback-path";
 
 export async function signInWithGitHubAction(callbackPath: string) {
@@ -34,14 +34,12 @@ export async function signInWithPasswordAction(
       redirectTo: safePath,
     });
   } catch (error) {
-    // Auth.js throws CredentialsSignin (an AuthError) for any failed
+    // Auth.js throws CredentialsSignin only when authorize rejects the
     // credentials. Show one generic message and never echo the input back.
-    // Everything else, including redirect()'s NEXT_REDIRECT, is re-thrown.
-    if (error instanceof AuthError) {
-      redirect(
-        `/signin?error=CredentialsSignin&callbackUrl=${encodeURIComponent(safePath)}`,
-      );
-    }
+    // Anything else (other AuthErrors such as a DB outage, and redirect()'s
+    // NEXT_REDIRECT) is re-thrown.
+    const failureUrl = passwordSignInFailureUrl(error, safePath);
+    if (failureUrl) redirect(failureUrl);
     throw error;
   }
 }
