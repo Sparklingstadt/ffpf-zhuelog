@@ -7,6 +7,7 @@ import {
 import type {
   ConversationNoteRepository,
   DailyConversation,
+  TrashedConversationNotes,
 } from "@ffpf-zhuelog/core/domain/chat/repositories/conversation-note-repository";
 import type { ConversationRepository } from "@ffpf-zhuelog/core/domain/chat/repositories/conversation-repository";
 import type { DateRange } from "@ffpf-zhuelog/core/domain/calendar/value-objects/log-date";
@@ -22,8 +23,10 @@ function map(row: ChatConversation): Conversation {
 const oldestFirst = [{ createdAt: "asc" as const }, { id: "asc" as const }];
 const createdWithin = (ownerId: string, range: DateRange) => ({
   ownerId,
+  deletedAt: null,
   createdAt: { gte: range.start, lt: range.end },
 });
+const inTrash = { deletedAt: { not: null } };
 export class PrismaConversationRepository
   implements ConversationRepository, ConversationNoteRepository
 {
@@ -39,7 +42,8 @@ export class PrismaConversationRepository
         await getPrismaClient().chatConversation.upsert({
           where: { id_ownerId: { id: value.id, ownerId } },
           create: { id: value.id, ownerId, ...data },
-          update: data,
+          // Saving a conversation again takes it back out of the trash.
+          update: { ...data, deletedAt: null },
         }),
       );
     } catch (error) {
@@ -55,7 +59,7 @@ export class PrismaConversationRepository
   }
   async list(ownerId: string): Promise<ConversationSummary[]> {
     const rows = await getPrismaClient().chatConversation.findMany({
-      where: { ownerId },
+      where: { ownerId, deletedAt: null },
       take: 50,
       orderBy: { updatedAt: "desc" },
       select: {
@@ -74,14 +78,14 @@ export class PrismaConversationRepository
     }));
   }
   async get(ownerId: string, id: string) {
-    const row = await getPrismaClient().chatConversation.findUnique({
-      where: { id_ownerId: { id, ownerId } },
+    const row = await getPrismaClient().chatConversation.findFirst({
+      where: { id, ownerId, deletedAt: null },
     });
     return row ? map(row) : null;
   }
   async listCreatedAt(ownerId: string) {
     const rows = await getPrismaClient().chatConversation.findMany({
-      where: { ownerId },
+      where: { ownerId, deletedAt: null },
       select: { createdAt: true },
       orderBy: { createdAt: "desc" },
     });
@@ -117,5 +121,57 @@ export class PrismaConversationRepository
       skip: noteNumber - 1,
     });
     return row ? { conversation: map(row), total } : null;
+  }
+  async trash(ownerId: string, id: string) {
+    const { count } = await getPrismaClient().chatConversation.updateMany({
+      where: { id, ownerId, deletedAt: null },
+      data: { deletedAt: new Date() },
+    });
+    return count === 1;
+  }
+  async restore(ownerId: string, id: string) {
+    const { count } = await getPrismaClient().chatConversation.updateMany({
+      where: { id, ownerId, ...inTrash },
+      data: { deletedAt: null },
+    });
+    return count === 1;
+  }
+  async purge(ownerId: string, id: string) {
+    const { count } = await getPrismaClient().chatConversation.deleteMany({
+      where: { id, ownerId, ...inTrash },
+    });
+    return count === 1;
+  }
+  async emptyTrash(ownerId: string) {
+    const { count } = await getPrismaClient().chatConversation.deleteMany({
+      where: { ownerId, ...inTrash },
+    });
+    return count;
+  }
+  async listTrashed(
+    ownerId: string,
+    limit: number,
+  ): Promise<TrashedConversationNotes> {
+    const prisma = getPrismaClient();
+    const where = { ownerId, ...inTrash };
+    const [rows, total] = await Promise.all([
+      prisma.chatConversation.findMany({
+        where,
+        orderBy: [{ deletedAt: "desc" }, { id: "asc" }],
+        take: limit,
+      }),
+      prisma.chatConversation.count({ where }),
+    ]);
+    return {
+      conversations: rows.map((row) => {
+        const { messages, ...summary } = map(row);
+        return {
+          ...summary,
+          messageCount: messages.length,
+          deletedAt: row.deletedAt!.toISOString(),
+        };
+      }),
+      total,
+    };
   }
 }

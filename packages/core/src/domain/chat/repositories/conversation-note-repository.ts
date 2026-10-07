@@ -10,7 +10,18 @@ export type DailyConversation = {
   total: number;
 };
 
-// Read side of saved conversations, browsed by JST date like learning notes.
+export type TrashedConversationNote = ConversationNoteSummary & {
+  // ISO string, like the summary's other timestamps.
+  deletedAt: string;
+};
+
+export type TrashedConversationNotes = {
+  conversations: TrashedConversationNote[];
+  total: number;
+};
+
+// Saved conversations browsed by JST date like learning notes, plus their
+// trash. Conversations in the trash are left out of the date views.
 export interface ConversationNoteRepository {
   listCreatedAt(ownerId: string): Promise<Date[]>;
   listByDate(
@@ -22,4 +33,14 @@ export interface ConversationNoteRepository {
     range: DateRange,
     noteNumber: number,
   ): Promise<DailyConversation | null>;
+  // Same contract as the learning notes' trash: false when the owner has no
+  // such conversation in the expected state.
+  trash(ownerId: string, id: string): Promise<boolean>;
+  restore(ownerId: string, id: string): Promise<boolean>;
+  purge(ownerId: string, id: string): Promise<boolean>;
+  emptyTrash(ownerId: string): Promise<number>;
+  listTrashed(
+    ownerId: string,
+    limit: number,
+  ): Promise<TrashedConversationNotes>;
 }
