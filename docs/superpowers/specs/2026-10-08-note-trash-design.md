@@ -111,7 +111,7 @@ export type TrashedConversationNotes = {
 
 - `getCurrentMemberUser()` でユーザーを取る。`null`（未ログイン・ゲスト・権限を失ったユーザー）か、`githubId` がない場合は拒否する。
 - 持ち主IDは常に `user.githubId`。フォームから持ち主IDは受け取らない。管理者でも他人のノートは操作できない。
-- ノートIDはフォームの隠しフィールド `id` で受け取り、形式を検証する。学習ノートは `z.cuid()`、会話は `z.uuid()`。不正なら何もせず「見つからない」と同じエラーを返す。
+- ノートIDはフォームの隠しフィールド `id` で受け取り、形式を検証する。学習ノートは `/^[a-z0-9]{1,64}$/`（Prisma の cuid と E2E の seed のIDの両方に合う）、会話は `z.uuid()`。不正なら何もせず「見つからない」と同じエラーを返す。
 - 同一オリジンの確認は Server Action に組み込みのものに任せる。実装前に `node_modules/next/dist/docs/` で今のバージョンの仕様を確かめる。
 
 ### 結果とエラー
@@ -160,7 +160,7 @@ controller は次の状態を返す。
 
 ### 確認ダイアログ
 
-- `src/presentation/components/records/confirm-submit-button.tsx`（クライアント部品）を作る。`window.confirm(message)` で確かめてから送信する。キャンセルなら送信しない。
+- `src/presentation/components/records/note-action-form.tsx`（クライアント部品 `NoteActionForm`）を作る。隠しフィールド・送信ボタン・エラー表示（`useActionState`）を持ち、`confirmMessage` があれば `window.confirm(confirmMessage)` で確かめてから送信する。キャンセルなら送信しない。
 - 文言：
   - 完全に削除：「このノートを完全に削除します。元に戻せません。よろしいですか？」
   - ゴミ箱を空にする：「ゴミ箱の N 件を完全に削除します。元に戻せません。よろしいですか？」
