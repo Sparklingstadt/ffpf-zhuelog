@@ -11,5 +11,5 @@ export function resolveSessionRole(
     typeof login === "string" &&
     isAllowedGitHubLogin(login, allowed)
     ? "admin"
-    : "user";
+    : "revoked";
 }
