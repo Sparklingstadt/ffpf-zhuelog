@@ -8,12 +8,16 @@ declare module "next-auth" {
       githubLogin: string;
       githubId?: string;
       role: AppRole;
+      accountId?: string;
+      sessionVersion?: number;
     };
   }
 
   interface User {
     githubLogin: string;
     role: AppRole;
+    accountId?: string;
+    sessionVersion?: number;
   }
 }
 
@@ -22,5 +26,7 @@ declare module "next-auth/jwt" {
     githubLogin: string;
     githubId?: string;
     role: AppRole;
+    accountId?: string;
+    sessionVersion?: number;
   }
 }
