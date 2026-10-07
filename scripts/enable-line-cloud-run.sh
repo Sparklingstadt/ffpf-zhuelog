@@ -5,16 +5,17 @@
 #   cd ffpf-zhuelog && git pull && ./scripts/enable-line-cloud-run.sh
 #
 # Enables LINE on the Cloud Run service, lets the webhook hand each drain to
-# Cloud Tasks (so the CPU is billed only while a request runs), schedules
-# /api/line/drain every 30 minutes and checks that the drain answers. The LINE webhook URL is switched
-# by hand afterwards. Safe to re-run.
+# Cloud Tasks (so the CPU is billed only while a request runs) and checks that
+# the drain answers. The 30-minute sweep is Vercel Cron (vercel.json), which
+# Vercel forwards here; the LINE webhook URL and the Vercel settings are
+# switched by hand afterwards. Safe to re-run.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source scripts/cloud-run-common.sh
 
 echo "== APIを有効化しています"
 gcloud services enable run.googleapis.com secretmanager.googleapis.com \
-  cloudscheduler.googleapis.com cloudtasks.googleapis.com
+  cloudtasks.googleapis.com
 
 URL="$(service_url 2>/dev/null || true)"
 [[ -n "$URL" ]] || {
@@ -79,18 +80,13 @@ gcloud run services update "$SERVICE" --region "$REGION" \
   --update-secrets "LINE_CHANNEL_SECRET=zhuelog-LINE_CHANNEL_SECRET:latest,LINE_CHANNEL_ACCESS_TOKEN=zhuelog-LINE_CHANNEL_ACCESS_TOKEN:latest,OPENAI_API_KEY=zhuelog-OPENAI_API_KEY:latest,CRON_SECRET=zhuelog-CRON_SECRET:latest" \
   --quiet >/dev/null
 
-echo "== Cloud Scheduler（30分おき）を設定しています"
-cron_secret="$(gcloud secrets versions access latest --secret zhuelog-CRON_SECRET)"
-job=(zhuelog-line-drain --location "$REGION" --schedule '*/30 * * * *'
-  --time-zone Asia/Tokyo --http-method GET --uri "$URL/api/line/drain")
-if gcloud scheduler jobs describe zhuelog-line-drain --location "$REGION" >/dev/null 2>&1; then
-  gcloud scheduler jobs update http "${job[@]}" \
-    --update-headers "Authorization=Bearer $cron_secret" --quiet >/dev/null
-else
-  gcloud scheduler jobs create http "${job[@]}" \
-    --headers "Authorization=Bearer $cron_secret" --quiet >/dev/null
+# Vercel Cron now sweeps every 30 minutes; a leftover job would only double it.
+if gcloud scheduler jobs describe zhuelog-line-drain --location "$REGION" --quiet >/dev/null 2>&1; then
+  echo "== 以前のCloud Schedulerのジョブを削除しています（Vercel Cronに置き換え）"
+  gcloud scheduler jobs delete zhuelog-line-drain --location "$REGION" --quiet >/dev/null
 fi
 
+cron_secret="$(gcloud secrets versions access latest --secret zhuelog-CRON_SECRET)"
 echo "== /api/line/drain を確認しています"
 status="$(curl_bearer "$cron_secret" -s -o /dev/null -w '%{http_code}' \
   "$URL/api/line/drain")"
@@ -108,6 +104,13 @@ cat <<EOF
 1. LINE Developers の「Messaging API設定」で Webhook URL を次に変えて「検証」を押す。
      $URL/api/line/webhook
 2. 自分のLINEから短い中文を送り、返信が届くことを確認する。
-3. Vercel の環境変数 LINE_INTEGRATION_ENABLED を false にして再デプロイする
+3. Vercel の環境変数を次のようにして再デプロイする
    （切り替えの前後に届いたメッセージも、どちらかが二重にならずに処理します）。
+     LINE_INTEGRATION_ENABLED = false
+     LINE_DRAIN_FORWARD_URL   = $URL
+     CRON_SECRET              = Secret Manager の zhuelog-CRON_SECRET と同じ値
+   CRON_SECRET の値は次のコマンドで表示できます（貼り付けたら画面を消してください）。
+     gcloud secrets versions access latest --secret zhuelog-CRON_SECRET
+   Vercel Cron が30分おきに Vercel の /api/line/drain を呼び、Vercel が
+   Cloud Run の /api/line/drain に取り次ぎます。
 EOF

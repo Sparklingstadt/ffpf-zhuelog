@@ -4,6 +4,11 @@ import { handleLineDrain } from "@/presentation/controllers/line-drain-controlle
 export const runtime = "nodejs";
 export const maxDuration = 60;
 export async function GET(request: Request) {
-  const { createDrain } = createLineContainer();
-  return handleLineDrain(request, process.env.CRON_SECRET, createDrain);
+  const { createDrain, createDrainForwarder } = createLineContainer();
+  return handleLineDrain(
+    request,
+    process.env.CRON_SECRET,
+    createDrain,
+    createDrainForwarder,
+  );
 }
