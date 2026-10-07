@@ -16,7 +16,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           email: profile.email,
           image: profile.avatar_url,
           githubLogin: profile.login,
-          role: isAllowedGitHubLogin(profile.login) ? "admin" : "user",
+          role: isAllowedGitHubLogin(profile.login) ? "admin" : "revoked",
         };
       },
     }),

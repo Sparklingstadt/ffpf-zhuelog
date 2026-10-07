@@ -18,11 +18,11 @@ import { handleChatRequest } from "../src/presentation/controllers/chat-controll
 
 test("admin JWTs lose privileges when their login leaves the current allowlist", () => {
   assert.equal(resolveSessionRole("admin", "Alice", "alice,bob"), "admin");
-  assert.equal(resolveSessionRole("admin", "Alice", "bob"), "user");
-  assert.equal(resolveSessionRole("admin", "Alice", ""), "user");
-  assert.equal(resolveSessionRole("admin", null, "alice"), "user");
+  assert.equal(resolveSessionRole("admin", "Alice", "bob"), "revoked");
+  assert.equal(resolveSessionRole("admin", "Alice", ""), "revoked");
+  assert.equal(resolveSessionRole("admin", null, "alice"), "revoked");
   assert.equal(resolveSessionRole("guest", "guest", ""), "guest");
-  assert.equal(resolveSessionRole("user", "alice", "alice"), "user");
+  assert.equal(resolveSessionRole("revoked", "alice", "alice"), "revoked");
 });
 
 test("callbacks reject external, encoded slash, backslash, control and malformed paths", () => {
