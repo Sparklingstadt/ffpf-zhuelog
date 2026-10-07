@@ -1,4 +1,5 @@
 import { ownerIdForAccount } from "@ffpf-zhuelog/core/domain/identity/entities/password-account";
+import { isOwnerId } from "@ffpf-zhuelog/core/domain/identity/owner-id";
 
 // Auth.js replaces the OAuth user id with crypto.randomUUID() (it becomes
 // token.sub), so the numeric GitHub account id must come from the provider
@@ -7,7 +8,6 @@ const GITHUB_ID = /^\d+$/;
 // Password accounts own their data as "password:<PasswordAccount.id>". The id
 // is a Prisma cuid; anything else (e.g. path segments) is never trusted.
 const PASSWORD_ACCOUNT_ID = /^[a-z0-9]{20,32}$/;
-const PASSWORD_OWNER_ID = /^password:[a-z0-9]{20,32}$/;
 
 export function githubIdFromAccount(
   account: { provider?: string; providerAccountId?: string } | null | undefined,
@@ -24,8 +24,5 @@ export function passwordOwnerId(accountId: unknown): string | undefined {
 }
 
 export function githubIdFromToken(value: unknown): string | undefined {
-  return typeof value === "string" &&
-    (GITHUB_ID.test(value) || PASSWORD_OWNER_ID.test(value))
-    ? value
-    : undefined;
+  return typeof value === "string" && isOwnerId(value) ? value : undefined;
 }
