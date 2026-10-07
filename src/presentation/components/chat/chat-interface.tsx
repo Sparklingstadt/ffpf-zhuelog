@@ -191,9 +191,7 @@ export function ChatInterface({
       <CardContent className="flex min-h-0 flex-1 flex-col px-0">
         <div className="space-y-2 px-4 pt-4 text-sm sm:px-6" role="status">
           {!ownerId ? (
-            <p>
-              履歴保存には、一度ログアウトしてGitHubでログインし直してください。
-            </p>
+            <p>履歴保存には、一度ログアウトしてログインし直してください。</p>
           ) : null}
           {history.backupError ? (
             <p className="text-destructive">{history.backupError}</p>

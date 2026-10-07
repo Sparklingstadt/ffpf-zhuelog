@@ -1,6 +1,7 @@
 import {
   CircleUserRound,
   Eye,
+  KeyRound,
   Languages,
   LockKeyhole,
   ShieldCheck,
@@ -12,6 +13,7 @@ import { isAuthConfigured } from "@/infrastructure/config/environment";
 import {
   signInAsGuestAction,
   signInWithGitHubAction,
+  signInWithPasswordAction,
 } from "@/presentation/actions/auth-actions";
 import {
   Alert,
@@ -20,6 +22,8 @@ import {
 } from "@/presentation/components/ui/alert";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
+import { Input } from "@/presentation/components/ui/input";
+import { Label } from "@/presentation/components/ui/label";
 import {
   Card,
   CardContent,
@@ -32,6 +36,7 @@ import { PracticeNotice } from "@/presentation/components/practice/practice-noti
 import { getSafeCallbackPath } from "@/presentation/http/safe-callback-path";
 
 const errorMessages: Record<string, string> = {
+  CredentialsSignin: "IDまたはパスワードが違うか、一時的にロックされています。",
   AccessDenied:
     "このGitHubアカウントには利用権限がありません。管理者に確認してください。",
   Configuration: "認証設定が完了していません。管理者に確認してください。",
@@ -40,7 +45,11 @@ const errorMessages: Record<string, string> = {
 };
 
 type SignInPageProps = {
-  searchParams: Promise<{ callbackUrl?: string; error?: string }>;
+  searchParams: Promise<{
+    callbackUrl?: string;
+    error?: string;
+    notice?: string;
+  }>;
 };
 
 export default async function SignInPage({ searchParams }: SignInPageProps) {
@@ -54,6 +63,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
     ? (errorMessages[params.error] ??
       "認証中にエラーが発生しました。もう一度お試しください。")
     : null;
+  const showPasswordChangedNotice = params.notice === "password-changed";
 
   return (
     <main className="flex flex-1 items-center justify-center px-4 py-8 sm:py-12">
@@ -64,7 +74,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
           </div>
           <div className="space-y-2">
             <Badge variant="secondary" className="gap-1.5">
-              <ShieldCheck className="size-3.5" /> 管理者 / ゲスト
+              <ShieldCheck className="size-3.5" /> 管理者 / メンバー / ゲスト
             </Badge>
             <CardTitle className="text-2xl">学习録にログイン</CardTitle>
             <CardDescription>
@@ -81,17 +91,61 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
             </Alert>
           ) : null}
 
+          {showPasswordChangedNotice ? (
+            <Alert>
+              <KeyRound />
+              <AlertDescription>
+                パスワードを変更しました。新しいパスワードでログインしてください。
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
           {!isConfigured ? (
             <Alert>
               <LockKeyhole />
               <AlertTitle>OAuth設定が必要です</AlertTitle>
               <AlertDescription>
-                管理者ログインには、READMEに従ってGitHub OAuth
-                Appと許可ユーザーを設定してください。ゲスト閲覧は利用できます。
+                GitHubでのログインには、READMEに従ってGitHub OAuth
+                Appと許可ユーザーを設定してください。IDとパスワードでのログインとゲスト閲覧は利用できます。
               </AlertDescription>
             </Alert>
           ) : null}
 
+          <form
+            action={signInWithPasswordAction.bind(null, callbackPath)}
+            className="space-y-3"
+          >
+            <div className="space-y-2">
+              <Label htmlFor="loginId">ログインID</Label>
+              <Input
+                id="loginId"
+                name="loginId"
+                type="text"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">パスワード</Label>
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                required
+              />
+            </div>
+            <Button type="submit" className="w-full">
+              <KeyRound /> IDとパスワードでログイン
+            </Button>
+          </form>
+          <div className="flex items-center gap-3" aria-hidden="true">
+            <Separator className="flex-1" />
+            <span className="text-xs text-muted-foreground">または</span>
+            <Separator className="flex-1" />
+          </div>
           <form action={signInWithGitHubAction.bind(null, callbackPath)}>
             <Button type="submit" className="w-full" disabled={!isConfigured}>
               <CircleUserRound /> GitHubでログイン
@@ -118,6 +172,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
           <p className="text-center text-xs leading-5 text-muted-foreground">
             ゲストは共有ノートへの投稿・CSVインポート・管理者用ChatGPT・LINE添削を利用できません。
             GitHub認証ではユーザー名・表示名・メールアドレス・プロフィール画像が利用されます。
+            IDとパスワードのアカウントは管理者が発行します。
           </p>
         </CardContent>
       </Card>
