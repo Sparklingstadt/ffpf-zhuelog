@@ -21,7 +21,7 @@ export function AuthControls({ user }: AuthControlsProps) {
       : `@${user.githubLogin}`;
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <Badge variant="outline" className="gap-1.5 py-1.5 font-normal">
         {isGuest ? (
           <Eye className="size-3.5" />
