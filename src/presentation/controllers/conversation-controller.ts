@@ -1,5 +1,8 @@
 import { z } from "zod";
-import type { AuthenticatedUser } from "@ffpf-zhuelog/core/domain/identity/entities/authenticated-user";
+import {
+  isMemberRole,
+  type AuthenticatedUser,
+} from "@ffpf-zhuelog/core/domain/identity/entities/authenticated-user";
 import { ConversationOwnershipError } from "@ffpf-zhuelog/core/domain/chat/conversation";
 import type { ConversationRepository } from "@ffpf-zhuelog/core/domain/chat/repositories/conversation-repository";
 import { SaveConversation } from "@ffpf-zhuelog/core/application/chat/use-cases/save-conversation";
@@ -12,13 +15,10 @@ const json = (value: unknown, status = 200) =>
   Response.json(value, { status, headers: { "Cache-Control": "no-store" } });
 function denial(user: AuthenticatedUser | null) {
   if (!user) return json({ error: "認証が必要です。" }, 401);
-  if (user.role !== "admin")
-    return json({ error: "管理者のみ利用できます。" }, 403);
+  if (!isMemberRole(user.role))
+    return json({ error: "ゲストは利用できません。" }, 403);
   if (!user.githubId)
-    return json(
-      { error: "一度ログアウトしてGitHubでログインし直してください。" },
-      401,
-    );
+    return json({ error: "一度ログアウトしてログインし直してください。" }, 401);
   return null;
 }
 export async function handleConversationSave(

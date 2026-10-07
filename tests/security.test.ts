@@ -22,6 +22,7 @@ test("admin JWTs lose privileges when their login leaves the current allowlist",
   assert.equal(resolveSessionRole("admin", "Alice", ""), "revoked");
   assert.equal(resolveSessionRole("admin", null, "alice"), "revoked");
   assert.equal(resolveSessionRole("guest", "guest", ""), "guest");
+  assert.equal(resolveSessionRole("member", "taro", ""), "member");
   assert.equal(resolveSessionRole("revoked", "alice", "alice"), "revoked");
 });
 

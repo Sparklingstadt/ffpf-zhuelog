@@ -73,6 +73,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const permitted =
         isPublicRoute ||
         session?.user.role === "admin" ||
+        session?.user.role === "member" ||
         session?.user.role === "guest";
       if (permitted) return true;
       if (pathname.startsWith("/api/")) {

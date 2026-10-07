@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { conversationNoteUseCases } from "@/composition/conversation-container";
-import { getCurrentAdminUser } from "@/composition/identity-container";
+import { getCurrentMemberUser } from "@/composition/identity-container";
 import {
   parseLogDate,
   parseLogNumber,
@@ -29,7 +29,7 @@ type ConversationDetailPageProps = {
 export default async function ConversationDetailPage({
   params,
 }: ConversationDetailPageProps) {
-  const user = await getCurrentAdminUser();
+  const user = await getCurrentMemberUser();
   if (!user) redirect("/signin?callbackUrl=/conversations");
 
   const { year, month, day, number } = await params;

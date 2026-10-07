@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { conversationNoteUseCases } from "@/composition/conversation-container";
-import { getCurrentAdminUser } from "@/composition/identity-container";
+import { getCurrentMemberUser } from "@/composition/identity-container";
 import { parseLogDate } from "@ffpf-zhuelog/core/domain/calendar/value-objects/log-date";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { ReauthNotice } from "@/presentation/components/chat/reauth-notice";
@@ -24,7 +24,7 @@ type ConversationDatePageProps = {
 export default async function ConversationDatePage({
   params,
 }: ConversationDatePageProps) {
-  const user = await getCurrentAdminUser();
+  const user = await getCurrentMemberUser();
   if (!user) redirect("/signin?callbackUrl=/conversations");
 
   const { year, month, day } = await params;

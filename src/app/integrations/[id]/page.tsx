@@ -2,6 +2,7 @@ import { ArrowLeft, Download, Puzzle, WandSparkles } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
+import { isMemberRole } from "@ffpf-zhuelog/core/domain/identity/entities/authenticated-user";
 import { getCurrentViewerUser } from "@/composition/identity-container";
 import {
   integrationUseCases,
@@ -43,7 +44,7 @@ export default async function IntegrationPage({
         ? `/signin?callbackUrl=/integrations/${integration.id}`
         : "/signin",
     );
-  if (user.role !== "admin") redirect("/");
+  if (!isMemberRole(user.role)) redirect("/");
   if (!integration) notFound();
 
   const { sourceCount, total, preview, error } = await loadIntegrationPreview(
