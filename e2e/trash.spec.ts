@@ -280,3 +280,20 @@ test("trash pages and buttons fit a narrow phone screen", async ({
     expect(scrolls, path).toBe(false);
   }
 });
+
+test("going back after trashing does not reopen the same number", async ({
+  page,
+  context,
+  db,
+}) => {
+  await seedNotes(db, adminOwnerId, notes);
+  await asAdmin(context);
+  await page.goto(`/logs/${day}`);
+  await page.goto(`/logs/${day}/2`);
+  await page.getByRole("button", { name: "ゴミ箱に入れる" }).click();
+  await expect(page).toHaveURL(`/logs/${day}?trashed=1`);
+  // The detail page is replaced, so back skips its number, which now
+  // belongs to the next note.
+  await page.goBack();
+  await expect(page).toHaveURL(`/logs/${day}`);
+});

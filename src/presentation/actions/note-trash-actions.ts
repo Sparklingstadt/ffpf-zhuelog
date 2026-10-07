@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { redirect, RedirectType } from "next/navigation";
 
 import { conversationNoteUseCases } from "@/composition/conversation-container";
 import { getCurrentMemberUser } from "@/composition/identity-container";
@@ -16,6 +16,12 @@ import { trashedRedirectPath } from "@/presentation/presenters/note-trash-href";
 export type { NoteActionState };
 
 type Kind = "learning" | "conversation";
+
+// Replace, not push: the detail page's number now belongs to the next note,
+// so going back must not reopen it.
+function redirectAfterTrash(path: string): never {
+  redirect(path, RedirectType.replace);
+}
 type Run = (ownerId: string, id: string) => Promise<boolean>;
 
 // Every list, the home page's recent notes and the trash pages change.
@@ -52,7 +58,7 @@ export async function trashLearningEntryAction(
     learningUseCases.trashLearningEntry.execute(ownerId, id),
   );
   if (state.status === "success")
-    redirect(trashedRedirectPath("/logs", formData));
+    redirectAfterTrash(trashedRedirectPath("/logs", formData));
   return state;
 }
 
@@ -88,7 +94,7 @@ export async function trashConversationAction(
     conversationNoteUseCases.trashConversation.execute(ownerId, id),
   );
   if (state.status === "success")
-    redirect(trashedRedirectPath("/conversations", formData));
+    redirectAfterTrash(trashedRedirectPath("/conversations", formData));
   return state;
 }
 
