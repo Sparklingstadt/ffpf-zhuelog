@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { withRecordOwner } from "../src/presentation/presenters/record-owner-href";
+import {
+  requestedRecordOwner,
+  withRecordOwner,
+} from "../src/presentation/presenters/record-owner-href";
 
 const other = { kind: "other" as const, ownerId: "password:ckabc123" };
 
@@ -25,4 +28,10 @@ test("keeps an existing query and the hash", () => {
     withRecordOwner("/logs#a", { kind: "other", ownerId: "219588180" }),
     "/logs?user=219588180#a",
   );
+});
+
+test("reads the first value of a repeated user query", () => {
+  assert.equal(requestedRecordOwner(undefined), undefined);
+  assert.equal(requestedRecordOwner("219588180"), "219588180");
+  assert.equal(requestedRecordOwner(["a", "b"]), "a");
 });

@@ -1,4 +1,4 @@
-import { getCurrentMemberUser } from "@/composition/identity-container";
+import { getRecordOwner } from "@/composition/identity-container";
 import {
   integrationUseCases,
   integrations,
@@ -13,12 +13,15 @@ type IntegrationExportContext = {
 };
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: IntegrationExportContext,
 ) {
   const { id } = await params;
-  return handleIntegrationExport(id, {
-    getMember: getCurrentMemberUser,
+  const requestedUser =
+    new URL(request.url).searchParams.get("user") ?? undefined;
+  return handleIntegrationExport(id, requestedUser, {
+    getRecordOwner: async (requested) =>
+      (await getRecordOwner(requested)).owner,
     findIntegration: (integrationId) => integrations.find(integrationId),
     exportIntegration: integrationUseCases.exportIntegration,
   });

@@ -2,9 +2,12 @@ import { ArrowLeft, CalendarDays, ChevronRight, Languages } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { getCurrentViewerUser } from "@/composition/identity-container";
+import { getRecordOwner } from "@/composition/identity-container";
 import { learningUseCases } from "@/composition/learning-container";
+import { loadRecordOwnerView } from "@/composition/record-owner-options";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
+import { ReauthNotice } from "@/presentation/components/chat/reauth-notice";
+import { RecordOwnerControls } from "@/presentation/components/records/record-owner-controls";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
@@ -12,17 +15,33 @@ import {
   formatLogDateKey,
   getLogDateHref,
 } from "@/presentation/presenters/log-date-presenter";
+import {
+  requestedRecordOwner,
+  withRecordOwner,
+} from "@/presentation/presenters/record-owner-href";
 
 export const dynamic = "force-dynamic";
 
-export default async function LogsPage() {
-  const user = await getCurrentViewerUser();
-  if (!user) redirect("/signin?callbackUrl=/logs");
+type LogsPageProps = {
+  searchParams: Promise<{ user?: string | string[] }>;
+};
 
-  // TODO(Task 5): replace with ResolveRecordOwner.
-  const dates = await learningUseCases.listLogDates.execute(
-    user.githubId ?? "",
+export default async function LogsPage({ searchParams }: LogsPageProps) {
+  const { user, owner } = await getRecordOwner(
+    requestedRecordOwner((await searchParams).user),
   );
+  if (!user || (owner.kind === "denied" && owner.reason === "unauthenticated"))
+    redirect("/signin?callbackUrl=/logs");
+  if (owner.kind === "denied" && owner.reason === "guest") redirect("/");
+  if (owner.kind === "redirect-self") redirect("/logs");
+
+  const hasNotes = owner.kind === "self" || owner.kind === "other";
+  const [dates, view] = hasNotes
+    ? await Promise.all([
+        learningUseCases.listLogDates.execute(owner.ownerId),
+        loadRecordOwnerView(user, owner),
+      ])
+    : [[], null];
 
   return (
     <main className="min-h-screen bg-background">
@@ -43,7 +62,7 @@ export default async function LogsPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline" size="sm">
-              <Link href="/">
+              <Link href={withRecordOwner("/", owner)}>
                 <ArrowLeft /> 学習ノートへ
               </Link>
             </Button>
@@ -51,7 +70,13 @@ export default async function LogsPage() {
           </div>
         </header>
 
-        {dates.length === 0 ? (
+        {view ? (
+          <RecordOwnerControls owner={owner} view={view} path="/logs" />
+        ) : null}
+
+        {!hasNotes ? (
+          <ReauthNotice subject="学習ノート" />
+        ) : dates.length === 0 ? (
           <Card className="border-dashed py-12 text-center shadow-none">
             <CardContent>
               <CalendarDays className="mx-auto size-7 text-muted-foreground" />
@@ -63,7 +88,7 @@ export default async function LogsPage() {
             {dates.map((group) => (
               <Link
                 key={formatLogDateKey(group.date)}
-                href={getLogDateHref(group.date)}
+                href={withRecordOwner(getLogDateHref(group.date), owner)}
                 className="group"
               >
                 <Card className="transition-colors group-hover:bg-muted/40">

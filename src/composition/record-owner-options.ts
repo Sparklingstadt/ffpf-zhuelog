@@ -1,3 +1,5 @@
+import type { RecordOwner } from "@ffpf-zhuelog/core/application/identity/use-cases/resolve-record-owner";
+import type { AuthenticatedUser } from "@ffpf-zhuelog/core/domain/identity/entities/authenticated-user";
 import { ownerIdForAccount } from "@ffpf-zhuelog/core/domain/identity/entities/password-account";
 import { passwordAccountUseCases } from "@/composition/identity-container";
 
@@ -25,4 +27,37 @@ export function labelForOwner(
   return (
     options.find((option) => option.ownerId === ownerId)?.displayName ?? ownerId
   );
+}
+
+export type RecordOwnerView = {
+  // Switcher choices, loaded for admins only; null hides the switcher.
+  options: RecordOwnerOption[] | null;
+  // Name for the "viewing" banner while another person's records are shown.
+  viewingName: string | null;
+};
+
+// Member list for the switcher. The top page still renders when the database
+// is down, so a failure leaves only "自分" instead of breaking the page.
+async function loadOptions(): Promise<RecordOwnerOption[]> {
+  try {
+    return await listRecordOwnerOptions();
+  } catch {
+    console.error("RECORD_OWNER_OPTIONS_UNAVAILABLE");
+    return [];
+  }
+}
+
+// What a records page shows above its content for the viewed owner.
+export async function loadRecordOwnerView(
+  user: AuthenticatedUser | null,
+  owner: RecordOwner,
+): Promise<RecordOwnerView> {
+  const options = user?.role === "admin" ? await loadOptions() : null;
+  return {
+    options,
+    viewingName:
+      owner.kind === "other"
+        ? labelForOwner(owner.ownerId, options ?? [])
+        : null,
+  };
 }

@@ -2,7 +2,6 @@ import {
   BookOpenText,
   CalendarDays,
   Database,
-  Eye,
   Languages,
   MessageCircle,
   MessagesSquare,
@@ -11,16 +10,24 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import type { ReactNode } from "react";
 
-import { isMemberRole } from "@ffpf-zhuelog/core/domain/identity/entities/authenticated-user";
-import { getCurrentViewerUser } from "@/composition/identity-container";
+import type { RecordOwner } from "@ffpf-zhuelog/core/application/identity/use-cases/resolve-record-owner";
+import {
+  isMemberRole,
+  type AuthenticatedUser,
+} from "@ffpf-zhuelog/core/domain/identity/entities/authenticated-user";
+import { getRecordOwner } from "@/composition/identity-container";
 import { integrations } from "@/composition/integration-container";
 import { learningUseCases } from "@/composition/learning-container";
+import { loadRecordOwnerView } from "@/composition/record-owner-options";
 import type { LearningEntry } from "@ffpf-zhuelog/core/domain/learning/entities/learning-entry";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
+import { ReauthNotice } from "@/presentation/components/chat/reauth-notice";
 import { CsvFormatGuide } from "@/presentation/components/learning/csv-format-guide";
 import { CsvImportForm } from "@/presentation/components/learning/csv-import-form";
 import { LearningEntryCard } from "@/presentation/components/learning/learning-entry-card";
+import { RecordOwnerControls } from "@/presentation/components/records/record-owner-controls";
 import {
   Alert,
   AlertDescription,
@@ -36,6 +43,10 @@ import {
   CardTitle,
 } from "@/presentation/components/ui/card";
 import { getLogDateHref } from "@/presentation/presenters/log-date-presenter";
+import {
+  requestedRecordOwner,
+  withRecordOwner,
+} from "@/presentation/presenters/record-owner-href";
 
 export const dynamic = "force-dynamic";
 
@@ -61,162 +72,235 @@ async function loadEntries(ownerId: string): Promise<{
   }
 }
 
-export default async function Home() {
-  const user = await getCurrentViewerUser();
-  if (!user) redirect("/signin");
+type HomeProps = {
+  searchParams: Promise<{ user?: string | string[] }>;
+};
 
-  // TODO(Task 5): replace with ResolveRecordOwner.
-  const { entries, total, databaseError } = await loadEntries(
-    user.githubId ?? "",
+function HomeHeader({
+  user,
+  owner,
+  total,
+}: {
+  user: AuthenticatedUser;
+  owner: RecordOwner;
+  // Number of entries for the viewed owner; null when no notes are shown.
+  total: number | null;
+}) {
+  const hasNotes = owner.kind === "self" || owner.kind === "other";
+  return (
+    <header className="flex flex-col gap-5 border-b pb-8 sm:flex-row sm:items-end sm:justify-between">
+      <div className="space-y-3">
+        <Badge variant="secondary" className="gap-1.5">
+          <Languages className="size-3.5" /> Chinese learning log
+        </Badge>
+        <div className="space-y-2">
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+            学习録
+          </h1>
+          <p className="max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
+            自分が書いた文と添削後の文を、ピン音や覚えるべきヒントと一緒に蓄積します。
+          </p>
+        </div>
+      </div>
+      <div className="flex flex-col items-start gap-2 sm:items-end">
+        <AuthControls user={user} />
+        <div className="flex flex-wrap gap-2 sm:justify-end">
+          <Button asChild variant="outline" size="sm">
+            <Link href="/practice">
+              <Sparkles /> 自分のAPIキーで添削
+            </Link>
+          </Button>
+          {hasNotes ? (
+            <Button asChild variant="outline" size="sm">
+              <Link href={withRecordOwner("/logs", owner)}>
+                <CalendarDays /> 日付から見る
+              </Link>
+            </Button>
+          ) : null}
+          {isMemberRole(user.role) ? (
+            <>
+              {integrations.list().map((integration) => (
+                <Button
+                  key={integration.id}
+                  asChild
+                  variant="outline"
+                  size="sm"
+                >
+                  <Link
+                    href={withRecordOwner(
+                      `/integrations/${integration.id}`,
+                      owner,
+                    )}
+                  >
+                    <Puzzle /> {integration.text.navLabel}
+                  </Link>
+                </Button>
+              ))}
+              <Button asChild variant="outline" size="sm">
+                <Link href="/chat">
+                  <MessageCircle /> ChatGPTと話す
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link href="/conversations">
+                  <MessagesSquare /> 会話ノート
+                </Link>
+              </Button>
+            </>
+          ) : null}
+        </div>
+        {total === null ? null : (
+          <div className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3 text-sm shadow-xs">
+            <Database className="size-4 text-muted-foreground" />
+            <span className="text-muted-foreground">登録済み</span>
+            <strong className="font-mono text-lg">{total}</strong>
+            <span className="text-muted-foreground">文</span>
+          </div>
+        )}
+      </div>
+    </header>
   );
+}
 
+function HomeShell({ children }: { children: ReactNode }) {
   return (
     <main className="min-h-screen bg-background">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
-        <header className="flex flex-col gap-5 border-b pb-8 sm:flex-row sm:items-end sm:justify-between">
-          <div className="space-y-3">
-            <Badge variant="secondary" className="gap-1.5">
-              <Languages className="size-3.5" /> Chinese learning log
-            </Badge>
-            <div className="space-y-2">
-              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-                学习録
-              </h1>
-              <p className="max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-                自分が書いた文と添削後の文を、ピン音や覚えるべきヒントと一緒に蓄積します。
-              </p>
+        {children}
+      </div>
+    </main>
+  );
+}
+
+export default async function Home({ searchParams }: HomeProps) {
+  const { user, owner } = await getRecordOwner(
+    requestedRecordOwner((await searchParams).user),
+  );
+  if (!user || (owner.kind === "denied" && owner.reason === "unauthenticated"))
+    redirect("/signin");
+  if (owner.kind === "redirect-self") redirect("/");
+
+  // Guests have no notes of their own: point them to the personal practice.
+  if (owner.kind === "denied" && owner.reason === "guest") {
+    return (
+      <HomeShell>
+        <HomeHeader user={user} owner={owner} total={null} />
+        <Card className="border-dashed py-14 text-center shadow-none">
+          <CardContent className="flex flex-col items-center gap-4">
+            <div className="rounded-full bg-muted p-3">
+              <BookOpenText className="size-6 text-muted-foreground" />
             </div>
+            <p className="max-w-xl text-sm leading-6 text-muted-foreground">
+              学習ノートは、ログインしたユーザーごとの記録です。ゲストは自分のAPIキーでの添削を利用できます。
+            </p>
+            <Button asChild>
+              <Link href="/practice">
+                <Sparkles /> 自分のAPIキーで添削する
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </HomeShell>
+    );
+  }
+
+  if (owner.kind === "denied") {
+    return (
+      <HomeShell>
+        <HomeHeader user={user} owner={owner} total={null} />
+        <ReauthNotice subject="学習ノート" />
+      </HomeShell>
+    );
+  }
+
+  const [{ entries, total, databaseError }, view] = await Promise.all([
+    loadEntries(owner.ownerId),
+    loadRecordOwnerView(user, owner),
+  ]);
+  const ownNotes = owner.kind === "self";
+
+  return (
+    <HomeShell>
+      <HomeHeader user={user} owner={owner} total={total} />
+
+      <RecordOwnerControls owner={owner} view={view} path="/" />
+
+      {databaseError ? (
+        <Alert variant="destructive">
+          <Database />
+          <AlertTitle>PostgreSQLの準備が必要です</AlertTitle>
+          <AlertDescription>{databaseError}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      <section
+        className={
+          ownNotes
+            ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start"
+            : "grid gap-6"
+        }
+      >
+        <div className="order-2 space-y-4 lg:order-1">
+          <div>
+            <h2 className="text-xl font-semibold tracking-tight">学習ノート</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              新しく登録された文から最大100件を表示します。
+            </p>
           </div>
-          <div className="flex flex-col items-start gap-2 sm:items-end">
-            <AuthControls user={user} />
-            <div className="flex flex-wrap gap-2 sm:justify-end">
-              <Button asChild variant="outline" size="sm">
-                <Link href="/practice">
-                  <Sparkles /> 自分のAPIキーで添削
-                </Link>
-              </Button>
-              <Button asChild variant="outline" size="sm">
-                <Link href="/logs">
-                  <CalendarDays /> 日付から見る
-                </Link>
-              </Button>
-              {isMemberRole(user.role) ? (
-                <>
-                  {integrations.list().map((integration) => (
-                    <Button
-                      key={integration.id}
-                      asChild
-                      variant="outline"
-                      size="sm"
-                    >
-                      <Link href={`/integrations/${integration.id}`}>
-                        <Puzzle /> {integration.text.navLabel}
-                      </Link>
-                    </Button>
-                  ))}
-                  <Button asChild variant="outline" size="sm">
-                    <Link href="/chat">
-                      <MessageCircle /> ChatGPTと話す
-                    </Link>
-                  </Button>
-                  <Button asChild variant="outline" size="sm">
-                    <Link href="/conversations">
-                      <MessagesSquare /> 会話ノート
-                    </Link>
-                  </Button>
-                </>
-              ) : null}
-            </div>
-            <div className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3 text-sm shadow-xs">
-              <Database className="size-4 text-muted-foreground" />
-              <span className="text-muted-foreground">登録済み</span>
-              <strong className="font-mono text-lg">{total}</strong>
-              <span className="text-muted-foreground">文</span>
-            </div>
-          </div>
-        </header>
 
-        {databaseError ? (
-          <Alert variant="destructive">
-            <Database />
-            <AlertTitle>PostgreSQLの準備が必要です</AlertTitle>
-            <AlertDescription>{databaseError}</AlertDescription>
-          </Alert>
-        ) : null}
-
-        <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
-          <div className="order-2 space-y-4 lg:order-1">
-            <div>
-              <h2 className="text-xl font-semibold tracking-tight">
-                学習ノート
-              </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                新しく登録された文から最大100件を表示します。
-              </p>
-            </div>
-
-            {entries.length === 0 ? (
-              <Card className="border-dashed py-14 text-center shadow-none">
-                <CardContent className="flex flex-col items-center gap-3">
-                  <div className="rounded-full bg-muted p-3">
-                    <BookOpenText className="size-6 text-muted-foreground" />
-                  </div>
-                  <div>
-                    <p className="font-medium">まだ学習文がありません</p>
+          {entries.length === 0 ? (
+            <Card className="border-dashed py-14 text-center shadow-none">
+              <CardContent className="flex flex-col items-center gap-3">
+                <div className="rounded-full bg-muted p-3">
+                  <BookOpenText className="size-6 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="font-medium">まだ学習文がありません</p>
+                  {ownNotes ? (
                     <p className="mt-1 text-sm text-muted-foreground">
                       CSVをインポートすると、ここに学習カードが並びます。
                     </p>
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid gap-4">
-                {entries.map((entry, index) => (
-                  <LearningEntryCard
-                    key={entry.id}
-                    entry={entry}
-                    numberLabel={`#${total - index}`}
-                    href={getLogDateHref(entry.createdAt)}
-                    linkLabel="この日の一覧"
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+                  ) : null}
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4">
+              {entries.map((entry, index) => (
+                <LearningEntryCard
+                  key={entry.id}
+                  entry={entry}
+                  numberLabel={`#${total - index}`}
+                  href={withRecordOwner(getLogDateHref(entry.createdAt), owner)}
+                  linkLabel="この日の一覧"
+                />
+              ))}
+            </div>
+          )}
+        </div>
 
+        {/* Imports always go to the signed-in user's own notes, so the form
+            only appears on them. */}
+        {ownNotes ? (
           <aside className="order-1 lg:order-2 lg:sticky lg:top-8">
-            {isMemberRole(user.role) ? (
-              <Card>
-                <CardHeader>
-                  <div className="mb-2 flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                    <Sparkles className="size-4" />
-                  </div>
-                  <CardTitle>CSVをインポート</CardTitle>
-                  <CardDescription>
-                    UTF-8のCSVファイルを選んで、学習文を一括登録します。
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <CsvImportForm disabled={Boolean(databaseError)} />
-                  <CsvFormatGuide />
-                </CardContent>
-              </Card>
-            ) : (
-              <Card>
-                <CardHeader>
-                  <div className="mb-2 flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                    <Eye className="size-4" />
-                  </div>
-                  <CardTitle>共有ノートは閲覧専用</CardTitle>
-                  <CardDescription>
-                    ゲストは共有ノートを閲覧できます。投稿・CSVインポート・管理者用ChatGPTは利用できません。個人練習は「自分のAPIキーで添削」から利用できます。
-                  </CardDescription>
-                </CardHeader>
-              </Card>
-            )}
+            <Card>
+              <CardHeader>
+                <div className="mb-2 flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                  <Sparkles className="size-4" />
+                </div>
+                <CardTitle>CSVをインポート</CardTitle>
+                <CardDescription>
+                  UTF-8のCSVファイルを選んで、自分の学習ノートに学習文を一括登録します。
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <CsvImportForm disabled={Boolean(databaseError)} />
+                <CsvFormatGuide />
+              </CardContent>
+            </Card>
           </aside>
-        </section>
-      </div>
-    </main>
+        ) : null}
+      </section>
+    </HomeShell>
   );
 }
