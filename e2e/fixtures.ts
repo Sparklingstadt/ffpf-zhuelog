@@ -38,6 +38,10 @@ export const test = base.extend<{ db: Client }>({
 });
 export { expect };
 
+// The githubId that asAdmin puts in the session, and so the owner of the
+// admin's notes (also LINE_NOTE_OWNER_ID in e2e/server.ts).
+export const adminOwnerId = "10001";
+
 export async function asAdmin(context: BrowserContext) {
   // Test-only cookie, signed with this run's random secret. No app auth bypass.
   const value = await encode({
@@ -48,7 +52,7 @@ export async function asAdmin(context: BrowserContext) {
       // Same shape as a real GitHub sign-in: Auth.js puts a random UUID in
       // sub, and the app stores the numeric GitHub id in its own claim.
       sub: "1b4e28ba-2fa1-11d2-883f-0016d3cca427",
-      githubId: "10001",
+      githubId: adminOwnerId,
       name: "E2E Admin",
       role: "admin",
       githubLogin: "e2e-admin",
@@ -107,7 +111,9 @@ export async function createMember(
 export async function asGuest(page: Page, callback = "/") {
   await page.goto(`/signin?callbackUrl=${encodeURIComponent(callback)}`);
   await page.getByRole("button", { name: "ゲストとして閲覧" }).click();
-  await expect(page.getByText("ゲスト（共有ノートは閲覧のみ）")).toBeVisible();
+  await expect(
+    page.getByText("ゲスト（自分のAPIキーでの添削のみ）"),
+  ).toBeVisible();
 }
 
 export async function upload(page: Page, text: string, name = "learning.csv") {
@@ -117,4 +123,64 @@ export async function upload(page: Page, text: string, name = "learning.csv") {
   await page
     .getByRole("button", { name: "CSVをインポート", exact: true })
     .click();
+}
+
+// The owner id the app derives for a password account.
+export const memberOwnerId = (accountId: string) => `password:${accountId}`;
+
+// Seeds learning notes straight into the database for one owner. Each text
+// becomes a note whose original and corrected sentence are the same, so Typle
+// takes words only from the hints (the quoted 「語」).
+export async function seedNotes(
+  db: Client,
+  ownerId: string,
+  notes: { text: string; hint?: string; createdAt?: string }[],
+) {
+  const batchId = `b${randomBytes(8).toString("hex")}`;
+  await db.query(
+    `INSERT INTO "ImportBatch" (id, "fileName", "rowCount") VALUES ($1, 'seed.csv', $2)`,
+    [batchId, notes.length],
+  );
+  for (const note of notes) {
+    const id = `n${randomBytes(8).toString("hex")}`;
+    await db.query(
+      `INSERT INTO "LearningEntry"
+         (id, "originalText", "correctedText", pinyin, "createdAt", "ownerId", "batchId")
+       VALUES ($1, $2, $2, 'pinyin', COALESCE($3::timestamp, NOW()), $4, $5)`,
+      [id, note.text, note.createdAt ?? null, ownerId, batchId],
+    );
+    if (note.hint)
+      await db.query(
+        `INSERT INTO "Hint" (id, content, position, "learningEntryId") VALUES ($1, $2, 0, $3)`,
+        [`h${randomBytes(8).toString("hex")}`, note.hint, id],
+      );
+  }
+}
+
+export async function seedConversation(
+  db: Client,
+  id: number,
+  ownerId: string,
+  createdAt: string,
+  title: string,
+  messages: [role: "user" | "assistant", text: string][],
+) {
+  await db.query(
+    `INSERT INTO "ChatConversation"
+       ("id", "ownerId", "title", "modelName", "ended", "messages", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, 'gpt-6.1-sol', false, $4, $5, $5)`,
+    [
+      `00000000-0000-4000-8000-${String(id).padStart(12, "0")}`,
+      ownerId,
+      title,
+      JSON.stringify(
+        messages.map(([role, text], index) => ({
+          id: `m${index}`,
+          role,
+          text,
+        })),
+      ),
+      createdAt,
+    ],
+  );
 }

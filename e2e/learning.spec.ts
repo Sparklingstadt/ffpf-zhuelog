@@ -1,5 +1,12 @@
 import { baseURL } from "./environment";
-import { asAdmin, asGuest, expect, test, upload } from "./fixtures";
+import {
+  adminOwnerId,
+  asAdmin,
+  asGuest,
+  expect,
+  test,
+  upload,
+} from "./fixtures";
 
 test("unauthenticated pages redirect to signin", async ({ page }) => {
   for (const path of [
@@ -39,14 +46,34 @@ test("integration pages keep sign-in callbacks and hide unknown ids", async ({
   await expect(page).toHaveURL(/\/$/);
 });
 
-test("guest signs in, cannot post or use chat, and can sign out", async ({
+test("signed-out export request is unauthorized", async ({ request }) => {
+  const response = await request.get("/api/integrations/typle/export");
+  expect(response.status()).toBe(401);
+});
+
+test("guest sees the practice guidance, no notes, and cannot use chat or export", async ({
   page,
+  db,
 }) => {
+  // Notes exist, but they belong to someone else: a guest never sees them.
+  await db.query(
+    `INSERT INTO "ImportBatch" (id, "fileName", "rowCount") VALUES ('e2e-batch', 'fixture.csv', 1)`,
+  );
+  await db.query(
+    'INSERT INTO "LearningEntry" (id, "originalText", "correctedText", pinyin, "ownerId", "batchId") VALUES ($1,$2,$3,$4,$5,$6)',
+    ["1", "他人の原文", "他人の添削", "pinyin", adminOwnerId, "e2e-batch"],
+  );
   await asGuest(page);
   await expect(
-    page.getByText("共有ノートは閲覧専用", { exact: true }),
+    page.getByText(
+      "学習ノートは、ログインしたユーザーごとの記録です。ゲストは自分のAPIキーでの添削を利用できます。",
+    ),
   ).toBeVisible();
-  await expect(page.getByText("まだ学習文がありません")).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "自分のAPIキーで添削する", exact: true }),
+  ).toHaveAttribute("href", "/practice");
+  await expect(page.getByText("他人の添削")).toHaveCount(0);
+  await expect(page.getByText("まだ学習文がありません")).toHaveCount(0);
   await expect(page.getByLabel("CSVファイル", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "ChatGPTと話す" })).toHaveCount(
     0,
@@ -54,12 +81,15 @@ test("guest signs in, cannot post or use chat, and can sign out", async ({
   await expect(page.getByRole("link", { name: "Typle用リスト" })).toHaveCount(
     0,
   );
+  await expect(page.getByRole("link", { name: "日付から見る" })).toHaveCount(0);
   const response = await page.request.post("/api/chat", {
     data: { messages: [] },
   });
   expect(response.status()).toBe(403);
-  await page.goto("/chat");
-  await expect(page).toHaveURL(/\/$/);
+  for (const path of ["/logs", "/logs/2026/9/20", "/chat"]) {
+    await page.goto(path);
+    await expect(page).toHaveURL(/\/$/);
+  }
   await page.goto("/integrations/typle");
   await expect(page).toHaveURL(/\/$/);
   const typleResponse = await page.request.get(
@@ -259,7 +289,8 @@ for (const [name, bytes, error] of [
   });
 }
 
-test("guest navigates date, detail and adjacent notes with JST grouping", async ({
+test("admin navigates date, detail and adjacent notes with JST grouping", async ({
+  context,
   page,
   db,
 }) => {
@@ -272,11 +303,12 @@ test("guest navigates date, detail and adjacent notes with JST grouping", async 
     ["3", "2026-09-20T01:00:00Z"],
   ]) {
     await db.query(
-      'INSERT INTO "LearningEntry" (id, "originalText", "correctedText", pinyin, "createdAt", "batchId") VALUES ($1,$2,$3,$4,$5,$6)',
-      [id, `原文${id}`, `添削${id}`, "pinyin", date, "e2e-batch"],
+      'INSERT INTO "LearningEntry" (id, "originalText", "correctedText", pinyin, "createdAt", "ownerId", "batchId") VALUES ($1,$2,$3,$4,$5,$6,$7)',
+      [id, `原文${id}`, `添削${id}`, "pinyin", date, adminOwnerId, "e2e-batch"],
     );
   }
-  await asGuest(page, "/logs");
+  await asAdmin(context);
+  await page.goto("/logs");
   await page.getByRole("link", { name: /2026\/9\/20/ }).click();
   await expect(page.locator("details")).toHaveCount(2);
   await page.getByRole("link", { name: "詳細を開く" }).first().click();

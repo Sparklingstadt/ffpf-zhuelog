@@ -1,6 +1,6 @@
 import { createHmac, randomUUID } from "node:crypto";
 import type { APIRequestContext } from "@playwright/test";
-import { test, expect } from "./fixtures";
+import { adminOwnerId, test, expect } from "./fixtures";
 import { cronSecret, lineStubUrl, lineTestConfig } from "./environment";
 
 function payload(id = "event1", text = "今天我busy。") {
@@ -147,7 +147,7 @@ test("Japanese text is translated, saved as a translation note and replied", asy
   await expect.poll(jobStatuses(db)).toEqual(["SENT"]);
   const entries = (
     await db.query(
-      'SELECT kind, "originalText", "correctedText" FROM "LearningEntry"',
+      'SELECT kind, "originalText", "correctedText", "ownerId" FROM "LearningEntry"',
     )
   ).rows;
   expect(entries).toEqual([
@@ -155,6 +155,8 @@ test("Japanese text is translated, saved as a translation note and replied", asy
       kind: "translation",
       originalText: "今日は忙しいです。",
       correctedText: "今天我很忙。",
+      // LINE has no sign-in: notes go to LINE_NOTE_OWNER_ID (e2e/server.ts).
+      ownerId: adminOwnerId,
     },
   ]);
   const texts = await pushedTexts(request);
@@ -170,8 +172,14 @@ test("Chinese text is corrected and replied", async ({ request, db }) => {
   );
   await expect.poll(jobStatuses(db)).toEqual(["SENT"]);
   expect(
-    (await db.query('SELECT kind, "originalText" FROM "LearningEntry"')).rows,
-  ).toEqual([{ kind: "correction", originalText: "今天我busy。" }]);
+    (
+      await db.query(
+        'SELECT kind, "originalText", "ownerId" FROM "LearningEntry"',
+      )
+    ).rows,
+  ).toEqual([
+    { kind: "correction", originalText: "今天我busy。", ownerId: adminOwnerId },
+  ]);
   const texts = await pushedTexts(request);
   expect(texts).toHaveLength(1);
   expect(texts[0]).toContain("【添削後】");
