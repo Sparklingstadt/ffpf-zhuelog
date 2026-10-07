@@ -9,6 +9,10 @@ import { parseLogDate } from "@ffpf-zhuelog/core/domain/calendar/value-objects/l
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { ReauthNotice } from "@/presentation/components/chat/reauth-notice";
 import { RecordOwnerControls } from "@/presentation/components/records/record-owner-controls";
+import {
+  TrashLink,
+  TrashNotice,
+} from "@/presentation/components/records/trash-notice";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
@@ -25,15 +29,19 @@ export const dynamic = "force-dynamic";
 
 type ConversationDatePageProps = {
   params: Promise<{ year: string; month: string; day: string }>;
-  searchParams: Promise<{ user?: string | string[] }>;
+  searchParams: Promise<{
+    user?: string | string[];
+    trashed?: string | string[];
+  }>;
 };
 
 export default async function ConversationDatePage({
   params,
   searchParams,
 }: ConversationDatePageProps) {
+  const query = await searchParams;
   const { user, owner } = await getRecordOwner(
-    requestedRecordOwner((await searchParams).user),
+    requestedRecordOwner(query.user),
   );
   if (!user || (owner.kind === "denied" && owner.reason === "unauthenticated"))
     redirect("/signin?callbackUrl=/conversations");
@@ -81,12 +89,19 @@ export default async function ConversationDatePage({
                 <ArrowLeft /> 日付一覧へ
               </Link>
             </Button>
+            {owner.kind === "self" ? (
+              <TrashLink href="/conversations/trash" />
+            ) : null}
             <AuthControls user={user} />
           </div>
         </header>
 
         {view ? (
           <RecordOwnerControls owner={owner} view={view} path={dateHref} />
+        ) : null}
+
+        {owner.kind === "self" && query.trashed === "1" ? (
+          <TrashNotice href="/conversations/trash" />
         ) : null}
 
         {!hasNotes ? (

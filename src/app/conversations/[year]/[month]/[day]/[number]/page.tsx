@@ -1,4 +1,4 @@
-import { ArrowLeft, CalendarDays, MessagesSquare } from "lucide-react";
+import { ArrowLeft, CalendarDays, MessagesSquare, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
@@ -9,10 +9,12 @@ import {
   parseLogDate,
   parseLogNumber,
 } from "@ffpf-zhuelog/core/domain/calendar/value-objects/log-date";
+import { trashConversationAction } from "@/presentation/actions/note-trash-actions";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { ChatMessage } from "@/presentation/components/chat/chat-message";
 import { ConversationDownloadButton } from "@/presentation/components/chat/conversation-download-button";
 import { ReauthNotice } from "@/presentation/components/chat/reauth-notice";
+import { NoteActionForm } from "@/presentation/components/records/note-action-form";
 import { RecordOwnerControls } from "@/presentation/components/records/record-owner-controls";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
@@ -120,7 +122,24 @@ export default async function ConversationDetailPage({
                 {note.ended ? " · 終了済み" : null}
               </p>
             </div>
-            <ConversationDownloadButton conversation={note} />
+            <div className="flex flex-wrap items-start gap-2">
+              <ConversationDownloadButton conversation={note} />
+              {/* Only your own notes: an admin viewing someone else reads only. */}
+              {owner.kind === "self" ? (
+                <NoteActionForm
+                  action={trashConversationAction}
+                  fields={{
+                    id: note.id,
+                    year: String(date.year),
+                    month: String(date.month),
+                    day: String(date.day),
+                  }}
+                  label="ゴミ箱に入れる"
+                  pendingLabel="移動中…"
+                  icon={<Trash2 />}
+                />
+              ) : null}
+            </div>
           </div>
           <CardContent className="space-y-5 px-4 py-6 sm:px-6">
             {note.messages.map((message) => (

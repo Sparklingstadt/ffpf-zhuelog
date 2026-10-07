@@ -14,6 +14,7 @@ import { loadRecordOwnerView } from "@/composition/record-owner-options";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { ReauthNotice } from "@/presentation/components/chat/reauth-notice";
 import { RecordOwnerControls } from "@/presentation/components/records/record-owner-controls";
+import { TrashLink } from "@/presentation/components/records/trash-notice";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
@@ -82,6 +83,9 @@ export default async function ConversationsPage({
                 <MessageCircle /> ChatGPTと話す
               </Link>
             </Button>
+            {owner.kind === "self" ? (
+              <TrashLink href="/conversations/trash" />
+            ) : null}
             <AuthControls user={user} />
           </div>
         </header>
