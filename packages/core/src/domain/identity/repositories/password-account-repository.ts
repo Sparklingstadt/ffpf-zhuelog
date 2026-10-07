@@ -11,8 +11,12 @@ export interface PasswordAccountRepository {
     displayName: string;
     passwordHash: string;
   }): Promise<PasswordAccount>;
-  // Counts one more failure; reaching the maximum locks the account and resets the count.
-  recordFailure(id: string, now: Date): Promise<void>;
+  // Atomically counts one attempt before verification. Returns false (and
+  // changes nothing) while the account is locked. If the previous lock has
+  // expired, counting restarts at 1. When the count reaches
+  // MAX_FAILED_ATTEMPTS, sets lockedUntil = now + LOCK_DURATION_MS.
+  // Success must call clearFailures.
+  reserveAttempt(id: string, now: Date): Promise<boolean>;
   clearFailures(id: string): Promise<void>;
   // Also invalidates existing sessions, and clears failures and the lock.
   setPassword(id: string, passwordHash: string): Promise<void>;

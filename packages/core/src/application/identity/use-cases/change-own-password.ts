@@ -1,8 +1,5 @@
 import { z } from "zod";
-import {
-  isLocked,
-  passwordSchema,
-} from "../../../domain/identity/entities/password-account";
+import { passwordSchema } from "../../../domain/identity/entities/password-account";
 import type { PasswordAccountRepository } from "../../../domain/identity/repositories/password-account-repository";
 import type { PasswordHasher } from "../ports/password-hasher";
 
@@ -30,17 +27,22 @@ export class ChangeOwnPassword {
     if (newPassword !== input.confirmPassword) return "mismatch";
 
     const account = await this.accounts.findById(accountId);
-    if (!account || isLocked(account, now)) return "invalid-current";
+    if (!account) return "invalid-current";
 
     const current = currentPasswordSchema.safeParse(input.currentPassword);
-    if (
-      !current.success ||
-      !(await this.hasher.verify(current.data, account.passwordHash))
-    ) {
-      await this.accounts.recordFailure(account.id, now);
+    const currentPassword = current.success ? current.data : "";
+    if (!(await this.accounts.reserveAttempt(account.id, now))) {
+      await this.hasher.simulateVerify(currentPassword);
       return "invalid-current";
     }
+    if (!current.success) {
+      await this.hasher.simulateVerify(currentPassword);
+      return "invalid-current";
+    }
+    if (!(await this.hasher.verify(currentPassword, account.passwordHash)))
+      return "invalid-current";
 
+    // setPassword also clears the failure count and the lock.
     await this.accounts.setPassword(
       account.id,
       await this.hasher.hash(newPassword),

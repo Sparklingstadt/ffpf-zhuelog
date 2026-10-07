@@ -30,7 +30,7 @@ export const displayNameSchema = z.string().trim().min(1).max(50);
 
 export const passwordSchema = z.string().min(12).max(128);
 
-// A blank field means "leave the password as it is".
+// A blank field means no password was given.
 export const optionalPasswordSchema = z.union([
   z
     .string()

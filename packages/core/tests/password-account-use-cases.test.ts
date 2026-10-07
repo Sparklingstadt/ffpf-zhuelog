@@ -22,15 +22,21 @@ class FakeAccounts implements PasswordAccountRepository {
   private seq = 0;
   private tick = 0;
 
+  private copy(account: PasswordAccount | undefined) {
+    return account ? structuredClone(account) : null;
+  }
+
   async findByLoginId(loginId: string) {
-    return this.accounts.find((a) => a.loginId === loginId) ?? null;
+    return this.copy(this.accounts.find((a) => a.loginId === loginId));
   }
   async findById(id: string) {
-    return this.accounts.find((a) => a.id === id) ?? null;
+    return this.copy(this.accounts.find((a) => a.id === id));
   }
   async list() {
-    return [...this.accounts].sort(
-      (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+    return structuredClone(
+      [...this.accounts].sort(
+        (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+      ),
     );
   }
   async create(input: {
@@ -51,16 +57,22 @@ class FakeAccounts implements PasswordAccountRepository {
     this.accounts.push(account);
     return account;
   }
-  async recordFailure(id: string, now: Date) {
+  // Synchronous body, so it is atomic like the single UPDATE of the real one.
+  async reserveAttempt(id: string, now: Date) {
     const account = this.accounts.find((a) => a.id === id)!;
-    account.failedAttempts += 1;
-    if (account.failedAttempts >= MAX_FAILED_ATTEMPTS) {
-      account.failedAttempts = 0;
-      account.lockedUntil = new Date(now.getTime() + LOCK_DURATION_MS);
-    }
+    if (account.lockedUntil !== null && account.lockedUntil > now) return false;
+    account.failedAttempts =
+      account.lockedUntil === null ? account.failedAttempts + 1 : 1;
+    account.lockedUntil =
+      account.failedAttempts >= MAX_FAILED_ATTEMPTS
+        ? new Date(now.getTime() + LOCK_DURATION_MS)
+        : null;
+    return true;
   }
   async clearFailures(id: string) {
-    this.accounts.find((a) => a.id === id)!.failedAttempts = 0;
+    const account = this.accounts.find((a) => a.id === id)!;
+    account.failedAttempts = 0;
+    account.lockedUntil = null;
   }
   async setPassword(id: string, passwordHash: string) {
     const account = this.accounts.find((a) => a.id === id)!;
@@ -79,6 +91,7 @@ class FakeHasher implements PasswordHasher {
   }
   async verify(password: string, passwordHash: string) {
     this.verified.push(password);
+    await new Promise((resolve) => setTimeout(resolve, 1));
     return passwordHash === `h:${password}`;
   }
   async simulateVerify(password: string) {
@@ -118,7 +131,7 @@ test("an account created with a mixed-case padded ID authenticates with the norm
 });
 
 test("five wrong passwords lock the account, even against the right password, until the lock expires", async () => {
-  const { repo, hasher } = await setup();
+  const { repo, hasher, account } = await setup();
   const auth = new AuthenticatePasswordAccount(repo, hasher);
   for (let i = 0; i < MAX_FAILED_ATTEMPTS; i++)
     assert.equal(
@@ -126,6 +139,7 @@ test("five wrong passwords lock the account, even against the right password, un
       null,
     );
   hasher.verified.length = 0;
+  hasher.simulated.length = 0;
   assert.equal(
     await auth.execute(
       { loginId: "taro", password: "correct horse battery" },
@@ -133,13 +147,32 @@ test("five wrong passwords lock the account, even against the right password, un
     ),
     null,
   );
+  // Locked: no real verification, but the same hashing time is spent.
   assert.equal(hasher.verified.length, 0);
-  const later = new Date(NOW.getTime() + LOCK_DURATION_MS);
+  assert.equal(hasher.simulated.length, 1);
   const ok = await auth.execute(
     { loginId: "taro", password: "correct horse battery" },
-    new Date(later.getTime() + 1),
+    new Date(NOW.getTime() + LOCK_DURATION_MS + 1),
   );
   assert.equal(ok?.loginId, "taro");
+  assert.equal(account.failedAttempts, 0);
+  assert.equal(account.lockedUntil, null);
+});
+
+test("parallel guesses cannot exceed the attempt limit and leave the account locked", async () => {
+  const { repo, hasher, account } = await setup();
+  const auth = new AuthenticatePasswordAccount(repo, hasher);
+  const attempts = [
+    ...Array.from({ length: 20 }, (_, i) =>
+      auth.execute({ loginId: "taro", password: `wrong-${i}` }, NOW),
+    ),
+    auth.execute({ loginId: "taro", password: "correct horse battery" }, NOW),
+  ];
+  const results = await Promise.all(attempts);
+  assert.ok(results.every((r) => r === null));
+  assert.ok(hasher.verified.length <= MAX_FAILED_ATTEMPTS);
+  assert.equal(hasher.simulated.length, 21 - hasher.verified.length);
+  assert.ok(account.lockedUntil && account.lockedUntil > NOW);
 });
 
 test("a successful login after four failures resets the failure count", async () => {
@@ -314,6 +347,7 @@ test("changing your own password while locked is invalid-current even with the r
   const { repo, hasher, account } = await setup();
   account.lockedUntil = new Date(NOW.getTime() + LOCK_DURATION_MS);
   hasher.verified.length = 0;
+  hasher.simulated.length = 0;
   const result = await new ChangeOwnPassword(repo, hasher).execute(
     account.id,
     {
@@ -325,6 +359,7 @@ test("changing your own password while locked is invalid-current even with the r
   );
   assert.equal(result, "invalid-current");
   assert.equal(hasher.verified.length, 0);
+  assert.equal(hasher.simulated.length, 1);
 });
 
 test("changing your own password succeeds and bumps the session version", async () => {

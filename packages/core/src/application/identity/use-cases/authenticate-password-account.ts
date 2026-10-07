@@ -1,6 +1,5 @@
 import { z } from "zod";
 import {
-  isLocked,
   loginIdSchema,
   type PasswordAccount,
 } from "../../../domain/identity/entities/password-account";
@@ -27,7 +26,7 @@ export class AuthenticatePasswordAccount {
     const parsed = credentialsSchema.safeParse(input);
     if (!parsed.success) {
       await this.hasher.simulateVerify(
-        String(input.password ?? "").slice(0, 128),
+        typeof input.password === "string" ? input.password.slice(0, 128) : "",
       );
       return null;
     }
@@ -38,14 +37,16 @@ export class AuthenticatePasswordAccount {
       await this.hasher.simulateVerify(password);
       return null;
     }
-    if (isLocked(account, now)) return null;
-
-    if (!(await this.hasher.verify(password, account.passwordHash))) {
-      await this.accounts.recordFailure(account.id, now);
+    // Every failure path spends hashing time, so a locked or unknown ID is
+    // indistinguishable from a wrong password by timing.
+    if (!(await this.accounts.reserveAttempt(account.id, now))) {
+      await this.hasher.simulateVerify(password);
       return null;
     }
-    if (account.failedAttempts > 0)
-      await this.accounts.clearFailures(account.id);
-    return account;
+    if (!(await this.hasher.verify(password, account.passwordHash)))
+      return null;
+
+    await this.accounts.clearFailures(account.id);
+    return { ...account, failedAttempts: 0, lockedUntil: null };
   }
 }
