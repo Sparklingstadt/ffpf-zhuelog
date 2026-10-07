@@ -24,7 +24,7 @@ test("unauthenticated pages redirect to signin", async ({ page }) => {
     await page.goto(path);
     await expect(page).toHaveURL(/\/signin(?:\?|$)/);
     await expect(
-      page.getByRole("button", { name: "ゲストとして閲覧" }),
+      page.getByRole("button", { name: "ゲストとして使う" }),
     ).toBeVisible();
   }
 });
@@ -98,7 +98,7 @@ test("guest sees the practice guidance, no notes, and cannot use chat or export"
   expect(typleResponse.status()).toBe(403);
   await page.getByRole("button", { name: "ログアウト" }).click();
   await expect(
-    page.getByRole("button", { name: "ゲストとして閲覧" }),
+    page.getByRole("button", { name: "ゲストとして使う" }),
   ).toBeVisible();
   await page.goto("/logs");
   await expect(page).toHaveURL(/\/signin(?:\?|$)/);

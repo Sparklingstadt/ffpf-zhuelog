@@ -98,7 +98,7 @@ AUTH_ALLOWED_GITHUB_LOGINS="github-login-1,github-login-2"
 
 - **admin（管理者）**: GitHub認証で許可リストに載っているユーザー。自分の学習ノートと会話ノート、CSVインポート・Typle連携・LINE連携とアカウント管理を使えます。メンバーの学習ノートと会話ノートは、切り替え欄から閲覧のみで見られます。
 - **member（メンバー）**: ID・パスワードでログインするアカウント。自分の学習ノートと会話ノート、本人のAPIキーでの添削、ChatGPT会話（`/chat`）、CSVインポート、Typle連携を使えます。CSVインポートは自分の学習ノートに追加されます。ほかのユーザーの記録は見られません。LINE連携とアカウント管理は使えません。
-- **guest（ゲスト）**: ログイン画面の「ゲストとして閲覧」。本人のAPIキーでの添削（`/practice`）だけです。学習ノートと会話ノートはなく、`/` には `/practice` への案内が出ます。`/logs` と `/conversations` は `/` に戻されます。
+- **guest（ゲスト）**: ログイン画面の「ゲストとして使う」。本人のAPIキーでの添削（`/practice`）だけです。学習ノートと会話ノートはなく、`/` には `/practice` への案内が出ます。`/logs` と `/conversations` は `/` に戻されます。
 - **revoked**: 許可リストから外れた管理者や、再設定・変更でセッションが失効したメンバー。どのページも使えず、ログイン画面に戻されます。
 
 memberのアカウントは、GitHub管理者が `/admin/accounts` で作ります。セルフ登録はありません。最初のアカウントも、まずGitHubで管理者としてログインして作成してください。
@@ -199,26 +199,57 @@ OPENAI_MODEL="gpt-6.1-sol"
 - **LINE**: 環境変数 `LINE_NOTE_OWNER_ID` の持ち主の学習ノートに保存します。
 - **Typle用リストの出力**: 表示中のユーザーのノートだけを含みます。権限のない `?user=` は403です。ログインしていない呼び出しは401です。
 
-## 学習ノートの持ち主の本番への反映（マージ前）
+## 学習ノートの持ち主の本番への反映
 
-mainはVercelの本番へ自動でデプロイされるため、マージの前に次の2つを済ませてください。
+mainはVercelの本番へ自動でデプロイされますが、Cloud Run（LINEの処理）は自動では更新されません。手順の順番を守ってください。
 
-1. **マイグレーション** `20261008090000_learning_entry_owner`（`LearningEntry.ownerId` の追加）を本番DB（Neon）へ適用します。既存の学習ノートは、すべて持ち主 `219588180` のものになります。前節と同じ手順です。
-
-   ```bash
-   vercel env pull .env.production.local --environment=production --yes
-   node --env-file=.env.production.local node_modules/prisma/build/index.js migrate deploy
-   rm .env.production.local
-   ```
-
-2. **Cloud Runに `LINE_NOTE_OWNER_ID=219588180` を設定します。** サービス名とリージョンは [`docs/cloud-run.md`](docs/cloud-run.md) の例（`zhuelog`・`asia-northeast1`）です。
+1. **Cloud Runに `LINE_NOTE_OWNER_ID=219588180` を設定します。** サービス名とリージョンは [`docs/cloud-run.md`](docs/cloud-run.md) の例（`zhuelog`・`asia-northeast1`）です。この操作は今のイメージの新しいリビジョンを作るだけで、今のコードは `LINE_NOTE_OWNER_ID` を読まないため、コードは新しくなりません。Vercelは、LINEが無効でCloud Runに取り次ぐだけなので設定は要りません。
 
    ```bash
    gcloud run services update zhuelog --region asia-northeast1 \
      --update-env-vars LINE_NOTE_OWNER_ID=219588180
    ```
 
-   Vercelは、LINEが無効でCloud Runに取り次ぐだけなので設定は要りません。
+2. **マイグレーション** `20261008090000_learning_entry_owner`（`LearningEntry.ownerId` の追加）を本番DB（Neon）へ適用します。既存の学習ノートは、すべて持ち主 `219588180` のものになります。前節と同じ手順ですが、**Vercelとリンク済みのリポジトリで、このPRのブランチをチェックアウトして**実行してください。mainにはまだこのマイグレーションがないため、mainのまま実行すると「No pending migrations」と表示され、適用できたように見えてしまいます。
+
+   ```bash
+   git fetch origin
+   git switch --detach origin/claude/per-user-learning-notes
+   vercel env pull .env.production.local --environment=production --yes
+   node --env-file=.env.production.local node_modules/prisma/build/index.js migrate deploy
+   node --env-file=.env.production.local node_modules/prisma/build/index.js migrate status
+   rm .env.production.local
+   git switch main
+   ```
+
+   `migrate status` で `20261008090000_learning_entry_owner` が適用済みになっていること（「Database schema is up to date!」）を、マージの前に必ず確認してください。ブランチをほかの作業場所でチェックアウトしている場合に備え、`git switch --detach` で取得したコミットを直接開いています。
+
+3. **マージし、VercelとCloud Runの両方に新しいコードを反映します。** マージしたら、Vercelの本番デプロイが Ready になるのを待ち、続けてCloud Runを新しいコードで再デプロイします。Cloud Runは `gcloud run services update` ではなく、[`docs/cloud-run.md`](docs/cloud-run.md) のとおり、Cloud Shellでソースからビルドして更新します。
+
+   ```bash
+   cd ffpf-zhuelog && git pull && ./scripts/deploy-cloud-run.sh
+   ```
+
+   設定済みの値は空欄のまま進めれば今のままです（`LINE_NOTE_OWNER_ID` も保たれます）。終わったら、新しいリビジョンがすべてのトラフィックを受けていることを確認します。
+
+   ```bash
+   gcloud run services describe zhuelog --region asia-northeast1 \
+     --format='value(status.latestReadyRevisionName,status.traffic)'
+   ```
+
+4. **確認します。** 自分のLINEから文を1件送り、管理者として `/` を開いてそのノートが表示されることを確認します。DBで確認するには、NeonのSQL Editorで次を実行し、`219588180` が返ることを見ます。
+
+   ```sql
+   SELECT "ownerId" FROM "LearningEntry" ORDER BY "createdAt" DESC LIMIT 1;
+   ```
+
+**注意: 手順2から、手順3のVercelとCloud Runの両方のデプロイが終わるまでの間は、CSVインポートとLINEの保存が失敗します。** `ownerId` は必須の列で、今のコードはこの列に値を入れずに登録するため、登録できません。LINEは「保存できなかった」旨の返信になります。この間はCSVインポートとLINEを使わず、終わったあとに送り直してください。GitHub・パスワードでのログインと、ノートの閲覧は影響を受けません。
+
+**ロールバック**: マージを取り消した（revertした）場合も、古いコードは `ownerId` を入れられないため、CSVインポートとLINEの保存が失敗します。ブランチをもう一度マージするまでの間は、NeonのSQL Editorで次を実行して、既定の持ち主を付けてください。再マージして新しいコードを反映したら、`ALTER TABLE "LearningEntry" ALTER COLUMN "ownerId" DROP DEFAULT;` で戻します。マイグレーションとスキーマには `DEFAULT` を入れていません。
+
+```sql
+ALTER TABLE "LearningEntry" ALTER COLUMN "ownerId" SET DEFAULT '219588180';
+```
 
 ## 日付別の学習ログ
 

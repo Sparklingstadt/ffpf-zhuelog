@@ -1,3 +1,5 @@
+"use client";
+
 import type { RecordOwner } from "@ffpf-zhuelog/core/application/identity/use-cases/resolve-record-owner";
 import { Button } from "@/presentation/components/ui/button";
 import { Label } from "@/presentation/components/ui/label";
@@ -9,7 +11,9 @@ type Props = {
 };
 
 // Admin-only switch for whose records the page shows. A plain GET form, so it
-// works without JavaScript. Pages must render it for admins only.
+// works without JavaScript (an empty `?user=` means the admin's own records).
+// With JavaScript, choosing 「自分」 leaves `user` out of the URL. Pages must
+// render it for admins only.
 export function RecordOwnerSwitcher({ owner, options, action }: Props) {
   if (owner.kind !== "self" && owner.kind !== "other") return null;
 
@@ -23,6 +27,16 @@ export function RecordOwnerSwitcher({ owner, options, action }: Props) {
       method="get"
       action={action}
       className="flex flex-wrap items-center gap-2"
+      onSubmit={(event) => {
+        // A disabled control is left out of the submitted query.
+        const select = event.currentTarget.elements.namedItem("user");
+        if (select instanceof HTMLSelectElement && select.value === "") {
+          select.disabled = true;
+          setTimeout(() => {
+            select.disabled = false;
+          }, 0);
+        }
+      }}
     >
       <Label htmlFor="record-owner-select">表示するユーザー</Label>
       <select

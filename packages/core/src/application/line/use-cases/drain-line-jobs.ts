@@ -46,6 +46,9 @@ export class DrainLineJobs {
   }
 
   private async generate(job: LineJob, token: string, deadline: number) {
+    // Without a note owner the result could not be saved, so skip OpenAI.
+    if (await this.process.rejectIfNoteOwnerMissing(job.id, token, this.userId))
+      return;
     let output: unknown;
     try {
       const signal = AbortSignal.timeout(Math.max(1, deadline - this.now()));

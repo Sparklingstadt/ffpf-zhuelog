@@ -2,6 +2,7 @@ import type { LineJobRepository } from "../../../domain/line/repositories/line-j
 import type { LineMessenger } from "../ports/line-messenger";
 import {
   makeLineLearningResult,
+  type LineJob,
   type LineJobKind,
 } from "../../../domain/line/line-learning";
 import type { LearningKind } from "../../../domain/learning/entities/learning-entry";
@@ -29,6 +30,26 @@ export class ProcessLineLearning {
     private readonly onNoteOwnerMissing: () => void = () => {},
   ) {}
 
+  // Checked before generating, so a missing owner never pays for OpenAI.
+  // Returns true when it replied with the failure, and generation must stop.
+  async rejectIfNoteOwnerMissing(id: string, token: string, userId: string) {
+    if (this.noteOwnerId) return false;
+    const job = await this.jobs.leased(id, token, userId, "GENERATING");
+    const kind = job && noteKind(job.kind);
+    if (!job || !kind) return false;
+    await this.replyNoteOwnerMissing(job, kind);
+    return true;
+  }
+
+  private replyNoteOwnerMissing(job: LineJob, kind: LearningKind) {
+    this.onNoteOwnerMissing();
+    return this.jobs.saveReply(
+      job,
+      formatGenerationFailure("NOTE_OWNER_MISSING", kind),
+      "NOTE_OWNER_MISSING",
+    );
+  }
+
   async complete(id: string, token: string, userId: string, output: unknown) {
     const job = await this.jobs.leased(id, token, userId, "GENERATING");
     const kind = job && noteKind(job.kind);
@@ -46,14 +67,7 @@ export class ProcessLineLearning {
         "CORRECTION_TOO_LONG",
       );
     }
-    if (!this.noteOwnerId) {
-      this.onNoteOwnerMissing();
-      return this.jobs.saveReply(
-        job,
-        formatGenerationFailure("NOTE_OWNER_MISSING", kind),
-        "NOTE_OWNER_MISSING",
-      );
-    }
+    if (!this.noteOwnerId) return this.replyNoteOwnerMissing(job, kind);
     return this.jobs.saveResult(
       job,
       this.noteOwnerId,

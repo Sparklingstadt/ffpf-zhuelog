@@ -230,7 +230,8 @@ test("without a note owner each job gets a failure reply and the rest keep proce
   jobs.add("correction", "PENDING", "a");
   jobs.add("translation", "PENDING", "b");
   await drain.execute(clock.now + 120_000);
-  assert.deepEqual(calls, ["correct:text-a", "translate:text-b"]);
+  // OpenAI is never called when the result could not be saved anyway.
+  assert.deepEqual(calls, []);
   assert.deepEqual(jobs.saved, []);
   assert.deepEqual(jobs.failed, []);
   assert.deepEqual(jobs.failCodes, [

@@ -27,7 +27,7 @@ test("nonce CSP is active, rotates, blocks injected scripts and retains working 
     "data-injected",
     "yes",
   );
-  await page.getByRole("button", { name: "ゲストとして閲覧" }).click();
+  await page.getByRole("button", { name: "ゲストとして使う" }).click();
   await expect(
     page.getByText("ゲスト（自分のAPIキーでの添削のみ）"),
   ).toBeVisible();

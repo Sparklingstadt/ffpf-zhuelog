@@ -110,7 +110,7 @@ export async function createMember(
 
 export async function asGuest(page: Page, callback = "/") {
   await page.goto(`/signin?callbackUrl=${encodeURIComponent(callback)}`);
-  await page.getByRole("button", { name: "ゲストとして閲覧" }).click();
+  await page.getByRole("button", { name: "ゲストとして使う" }).click();
   await expect(
     page.getByText("ゲスト（自分のAPIキーでの添削のみ）"),
   ).toBeVisible();

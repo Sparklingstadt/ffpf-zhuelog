@@ -158,7 +158,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
           </div>
           <form action={signInAsGuestAction.bind(null, callbackPath)}>
             <Button type="submit" className="w-full" variant="outline">
-              <Eye /> ゲストとして閲覧
+              <Eye /> ゲストとして使う
             </Button>
           </form>
           <form action={signInAsGuestAction.bind(null, "/practice")}>

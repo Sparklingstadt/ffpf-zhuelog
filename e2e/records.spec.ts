@@ -75,10 +75,27 @@ test("members see only their own notes, numbered from 1 for each", async ({
       .first()
       .getAttribute("href");
     expect(dateHref).toBeTruthy();
-    await a.page.goto(`${dateHref}/1`);
-    await expect(a.page.getByText(/A添削[12]/).first()).toBeVisible();
-    await expect(a.page.getByText("B添削1")).toHaveCount(0);
-    expect((await a.page.goto(`${dateHref}/2`))?.status()).toBe(200);
+    // A's /1 and /2 are two different notes, each alone on its page.
+    const shown: string[] = [];
+    for (const [n, other] of [
+      [1, "A添削2"],
+      [2, "A添削1"],
+    ] as const) {
+      expect((await a.page.goto(`${dateHref}/${n}`))?.status()).toBe(200);
+      const text = await a.page
+        .getByText(/^A添削[12]$/)
+        .first()
+        .textContent();
+      expect(text).toBeTruthy();
+      shown.push(text!);
+      await expect(a.page.getByText(other, { exact: true })).toHaveCount(0);
+      await expect(a.page.getByText("B添削1")).toHaveCount(0);
+    }
+    expect(new Set(shown).size).toBe(2);
+    // B's own count on the date list is 1, not A's 2.
+    await b.page.goto("/logs");
+    await expect(b.page.getByText("1件の学習ノート")).toBeVisible();
+    await expect(b.page.getByText("2件の学習ノート")).toHaveCount(0);
     await b.page.goto(`${dateHref}/1`);
     await expect(b.page.getByText("B添削1", { exact: true })).toBeVisible();
     await expect(b.page.getByText(/A添削/)).toHaveCount(0);
@@ -384,4 +401,42 @@ test("the export contains only the shown owner's notes", async ({
   } finally {
     await member.context.close();
   }
+});
+
+test("an admin with a malformed ?user= sees their own notes, and a raw owner ID shows as is", async ({
+  context,
+  page,
+  db,
+}) => {
+  await seedNotes(db, adminOwnerId, [{ text: "管理者の記録" }]);
+  await asAdmin(context);
+
+  await page.goto("/?user=../x");
+  await expect(page).toHaveURL(
+    (url) => url.pathname === "/" && url.search === "",
+  );
+  await expect(
+    page.getByText("管理者の記録", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(page.getByText("さんの記録を表示中")).toHaveCount(0);
+
+  // A well-formed ID that no member has still shows, named by the raw ID.
+  await page.goto("/?user=999999");
+  await expect(page).toHaveURL(
+    (url) => url.pathname === "/" && url.searchParams.get("user") === "999999",
+  );
+  await expect(
+    page.getByText("999999さんの記録を表示中（閲覧のみ）"),
+  ).toBeVisible();
+  await expect(page.getByText("管理者の記録")).toHaveCount(0);
+
+  // Choosing 「自分」 in the switcher goes back to the bare path.
+  await page.getByLabel("表示するユーザー").selectOption({ label: "自分" });
+  await page.getByRole("button", { name: "表示", exact: true }).click();
+  await expect(page).toHaveURL(
+    (url) => url.pathname === "/" && url.search === "",
+  );
+  await expect(
+    page.getByText("管理者の記録", { exact: true }).first(),
+  ).toBeVisible();
 });

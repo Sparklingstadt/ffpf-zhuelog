@@ -130,8 +130,17 @@
   - LINE で追加した記録が `LINE_NOTE_OWNER_ID` のノートに入ること。
   - 既存の E2E のうち、ゲストが共有ノートを閲覧する前提のものは、新しい仕様に合わせて書き換える。
 
-## 本番への反映（マージ前）
+## 本番への反映
 
-- Neon にマイグレーションを適用する。既存の学習ノートは `219588180` のものになる。
-- Cloud Run（LINE の処理）に、`LINE_NOTE_OWNER_ID=219588180` を設定する。Vercel では LINE が無効で、処理を Cloud Run に取り次ぐだけなので、設定は要らない。マイグレーションを適用し、環境変数を設定してからマージする。
-- PR 本文に、この手順とコマンドを書く。
+main は Vercel の本番へ自動でデプロイされるが、Cloud Run は自動では更新されない。`gcloud run services update --update-env-vars` は今のイメージの新しいリビジョンを作るだけで、コードは新しくならない。Cloud Run の新しいコードは、Cloud Shell で `git pull && ./scripts/deploy-cloud-run.sh` を実行したときだけ反映される（`docs/cloud-run.md`）。次の順で行う。
+
+1. Cloud Run に `LINE_NOTE_OWNER_ID=219588180` を設定する（今のコードは読まない）。Vercel では LINE が無効で、処理を Cloud Run に取り次ぐだけなので、設定は要らない。
+2. Vercel とリンク済みのリポジトリで、PR のブランチをチェックアウトして、Neon にマイグレーションを適用する。main にはこのマイグレーションがなく、`migrate deploy` が「No pending migrations」で終わって成功に見えるため。`migrate status` で `20261008090000_learning_entry_owner` が適用済みになったことを、マージの前に確認する。既存の学習ノートは `219588180` のものになる。
+3. マージし、Vercel の本番デプロイが Ready になったら、続けて Cloud Run を `git pull && ./scripts/deploy-cloud-run.sh` で再デプロイする。新しいリビジョンがトラフィックを受けていることを確認する。
+4. LINE から 1 件送り、管理者として `/` で見えること、または `SELECT "ownerId" FROM "LearningEntry" ORDER BY "createdAt" DESC LIMIT 1` が `219588180` であることを確認する。
+
+手順 2 から手順 3 の Vercel と Cloud Run の両方のデプロイが終わるまでは、古いコードが `ownerId`（NOT NULL）を入れられないため、CSV インポートと LINE の保存が失敗する。この間は使わず、終わってから送り直す。古い Cloud Run のコードのままだと、LINE のノートが保存されないうえ、ゲストにもノートが見える。
+
+マージを revert した場合は、ブランチを再マージするまで `ALTER TABLE "LearningEntry" ALTER COLUMN "ownerId" SET DEFAULT '219588180';` を実行しておく。マイグレーションとスキーマには `DEFAULT` を入れない。
+
+PR 本文に、この手順とコマンドを書く。

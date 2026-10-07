@@ -793,6 +793,37 @@ test("a note is saved under the configured LINE note owner", async () => {
   assert.equal(owner, "o1");
 });
 
+test("the note owner is checked before generating", async () => {
+  for (const owner of [null, "o1"]) {
+    const jobs = repo();
+    const job = translationJob({ kind: "correction" });
+    const logged: unknown[][] = [];
+    const replies: (string | undefined)[] = [];
+    jobs.leased = async () => job;
+    jobs.saveReply = async (_job, _text, code) => {
+      replies.push(code);
+      return true;
+    };
+    const service = processor(
+      jobs,
+      {
+        push: async () => assert.fail("must not send"),
+        pushText: async () => assert.fail("must not send"),
+      },
+      owner,
+      (...args) => logged.push(args),
+    );
+    const rejected = await service.rejectIfNoteOwnerMissing(
+      job.id,
+      job.leaseToken!,
+      config.userId,
+    );
+    assert.equal(rejected, owner === null);
+    assert.deepEqual(replies, owner === null ? ["NOTE_OWNER_MISSING"] : []);
+    assert.equal(logged.length, owner === null ? 1 : 0);
+  }
+});
+
 test("without a note owner nothing is saved and the user gets the failure reply", async () => {
   for (const kind of ["correction", "translation"] as const) {
     const jobs = repo();
