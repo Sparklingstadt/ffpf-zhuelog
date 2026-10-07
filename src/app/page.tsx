@@ -39,13 +39,16 @@ import { getLogDateHref } from "@/presentation/presenters/log-date-presenter";
 
 export const dynamic = "force-dynamic";
 
-async function loadEntries(): Promise<{
+async function loadEntries(ownerId: string): Promise<{
   entries: LearningEntry[];
   total: number;
   databaseError: string | null;
 }> {
   try {
-    const result = await learningUseCases.listRecentEntries.execute(100);
+    const result = await learningUseCases.listRecentEntries.execute(
+      ownerId,
+      100,
+    );
     return { ...result, databaseError: null };
   } catch {
     console.error("LEARNING_ENTRIES_UNAVAILABLE");
@@ -62,7 +65,10 @@ export default async function Home() {
   const user = await getCurrentViewerUser();
   if (!user) redirect("/signin");
 
-  const { entries, total, databaseError } = await loadEntries();
+  // TODO(Task 5): replace with ResolveRecordOwner.
+  const { entries, total, databaseError } = await loadEntries(
+    user.githubId ?? "",
+  );
 
   return (
     <main className="min-h-screen bg-background">

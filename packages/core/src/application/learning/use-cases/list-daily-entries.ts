@@ -7,7 +7,7 @@ import {
 export class ListDailyEntries {
   constructor(private readonly repository: LearningEntryRepository) {}
 
-  execute(date: LogDate) {
-    return this.repository.listByDate(getTokyoDateRange(date));
+  execute(ownerId: string, date: LogDate) {
+    return this.repository.listByDate(ownerId, getTokyoDateRange(date));
   }
 }

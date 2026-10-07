@@ -18,7 +18,7 @@ export async function GET(
 ) {
   const { id } = await params;
   return handleIntegrationExport(id, {
-    isMember: async () => Boolean(await getCurrentMemberUser()),
+    getMember: getCurrentMemberUser,
     findIntegration: (integrationId) => integrations.find(integrationId),
     exportIntegration: integrationUseCases.exportIntegration,
   });

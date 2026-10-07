@@ -9,7 +9,7 @@ type Dependencies = Parameters<typeof handleIntegrationExport>[1];
 
 function dependencies(overrides: Partial<Dependencies> = {}): Dependencies {
   return {
-    isMember: async () => true,
+    getMember: async () => ({ githubId: "o1" }),
     findIntegration: (id) => (id === "sample" ? sampleIntegration : undefined),
     exportIntegration: {
       execute: async (): Promise<IntegrationFile | null> => null,
@@ -23,7 +23,7 @@ test("export API rejects non-admins before looking up the integration", async ()
   const response = await handleIntegrationExport(
     "sample",
     dependencies({
-      isMember: async () => false,
+      getMember: async () => null,
       findIntegration: () => {
         lookedUp = true;
         return sampleIntegration;

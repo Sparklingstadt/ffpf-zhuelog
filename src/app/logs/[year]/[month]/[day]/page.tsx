@@ -26,7 +26,11 @@ export default async function LogDatePage({ params }: LogDatePageProps) {
   const date = parseLogDate(year, month, day);
   if (!date) notFound();
 
-  const entries = await learningUseCases.listDailyEntries.execute(date);
+  // TODO(Task 5): replace with ResolveRecordOwner.
+  const entries = await learningUseCases.listDailyEntries.execute(
+    user.githubId ?? "",
+    date,
+  );
 
   return (
     <main className="min-h-screen bg-background">

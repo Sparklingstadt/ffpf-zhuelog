@@ -56,7 +56,7 @@ test("ListLogDates groups any timestamps by Japan date", async () => {
       new Date("2026-10-03T15:00:00Z"),
       new Date("2026-10-04T15:00:00Z"),
     ],
-  }).execute();
+  }).execute("o1");
   assert.deepEqual(dates, [
     { date: { year: 2026, month: 10, day: 4 }, count: 2 },
     { date: { year: 2026, month: 10, day: 5 }, count: 1 },

@@ -100,7 +100,12 @@ class FakeJobs implements LineJobRepository {
   private find(job: LineJob) {
     return this.jobs.find((j) => j.id === job.id)!;
   }
-  async saveResult(job: LineJob, _draft: unknown, csv: string) {
+  async saveResult(
+    job: LineJob,
+    _ownerId: string,
+    _draft: unknown,
+    csv: string,
+  ) {
     if (this.throwOnSave.has(job.id)) throw new Error("db down");
     Object.assign(this.find(job), { status: "READY", leaseToken: null, csv });
     this.saved.push(job.id);

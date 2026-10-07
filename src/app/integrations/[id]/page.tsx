@@ -47,7 +47,9 @@ export default async function IntegrationPage({
   if (!isMemberRole(user.role)) redirect("/");
   if (!integration) notFound();
 
+  // TODO(Task 5): replace with ResolveRecordOwner.
   const { sourceCount, total, preview, error } = await loadIntegrationPreview(
+    user.githubId ?? "",
     integration,
     integrationUseCases.previewIntegration,
   );

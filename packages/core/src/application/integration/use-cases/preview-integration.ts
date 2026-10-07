@@ -5,8 +5,9 @@ import { INTEGRATION_SOURCE_LIMIT } from "./integration-source-limit";
 export class PreviewIntegration {
   constructor(private readonly repository: LearningEntryRepository) {}
 
-  async execute(integration: Integration) {
+  async execute(ownerId: string, integration: Integration) {
     const { entries, total } = await this.repository.listRecent(
+      ownerId,
       INTEGRATION_SOURCE_LIMIT,
     );
     return {

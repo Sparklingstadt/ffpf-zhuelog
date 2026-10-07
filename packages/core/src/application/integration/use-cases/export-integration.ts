@@ -11,8 +11,12 @@ const FILE_NAME = /^[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}$/;
 export class ExportIntegration {
   constructor(private readonly repository: LearningEntryRepository) {}
 
-  async execute(integration: Integration): Promise<IntegrationFile | null> {
+  async execute(
+    ownerId: string,
+    integration: Integration,
+  ): Promise<IntegrationFile | null> {
     const { entries } = await this.repository.listRecent(
+      ownerId,
       INTEGRATION_SOURCE_LIMIT,
     );
     const file = integration.export(entries);

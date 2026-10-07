@@ -13,6 +13,7 @@ const oldestFirst = [{ createdAt: "asc" as const }, { id: "asc" as const }];
 
 export class PrismaLearningEntryRepository implements LearningEntryRepository {
   async importBatch(
+    ownerId: string,
     fileName: string,
     entries: LearningEntryDraft[],
   ): Promise<number> {
@@ -27,6 +28,7 @@ export class PrismaLearningEntryRepository implements LearningEntryRepository {
         for (const entry of entries) {
           await tx.learningEntry.create({
             data: {
+              ownerId,
               batchId: batch.id,
               kind: entry.kind ?? "correction",
               originalText: entry.originalText,
@@ -48,31 +50,36 @@ export class PrismaLearningEntryRepository implements LearningEntryRepository {
     return entries.length;
   }
 
-  async listRecent(limit: number): Promise<RecentLearningEntries> {
+  async listRecent(
+    ownerId: string,
+    limit: number,
+  ): Promise<RecentLearningEntries> {
     const prisma = getPrismaClient();
     const [records, total] = await Promise.all([
       prisma.learningEntry.findMany({
+        where: { ownerId },
         include: { hints: hintsByPosition },
         orderBy: { createdAt: "desc" },
         take: limit,
       }),
-      prisma.learningEntry.count(),
+      prisma.learningEntry.count({ where: { ownerId } }),
     ]);
 
     return { entries: records.map(toLearningEntry), total };
   }
 
-  async listCreatedAt(): Promise<Date[]> {
+  async listCreatedAt(ownerId: string): Promise<Date[]> {
     const records = await getPrismaClient().learningEntry.findMany({
+      where: { ownerId },
       select: { createdAt: true },
       orderBy: { createdAt: "desc" },
     });
     return records.map((record) => record.createdAt);
   }
 
-  async listByDate(range: DateRange) {
+  async listByDate(ownerId: string, range: DateRange) {
     const records = await getPrismaClient().learningEntry.findMany({
-      where: { createdAt: { gte: range.start, lt: range.end } },
+      where: { ownerId, createdAt: { gte: range.start, lt: range.end } },
       include: { hints: hintsByPosition },
       orderBy: oldestFirst,
     });
@@ -80,11 +87,15 @@ export class PrismaLearningEntryRepository implements LearningEntryRepository {
   }
 
   async getByDateAndNumber(
+    ownerId: string,
     range: DateRange,
     entryNumber: number,
   ): Promise<DailyLearningEntry | null> {
     const prisma = getPrismaClient();
-    const where = { createdAt: { gte: range.start, lt: range.end } };
+    const where = {
+      ownerId,
+      createdAt: { gte: range.start, lt: range.end },
+    };
     const total = await prisma.learningEntry.count({ where });
     if (
       !Number.isSafeInteger(entryNumber) ||

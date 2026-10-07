@@ -575,7 +575,7 @@ test("translation jobs are saved as translation notes", async () => {
   const job = translationJob();
   let draft: unknown;
   jobs.leased = async () => job;
-  jobs.saveResult = async (_job, saved) => {
+  jobs.saveResult = async (_job, _ownerId, saved) => {
     draft = saved;
     return true;
   };

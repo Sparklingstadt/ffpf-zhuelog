@@ -170,7 +170,12 @@ export class PrismaLineJobRepository implements LineJobRepository {
     );
   }
 
-  async saveResult(job: LineJob, draft: LearningEntryDraft, csv: string) {
+  async saveResult(
+    job: LineJob,
+    ownerId: string,
+    draft: LearningEntryDraft,
+    csv: string,
+  ) {
     if (!isGenerated(job.kind)) return false;
     return getPrismaClient().$transaction(async (tx) => {
       const locked = await tx.lineLearningJob.updateMany({
@@ -189,6 +194,7 @@ export class PrismaLineJobRepository implements LineJobRepository {
       });
       const entry = await tx.learningEntry.create({
         data: {
+          ownerId,
           batchId: batch.id,
           kind: draft.kind ?? "correction",
           originalText: draft.originalText,

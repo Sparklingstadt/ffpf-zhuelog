@@ -40,7 +40,9 @@ export async function importLearningCsvAction(
   }
 
   try {
+    // TODO(Task 5): replace with the owner id from ResolveRecordOwner.
     const rowCount = await learningUseCases.importLearningCsv.execute(
+      user.githubId ?? "",
       file.name,
       await file.text(),
     );

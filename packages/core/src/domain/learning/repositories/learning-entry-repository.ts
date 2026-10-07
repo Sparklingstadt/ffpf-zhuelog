@@ -14,14 +14,19 @@ export type DailyLearningEntry = {
   total: number;
 };
 
-// Learning notes are shared: the admin writes them and guests may read them,
-// so unlike conversations they have no owner.
+// Learning notes belong to the user who wrote them: every method is scoped to
+// one owner id, including the per-day numbering and the counts.
 export interface LearningEntryRepository {
-  importBatch(fileName: string, entries: LearningEntryDraft[]): Promise<number>;
-  listRecent(limit: number): Promise<RecentLearningEntries>;
-  listCreatedAt(): Promise<Date[]>;
-  listByDate(range: DateRange): Promise<LearningEntry[]>;
+  importBatch(
+    ownerId: string,
+    fileName: string,
+    entries: LearningEntryDraft[],
+  ): Promise<number>;
+  listRecent(ownerId: string, limit: number): Promise<RecentLearningEntries>;
+  listCreatedAt(ownerId: string): Promise<Date[]>;
+  listByDate(ownerId: string, range: DateRange): Promise<LearningEntry[]>;
   getByDateAndNumber(
+    ownerId: string,
     range: DateRange,
     entryNumber: number,
   ): Promise<DailyLearningEntry | null>;

@@ -10,18 +10,23 @@ function error(message: string, status: number) {
 export async function handleIntegrationExport(
   id: string,
   dependencies: {
-    isMember: () => Promise<boolean>;
+    getMember: () => Promise<{ githubId?: string } | null>;
     findIntegration: (id: string) => Integration | undefined;
     exportIntegration: Pick<ExportIntegration, "execute">;
   },
 ) {
-  if (!(await dependencies.isMember()))
+  const member = await dependencies.getMember();
+  if (!member)
     return error("管理者またはメンバーとしてログインしてください。", 403);
   const integration = dependencies.findIntegration(id);
   if (!integration) return error("連携が見つかりません。", 404);
 
   try {
-    const file = await dependencies.exportIntegration.execute(integration);
+    const file = await dependencies.exportIntegration.execute(
+      // TODO(Task 5): replace with ResolveRecordOwner.
+      member.githubId ?? "",
+      integration,
+    );
     if (!file) return error("出力できる項目がありません。", 422);
     return new Response(file.body, {
       headers: {

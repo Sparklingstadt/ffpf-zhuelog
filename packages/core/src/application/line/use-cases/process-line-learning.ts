@@ -41,7 +41,8 @@ export class ProcessLineLearning {
         "CORRECTION_TOO_LONG",
       );
     }
-    return this.jobs.saveResult(job, result.draft, result.csv);
+    // TODO(Task 3): pass the real owner (LINE_NOTE_OWNER_ID) instead of "".
+    return this.jobs.saveResult(job, "", result.draft, result.csv);
   }
 
   async deliver(id: string, token: string, userId: string) {

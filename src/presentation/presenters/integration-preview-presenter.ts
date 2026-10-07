@@ -12,11 +12,15 @@ export type IntegrationPreviewResult = {
 };
 
 export async function loadIntegrationPreview(
+  ownerId: string,
   integration: Integration,
   previewIntegration: Pick<PreviewIntegration, "execute">,
 ): Promise<IntegrationPreviewResult> {
   try {
-    return { ...(await previewIntegration.execute(integration)), error: null };
+    return {
+      ...(await previewIntegration.execute(ownerId, integration)),
+      error: null,
+    };
   } catch {
     // Same rule as the export API: only the code and the public id.
     console.error("INTEGRATION_PREVIEW_UNAVAILABLE", integration.id);

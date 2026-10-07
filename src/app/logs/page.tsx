@@ -19,7 +19,10 @@ export default async function LogsPage() {
   const user = await getCurrentViewerUser();
   if (!user) redirect("/signin?callbackUrl=/logs");
 
-  const dates = await learningUseCases.listLogDates.execute();
+  // TODO(Task 5): replace with ResolveRecordOwner.
+  const dates = await learningUseCases.listLogDates.execute(
+    user.githubId ?? "",
+  );
 
   return (
     <main className="min-h-screen bg-background">

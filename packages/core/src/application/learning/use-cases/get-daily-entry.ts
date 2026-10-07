@@ -7,8 +7,9 @@ import {
 export class GetDailyEntry {
   constructor(private readonly repository: LearningEntryRepository) {}
 
-  execute(date: LogDate, entryNumber: number) {
+  execute(ownerId: string, date: LogDate, entryNumber: number) {
     return this.repository.getByDateAndNumber(
+      ownerId,
       getTokyoDateRange(date),
       entryNumber,
     );

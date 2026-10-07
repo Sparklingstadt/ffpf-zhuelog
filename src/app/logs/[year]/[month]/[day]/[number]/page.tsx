@@ -29,7 +29,9 @@ export default async function LogDetailPage({ params }: LogDetailPageProps) {
   const entryNumber = parseLogNumber(number);
   if (!date || !entryNumber) notFound();
 
+  // TODO(Task 5): replace with ResolveRecordOwner.
   const result = await learningUseCases.getDailyEntry.execute(
+    user.githubId ?? "",
     date,
     entryNumber,
   );
