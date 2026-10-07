@@ -12,6 +12,7 @@ const fieldMessages: Record<string, string> = {
   loginId: "ログインIDは英小文字・数字・. _ - の3〜32文字にしてください。",
   displayName: "表示名は1〜50文字にしてください。",
   password: "パスワードは12〜128文字にしてください。",
+  newPassword: "パスワードは12〜128文字にしてください。",
 };
 
 // Errors the admin can act on (bad input, duplicate ID, missing account), as
@@ -42,4 +43,14 @@ export function accountActionErrorMessage(error: unknown): string {
     return "アカウントが見つかりません。";
   }
   return accountActionFallbackMessage;
+}
+
+// Non-"changed" outcomes of ChangeOwnPassword. "invalid-current" deliberately
+// covers a wrong password and a temporary lock with one message.
+export function changePasswordOutcomeMessage(
+  outcome: "invalid-current" | "mismatch",
+): string {
+  return outcome === "mismatch"
+    ? "確認用のパスワードが一致しません。"
+    : "現在のパスワードが違うか、一時的にロックされています。";
 }

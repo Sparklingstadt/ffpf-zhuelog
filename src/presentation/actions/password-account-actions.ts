@@ -4,10 +4,13 @@ import { revalidatePath } from "next/cache";
 
 import {
   getCurrentAdminUser,
+  getCurrentMemberUser,
   passwordAccountUseCases,
+  signOutTo,
 } from "@/composition/identity-container";
 import {
   accountActionErrorMessage,
+  changePasswordOutcomeMessage,
   isExpectedAccountActionError,
 } from "@/presentation/presenters/account-action-errors";
 
@@ -21,8 +24,8 @@ export type AccountActionState =
       generated: boolean;
     };
 
-const forbidden: AccountActionState = {
-  status: "error",
+const forbidden = {
+  status: "error" as const,
   message: "この操作を行う権限がありません。再度ログインしてください。",
 };
 
@@ -93,4 +96,39 @@ export async function resetPasswordAccountPasswordAction(
   }
   refreshAccountList();
   return { status: "success", ...result };
+}
+
+export type ChangePasswordState =
+  { status: "idle" } | { status: "error"; message: string };
+
+function changePasswordFailure(error: unknown): ChangePasswordState {
+  if (!isExpectedAccountActionError(error)) {
+    console.error("PASSWORD_CHANGE_FAILED");
+  }
+  return { status: "error", message: accountActionErrorMessage(error) };
+}
+
+export async function changeOwnPasswordAction(
+  _previousState: ChangePasswordState,
+  formData: FormData,
+): Promise<ChangePasswordState> {
+  const user = await getCurrentMemberUser();
+  if (user?.role !== "member" || !user.accountId) return forbidden;
+
+  let outcome;
+  try {
+    outcome = await passwordAccountUseCases.changeOwn.execute(user.accountId, {
+      currentPassword: field(formData, "currentPassword"),
+      newPassword: field(formData, "newPassword"),
+      confirmPassword: field(formData, "confirmPassword"),
+    });
+  } catch (error) {
+    return changePasswordFailure(error);
+  }
+  if (outcome !== "changed") {
+    return { status: "error", message: changePasswordOutcomeMessage(outcome) };
+  }
+  // Runs outside the try/catch: signOut ends by throwing NEXT_REDIRECT.
+  await signOutTo("/signin?notice=password-changed");
+  return { status: "idle" };
 }

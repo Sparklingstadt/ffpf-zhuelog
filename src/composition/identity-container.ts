@@ -69,3 +69,7 @@ export async function signInWithPassword(input: {
 export async function signOutCurrentUser() {
   await signOut({ redirectTo: "/signin" });
 }
+
+export async function signOutTo(redirectTo: string) {
+  await signOut({ redirectTo });
+}

@@ -13,8 +13,10 @@ import {
   LoginIdTakenError,
   PasswordAccountNotFoundError,
 } from "@ffpf-zhuelog/core/domain/identity/password-account-error";
+import { ChangeOwnPassword } from "@ffpf-zhuelog/core/application/identity/use-cases/change-own-password";
 import {
   accountActionErrorMessage,
+  changePasswordOutcomeMessage,
   accountActionFallbackMessage,
   isExpectedAccountActionError,
 } from "../src/presentation/presenters/account-action-errors";
@@ -143,5 +145,47 @@ test("a ZodError thrown by the real CreatePasswordAccount is recognised", async 
   assert.equal(
     accountActionErrorMessage(error),
     "ログインIDは英小文字・数字・. _ - の3〜32文字にしてください。",
+  );
+});
+
+test("change-password outcomes map to their messages", () => {
+  assert.equal(
+    changePasswordOutcomeMessage("mismatch"),
+    "確認用のパスワードが一致しません。",
+  );
+  assert.equal(
+    changePasswordOutcomeMessage("invalid-current"),
+    "現在のパスワードが違うか、一時的にロックされています。",
+  );
+});
+
+test("a ZodError thrown by the real ChangeOwnPassword maps to the password message", async () => {
+  const unused = () => {
+    throw new Error("not reached");
+  };
+  const repo = {
+    findById: unused,
+    reserveAttempt: unused,
+    setPassword: unused,
+  } as unknown as PasswordAccountRepository;
+  const hasher = { hash: unused, verify: unused, simulateVerify: unused };
+
+  const error = await new ChangeOwnPassword(
+    repo,
+    hasher as unknown as PasswordHasher,
+  )
+    .execute("acc", {
+      currentPassword: "current",
+      newPassword: "short",
+      confirmPassword: "short",
+    })
+    .then(
+      () => assert.fail("expected a rejection"),
+      (e: unknown) => e,
+    );
+  assert.equal(isExpectedAccountActionError(error), true);
+  assert.equal(
+    accountActionErrorMessage(error),
+    "パスワードは12〜128文字にしてください。",
   );
 });
