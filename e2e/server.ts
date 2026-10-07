@@ -31,6 +31,8 @@ async function main() {
     LINE_CHANNEL_ACCESS_TOKEN: "test-only-never-send",
     LINE_ALLOWED_USER_ID: lineTestConfig.userId,
     LINE_BOT_USER_ID: lineTestConfig.botId,
+    // The E2E admin's githubId (see asAdmin in e2e/fixtures.ts).
+    LINE_NOTE_OWNER_ID: "10001",
     OPENAI_API_BASE_URL: stubs.openaiUrl,
     LINE_API_BASE_URL: stubs.lineUrl,
     CRON_SECRET: cronSecret,

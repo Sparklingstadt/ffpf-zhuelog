@@ -3,10 +3,12 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { conversationNoteUseCases } from "@/composition/conversation-container";
-import { getCurrentMemberUser } from "@/composition/identity-container";
+import { getRecordOwner } from "@/composition/identity-container";
+import { loadRecordOwnerView } from "@/composition/record-owner-options";
 import { parseLogDate } from "@ffpf-zhuelog/core/domain/calendar/value-objects/log-date";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { ReauthNotice } from "@/presentation/components/chat/reauth-notice";
+import { RecordOwnerControls } from "@/presentation/components/records/record-owner-controls";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
@@ -14,30 +16,45 @@ import {
   formatLogDate,
   formatTokyoDateTime,
 } from "@/presentation/presenters/log-date-presenter";
+import {
+  requestedRecordOwner,
+  withRecordOwner,
+} from "@/presentation/presenters/record-owner-href";
 
 export const dynamic = "force-dynamic";
 
 type ConversationDatePageProps = {
   params: Promise<{ year: string; month: string; day: string }>;
+  searchParams: Promise<{ user?: string | string[] }>;
 };
 
 export default async function ConversationDatePage({
   params,
+  searchParams,
 }: ConversationDatePageProps) {
-  const user = await getCurrentMemberUser();
-  if (!user) redirect("/signin?callbackUrl=/conversations");
+  const { user, owner } = await getRecordOwner(
+    requestedRecordOwner((await searchParams).user),
+  );
+  if (!user || (owner.kind === "denied" && owner.reason === "unauthenticated"))
+    redirect("/signin?callbackUrl=/conversations");
+  if (owner.kind === "denied" && owner.reason === "guest") redirect("/");
 
   const { year, month, day } = await params;
   const date = parseLogDate(year, month, day);
   if (!date) notFound();
-
-  const notes = user.githubId
-    ? await conversationNoteUseCases.listDailyConversations.execute(
-        user.githubId,
-        date,
-      )
-    : [];
   const dateHref = `/conversations/${date.year}/${date.month}/${date.day}`;
+  if (owner.kind === "redirect-self") redirect(dateHref);
+
+  const hasNotes = owner.kind === "self" || owner.kind === "other";
+  const [notes, view] = hasNotes
+    ? await Promise.all([
+        conversationNoteUseCases.listDailyConversations.execute(
+          owner.ownerId,
+          date,
+        ),
+        loadRecordOwnerView(user, owner),
+      ])
+    : [[], null];
 
   return (
     <main className="min-h-screen bg-background">
@@ -52,13 +69,15 @@ export default async function ConversationDatePage({
                 {formatLogDate(date)}
               </h1>
               <p className="mt-2 text-sm text-muted-foreground">
-                この日に保存した会話ノート：{notes.length}件
+                {hasNotes
+                  ? `この日に保存した会話ノート：${notes.length}件`
+                  : null}
               </p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline" size="sm">
-              <Link href="/conversations">
+              <Link href={withRecordOwner("/conversations", owner)}>
                 <ArrowLeft /> 日付一覧へ
               </Link>
             </Button>
@@ -66,7 +85,11 @@ export default async function ConversationDatePage({
           </div>
         </header>
 
-        {!user.githubId ? (
+        {view ? (
+          <RecordOwnerControls owner={owner} view={view} path={dateHref} />
+        ) : null}
+
+        {!hasNotes ? (
           <ReauthNotice />
         ) : notes.length === 0 ? (
           <Card className="border-dashed py-12 text-center shadow-none">
@@ -80,7 +103,7 @@ export default async function ConversationDatePage({
             {notes.map((note, index) => (
               <Link
                 key={note.id}
-                href={`${dateHref}/${index + 1}`}
+                href={withRecordOwner(`${dateHref}/${index + 1}`, owner)}
                 className="group"
               >
                 <Card className="transition-colors group-hover:bg-muted/40">

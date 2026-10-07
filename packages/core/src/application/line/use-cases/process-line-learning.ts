@@ -2,6 +2,7 @@ import type { LineJobRepository } from "../../../domain/line/repositories/line-j
 import type { LineMessenger } from "../ports/line-messenger";
 import {
   makeLineLearningResult,
+  type LineJob,
   type LineJobKind,
 } from "../../../domain/line/line-learning";
 import type { LearningKind } from "../../../domain/learning/entities/learning-entry";
@@ -22,7 +23,32 @@ export class ProcessLineLearning {
   constructor(
     private readonly jobs: LineJobRepository,
     private readonly messenger: LineMessenger,
+    // Whose learning notes LINE writes; null when LINE_NOTE_OWNER_ID is
+    // missing or malformed, which fails each job instead of disabling LINE.
+    private readonly noteOwnerId: string | null,
+    // Told only that the owner is missing, never anything about the job.
+    private readonly onNoteOwnerMissing: () => void = () => {},
   ) {}
+
+  // Checked before generating, so a missing owner never pays for OpenAI.
+  // Returns true when it replied with the failure, and generation must stop.
+  async rejectIfNoteOwnerMissing(id: string, token: string, userId: string) {
+    if (this.noteOwnerId) return false;
+    const job = await this.jobs.leased(id, token, userId, "GENERATING");
+    const kind = job && noteKind(job.kind);
+    if (!job || !kind) return false;
+    await this.replyNoteOwnerMissing(job, kind);
+    return true;
+  }
+
+  private replyNoteOwnerMissing(job: LineJob, kind: LearningKind) {
+    this.onNoteOwnerMissing();
+    return this.jobs.saveReply(
+      job,
+      formatGenerationFailure("NOTE_OWNER_MISSING", kind),
+      "NOTE_OWNER_MISSING",
+    );
+  }
 
   async complete(id: string, token: string, userId: string, output: unknown) {
     const job = await this.jobs.leased(id, token, userId, "GENERATING");
@@ -41,7 +67,13 @@ export class ProcessLineLearning {
         "CORRECTION_TOO_LONG",
       );
     }
-    return this.jobs.saveResult(job, result.draft, result.csv);
+    if (!this.noteOwnerId) return this.replyNoteOwnerMissing(job, kind);
+    return this.jobs.saveResult(
+      job,
+      this.noteOwnerId,
+      result.draft,
+      result.csv,
+    );
   }
 
   async deliver(id: string, token: string, userId: string) {

@@ -11,14 +11,14 @@ export type LogDateSummary = {
 
 // Any notes browsed by JST date, such as learning and conversation notes.
 export type CreatedAtSource = {
-  listCreatedAt(): Promise<Date[]>;
+  listCreatedAt(ownerId: string): Promise<Date[]>;
 };
 
 export class ListLogDates {
   constructor(private readonly repository: CreatedAtSource) {}
 
-  async execute(): Promise<LogDateSummary[]> {
-    const timestamps = await this.repository.listCreatedAt();
+  async execute(ownerId: string): Promise<LogDateSummary[]> {
+    const timestamps = await this.repository.listCreatedAt(ownerId);
     const groups = new Map<string, LogDateSummary>();
 
     for (const timestamp of timestamps) {

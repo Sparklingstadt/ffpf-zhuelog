@@ -16,7 +16,7 @@ export default async function PracticePage() {
         <div>
           <h1 className="text-2xl font-semibold">自分のAPIキーで添削</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            共有ノートとは別の、端末に保存する個人練習です。
+            学習ノートとは別の、端末に保存する個人練習です。
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

@@ -7,6 +7,10 @@ import "dotenv/config";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { securePostgresConnectionString } from "../src/infrastructure/config/postgres-connection";
 
+// Seeded notes belong to the administrator, matching the migration that
+// assigned the pre-existing shared notes to this GitHub account.
+const SEED_OWNER_ID = "219588180";
+
 type SeedEntry = {
   id: string;
   createdAt: string;
@@ -189,6 +193,7 @@ async function main() {
           await tx.learningEntry.create({
             data: {
               id: entry.id,
+              ownerId: SEED_OWNER_ID,
               batchId: batch.id,
               createdAt: new Date(entry.createdAt),
               originalText: entry.originalText,

@@ -7,8 +7,12 @@ export class ImportLearningCsv {
     private readonly repository: LearningEntryRepository,
   ) {}
 
-  async execute(fileName: string, source: string) {
+  async execute(ownerId: string, fileName: string, source: string) {
     const entries = this.parser.parse(source);
-    return this.repository.importBatch(fileName.slice(0, 255), entries);
+    return this.repository.importBatch(
+      ownerId,
+      fileName.slice(0, 255),
+      entries,
+    );
   }
 }

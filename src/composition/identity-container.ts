@@ -4,6 +4,11 @@ import { ListPasswordAccounts } from "@ffpf-zhuelog/core/application/identity/us
 import { RequireAdminUser } from "@ffpf-zhuelog/core/application/identity/use-cases/require-admin-user";
 import { RequireMemberUser } from "@ffpf-zhuelog/core/application/identity/use-cases/require-member-user";
 import { RequireViewerUser } from "@ffpf-zhuelog/core/application/identity/use-cases/require-viewer-user";
+import {
+  resolveRecordOwner,
+  type RecordOwner,
+} from "@ffpf-zhuelog/core/application/identity/use-cases/resolve-record-owner";
+import type { AuthenticatedUser } from "@ffpf-zhuelog/core/domain/identity/entities/authenticated-user";
 import { ResetPasswordAccountPassword } from "@ffpf-zhuelog/core/application/identity/use-cases/reset-password-account-password";
 import { AuthJsCurrentUserProvider } from "@/infrastructure/auth/authjs-current-user-provider";
 import { signIn, signOut } from "@/infrastructure/auth/authjs-config";
@@ -39,6 +44,17 @@ export function getCurrentMemberUser() {
 
 export function getCurrentViewerUser() {
   return requireViewerUser.execute();
+}
+
+// Reads the user through the same provider as the other getters so a revoked
+// session (sessionVersion) is denied here too. The user comes back with the
+// owner so pages need not read the session twice.
+export async function getRecordOwner(requested: string | undefined): Promise<{
+  user: AuthenticatedUser | null;
+  owner: RecordOwner;
+}> {
+  const user = await getCurrentViewerUser();
+  return { user, owner: resolveRecordOwner(user, requested) };
 }
 
 export async function signInWithGitHub(redirectTo: string) {

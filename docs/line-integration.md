@@ -52,7 +52,7 @@ v0.12.0 から、添削と翻訳はすべてサーバーの中で OpenAI API を
 - 内部では `"最初の文","添削後の文","ピン音","ヒント1","ヒント2",...` のヘッダーなしCSVを保存します。翻訳も同じ形で、「最初の文」が日本語の原文、「添削後の文」が中国語訳です。表示の整形によって学習ノートの内容は変わりません。
 - CSVはプログラムでエスケープします。AI出力を直接SQLやCSVとして実行しません。原文はAI出力ではなく保存済みのLINE本文から取得します。入力の文は指示ではなくデータとしてOpenAIに渡し、結果は決められた形かを検証します。
 - 日付別一覧はLINE送信日時（既存画面と同じJST表示）で分類します。登録後にWeb画面を再読み込みすると表示されます。
-- **既存アプリの仕様に合わせ、登録したノートはゲストからも閲覧できます。** 非公開にしたい内容は送らないでください。LINE上で送信取消しても本アプリの保存済みノートは自動削除されません。
+- **登録したノートは、`LINE_NOTE_OWNER_ID` の持ち主と管理者だけが閲覧できます。** ゲストと、ほかのmemberには表示されません。LINE上で送信取消しても本アプリの保存済みノートは自動削除されません。
 - メッセージはLINE、アプリのDB、OpenAIを経由します。OpenAIには `store: false` を指定しますが、OpenAI側のあらゆるログの不保持を保証しません。ログにはジョブIDと原因コードだけを出し、本文・生成結果・チャネルシークレット・アクセストークン・APIキーは出しません。
 - 生成は `gpt-5-mini` に固定です（クライアントからは選べません）。OpenAIの利用料金は `OPENAI_API_KEY` のプロジェクトに発生します。呼び出しは通常1メッセージにつき1回です（生成の途中で関数が打ち切られた場合に限り、同じメッセージを最大3回まで生成し直します。「重複・失敗時の扱い」を参照）。500文字の上限と送信者の制限が費用の目安になります。
 - 返信はReply APIではなくPush APIを使用し、**LINE公式アカウントの配信枠**を消費します。友だち追加が必要です。受理成功でもブロック等で端末に表示されない場合があります。
@@ -77,17 +77,20 @@ LINEへの送信が一時的に失敗した場合は、同じ再送キー（`X-L
 
 専用のLINE公式アカウントを用意すると、既存ボットのWebhookを上書きせずに運用できます。
 
-| 変数                        | 役割                                                  | 設定先          |
-| --------------------------- | ----------------------------------------------------- | --------------- |
-| `LINE_INTEGRATION_ENABLED`  | 準備完了後だけ `true`                                 | Webサーバー     |
-| `LINE_CHANNEL_SECRET`       | Webhookの署名検証                                     | Webサーバーのみ |
-| `LINE_CHANNEL_ACCESS_TOKEN` | 返信のPush送信                                        | Webサーバーのみ |
-| `LINE_BOT_USER_ID`          | 受信先の公式アカウントのユーザーID（Uから始まる値）   | Webサーバーのみ |
-| `LINE_ALLOWED_USER_ID`      | 利用を許可する自分のLINEユーザーID（1人）             | Webサーバーのみ |
-| `OPENAI_API_KEY`            | 添削・翻訳の生成（Webのチャットと共通）               | Webサーバーのみ |
-| `CRON_SECRET`               | Vercel Cron・Cloud Tasksの認証（下記で生成する値）    | Webサーバーのみ |
-| `LINE_DRAIN_TASKS_QUEUE`    | Cloud Runのみ。drainを頼むCloud Tasksのキュー名       | Webサーバーのみ |
-| `LINE_DRAIN_FORWARD_URL`    | Vercelのみ。drainを取り次ぐCloud RunのURL（`https:`） | Webサーバーのみ |
+| 変数                        | 役割                                                                         | 設定先          |
+| --------------------------- | ---------------------------------------------------------------------------- | --------------- |
+| `LINE_INTEGRATION_ENABLED`  | 準備完了後だけ `true`                                                        | Webサーバー     |
+| `LINE_CHANNEL_SECRET`       | Webhookの署名検証                                                            | Webサーバーのみ |
+| `LINE_CHANNEL_ACCESS_TOKEN` | 返信のPush送信                                                               | Webサーバーのみ |
+| `LINE_BOT_USER_ID`          | 受信先の公式アカウントのユーザーID（Uから始まる値）                          | Webサーバーのみ |
+| `LINE_ALLOWED_USER_ID`      | 利用を許可する自分のLINEユーザーID（1人）                                    | Webサーバーのみ |
+| `LINE_NOTE_OWNER_ID`        | LINEで追加する学習ノートの持ち主ID（数字のGitHub ID、または `password:...`） | Webサーバーのみ |
+| `OPENAI_API_KEY`            | 添削・翻訳の生成（Webのチャットと共通）                                      | Webサーバーのみ |
+| `CRON_SECRET`               | Vercel Cron・Cloud Tasksの認証（下記で生成する値）                           | Webサーバーのみ |
+| `LINE_DRAIN_TASKS_QUEUE`    | Cloud Runのみ。drainを頼むCloud Tasksのキュー名                              | Webサーバーのみ |
+| `LINE_DRAIN_FORWARD_URL`    | Vercelのみ。drainを取り次ぐCloud RunのURL（`https:`）                        | Webサーバーのみ |
+
+`LINE_NOTE_OWNER_ID` は数字のGitHub ID、または `password:` で始まるメンバーのIDです。未設定や形式が違うときもLINE連携は止まりませんが、記録は保存せず、LINEに「添削（翻訳）できませんでした」とエラーコード `NOTE_OWNER_MISSING` の返信を送り、ログに `LINE_NOTE_OWNER_MISSING` を出します。
 
 LINE DevelopersのチャネルID、チャネルシークレット、チャネルアクセストークン、公式アカウントのID、自分のユーザーIDはそれぞれ別物です。トークン類はチャットやGitに貼らず、Vercel環境変数／gitignore済みの `.env.local` に保存してください。
 

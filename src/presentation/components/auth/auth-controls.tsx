@@ -15,7 +15,7 @@ export function AuthControls({ user }: AuthControlsProps) {
   const isMember = user.role === "member";
   const isAdmin = user.role === "admin";
   const label = isGuest
-    ? "ゲスト（共有ノートは閲覧のみ）"
+    ? "ゲスト（自分のAPIキーでの添削のみ）"
     : isMember
       ? (user.displayName ?? user.githubLogin)
       : `@${user.githubLogin}`;

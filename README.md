@@ -96,9 +96,9 @@ AUTH_ALLOWED_GITHUB_LOGINS="github-login-1,github-login-2"
 
 ロールは4種類です。
 
-- **admin（管理者）**: GitHub認証で許可リストに載っているユーザー。共有ノートの投稿・CSVインポート・Typle連携・LINE連携とアカウント管理を使えます。
-- **member（メンバー）**: ID・パスワードでログインするアカウント。共有ノートの閲覧と本人のAPIキーでの添削に加えて、ChatGPT会話（`/chat`）、自分の会話ノート、CSVインポート、Typle連携を使えます。CSVインポートでは、全員が見る共有ノートに記録を追加できます。LINE連携とアカウント管理は使えません。
-- **guest（ゲスト）**: ログイン画面の「ゲストとして閲覧」。共有ノートの閲覧と本人のAPIキーでの添削だけです。
+- **admin（管理者）**: GitHub認証で許可リストに載っているユーザー。自分の学習ノートと会話ノート、CSVインポート・Typle連携・LINE連携とアカウント管理を使えます。メンバーの学習ノートと会話ノートは、切り替え欄から閲覧のみで見られます。
+- **member（メンバー）**: ID・パスワードでログインするアカウント。自分の学習ノートと会話ノート、本人のAPIキーでの添削、ChatGPT会話（`/chat`）、CSVインポート、Typle連携を使えます。CSVインポートは自分の学習ノートに追加されます。ほかのユーザーの記録は見られません。LINE連携とアカウント管理は使えません。
+- **guest（ゲスト）**: ログイン画面の「ゲストとして使う」。本人のAPIキーでの添削（`/practice`）だけです。学習ノートと会話ノートはなく、`/` には `/practice` への案内が出ます。`/logs` と `/conversations` は `/` に戻されます。
 - **revoked**: 許可リストから外れた管理者や、再設定・変更でセッションが失効したメンバー。どのページも使えず、ログイン画面に戻されます。
 
 memberのアカウントは、GitHub管理者が `/admin/accounts` で作ります。セルフ登録はありません。最初のアカウントも、まずGitHubで管理者としてログインして作成してください。
@@ -108,9 +108,9 @@ memberのアカウントは、GitHub管理者が `/admin/accounts` で作りま�
 - **ロック**: 5回続けて間違えると、そのアカウントは15分間ロックされます。ロック中は正しいパスワードでもログインできません。ログイン画面には、IDの有無やロックの状態を区別せず「IDまたはパスワードが違うか、一時的にロックされています。」とだけ表示します。ロック中のアカウントは `/admin/accounts` に「ロック中」と表示され、管理者がパスワードを再設定すると解除されます。
 - **セッションの失効**: パスワードを再設定・変更すると、そのアカウントの既存のセッションは、すべて使えなくなります。セッションの有効性（`sessionVersion`）は、サーバー側でユーザーを読むたびにDBで確認します。
 - **パスワードの保存**: scrypt（N=2^15, r=8, p=1）でハッシュ化したものだけを保存します。平文はDBにもログにも残しません。
-- **会話ノートの公開範囲**: memberの保存した会話は、所有者 `password:<アカウントID>` に紐づき、本人だけが見られます。
+- **記録の持ち主**: memberの学習ノートと会話は、所有者 `password:<アカウントID>` に紐づきます。本人と管理者が見られます（詳細は「学習ノートと会話ノートの公開範囲」）。
 
-新しい環境変数はありません。ただしDBマイグレーション `20261007090000_password_accounts`（`PasswordAccount` テーブルの追加）が必要です。本番へデプロイする前に、Vercelとリンク済みのmainのチェックアウトで、次の手順で本番DB（Neon）へ適用してください。`prisma.config.ts` は `.env` だけを読み込むので、`vercel env pull` だけでは本番の `DATABASE_URL` が使われません。`--environment=production` で取得したファイルを、`--env-file` で明示して渡します。
+パスワードアカウントのために新しい環境変数は要りません。ただしDBマイグレーション `20261007090000_password_accounts`（`PasswordAccount` テーブルの追加）が必要です。本番へデプロイする前に、Vercelとリンク済みのmainのチェックアウトで、次の手順で本番DB（Neon）へ適用してください。`prisma.config.ts` は `.env` だけを読み込むので、`vercel env pull` だけでは本番の `DATABASE_URL` が使われません。`--environment=production` で取得したファイルを、`--env-file` で明示して渡します。
 
 ```bash
 vercel env pull .env.production.local --environment=production --yes
@@ -123,7 +123,7 @@ rm .env.production.local
 
 認可はProxyによるページ保護に加え、画面のServer ComponentとCSVインポートのServer Actionでも検証します。
 
-ログイン画面からは、GitHub認証を使わずゲストとしてログインすることもできます。ゲストは共有ノートと日付別ログの閲覧、および本人のAPIキーでの個人添削を利用できます。共有ノートへの投稿・CSVインポート・ChatGPT・Typle連携は管理者・メンバー専用、LINE連携は管理者専用です。共有データの書き込み権限はServer ActionとAPI Routeでも検証します。
+ログイン画面からは、GitHub認証を使わずゲストとしてログインすることもできます。ゲストが使えるのは、本人のAPIキーでの個人添削（`/practice`）だけです。学習ノート・日付別ログ・会話ノート・CSVインポート・ChatGPT・Typle連携は管理者・メンバー専用、LINE連携は管理者専用です。書き込み権限と記録の持ち主はServer ActionとAPI Routeでも検証します。
 
 ## 本人のAPIキーでの添削（BYOK）
 
@@ -135,7 +135,7 @@ rm .env.production.local
 
 - **料金**: API料金は本人のOpenAIアカウントに発生します。ChatGPTの定額契約とは別です。運営者のキーへのフォールバックや自動再試行はありません。エラー／切断時もOpenAI側では処理・課金が行われている可能性があります。
 - **APIキー**: この画面を開いている間のメモリー内のみで保持します。移動・再読み込み・ログアウト後は再入力が必要です。localStorage、sessionStorage、Cookie、DB、アプリのログには保存しません。キーと原文は同一オリジンのAPIを経由してOpenAIに送信するため、運営サーバーはリクエスト処理中のキーを扱います。公開時はHTTPSを使用してください。分析・エラー収集基盤でも、このエンドポイントのリクエスト本文を記録しないでください。
-- **履歴**: 原文・添削結果・日時をこのブラウザーのlocalStorageに最大100件保存します。アプリDB・共有ノート・LINEには転送しません。ログアウト後も残ります。同じブラウザーを使う人には見えるため、共用端末では「履歴をすべて削除」を実行してください。ブラウザーのデータ削除によって失われ、別端末への同期・復元はできません。保存が禁止／容量不足の場合は警告し、結果は画面内だけに保持します。
+- **履歴**: 原文・添削結果・日時をこのブラウザーのlocalStorageに最大100件保存します。アプリDB・学習ノート・LINEには転送しません。ログアウト後も残ります。同じブラウザーを使う人には見えるため、共用端末では「履歴をすべて削除」を実行してください。ブラウザーのデータ削除によって失われ、別端末への同期・復元はできません。保存が禁止／容量不足の場合は警告し、結果は画面内だけに保持します。
 - **OpenAI側の保持**: Responses APIには `store: false` を指定しますが、これはOpenAI側のあらゆるログの不保持を保証しません。[OpenAIのデータ保持ポリシー](https://developers.openai.com/api/docs/guides/your-data)を確認してください。
 - **制限**: 固定モデル `gpt-5-mini`、最大出力4,000トークン、サーバー45秒、送信本文8KiB。同一プロセス内で1キー同時1件・1分10件、全体同時16件に制限します。キーの識別子（プロセスごとのランダムな秘密鍵によるHMAC-SHA-256）とカウンターだけを一時メモリーに保持し、DBには保存しません。サーバーレスの別インスタンス間では制限を共有しないため、厳密な課金上限ではありません。Vercelの無料枠やOpenAIの利用上限によって利用できない場合があります。
 - **権限と安全性**: Auth.jsのゲスト／管理者セッションと同一オリジンを検証し、外部からのブラウザー送信・任意モデル／接続先・キー未指定を拒否します。生成結果はスキーマ検証後に通常のテキストとして表示します。
@@ -146,14 +146,14 @@ rm .env.production.local
 
 ## LINEでの添削・翻訳
 
-自分のLINE（公式アカウントとの1対1トーク）に送った文を、Cloud Run上でOpenAI API（`gpt-5-mini`）が処理し、同じトークに返信して学習ノートに保存します。MacやCodexは不要です。
+自分のLINE（公式アカウントとの1対1トーク）に送った文を、Cloud Run上でOpenAI API（`gpt-5-mini`）が処理し、同じトークに返信して学習ノートに保存します。LINEにはログインがないため、保存先は環境変数 `LINE_NOTE_OWNER_ID` で指定した持ち主の学習ノートです。MacやCodexは不要です。
 
 - ひらがな・カタカナを含む日本語の文は、中国語（簡体字）に翻訳します。返信は「元の文」「中国語訳」「ヒント」で、ノートには「翻訳」として保存されます。
 - 漢字を含むそれ以外の文は、中国語として添削します。返信は「元の文」「添削後」「ヒント」です。
 - 500文字を超える文は上限を通知し、生成も保存もしません。コマンドはありません（`/battery`・開発モードは廃止しました）。
 - webhookはCloud Tasksに処理を頼んでから返答し、処理は `GET /api/line/drain` のリクエストの中で動きます（Cloud Runの課金をリクエスト中だけにするため）。取り残しは次のwebhookと、Vercel Cron（30分おき、`GET /api/line/drain`）が拾い直します。LINEが無効なVercelは、この呼び出しを `LINE_DRAIN_FORWARD_URL`（Cloud RunのURL）の `/api/line/drain` に取り次ぎます。
 
-必要な環境変数は `LINE_INTEGRATION_ENABLED`・`LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`LINE_BOT_USER_ID`・`LINE_ALLOWED_USER_ID`・`OPENAI_API_KEY`、そして `/api/line/drain` を保護する `CRON_SECRET`（`openssl rand -hex 32` で生成した32文字以上の値）です。`OPENAI_API_BASE_URL` と `LINE_API_BASE_URL` はE2Eテスト専用（ループバックのアドレスだけを受け付けます）で、本番では設定しません。設定手順、v0.12.0への切り替え（Macのworkerの停止など）、失敗時の扱いは [`docs/line-integration.md`](docs/line-integration.md) を参照してください。
+必要な環境変数は `LINE_INTEGRATION_ENABLED`・`LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`LINE_BOT_USER_ID`・`LINE_ALLOWED_USER_ID`・`LINE_NOTE_OWNER_ID`・`OPENAI_API_KEY`、そして `/api/line/drain` を保護する `CRON_SECRET`（`openssl rand -hex 32` で生成した32文字以上の値）です。`LINE_NOTE_OWNER_ID` は、LINEで送った文の学習ノートを持つユーザーのIDで、GitHubの数字のID（管理者）か `password:<アカウントID>`（member）を指定します。LINE連携を有効にするCloud Runでは必須で、未設定または不正な値だと、ノートを保存せず、生成失敗と同じ返信を送ります。LINEが無効なVercelでは、取り次ぐだけなので設定は要りません。`OPENAI_API_BASE_URL` と `LINE_API_BASE_URL` はE2Eテスト専用（ループバックのアドレスだけを受け付けます）で、本番では設定しません。設定手順、v0.12.0への切り替え（Macのworkerの停止など）、失敗時の扱いは [`docs/line-integration.md`](docs/line-integration.md) を参照してください。
 
 ## ChatGPT会話機能の設定
 
@@ -177,7 +177,7 @@ OPENAI_MODEL="gpt-6.1-sol"
 - **端末にダウンロード**: 発言・日時・モデル情報をMarkdownとして出力します。会話練習と会話ノートの詳細から使えます。
 - **端末バックアップ**: 会話はLocalStorageにも自動バックアップします（最新20会話・合計1MiBまで、古いものから除外）。進行中の会話は再読み込みで復元し、勝手に再送信しません。DB保存失敗時もローカルバックアップとダウンロードを使えます。容量不足・保存禁止・破損時は警告を表示します。会話練習の「保存した会話」から、DB履歴と端末バックアップを開けます。
 - **上限**: DB保存は最大40発言・総テキスト40,000文字です。タイトルは最初の発言から作ります。
-- **公開範囲**: 会話は保存した本人だけが見られます。ゲストや別の管理者には表示されず、APIでも本人以外の閲覧・上書きを拒否します。古いログインセッションでは、一度ログアウトしてGitHubでログインし直してください。
+- **公開範囲**: 会話は保存した本人と管理者が見られます。管理者は切り替え欄で選んだユーザーの会話ノートを閲覧のみで見られ、memberが他人の `?user=` を指定しても自分の記録に戻されます。ゲストには表示されず、APIでも本人以外の上書きを拒否します。古いログインセッションでは、一度ログアウトしてGitHubでログインし直してください。
 - **端末の注意**: バックアップはGitHub IDごとに分かれますが、ログアウト後も端末に残ります。共用端末では、ほかの利用者がブラウザーデータを確認できる場合があります。ブラウザーデータを削除するとローカル履歴は消えます。別の端末では、DBに保存した履歴を参照してください。
 
 公開前に `pnpm run db:deploy` で `prisma/migrations/20261001100000_chat_conversations` と `20261004090000_chat_conversation_created_at` を対象DBへ適用し、API版の `OPENAI_MODEL=gpt-6.1-sol` 設定を確認してデプロイします。マイグレーションを適用していない場合、DB保存・履歴取得・会話ノートはエラーになります。端末保存とダウンロードは独立して利用できます。
@@ -188,6 +188,69 @@ OPENAI_MODEL="gpt-6.1-sol"
 
 ブラウザーの保存が制限されている場合でも、その画面での切り替えは利用できます。初期配色はCSP nonce付きの固定スクリプトで本文表示前に適用し、ライト画面が一瞬表示されるのを防ぎます。
 
+## 学習ノートと会話ノートの公開範囲
+
+学習ノートは共有ではなく、ユーザーごとの個人の記録です。会話ノートも同じ規則です。
+
+- **本人**: 自分の学習ノート・日付別ログ・会話ノートだけを見られます。番号（`#1` やその日の n 件目）も持ち主ごとに数えます。memberが `?user=` に他人を指定しても、自分の記録のページに戻されます。
+- **管理者**: 自分の記録に加えて、ヘッダー下の切り替え欄（「表示するユーザー」）でmemberを選ぶと、そのユーザーの学習ノート・日付別ログ・会話ノート・Typle用リストを見られます。閲覧のみで、「〇〇さんの記録を表示中（閲覧のみ）」のバナーを出し、CSVインポートのフォームは出しません。日付や詳細へのリンクでも `?user=` を引き継ぎます。
+- **ゲスト**: 記録を持たず、`/practice` だけを使えます。`/logs` と `/conversations` は `/` に戻されます。
+- **CSVインポート**: `?user=` に関わらず、ログイン中のユーザー自身の学習ノートに登録します。
+- **LINE**: 環境変数 `LINE_NOTE_OWNER_ID` の持ち主の学習ノートに保存します。
+- **Typle用リストの出力**: 表示中のユーザーのノートだけを含みます。権限のない `?user=` は403です。ログインしていない呼び出しは401です。
+
+## 学習ノートの持ち主の本番への反映
+
+mainはVercelの本番へ自動でデプロイされますが、Cloud Run（LINEの処理）は自動では更新されません。手順の順番を守ってください。
+
+1. **Cloud Runに `LINE_NOTE_OWNER_ID=219588180` を設定します。** サービス名とリージョンは [`docs/cloud-run.md`](docs/cloud-run.md) の例（`zhuelog`・`asia-northeast1`）です。この操作は今のイメージの新しいリビジョンを作るだけで、今のコードは `LINE_NOTE_OWNER_ID` を読まないため、コードは新しくなりません。Vercelは、LINEが無効でCloud Runに取り次ぐだけなので設定は要りません。
+
+   ```bash
+   gcloud run services update zhuelog --region asia-northeast1 \
+     --update-env-vars LINE_NOTE_OWNER_ID=219588180
+   ```
+
+2. **マイグレーション** `20261008090000_learning_entry_owner`（`LearningEntry.ownerId` の追加）を本番DB（Neon）へ適用します。既存の学習ノートは、すべて持ち主 `219588180` のものになります。前節と同じ手順ですが、**Vercelとリンク済みのリポジトリで、このPRのブランチをチェックアウトして**実行してください。mainにはまだこのマイグレーションがないため、mainのまま実行すると「No pending migrations」と表示され、適用できたように見えてしまいます。
+
+   ```bash
+   git fetch origin
+   git switch --detach origin/claude/per-user-learning-notes
+   vercel env pull .env.production.local --environment=production --yes
+   node --env-file=.env.production.local node_modules/prisma/build/index.js migrate deploy
+   node --env-file=.env.production.local node_modules/prisma/build/index.js migrate status
+   rm .env.production.local
+   git switch main
+   ```
+
+   `migrate status` で `20261008090000_learning_entry_owner` が適用済みになっていること（「Database schema is up to date!」）を、マージの前に必ず確認してください。ブランチをほかの作業場所でチェックアウトしている場合に備え、`git switch --detach` で取得したコミットを直接開いています。
+
+3. **マージし、VercelとCloud Runの両方に新しいコードを反映します。** マージしたら、Vercelの本番デプロイが Ready になるのを待ち、続けてCloud Runを新しいコードで再デプロイします。Cloud Runは `gcloud run services update` ではなく、[`docs/cloud-run.md`](docs/cloud-run.md) のとおり、Cloud Shellでソースからビルドして更新します。
+
+   ```bash
+   cd ffpf-zhuelog && git pull && ./scripts/deploy-cloud-run.sh
+   ```
+
+   設定済みの値は空欄のまま進めれば今のままです（`LINE_NOTE_OWNER_ID` も保たれます）。終わったら、新しいリビジョンがすべてのトラフィックを受けていることを確認します。
+
+   ```bash
+   gcloud run services describe zhuelog --region asia-northeast1 \
+     --format='value(status.latestReadyRevisionName,status.traffic)'
+   ```
+
+4. **確認します。** 自分のLINEから文を1件送り、管理者として `/` を開いてそのノートが表示されることを確認します。DBで確認するには、NeonのSQL Editorで次を実行し、`219588180` が返ることを見ます。
+
+   ```sql
+   SELECT "ownerId" FROM "LearningEntry" ORDER BY "createdAt" DESC LIMIT 1;
+   ```
+
+**注意: 手順2から、手順3のVercelとCloud Runの両方のデプロイが終わるまでの間は、CSVインポートとLINEの保存が失敗します。** `ownerId` は必須の列で、今のコードはこの列に値を入れずに登録するため、登録できません。LINEは「保存できなかった」旨の返信になります。この間はCSVインポートとLINEを使わず、終わったあとに送り直してください。GitHub・パスワードでのログインと、ノートの閲覧は影響を受けません。
+
+**ロールバック**: マージを取り消した（revertした）場合も、古いコードは `ownerId` を入れられないため、CSVインポートとLINEの保存が失敗します。ブランチをもう一度マージするまでの間は、NeonのSQL Editorで次を実行して、既定の持ち主を付けてください。再マージして新しいコードを反映したら、`ALTER TABLE "LearningEntry" ALTER COLUMN "ownerId" DROP DEFAULT;` で戻します。マイグレーションとスキーマには `DEFAULT` を入れていません。
+
+```sql
+ALTER TABLE "LearningEntry" ALTER COLUMN "ownerId" SET DEFAULT '219588180';
+```
+
 ## 日付別の学習ログ
 
 学習ノートの登録日時は日本時間（JST）で表示します。`/logs` から登録日を選び、日別一覧とその日の連番詳細を開けます。
@@ -197,7 +260,7 @@ OPENAI_MODEL="gpt-6.1-sol"
 
 ## Typle用の復習リスト
 
-管理者とメンバーはホームの「Typle用リスト」（`/integrations/typle`）から、学習ノートをTyple向けの復習リストへ変換できます。処理は連携プラグイン `@ffpf-zhuelog/typle-integrate-plugin`（`packages/typle-integrate-plugin/`）にあります。
+管理者とメンバーはホームの「Typle用リスト」（`/integrations/typle`）から、自分の学習ノートをTyple向けの復習リストへ変換できます（管理者は選んだユーザーのノートも見られます）。処理は連携プラグイン `@ffpf-zhuelog/typle-integrate-plugin`（`packages/typle-integrate-plugin/`）にあります。
 
 - ヒント内の「引用語」と、添削によって追加された短い中国語を抽出します。
 - 3文字以下の語（图书馆など）は分割せず1語として扱います。語順を入れ替えただけの部分は、追加された語に数えません。
@@ -230,7 +293,7 @@ UTF-8のCSVを利用します。ヘッダー行は省略可能です。
 ## データ構造
 
 - `ImportBatch`: インポートしたファイル名・件数・日時
-- `LearningEntry`: 最初の文・添削後の文・ピン音
+- `LearningEntry`: 最初の文・添削後の文・ピン音・所有者（GitHubの数字のID、または `password:<アカウントID>`）
 - `Hint`: 学習文に属する可変個数のヒントと表示順
 - `PasswordAccount`: ID・パスワードのアカウント（ログインID・表示名・パスワードのハッシュ・`sessionVersion`・失敗回数・ロック期限）
 - `ChatConversation`: 保存した会話（所有者のGitHub IDまたは `password:<アカウントID>`・タイトル・モデル・終了状態・発言・保存日時・更新日時）
@@ -274,14 +337,15 @@ Desktop Chromiumとモバイル幅（Pixel 7 / Chromium）の両方で検証し�
 
 - 認証前のリダイレクト、ゲストログイン／ログアウト、外部URLへのリダイレクト拒否
 - ID・パスワードのアカウント（管理者による作成、作成直後のパスワード表示（再表示できない旨の注記つき）、memberのChatGPT利用、アカウント管理画面の拒否、ログイン失敗の共通メッセージ、5回失敗でのロック、再設定によるセッション失効、パスワード変更、会話ノートの非公開）
-- ゲストのCSV操作・管理者用ChatGPT利用制限（古い管理者フォームからの投稿も拒否）
+- ゲストの `/practice` への案内・学習ノートと会話ノートの非表示・CSV操作・管理者用ChatGPT利用制限（古い管理者フォームからの投稿も拒否）
 - 本人のAPIキーでの添削、同意、端末履歴、キーの非永続化、DB非保存、モバイル表示
 - CSVの登録・リロード後の永続化・可変ヒント・BOM・引用符・改行・入力エラー
 - 日付一覧・ノート詳細・前後移動・JST日付境界・無効なURL・折り畳み
 - OpenAIキー未設定時のチャット利用拒否
 - 会話の終了・DB保存・再保存・端末バックアップの復元・ダウンロード・他人の会話の閲覧／上書き拒否（AI応答はモック）
-- 会話ノートの日付一覧・日別一覧・詳細・前後移動・JST日付境界・無効なURL・ゲストと他人からの非表示
-- LINEの署名付きwebhook・重複排除・日本語の翻訳と中文の添削・生成失敗の返信・同時受信・Cronでの取り残しの処理（OpenAIとLINEは `127.0.0.1:3108` / `3109` の偽サーバー）
+- 会話ノートの日付一覧・日別一覧・詳細・前後移動・JST日付境界・無効なURL・ゲストと他人（memberから見た他人）からの非表示
+- ユーザーごとの記録（memberは自分の記録だけが見え番号も別々、管理者は切り替え欄でmemberの記録・会話ノートを閲覧のみで見られる、memberの `?user=` は自分に戻される、Typleの出力は表示中のユーザーのノートだけ）
+- LINEの署名付きwebhook・重複排除・日本語の翻訳と中文の添削（`LINE_NOTE_OWNER_ID` のノートへの保存）・生成失敗の返信・同時受信・Cronでの取り残しの処理（OpenAIとLINEは `127.0.0.1:3108` / `3109` の偽サーバー）
 - Typle用リストの抽出・管理者・メンバー限定表示・互換JSON出力・先頭20件の表示・存在しない連携の404
 
 DBは`127.0.0.1:55439/zhuelog_e2e`に固定され、`compose.e2e.yaml`の専用コンテナだけを使用します。

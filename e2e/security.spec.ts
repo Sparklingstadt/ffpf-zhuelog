@@ -27,8 +27,10 @@ test("nonce CSP is active, rotates, blocks injected scripts and retains working 
     "data-injected",
     "yes",
   );
-  await page.getByRole("button", { name: "ゲストとして閲覧" }).click();
-  await expect(page.getByText("ゲスト（共有ノートは閲覧のみ）")).toBeVisible();
+  await page.getByRole("button", { name: "ゲストとして使う" }).click();
+  await expect(
+    page.getByText("ゲスト（自分のAPIキーでの添削のみ）"),
+  ).toBeVisible();
 });
 
 test("revoked admin JWT cannot access pages, API or import actions", async ({

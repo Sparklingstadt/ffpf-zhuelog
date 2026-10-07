@@ -78,7 +78,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
             </Badge>
             <CardTitle className="text-2xl">学习録にログイン</CardTitle>
             <CardDescription>
-              ゲストも共有ノートの閲覧と、自分のAPIキーでの添削を利用できます。
+              学習ノートはログインしたユーザーごとの記録です。ゲストは自分のAPIキーでの添削を利用できます。
             </CardDescription>
           </div>
         </CardHeader>
@@ -158,7 +158,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
           </div>
           <form action={signInAsGuestAction.bind(null, callbackPath)}>
             <Button type="submit" className="w-full" variant="outline">
-              <Eye /> ゲストとして閲覧
+              <Eye /> ゲストとして使う
             </Button>
           </form>
           <form action={signInAsGuestAction.bind(null, "/practice")}>
@@ -170,7 +170,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
             <PracticeNotice />
           </div>
           <p className="text-center text-xs leading-5 text-muted-foreground">
-            ゲストは共有ノートへの投稿・CSVインポート・ChatGPT（管理者・メンバー専用）・LINE添削を利用できません。
+            ゲストは学習ノート・CSVインポート・ChatGPT（管理者・メンバー専用）・LINE添削を利用できません。
             GitHub認証ではユーザー名・表示名・メールアドレス・プロフィール画像が利用されます。
             IDとパスワードのアカウントは管理者が発行します。
           </p>

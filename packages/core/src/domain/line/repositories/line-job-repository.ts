@@ -18,6 +18,7 @@ export interface LineJobRepository {
   ): Promise<LineJob | null>;
   saveResult(
     job: LineJob,
+    ownerId: string,
     draft: LearningEntryDraft,
     csv: string,
   ): Promise<boolean>;

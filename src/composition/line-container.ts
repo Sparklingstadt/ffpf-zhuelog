@@ -25,6 +25,9 @@ export function createLineContainer() {
           new ProcessLineLearning(
             jobs,
             new LinePushMessenger(config.accessToken),
+            config.noteOwnerId,
+            // A fixed code only: the job has message text and row data.
+            () => console.error("LINE_NOTE_OWNER_MISSING"),
           ),
           new OpenAiLineLearningGenerator(process.env.OPENAI_API_KEY ?? ""),
           config.userId,

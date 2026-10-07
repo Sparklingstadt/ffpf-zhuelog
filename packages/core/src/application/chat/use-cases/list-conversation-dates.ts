@@ -5,8 +5,6 @@ export class ListConversationDates {
   constructor(private readonly repository: ConversationNoteRepository) {}
 
   execute(ownerId: string) {
-    return new ListLogDates({
-      listCreatedAt: () => this.repository.listCreatedAt(ownerId),
-    }).execute();
+    return new ListLogDates(this.repository).execute(ownerId);
   }
 }

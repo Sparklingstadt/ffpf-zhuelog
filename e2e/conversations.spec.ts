@@ -1,33 +1,4 @@
-import type { Client } from "pg";
-import { asAdmin, asGuest, expect, test } from "./fixtures";
-
-async function seedConversation(
-  db: Client,
-  id: number,
-  ownerId: string,
-  createdAt: string,
-  title: string,
-  messages: [role: "user" | "assistant", text: string][],
-) {
-  await db.query(
-    `INSERT INTO "ChatConversation"
-       ("id", "ownerId", "title", "modelName", "ended", "messages", "createdAt", "updatedAt")
-     VALUES ($1, $2, $3, 'gpt-6.1-sol', false, $4, $5, $5)`,
-    [
-      `00000000-0000-4000-8000-${String(id).padStart(12, "0")}`,
-      ownerId,
-      title,
-      JSON.stringify(
-        messages.map(([role, text], index) => ({
-          id: `m${index}`,
-          role,
-          text,
-        })),
-      ),
-      createdAt,
-    ],
-  );
-}
+import { asAdmin, asGuest, expect, seedConversation, test } from "./fixtures";
 
 test("admin browses own saved conversations by JST date", async ({
   page,

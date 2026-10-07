@@ -22,10 +22,11 @@ model LearningEntry {
   correctedText String
   pinyin        String
   createdAt     DateTime    @default(now())
+  ownerId       String
   batchId       String
   batch         ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
   hints         Hint[]
-  @@index([createdAt])
+  @@index([ownerId, createdAt])
   @@index([batchId])
 }
 

@@ -14,7 +14,7 @@ test("preview loader returns the use case result without an error", async () => 
     },
   };
   assert.deepEqual(
-    await loadIntegrationPreview(sampleIntegration, {
+    await loadIntegrationPreview("o1", sampleIntegration, {
       execute: async () => loaded,
     }),
     { ...loaded, error: null },
@@ -26,7 +26,7 @@ test("preview loader hides database failures and logs only the code and id", asy
   t.mock.method(console, "error", (...args: unknown[]) => {
     logged.push(args);
   });
-  const result = await loadIntegrationPreview(sampleIntegration, {
+  const result = await loadIntegrationPreview("o1", sampleIntegration, {
     execute: async () => {
       throw new Error("password=secret 我很好");
     },

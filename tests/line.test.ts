@@ -26,7 +26,14 @@ const config = {
   accessToken: "test-token",
   userId: `U${"1".repeat(32)}`,
   botId: `U${"2".repeat(32)}`,
+  noteOwnerId: "o1" as string | null,
 };
+const processor = (
+  jobs: LineJobRepository,
+  messenger: ConstructorParameters<typeof ProcessLineLearning>[1],
+  noteOwnerId: string | null = config.noteOwnerId,
+  onNoteOwnerMissing?: () => void,
+) => new ProcessLineLearning(jobs, messenger, noteOwnerId, onNoteOwnerMissing);
 const correction = {
   correctedText: '我说："你好"。\n今天很好。',
   pinyin: "Nǐ hǎo, jīntiān hěn hǎo.",
@@ -243,7 +250,7 @@ test("text-too-long jobs are delivered as the limit notice", async () => {
     finished = true;
   };
   const sent: string[] = [];
-  const service = new ProcessLineLearning(jobs, {
+  const service = processor(jobs, {
     push: async () => assert.fail("must not send CSV"),
     pushText: async (_user, text) => {
       sent.push(text);
@@ -285,7 +292,7 @@ test("a correction too long for LINE is replied to as a failure, never retried s
     saved = { text, code };
     return true;
   };
-  const service = new ProcessLineLearning(jobs, {
+  const service = processor(jobs, {
     push: async () => assert.fail("must not send"),
     pushText: async () => assert.fail("must not send"),
   });
@@ -408,7 +415,7 @@ test("a delivery without content or a first attempt is not reported as expired",
     jobs.fail = async (_job, permanent, code) => {
       failures.push([permanent, code]);
     };
-    const service = new ProcessLineLearning(jobs, {
+    const service = processor(jobs, {
       push: async () => assert.fail("must not send"),
       pushText: async () => assert.fail("must not send"),
     });
@@ -449,7 +456,7 @@ test("expired outbox stops without sending; retry reuses persisted CSV", async (
   jobs.finishDelivery = async () => {
     sent = true;
   };
-  const service = new ProcessLineLearning(jobs, {
+  const service = processor(jobs, {
     pushText: async () => {
       assert.fail("must not send plain text for corrections");
     },
@@ -508,7 +515,7 @@ test("correction failure is persisted before text delivery, with bounded retry a
   jobs.finishDelivery = async () => {
     finished = true;
   };
-  const service = new ProcessLineLearning(jobs, {
+  const service = processor(jobs, {
     push: async () => assert.fail("must not send CSV"),
     pushText: async (user, text, key) => {
       assert.equal(user, config.userId);
@@ -575,12 +582,12 @@ test("translation jobs are saved as translation notes", async () => {
   const job = translationJob();
   let draft: unknown;
   jobs.leased = async () => job;
-  jobs.saveResult = async (_job, saved) => {
+  jobs.saveResult = async (_job, _ownerId, saved) => {
     draft = saved;
     return true;
   };
   jobs.saveReply = async () => assert.fail("must save a note, not a reply");
-  const service = new ProcessLineLearning(jobs, {
+  const service = processor(jobs, {
     push: async () => assert.fail("must not send"),
     pushText: async () => assert.fail("must not send"),
   });
@@ -608,7 +615,7 @@ test("translation failures reply without a note", async () => {
     reply = { text, code };
     return true;
   };
-  const service = new ProcessLineLearning(jobs, {
+  const service = processor(jobs, {
     push: async () => assert.fail("must not send"),
     pushText: async () => assert.fail("must not send"),
   });
@@ -635,7 +642,7 @@ test("a translation too long for LINE is replied to as a failure", async () => {
     reply = { text, code };
     return true;
   };
-  const service = new ProcessLineLearning(jobs, {
+  const service = processor(jobs, {
     push: async () => assert.fail("must not send"),
     pushText: async () => assert.fail("must not send"),
   });
@@ -669,7 +676,7 @@ test("translation jobs are delivered as CSV with their kind, or as their failure
     jobs.finishDelivery = async () => {
       finished = true;
     };
-    const service = new ProcessLineLearning(jobs, {
+    const service = processor(jobs, {
       push: async (...args) => {
         calls.push(["push", ...args]);
         return "accepted";
@@ -760,4 +767,102 @@ test("Japanese text is queued for translation", async () => {
       ["jp-3", "text-too-long", ""],
     ],
   );
+});
+
+test("a note is saved under the configured LINE note owner", async () => {
+  const jobs = repo();
+  const job = translationJob();
+  let owner: string | undefined;
+  jobs.leased = async () => job;
+  jobs.saveResult = async (_job, ownerId) => {
+    owner = ownerId;
+    return true;
+  };
+  const service = processor(
+    jobs,
+    {
+      push: async () => assert.fail("must not send"),
+      pushText: async () => assert.fail("must not send"),
+    },
+    "o1",
+  );
+  assert.equal(
+    await service.complete(job.id, job.leaseToken!, config.userId, translation),
+    true,
+  );
+  assert.equal(owner, "o1");
+});
+
+test("the note owner is checked before generating", async () => {
+  for (const owner of [null, "o1"]) {
+    const jobs = repo();
+    const job = translationJob({ kind: "correction" });
+    const logged: unknown[][] = [];
+    const replies: (string | undefined)[] = [];
+    jobs.leased = async () => job;
+    jobs.saveReply = async (_job, _text, code) => {
+      replies.push(code);
+      return true;
+    };
+    const service = processor(
+      jobs,
+      {
+        push: async () => assert.fail("must not send"),
+        pushText: async () => assert.fail("must not send"),
+      },
+      owner,
+      (...args) => logged.push(args),
+    );
+    const rejected = await service.rejectIfNoteOwnerMissing(
+      job.id,
+      job.leaseToken!,
+      config.userId,
+    );
+    assert.equal(rejected, owner === null);
+    assert.deepEqual(replies, owner === null ? ["NOTE_OWNER_MISSING"] : []);
+    assert.equal(logged.length, owner === null ? 1 : 0);
+  }
+});
+
+test("without a note owner nothing is saved and the user gets the failure reply", async () => {
+  for (const kind of ["correction", "translation"] as const) {
+    const jobs = repo();
+    const job = translationJob({ kind });
+    const logged: unknown[][] = [];
+    let reply: { text: string; code?: string } | undefined;
+    jobs.leased = async () => job;
+    jobs.saveResult = async () => assert.fail("must not save a learning note");
+    jobs.fail = async () => assert.fail("must reply instead of failing");
+    jobs.saveReply = async (_job, text, code) => {
+      reply = { text, code };
+      return true;
+    };
+    const service = processor(
+      jobs,
+      {
+        push: async () => assert.fail("must not send"),
+        pushText: async () => assert.fail("must not send"),
+      },
+      null,
+      (...args) => logged.push(args),
+    );
+    assert.equal(
+      await service.complete(
+        job.id,
+        job.leaseToken!,
+        config.userId,
+        kind === "translation" ? translation : correction,
+      ),
+      true,
+    );
+    assert.equal(reply?.code, "NOTE_OWNER_MISSING");
+    assert.match(
+      reply!.text,
+      kind === "translation"
+        ? /^翻訳できませんでした。/
+        : /^添削できませんでした。/,
+    );
+    assert.match(reply!.text, /エラーコード: NOTE_OWNER_MISSING/);
+    assert.deepEqual(logged, [[]]);
+  }
 });

@@ -30,6 +30,7 @@ cd ffpf-zhuelog && git pull && ./scripts/enable-line-cloud-run.sh
 `scripts/enable-line-cloud-run.sh` は、下の手順5と、手順3のLINE部分を行います。
 
 - LINEのチャネルシークレット・チャネルアクセストークン・`OPENAI_API_KEY` を聞かれたら入力し、Secret Managerに登録します。値はVercelの環境変数、またはLINE Developersからコピーします。チャネルアクセストークンは再発行しないでください（Vercelで使っているトークンが無効になります）。
+- 「LINEで追加する学習ノートの持ち主ID」を聞かれます。LINEで送った文の学習ノートを持つユーザーのIDで、GitHubアカウントの数字のID（管理者）か、メンバーの `password:<アカウントID>` を入力します。サービスの `LINE_NOTE_OWNER_ID` に設定されます。未設定または不正な値だと、LINEで送った文はノートに保存されず、生成失敗と同じ返信が届きます。これまでの学習ノートは `219588180` の持ち主のものになるので、これまでどおり使うなら `219588180` を入力します。
 - `CRON_SECRET` は自動で作ります。公式アカウントのユーザーIDは、チャネルアクセストークンを使ってLINEのAPIから取得します。あなたのLINEユーザーIDだけを入力します。
 - Cloud Tasksのキュー `zhuelog-line-drain` を作り、サービスアカウントにタスクを追加する権限（`roles/cloudtasks.enqueuer`）を付けます。
 - サービスにLINEの設定とキュー名（`LINE_DRAIN_TASKS_QUEUE`）を加え、`--cpu-throttling`（リクエストベースの課金）にします。
@@ -119,7 +120,7 @@ gcloud run deploy zhuelog \
   --region asia-northeast1 \
   --allow-unauthenticated \
   --max-instances 1 \
-  --set-env-vars "AUTH_GITHUB_ID=<OAuth AppのClient ID>,AUTH_ALLOWED_GITHUB_LOGINS=<ログイン名>,OPENAI_MODEL=gpt-6.1-sol,LINE_INTEGRATION_ENABLED=true,LINE_BOT_USER_ID=<U...>,LINE_ALLOWED_USER_ID=<U...>" \
+  --set-env-vars "AUTH_GITHUB_ID=<OAuth AppのClient ID>,AUTH_ALLOWED_GITHUB_LOGINS=<ログイン名>,OPENAI_MODEL=gpt-6.1-sol,LINE_INTEGRATION_ENABLED=true,LINE_BOT_USER_ID=<U...>,LINE_ALLOWED_USER_ID=<U...>,LINE_NOTE_OWNER_ID=<持ち主ID>" \
   --set-secrets "DATABASE_URL=zhuelog-DATABASE_URL:latest,AUTH_SECRET=zhuelog-AUTH_SECRET:latest,AUTH_GITHUB_SECRET=zhuelog-AUTH_GITHUB_SECRET:latest,OPENAI_API_KEY=zhuelog-OPENAI_API_KEY:latest,LINE_CHANNEL_SECRET=zhuelog-LINE_CHANNEL_SECRET:latest,LINE_CHANNEL_ACCESS_TOKEN=zhuelog-LINE_CHANNEL_ACCESS_TOKEN:latest,CRON_SECRET=zhuelog-CRON_SECRET:latest"
 ```
 

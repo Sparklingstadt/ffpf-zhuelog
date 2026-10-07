@@ -26,7 +26,7 @@ function fakeRepository(entries: LearningEntry[], total = entries.length) {
     throw new Error("unused repository method");
   };
   const repository: LearningEntryRepository = {
-    async listRecent(limit) {
+    async listRecent(_ownerId, limit) {
       limits.push(limit);
       return { entries, total };
     },
@@ -70,7 +70,10 @@ function sample(file: IntegrationFile | null) {
 test("preview reads the newest 1,000 notes, passes them to the plugin, and reports counts", async () => {
   const { repository, limits } = fakeRepository([entry], 5);
   const { integration, received } = sample(null);
-  const result = await new PreviewIntegration(repository).execute(integration);
+  const result = await new PreviewIntegration(repository).execute(
+    "o1",
+    integration,
+  );
   assert.deepEqual(limits, [1000]);
   assert.deepEqual(received, [[entry]]);
   assert.deepEqual(result, {
@@ -88,11 +91,17 @@ test("export returns the plugin file, or null when there is nothing to export", 
   };
   const { repository, limits } = fakeRepository([entry]);
   assert.deepEqual(
-    await new ExportIntegration(repository).execute(sample(file).integration),
+    await new ExportIntegration(repository).execute(
+      "o1",
+      sample(file).integration,
+    ),
     file,
   );
   assert.equal(
-    await new ExportIntegration(repository).execute(sample(null).integration),
+    await new ExportIntegration(repository).execute(
+      "o1",
+      sample(null).integration,
+    ),
     null,
   );
   assert.deepEqual(limits, [1000, 1000]);
@@ -102,6 +111,7 @@ test("export rejects file names that could break Content-Disposition", async () 
   const { repository } = fakeRepository([entry]);
   const exportFile = (fileName: string) =>
     new ExportIntegration(repository).execute(
+      "o1",
       sample({ fileName, contentType: "text/plain", body: "" }).integration,
     );
   for (const fileName of [
