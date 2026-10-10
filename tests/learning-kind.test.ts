@@ -14,6 +14,7 @@ const record = {
   correctedText: "我去了学校。",
   pinyin: "Wǒ qù le xuéxiào.",
   createdAt: new Date("2026-10-05T00:00:00.000Z"),
+  sharedAt: null,
   hints: [{ id: "hint-1", content: "「了」で完了を表す", position: 0 }],
 };
 

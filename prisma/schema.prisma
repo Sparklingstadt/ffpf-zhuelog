@@ -24,12 +24,15 @@ model LearningEntry {
   createdAt     DateTime    @default(now())
   // Set while the note is in its owner's trash.
   deletedAt     DateTime?
+  // Set while the owner shares the note with the members who follow them.
+  sharedAt      DateTime?
   ownerId       String
   batchId       String
   batch         ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
   hints         Hint[]
   @@index([ownerId, createdAt])
   @@index([ownerId, deletedAt])
+  @@index([ownerId, sharedAt])
   @@index([batchId])
 }
 
@@ -105,4 +108,15 @@ model PasswordAccount {
   lockedUntil    DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+}
+
+// One-way follow. Admins have no row in the database, so neither column has a
+// foreign key: the use cases check that the followee is an existing member.
+model Follow {
+  followerId String
+  followeeId String
+  createdAt  DateTime @default(now())
+
+  @@id([followerId, followeeId])
+  @@index([followeeId])
 }

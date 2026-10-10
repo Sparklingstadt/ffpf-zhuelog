@@ -14,6 +14,8 @@ export type LearningEntry = {
   correctedText: string;
   pinyin: string;
   createdAt: Date;
+  // Set while the owner shares the note with their followers.
+  sharedAt: Date | null;
   hints: LearningHint[];
 };
 

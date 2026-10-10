@@ -44,6 +44,8 @@ function fakeRepository(result: boolean) {
       calls.push(["listTrashed", ownerId, limit]);
       return { entries: [], total: 0 };
     },
+    setShared: unused,
+    listSharedByOwners: unused,
   };
   return { repository, calls };
 }
