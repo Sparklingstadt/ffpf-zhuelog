@@ -1,4 +1,10 @@
-import { ArrowLeft, CalendarDays, Languages, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarDays,
+  Languages,
+  Share2,
+  Trash2,
+} from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
@@ -11,6 +17,7 @@ import {
 } from "@ffpf-zhuelog/core/domain/calendar/value-objects/log-date";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { ReauthNotice } from "@/presentation/components/chat/reauth-notice";
+import { shareLearningEntryAction } from "@/presentation/actions/follow-actions";
 import { trashLearningEntryAction } from "@/presentation/actions/note-trash-actions";
 import { LearningEntryCard } from "@/presentation/components/learning/learning-entry-card";
 import { NoteActionForm } from "@/presentation/components/records/note-action-form";
@@ -92,6 +99,8 @@ export default async function LogDetailPage({
   ]);
   if (!result) notFound();
   const { entry, total } = result;
+  // Only a member shares: an admin is never followed.
+  const canShare = owner.kind === "self" && user.role === "member";
 
   return (
     <main className="min-h-screen bg-background">
@@ -110,6 +119,12 @@ export default async function LogDetailPage({
             have fewer entries that day, so this number could be missing. */}
         <RecordOwnerControls owner={owner} view={view} path={dateHref} />
 
+        {canShare && entry.sharedAt ? (
+          <div>
+            <Badge variant="secondary">共有中（フォロワーが見られます）</Badge>
+          </div>
+        ) : null}
+
         <LearningEntryCard
           entry={entry}
           numberLabel={`#${entryNumber}`}
@@ -118,7 +133,16 @@ export default async function LogDetailPage({
 
         {/* Only your own notes: an admin viewing someone else reads only. */}
         {owner.kind === "self" ? (
-          <div className="flex justify-end">
+          <div className="flex flex-wrap items-start justify-end gap-2">
+            {canShare ? (
+              <NoteActionForm
+                action={shareLearningEntryAction}
+                fields={{ id: entry.id, shared: String(!entry.sharedAt) }}
+                label={entry.sharedAt ? "共有をやめる" : "共有する"}
+                pendingLabel="変更中…"
+                icon={<Share2 />}
+              />
+            ) : null}
             <NoteActionForm
               action={trashLearningEntryAction}
               fields={{

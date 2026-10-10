@@ -1,4 +1,11 @@
-import { CircleUserRound, Eye, KeyRound, LogOut, Users } from "lucide-react";
+import {
+  CircleUserRound,
+  Eye,
+  KeyRound,
+  LogOut,
+  Users,
+  UsersRound,
+} from "lucide-react";
 import Link from "next/link";
 
 import type { AuthenticatedUser } from "@ffpf-zhuelog/core/domain/identity/entities/authenticated-user";
@@ -35,6 +42,14 @@ export function AuthControls({ user }: AuthControlsProps) {
         <Badge variant="secondary" className="py-1.5 font-normal">
           ロール：{roleLabel}
         </Badge>
+      ) : null}
+      {isMember || isAdmin ? (
+        <Button asChild variant="ghost" size="sm">
+          <Link href="/follow">
+            <UsersRound />
+            フォロー
+          </Link>
+        </Button>
       ) : null}
       {isMember ? (
         <Button asChild variant="ghost" size="sm">
