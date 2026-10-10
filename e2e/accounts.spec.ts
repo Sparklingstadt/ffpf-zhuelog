@@ -26,6 +26,8 @@ test("admin creates a member who can use chat", async ({
   baseURL,
 }) => {
   await asAdmin(context);
+  await page.goto("/");
+  await expect(page.getByText("ロール：管理者")).toBeVisible();
   await page.goto("/admin/accounts");
   await page.getByLabel("ログインID", { exact: true }).fill("taro");
   await page.getByLabel("表示名").fill("太郎");
@@ -42,6 +44,7 @@ test("admin creates a member who can use chat", async ({
       memberPage.getByRole("heading", { name: "会話練習" }),
     ).toBeVisible();
     await expect(memberPage.getByText("太郎")).toBeVisible();
+    await expect(memberPage.getByText("ロール：メンバー")).toBeVisible();
   } finally {
     await memberContext.close();
   }

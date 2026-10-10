@@ -19,6 +19,7 @@ export function AuthControls({ user }: AuthControlsProps) {
     : isMember
       ? (user.displayName ?? user.githubLogin)
       : `@${user.githubLogin}`;
+  const roleLabel = isAdmin ? "管理者" : isMember ? "メンバー" : null;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -30,6 +31,11 @@ export function AuthControls({ user }: AuthControlsProps) {
         )}
         {label}
       </Badge>
+      {roleLabel ? (
+        <Badge variant="secondary" className="py-1.5 font-normal">
+          ロール：{roleLabel}
+        </Badge>
+      ) : null}
       {isMember ? (
         <Button asChild variant="ghost" size="sm">
           <Link href="/account/password">
