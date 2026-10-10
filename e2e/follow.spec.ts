@@ -140,6 +140,8 @@ test("unsharing or trashing a note removes it from the timeline", async ({
     // Trashing A2 takes it off the timeline too.
     await a.page.goto("/logs/2026/10/4/2");
     await a.page.getByRole("button", { name: "ゴミ箱に入れる" }).click();
+    // The trash has committed once A lands on the day's list.
+    await expect(a.page).toHaveURL("/logs/2026/10/4?trashed=1");
     await b.page.reload();
     await expect(note(b.page, "A2原文")).toHaveCount(0);
     await expect(
