@@ -13,6 +13,7 @@ type PrismaLearningEntryRecord = {
   correctedText: string;
   pinyin: string;
   createdAt: Date;
+  sharedAt: Date | null;
   hints: { id: string; content: string; position: number }[];
 };
 
@@ -26,6 +27,7 @@ export function toLearningEntry(
     correctedText: record.correctedText,
     pinyin: record.pinyin,
     createdAt: record.createdAt,
+    sharedAt: record.sharedAt,
     hints: record.hints.map((hint) => ({ ...hint })),
   };
 }

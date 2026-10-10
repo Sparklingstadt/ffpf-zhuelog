@@ -54,6 +54,13 @@ function fakeRepository() {
       owners.push(ownerId);
       return { entries: [], total: 0 };
     },
+    async setShared(ownerId) {
+      owners.push(ownerId);
+      return false;
+    },
+    async listSharedByOwners() {
+      throw new Error("not used");
+    },
   };
   return { repository, owners };
 }

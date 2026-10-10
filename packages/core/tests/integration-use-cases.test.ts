@@ -17,6 +17,7 @@ const entry: LearningEntry = {
   correctedText: "我去了学校。",
   pinyin: "Wǒ qù le xuéxiào.",
   createdAt: new Date("2026-09-25T00:00:00.000Z"),
+  sharedAt: null,
   hints: [],
 };
 
@@ -39,6 +40,8 @@ function fakeRepository(entries: LearningEntry[], total = entries.length) {
     purge: unused,
     emptyTrash: unused,
     listTrashed: unused,
+    setShared: unused,
+    listSharedByOwners: unused,
   };
   return { repository, limits };
 }

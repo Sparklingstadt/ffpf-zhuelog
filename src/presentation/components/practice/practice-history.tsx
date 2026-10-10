@@ -62,6 +62,7 @@ export function PracticeHistory({
             ...record,
             kind: "correction",
             createdAt: new Date(record.createdAt),
+            sharedAt: null,
             hints: record.hints.map((content, position) => ({
               id: `${record.id}-${position}`,
               content,

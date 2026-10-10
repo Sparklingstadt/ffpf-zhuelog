@@ -3,6 +3,7 @@ import type {
   DailyLearningEntry,
   LearningEntryRepository,
   RecentLearningEntries,
+  SharedLearningEntry,
   TrashedLearningEntries,
 } from "@ffpf-zhuelog/core/domain/learning/repositories/learning-entry-repository";
 import type { DateRange } from "@ffpf-zhuelog/core/domain/calendar/value-objects/log-date";
@@ -173,5 +174,46 @@ export class PrismaLearningEntryRepository implements LearningEntryRepository {
       })),
       total,
     };
+  }
+
+  async setShared(ownerId: string, id: string, shared: boolean) {
+    const prisma = getPrismaClient();
+    const owned = { id, ownerId, deletedAt: null };
+    if (!shared) {
+      const { count } = await prisma.learningEntry.updateMany({
+        where: owned,
+        data: { sharedAt: null },
+      });
+      return count === 1;
+    }
+    // Only a note that is not shared yet gets a new sharedAt, so sharing twice
+    // keeps the first time.
+    const { count } = await prisma.learningEntry.updateMany({
+      where: { ...owned, sharedAt: null },
+      data: { sharedAt: new Date() },
+    });
+    if (count === 1) return true;
+    return (await prisma.learningEntry.count({ where: owned })) === 1;
+  }
+
+  async listSharedByOwners(
+    ownerIds: string[],
+    limit: number,
+  ): Promise<SharedLearningEntry[]> {
+    if (ownerIds.length === 0) return [];
+    const records = await getPrismaClient().learningEntry.findMany({
+      where: {
+        ownerId: { in: ownerIds },
+        sharedAt: { not: null },
+        deletedAt: null,
+      },
+      include: { hints: hintsByPosition },
+      orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+      take: limit,
+    });
+    return records.map((record) => ({
+      ...toLearningEntry(record),
+      ownerId: record.ownerId,
+    }));
   }
 }

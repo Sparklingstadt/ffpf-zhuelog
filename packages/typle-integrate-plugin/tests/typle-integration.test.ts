@@ -12,6 +12,7 @@ function entry(overrides: Partial<LearningEntry> = {}): LearningEntry {
     correctedText: "这道菜很好吃。",
     pinyin: "Zhè dào cài hěn hǎochī.",
     createdAt: new Date("2026-09-25T00:00:00.000Z"),
+    sharedAt: null,
     hints: [{ id: "hint-1", content: "料理を数える量詞は「道」", position: 0 }],
     ...overrides,
   };
