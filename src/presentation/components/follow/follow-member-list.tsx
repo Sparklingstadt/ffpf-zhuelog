@@ -41,7 +41,7 @@ export function FollowMemberList({
               action={unfollowMemberAction}
               fields={{ followeeId: member.ownerId }}
               label="フォロー解除"
-              pendingLabel="解除中…"
+              pendingLabel="処理中…"
               icon={<UserMinus />}
               variant="outline"
             />
@@ -50,7 +50,7 @@ export function FollowMemberList({
               action={followMemberAction}
               fields={{ followeeId: member.ownerId }}
               label="フォローする"
-              pendingLabel="フォロー中…"
+              pendingLabel="処理中…"
               icon={<UserPlus />}
               variant="default"
             />

@@ -190,3 +190,44 @@ test("an admin can follow a member but has no share button", async ({
   await expect(note(page, "A1原文")).toBeVisible();
   await expect(page.getByRole("button", { name: "共有する" })).toHaveCount(0);
 });
+
+test("a member cannot share another member's note by forging its id", async ({
+  browser,
+  baseURL,
+  db,
+}) => {
+  const taro = await createMember(db, "taro", "太郎", password);
+  const hanako = await createMember(db, "hanako", "花子", password);
+  await seedNotes(db, memberOwnerId(taro), [notes[0]]);
+  await seedNotes(db, memberOwnerId(hanako), [
+    { text: "B1原文", createdAt: "2026-10-04T01:00:00Z", hint: "「一」" },
+  ]);
+  const { rows } = await db.query(
+    `SELECT id FROM "LearningEntry" WHERE "ownerId" = $1`,
+    [memberOwnerId(taro)],
+  );
+  const taroNoteId = rows[0].id as string;
+
+  const b = await signedInPage(browser, baseURL, "hanako", detail);
+  try {
+    // B's own form, with the hidden id swapped for A's note.
+    await expect(note(b.page, "B1原文")).toBeVisible();
+    await b.page
+      .locator('form:has(button:text-is("共有する")) input[name="id"]')
+      .evaluate((input, id) => {
+        (input as HTMLInputElement).value = id;
+      }, taroNoteId);
+    await b.page.getByRole("button", { name: "共有する" }).click();
+    await expect(
+      b.page.getByText("見つかりませんでした。画面を更新してください。"),
+    ).toBeVisible();
+
+    const shared = await db.query(
+      `SELECT "sharedAt" FROM "LearningEntry" WHERE id = $1`,
+      [taroNoteId],
+    );
+    expect(shared.rows[0].sharedAt).toBeNull();
+  } finally {
+    await b.context.close();
+  }
+});
