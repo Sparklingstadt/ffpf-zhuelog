@@ -1,6 +1,6 @@
-import type { RecordOwner } from "@ffpf-zhuelog/core/application/identity/use-cases/resolve-record-owner";
-import type { AuthenticatedUser } from "@ffpf-zhuelog/core/domain/identity/entities/authenticated-user";
-import { ownerIdForAccount } from "@ffpf-zhuelog/core/domain/identity/entities/password-account";
+import type { RecordOwner } from "@/application/identity/use-cases/resolve-record-owner";
+import type { AuthenticatedUser } from "@/domain/identity/entities/authenticated-user";
+import { ownerIdForAccount } from "@/domain/identity/entities/password-account";
 import { passwordAccountUseCases } from "@/composition/identity-container";
 
 export type RecordOwnerOption = {

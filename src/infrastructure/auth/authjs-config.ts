@@ -1,4 +1,4 @@
-import { AuthenticatePasswordAccount } from "@ffpf-zhuelog/core/application/identity/use-cases/authenticate-password-account";
+import { AuthenticatePasswordAccount } from "@/application/identity/use-cases/authenticate-password-account";
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import GitHub from "next-auth/providers/github";

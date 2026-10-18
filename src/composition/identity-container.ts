@@ -1,15 +1,15 @@
-import { ChangeOwnPassword } from "@ffpf-zhuelog/core/application/identity/use-cases/change-own-password";
-import { CreatePasswordAccount } from "@ffpf-zhuelog/core/application/identity/use-cases/create-password-account";
-import { ListPasswordAccounts } from "@ffpf-zhuelog/core/application/identity/use-cases/list-password-accounts";
-import { RequireAdminUser } from "@ffpf-zhuelog/core/application/identity/use-cases/require-admin-user";
-import { RequireMemberUser } from "@ffpf-zhuelog/core/application/identity/use-cases/require-member-user";
-import { RequireViewerUser } from "@ffpf-zhuelog/core/application/identity/use-cases/require-viewer-user";
+import { ChangeOwnPassword } from "@/application/identity/use-cases/change-own-password";
+import { CreatePasswordAccount } from "@/application/identity/use-cases/create-password-account";
+import { ListPasswordAccounts } from "@/application/identity/use-cases/list-password-accounts";
+import { RequireAdminUser } from "@/application/identity/use-cases/require-admin-user";
+import { RequireMemberUser } from "@/application/identity/use-cases/require-member-user";
+import { RequireViewerUser } from "@/application/identity/use-cases/require-viewer-user";
 import {
   resolveRecordOwner,
   type RecordOwner,
-} from "@ffpf-zhuelog/core/application/identity/use-cases/resolve-record-owner";
-import type { AuthenticatedUser } from "@ffpf-zhuelog/core/domain/identity/entities/authenticated-user";
-import { ResetPasswordAccountPassword } from "@ffpf-zhuelog/core/application/identity/use-cases/reset-password-account-password";
+} from "@/application/identity/use-cases/resolve-record-owner";
+import type { AuthenticatedUser } from "@/domain/identity/entities/authenticated-user";
+import { ResetPasswordAccountPassword } from "@/application/identity/use-cases/reset-password-account-password";
 import { AuthJsCurrentUserProvider } from "@/infrastructure/auth/authjs-current-user-provider";
 import { signIn, signOut } from "@/infrastructure/auth/authjs-config";
 import {

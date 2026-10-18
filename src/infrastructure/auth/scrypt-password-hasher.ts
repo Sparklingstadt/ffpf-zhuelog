@@ -5,7 +5,7 @@ import {
   type ScryptOptions,
 } from "node:crypto";
 
-import type { PasswordHasher } from "@ffpf-zhuelog/core/application/identity/ports/password-hasher";
+import type { PasswordHasher } from "@/application/identity/ports/password-hasher";
 
 const N = 2 ** 15;
 const R = 8;

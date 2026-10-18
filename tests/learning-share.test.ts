@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { ShareLearningEntry } from "@ffpf-zhuelog/core/application/learning/use-cases/share-learning-entry";
-import type { LearningEntryRepository } from "@ffpf-zhuelog/core/domain/learning/repositories/learning-entry-repository";
+import { ShareLearningEntry } from "../src/application/learning/use-cases/share-learning-entry";
+import type { LearningEntryRepository } from "../src/domain/learning/repositories/learning-entry-repository";
 
 type Call = [method: string, ...args: unknown[]];
 

@@ -1,5 +1,5 @@
-import type { ImportLearningCsv } from "@ffpf-zhuelog/core/application/learning/use-cases/import-learning-csv";
-import { csvImportErrorMessage } from "@ffpf-zhuelog/core/domain/learning/csv-validation-error";
+import type { ImportLearningCsv } from "@/application/learning/use-cases/import-learning-csv";
+import { csvImportErrorMessage } from "@/domain/learning/csv-validation-error";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 

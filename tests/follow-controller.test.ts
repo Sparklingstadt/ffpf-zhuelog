@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
 
-import type { FollowResult } from "@ffpf-zhuelog/core/application/social/use-cases/follow-member";
+import type { FollowResult } from "../src/application/social/use-cases/follow-member";
 import {
   handleFollow,
   handleShare,

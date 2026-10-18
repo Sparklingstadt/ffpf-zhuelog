@@ -1,4 +1,4 @@
-import type { FollowTimelineItem } from "@ffpf-zhuelog/core/application/social/use-cases/list-follow-timeline";
+import type { FollowTimelineItem } from "@/application/social/use-cases/list-follow-timeline";
 import { LearningEntryCard } from "@/presentation/components/learning/learning-entry-card";
 import { formatTokyoDateTime } from "@/presentation/presenters/log-date-presenter";
 

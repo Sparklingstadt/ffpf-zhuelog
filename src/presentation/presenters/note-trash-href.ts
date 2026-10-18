@@ -1,4 +1,4 @@
-import { parseLogDate } from "@ffpf-zhuelog/core/domain/calendar/value-objects/log-date";
+import { parseLogDate } from "@/domain/calendar/value-objects/log-date";
 
 import { getLogDateHref } from "./log-date-presenter";
 

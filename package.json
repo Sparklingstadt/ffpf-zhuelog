@@ -28,7 +28,6 @@
     "test:regression": "pnpm run typecheck && pnpm run lint && pnpm run test:unit && pnpm run build && pnpm run test:e2e"
   },
   "dependencies": {
-    "@ffpf-zhuelog/core": "workspace:*",
     "@next/env": "16.3.8",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",

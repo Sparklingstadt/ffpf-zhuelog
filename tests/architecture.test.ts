@@ -4,13 +4,15 @@ import { relative } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+// Only the inner layers: src/domain and src/application.
 const root = fileURLToPath(new URL("../src/", import.meta.url));
 const sources = readdirSync(root, { recursive: true, encoding: "utf8" })
   .filter((path) => path.endsWith(".ts"))
   .map((path) => ({
     path: relative(root, `${root}${path}`).replaceAll("\\", "/"),
     text: readFileSync(`${root}${path}`, "utf8"),
-  }));
+  }))
+  .filter(({ path }) => /^(domain|application)\//.test(path));
 const interfaces = (text: string) =>
   [...text.matchAll(/^export interface (\w+)/gm)].map((match) => match[1]);
 
@@ -41,7 +43,7 @@ test("domain never depends on application", () => {
   assert.deepEqual(leaks, []);
 });
 
-test("core never writes to the console; outer layers own logging", () => {
+test("domain and application never write to the console; outer layers own logging", () => {
   const logging = sources
     .filter(({ text }) => /\bconsole\.\w+\(/.test(text))
     .map(({ path }) => path);

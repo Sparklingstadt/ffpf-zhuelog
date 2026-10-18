@@ -14,7 +14,7 @@ import { loadRecordOwnerView } from "@/composition/record-owner-options";
 import {
   parseLogDate,
   parseLogNumber,
-} from "@ffpf-zhuelog/core/domain/calendar/value-objects/log-date";
+} from "@/domain/calendar/value-objects/log-date";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { shareLearningEntryAction } from "@/presentation/actions/follow-actions";

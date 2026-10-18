@@ -9,12 +9,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
-import type { RecordOwner } from "@ffpf-zhuelog/core/application/identity/use-cases/resolve-record-owner";
-import type { AuthenticatedUser } from "@ffpf-zhuelog/core/domain/identity/entities/authenticated-user";
+import type { RecordOwner } from "@/application/identity/use-cases/resolve-record-owner";
+import type { AuthenticatedUser } from "@/domain/identity/entities/authenticated-user";
 import { getRecordOwner } from "@/composition/identity-container";
 import { learningUseCases } from "@/composition/learning-container";
 import { loadRecordOwnerView } from "@/composition/record-owner-options";
-import type { LearningEntry } from "@ffpf-zhuelog/core/domain/learning/entities/learning-entry";
+import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { CsvFormatGuide } from "@/presentation/components/learning/csv-format-guide";

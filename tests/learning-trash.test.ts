@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { EmptyLearningTrash } from "@ffpf-zhuelog/core/application/learning/use-cases/empty-learning-trash";
+import { EmptyLearningTrash } from "../src/application/learning/use-cases/empty-learning-trash";
 import {
   ListTrashedEntries,
   TRASH_LIST_LIMIT,
-} from "@ffpf-zhuelog/core/application/learning/use-cases/list-trashed-entries";
-import { PurgeLearningEntry } from "@ffpf-zhuelog/core/application/learning/use-cases/purge-learning-entry";
-import { RestoreLearningEntry } from "@ffpf-zhuelog/core/application/learning/use-cases/restore-learning-entry";
-import { TrashLearningEntry } from "@ffpf-zhuelog/core/application/learning/use-cases/trash-learning-entry";
-import type { LearningEntryRepository } from "@ffpf-zhuelog/core/domain/learning/repositories/learning-entry-repository";
+} from "../src/application/learning/use-cases/list-trashed-entries";
+import { PurgeLearningEntry } from "../src/application/learning/use-cases/purge-learning-entry";
+import { RestoreLearningEntry } from "../src/application/learning/use-cases/restore-learning-entry";
+import { TrashLearningEntry } from "../src/application/learning/use-cases/trash-learning-entry";
+import type { LearningEntryRepository } from "../src/domain/learning/repositories/learning-entry-repository";
 
 type Call = [method: string, ...args: unknown[]];
 

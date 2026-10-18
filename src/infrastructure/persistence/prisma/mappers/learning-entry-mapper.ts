@@ -2,7 +2,7 @@ import { z } from "zod";
 import {
   LEARNING_KINDS,
   type LearningEntry,
-} from "@ffpf-zhuelog/core/domain/learning/entities/learning-entry";
+} from "@/domain/learning/entities/learning-entry";
 
 const learningKindSchema = z.enum(LEARNING_KINDS);
 

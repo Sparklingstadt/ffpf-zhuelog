@@ -1,4 +1,4 @@
-import type { AppRole } from "@ffpf-zhuelog/core/domain/identity/entities/authenticated-user";
+import type { AppRole } from "@/domain/identity/entities/authenticated-user";
 
 // Member (password) sessions are revoked by bumping the account's
 // sessionVersion, so each session read compares the JWT claim with the DB.

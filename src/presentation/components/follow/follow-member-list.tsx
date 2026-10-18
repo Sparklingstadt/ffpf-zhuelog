@@ -1,6 +1,6 @@
 import { UserMinus, UserPlus } from "lucide-react";
 
-import type { FollowDirectoryMember } from "@ffpf-zhuelog/core/application/social/use-cases/list-follow-directory";
+import type { FollowDirectoryMember } from "@/application/social/use-cases/list-follow-directory";
 import {
   followMemberAction,
   unfollowMemberAction,

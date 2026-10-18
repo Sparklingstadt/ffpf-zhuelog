@@ -1,5 +1,5 @@
-import { ownerIdForAccount } from "@ffpf-zhuelog/core/domain/identity/entities/password-account";
-import { isOwnerId } from "@ffpf-zhuelog/core/domain/identity/owner-id";
+import { ownerIdForAccount } from "@/domain/identity/entities/password-account";
+import { isOwnerId } from "@/domain/identity/owner-id";
 
 // Auth.js replaces the OAuth user id with crypto.randomUUID() (it becomes
 // token.sub), so the numeric GitHub account id must come from the provider

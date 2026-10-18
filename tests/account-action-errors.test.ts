@@ -1,19 +1,19 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { z } from "zod";
-import { CreatePasswordAccount } from "@ffpf-zhuelog/core/application/identity/use-cases/create-password-account";
-import type { PasswordHasher } from "@ffpf-zhuelog/core/application/identity/ports/password-hasher";
-import type { PasswordAccountRepository } from "@ffpf-zhuelog/core/domain/identity/repositories/password-account-repository";
+import { CreatePasswordAccount } from "../src/application/identity/use-cases/create-password-account";
+import type { PasswordHasher } from "../src/application/identity/ports/password-hasher";
+import type { PasswordAccountRepository } from "../src/domain/identity/repositories/password-account-repository";
 import {
   displayNameSchema,
   loginIdSchema,
   optionalPasswordSchema,
-} from "@ffpf-zhuelog/core/domain/identity/entities/password-account";
+} from "../src/domain/identity/entities/password-account";
 import {
   LoginIdTakenError,
   PasswordAccountNotFoundError,
-} from "@ffpf-zhuelog/core/domain/identity/password-account-error";
-import { ChangeOwnPassword } from "@ffpf-zhuelog/core/application/identity/use-cases/change-own-password";
+} from "../src/domain/identity/password-account-error";
+import { ChangeOwnPassword } from "../src/application/identity/use-cases/change-own-password";
 import {
   accountActionErrorMessage,
   changePasswordOutcomeMessage,

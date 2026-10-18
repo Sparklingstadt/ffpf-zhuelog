@@ -1,5 +1,5 @@
-import type { FollowResult } from "@ffpf-zhuelog/core/application/social/use-cases/follow-member";
-import type { AppRole } from "@ffpf-zhuelog/core/domain/identity/entities/authenticated-user";
+import type { FollowResult } from "@/application/social/use-cases/follow-member";
+import type { AppRole } from "@/domain/identity/entities/authenticated-user";
 import { z } from "zod";
 
 import type { NoteActionState } from "@/presentation/controllers/note-trash-controller";
