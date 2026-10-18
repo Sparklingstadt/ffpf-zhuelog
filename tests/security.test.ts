@@ -7,8 +7,8 @@ import { CsvParseLearningParser } from "../src/infrastructure/csv/csv-parse-lear
 import {
   CsvValidationError,
   csvImportErrorMessage,
-} from "@ffpf-zhuelog/core/domain/learning/csv-validation-error";
-import { parseLogNumber } from "@ffpf-zhuelog/core/domain/calendar/value-objects/log-date";
+} from "../src/domain/learning/csv-validation-error";
+import { parseLogNumber } from "../src/domain/calendar/value-objects/log-date";
 import { getSafeCallbackPath } from "../src/presentation/http/safe-callback-path";
 
 test("admin JWTs lose privileges when their login leaves the current allowlist", () => {

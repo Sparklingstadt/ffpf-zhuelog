@@ -14,22 +14,12 @@
 
 ## アーキテクチャ
 
-pnpm workspaces のモノレポです。ルートの Next.js アプリ（`@ffpf-zhuelog/web`）が、`packages/` のパッケージを使います。パッケージはビルドせず、TypeScript のまま読み込みます。
-
-```text
-.
-├── src/                          # Next.js アプリ（@ffpf-zhuelog/web）
-├── packages/
-│   └── core/                     # @ffpf-zhuelog/core
-```
-
 コードは依存関係が内側へ向くよう、機能別の関心事を層に分けています。
 
 ```text
-packages/core/src/
-├── domain/          # エンティティ、値オブジェクト、リポジトリの契約
-└── application/     # ユースケースと外部サービスのポート
 src/
+├── domain/          # エンティティ、値オブジェクト、リポジトリの契約
+├── application/     # ユースケースと外部サービスのポート
 ├── infrastructure/  # Prisma、Auth.js、CSV解析の実装
 ├── presentation/    # 画面部品、Server Action、コントローラー
 ├── composition/     # 実装を組み立ててユースケースを公開
@@ -38,9 +28,10 @@ src/
 
 `domain` はフレームワークやデータベースに依存せず、`application` はドメインの契約だけを利用します。外部サービス固有のコードは `infrastructure` に閉じ込め、`composition` で依存性を注入します。
 
-パッケージ間の依存は、次のルールをESLintで検査します。
+層の間の依存は、次のルールをESLintと `tests/architecture.test.ts` で検査します。
 
-- `packages/` からアプリの内部（`@/…`）、Next.js、React、Prismaを import しない
+- `domain`・`application` から外側の層（`@/infrastructure` など）、Next.js、React、Prismaを import しない
+- `domain` から `application` を import しない
 
 ## 起動方法
 

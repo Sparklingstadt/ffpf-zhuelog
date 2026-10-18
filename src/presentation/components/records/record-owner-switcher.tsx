@@ -1,6 +1,6 @@
 "use client";
 
-import type { RecordOwner } from "@ffpf-zhuelog/core/application/identity/use-cases/resolve-record-owner";
+import type { RecordOwner } from "@/application/identity/use-cases/resolve-record-owner";
 import { Button } from "@/presentation/components/ui/button";
 import { Label } from "@/presentation/components/ui/label";
 

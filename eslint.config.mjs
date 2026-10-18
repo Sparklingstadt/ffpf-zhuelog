@@ -2,11 +2,13 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 
-// Workspace packages stay framework-free and never reach into the app.
-const packageBoundaries = [
+// The inner layers (domain, application) stay framework-free and never reach
+// into the outer layers.
+const innerLayerBoundaries = [
   {
-    group: ["@/**"],
-    message: "パッケージからアプリの内部（src/）を import しないでください。",
+    regex: "^@/(?!(domain|application)/)",
+    message:
+      "domain・application から外側の層（infrastructure・presentation・composition・app）を import しないでください。",
   },
   {
     group: [
@@ -18,7 +20,8 @@ const packageBoundaries = [
       "react-dom/**",
       "@prisma/**",
     ],
-    message: "パッケージをフレームワークやDBに依存させないでください。",
+    message:
+      "domain・application をフレームワークやDBに依存させないでください。",
   },
 ];
 
@@ -26,9 +29,12 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   {
-    files: ["packages/**/*.{ts,tsx,mts}"],
+    files: [
+      "src/domain/**/*.{ts,tsx,mts}",
+      "src/application/**/*.{ts,tsx,mts}",
+    ],
     rules: {
-      "no-restricted-imports": ["error", { patterns: packageBoundaries }],
+      "no-restricted-imports": ["error", { patterns: innerLayerBoundaries }],
     },
   },
   // Override default ignores of eslint-config-next.

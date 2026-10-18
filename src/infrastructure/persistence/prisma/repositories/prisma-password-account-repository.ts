@@ -2,12 +2,12 @@ import {
   LOCK_DURATION_MS,
   MAX_FAILED_ATTEMPTS,
   type PasswordAccount,
-} from "@ffpf-zhuelog/core/domain/identity/entities/password-account";
+} from "@/domain/identity/entities/password-account";
 import {
   LoginIdTakenError,
   PasswordAccountNotFoundError,
-} from "@ffpf-zhuelog/core/domain/identity/password-account-error";
-import type { PasswordAccountRepository } from "@ffpf-zhuelog/core/domain/identity/repositories/password-account-repository";
+} from "@/domain/identity/password-account-error";
+import type { PasswordAccountRepository } from "@/domain/identity/repositories/password-account-repository";
 import { getPrismaClient } from "../prisma-client";
 import type { PasswordAccount as PasswordAccountRow } from "@/generated/prisma/client";
 

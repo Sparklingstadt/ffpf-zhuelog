@@ -39,23 +39,7 @@ async function testFiles(dir) {
     .map((name) => `${dir}${name}`);
 }
 
-// App tests live in tests/; each workspace package keeps its own tests/.
-const packages = (
-  await readdir(new URL("../packages/", import.meta.url), {
-    withFileTypes: true,
-  })
-)
-  .filter((entry) => entry.isDirectory())
-  .map((entry) => entry.name)
-  .sort();
-const files = [
-  ...(await testFiles("tests/")),
-  ...(
-    await Promise.all(
-      packages.map((name) => testFiles(`packages/${name}/tests/`)),
-    )
-  ).flat(),
-];
+const files = await testFiles("tests/");
 const passed = await run(process.execPath, [
   "--import",
   "tsx",

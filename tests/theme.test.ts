@@ -4,7 +4,7 @@ import { runInNewContext } from "node:vm";
 import {
   isDarkTheme,
   parseThemePreference,
-} from "@ffpf-zhuelog/core/domain/preferences/theme";
+} from "../src/domain/preferences/theme";
 import {
   THEME_BOOTSTRAP_SCRIPT,
   THEME_STORAGE_KEY,

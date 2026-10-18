@@ -1,21 +1,21 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AuthenticatePasswordAccount } from "@ffpf-zhuelog/core/application/identity/use-cases/authenticate-password-account";
-import { ChangeOwnPassword } from "@ffpf-zhuelog/core/application/identity/use-cases/change-own-password";
-import { CreatePasswordAccount } from "@ffpf-zhuelog/core/application/identity/use-cases/create-password-account";
-import { ListPasswordAccounts } from "@ffpf-zhuelog/core/application/identity/use-cases/list-password-accounts";
-import { ResetPasswordAccountPassword } from "@ffpf-zhuelog/core/application/identity/use-cases/reset-password-account-password";
-import type { PasswordHasher } from "@ffpf-zhuelog/core/application/identity/ports/password-hasher";
+import { AuthenticatePasswordAccount } from "../src/application/identity/use-cases/authenticate-password-account";
+import { ChangeOwnPassword } from "../src/application/identity/use-cases/change-own-password";
+import { CreatePasswordAccount } from "../src/application/identity/use-cases/create-password-account";
+import { ListPasswordAccounts } from "../src/application/identity/use-cases/list-password-accounts";
+import { ResetPasswordAccountPassword } from "../src/application/identity/use-cases/reset-password-account-password";
+import type { PasswordHasher } from "../src/application/identity/ports/password-hasher";
 import {
   LOCK_DURATION_MS,
   MAX_FAILED_ATTEMPTS,
   type PasswordAccount,
-} from "@ffpf-zhuelog/core/domain/identity/entities/password-account";
+} from "../src/domain/identity/entities/password-account";
 import {
   LoginIdTakenError,
   PasswordAccountNotFoundError,
-} from "@ffpf-zhuelog/core/domain/identity/password-account-error";
-import type { PasswordAccountRepository } from "@ffpf-zhuelog/core/domain/identity/repositories/password-account-repository";
+} from "../src/domain/identity/password-account-error";
+import type { PasswordAccountRepository } from "../src/domain/identity/repositories/password-account-repository";
 
 class FakeAccounts implements PasswordAccountRepository {
   readonly accounts: PasswordAccount[] = [];

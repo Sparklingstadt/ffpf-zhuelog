@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-import type { AuthenticatedUser } from "@ffpf-zhuelog/core/domain/identity/entities/authenticated-user";
+import type { AuthenticatedUser } from "@/domain/identity/entities/authenticated-user";
 import { signOutAction } from "@/presentation/actions/auth-actions";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";

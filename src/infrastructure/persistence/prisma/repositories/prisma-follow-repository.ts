@@ -1,4 +1,4 @@
-import type { FollowRepository } from "@ffpf-zhuelog/core/domain/social/repositories/follow-repository";
+import type { FollowRepository } from "@/domain/social/repositories/follow-repository";
 import { getPrismaClient } from "../prisma-client";
 
 export class PrismaFollowRepository implements FollowRepository {

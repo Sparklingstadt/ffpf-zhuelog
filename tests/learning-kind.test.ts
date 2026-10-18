@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { LearningEntry } from "@ffpf-zhuelog/core/domain/learning/entities/learning-entry";
+import type { LearningEntry } from "../src/domain/learning/entities/learning-entry";
 import { CsvParseLearningParser } from "../src/infrastructure/csv/csv-parse-learning-parser";
 import { toLearningEntry } from "../src/infrastructure/persistence/prisma/mappers/learning-entry-mapper";
 import { LearningEntryCard } from "../src/presentation/components/learning/learning-entry-card";

@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { ListLogDates } from "@ffpf-zhuelog/core/application/calendar/use-cases/list-log-dates";
+import { ListLogDates } from "../src/application/calendar/use-cases/list-log-dates";
 import {
   getLogDateKey,
   getTokyoDateParts,
   getTokyoDateRange,
   parseLogDate,
   parseLogNumber,
-} from "@ffpf-zhuelog/core/domain/calendar/value-objects/log-date";
+} from "../src/domain/calendar/value-objects/log-date";
 
 test("parseLogDate accepts real calendar dates only", () => {
   assert.deepEqual(parseLogDate("2026", "10", "4"), {

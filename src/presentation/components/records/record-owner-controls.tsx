@@ -1,4 +1,4 @@
-import type { RecordOwner } from "@ffpf-zhuelog/core/application/identity/use-cases/resolve-record-owner";
+import type { RecordOwner } from "@/application/identity/use-cases/resolve-record-owner";
 import { RecordOwnerSwitcher } from "@/presentation/components/records/record-owner-switcher";
 import { ViewingOtherBanner } from "@/presentation/components/records/viewing-other-banner";
 

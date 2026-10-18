@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { ListLogDates } from "@ffpf-zhuelog/core/application/calendar/use-cases/list-log-dates";
-import { GetDailyEntry } from "@ffpf-zhuelog/core/application/learning/use-cases/get-daily-entry";
-import { ImportLearningCsv } from "@ffpf-zhuelog/core/application/learning/use-cases/import-learning-csv";
-import { ListDailyEntries } from "@ffpf-zhuelog/core/application/learning/use-cases/list-daily-entries";
-import { ListRecentEntries } from "@ffpf-zhuelog/core/application/learning/use-cases/list-recent-entries";
-import type { LearningEntryRepository } from "@ffpf-zhuelog/core/domain/learning/repositories/learning-entry-repository";
+import { ListLogDates } from "../src/application/calendar/use-cases/list-log-dates";
+import { GetDailyEntry } from "../src/application/learning/use-cases/get-daily-entry";
+import { ImportLearningCsv } from "../src/application/learning/use-cases/import-learning-csv";
+import { ListDailyEntries } from "../src/application/learning/use-cases/list-daily-entries";
+import { ListRecentEntries } from "../src/application/learning/use-cases/list-recent-entries";
+import type { LearningEntryRepository } from "../src/domain/learning/repositories/learning-entry-repository";
 
 function fakeRepository() {
   const owners: string[] = [];

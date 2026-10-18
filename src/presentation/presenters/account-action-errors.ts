@@ -3,7 +3,7 @@ import { ZodError } from "zod";
 import {
   LoginIdTakenError,
   PasswordAccountNotFoundError,
-} from "@ffpf-zhuelog/core/domain/identity/password-account-error";
+} from "@/domain/identity/password-account-error";
 
 export const accountActionFallbackMessage =
   "処理できませんでした。時間をおいてもう一度お試しください。";

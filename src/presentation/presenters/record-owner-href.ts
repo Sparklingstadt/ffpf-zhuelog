@@ -1,4 +1,4 @@
-import type { RecordOwner } from "@ffpf-zhuelog/core/application/identity/use-cases/resolve-record-owner";
+import type { RecordOwner } from "@/application/identity/use-cases/resolve-record-owner";
 
 // Carries the viewed owner into a link. Only another person's records need the
 // `user` query; the signed-in user's own records are the default.

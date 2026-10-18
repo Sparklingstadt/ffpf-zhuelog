@@ -3,7 +3,6 @@
 .vercel/
 .next/
 node_modules/
-packages/*/node_modules/
 src/generated/
 .env*
 !.env.example

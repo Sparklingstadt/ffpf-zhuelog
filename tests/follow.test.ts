@@ -1,16 +1,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { FollowMember } from "@ffpf-zhuelog/core/application/social/use-cases/follow-member";
-import { ListFollowDirectory } from "@ffpf-zhuelog/core/application/social/use-cases/list-follow-directory";
-import { ListFollowTimeline } from "@ffpf-zhuelog/core/application/social/use-cases/list-follow-timeline";
-import { UnfollowMember } from "@ffpf-zhuelog/core/application/social/use-cases/unfollow-member";
-import type { PasswordAccount } from "@ffpf-zhuelog/core/domain/identity/entities/password-account";
-import type { PasswordAccountRepository } from "@ffpf-zhuelog/core/domain/identity/repositories/password-account-repository";
+import { FollowMember } from "../src/application/social/use-cases/follow-member";
+import { ListFollowDirectory } from "../src/application/social/use-cases/list-follow-directory";
+import { ListFollowTimeline } from "../src/application/social/use-cases/list-follow-timeline";
+import { UnfollowMember } from "../src/application/social/use-cases/unfollow-member";
+import type { PasswordAccount } from "../src/domain/identity/entities/password-account";
+import type { PasswordAccountRepository } from "../src/domain/identity/repositories/password-account-repository";
 import type {
   LearningEntryRepository,
   SharedLearningEntry,
-} from "@ffpf-zhuelog/core/domain/learning/repositories/learning-entry-repository";
-import type { FollowRepository } from "@ffpf-zhuelog/core/domain/social/repositories/follow-repository";
+} from "../src/domain/learning/repositories/learning-entry-repository";
+import type { FollowRepository } from "../src/domain/social/repositories/follow-repository";
 
 const ADMIN = "219588180";
 
