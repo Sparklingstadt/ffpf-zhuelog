@@ -21,73 +21,14 @@ const packageBoundaries = [
     message: "パッケージをフレームワークやDBに依存させないでください。",
   },
 ];
-const pluginImports = ["@ffpf-zhuelog/*-plugin", "@ffpf-zhuelog/*-plugin/**"];
 
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
-  // Flat config lets a later block replace a rule, so the core and plugin
-  // blocks repeat packageBoundaries.
   {
     files: ["packages/**/*.{ts,tsx,mts}"],
     rules: {
       "no-restricted-imports": ["error", { patterns: packageBoundaries }],
-    },
-  },
-  {
-    files: ["packages/core/**/*.{ts,tsx,mts}"],
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        {
-          patterns: [
-            ...packageBoundaries,
-            {
-              group: pluginImports,
-              message: "core は個別の連携プラグインを import しません。",
-            },
-          ],
-        },
-      ],
-    },
-  },
-  {
-    files: ["packages/*-plugin/**/*.{ts,tsx,mts}"],
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        {
-          patterns: [
-            ...packageBoundaries,
-            {
-              group: [
-                "@ffpf-zhuelog/core/domain/**",
-                "@ffpf-zhuelog/core/application/**",
-              ],
-              message:
-                "プラグインは @ffpf-zhuelog/core/integration だけを使ってください。",
-            },
-          ],
-        },
-      ],
-    },
-  },
-  {
-    files: ["src/**/*.{ts,tsx}"],
-    ignores: ["src/composition/**"],
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        {
-          patterns: [
-            {
-              group: pluginImports,
-              message:
-                "連携プラグインの登録は src/composition/ だけで行ってください。",
-            },
-          ],
-        },
-      ],
     },
   },
   // Override default ignores of eslint-config-next.

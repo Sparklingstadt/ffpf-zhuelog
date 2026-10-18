@@ -103,7 +103,7 @@ test("blocked storage still allows theme switching without breaking the page", a
   expect(errors).toEqual([]);
 });
 
-test("both themes cover sign-in, notes, CSV, dated logs, chat and personal practice", async ({
+test("both themes cover sign-in, notes, CSV and dated logs", async ({
   page,
   context,
 }, testInfo) => {
@@ -125,7 +125,7 @@ test("both themes cover sign-in, notes, CSV, dated logs, chat and personal pract
     '"今天我很busy。","今天我很忙。","Jīntiān wǒ hěn máng.","忙＝忙しい","今日は、という意味の今天"',
   );
   await expect(page.getByText("1件の学習文を登録しました。")).toBeVisible();
-  const paths = ["/", "/logs", "/chat", "/practice"];
+  const paths = ["/", "/logs"];
   await page
     .getByRole("link", { name: "この日の一覧", exact: true })
     .first()
@@ -147,10 +147,10 @@ test("both themes cover sign-in, notes, CSV, dated logs, chat and personal pract
         () => document.documentElement.scrollWidth > innerWidth + 1,
       );
       expect(overflow, `${mode} ${path} viewport`).toBe(false);
-      if (path === "/" || path === "/chat" || path === "/practice") {
+      if (path === "/") {
         await page.screenshot({
           path: testInfo.outputPath(
-            `${path === "/" ? "notes" : path.slice(1)}-${mode === "ダーク" ? "dark" : "light"}.png`,
+            `notes-${mode === "ダーク" ? "dark" : "light"}.png`,
           ),
           fullPage: true,
         });

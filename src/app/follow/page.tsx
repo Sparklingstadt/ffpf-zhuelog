@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { getRecordOwner } from "@/composition/identity-container";
 import { socialUseCases } from "@/composition/social-container";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
-import { ReauthNotice } from "@/presentation/components/chat/reauth-notice";
+import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { FollowMemberList } from "@/presentation/components/follow/follow-member-list";
 import { FollowTimeline } from "@/presentation/components/follow/follow-timeline";
 import { Badge } from "@/presentation/components/ui/badge";

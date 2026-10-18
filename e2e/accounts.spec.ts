@@ -19,7 +19,7 @@ async function readOutputPassword(page: Page) {
   return match[1];
 }
 
-test("admin creates a member who can use chat", async ({
+test("admin creates a member who can open their notes", async ({
   page,
   context,
   browser,
@@ -39,9 +39,9 @@ test("admin creates a member who can use chat", async ({
   const memberContext = await browser.newContext({ baseURL });
   try {
     const memberPage = await memberContext.newPage();
-    await asMember(memberPage, "taro", password, "/chat");
+    await asMember(memberPage, "taro", password, "/logs");
     await expect(
-      memberPage.getByRole("heading", { name: "会話練習" }),
+      memberPage.getByRole("heading", { name: "日付別の学習ノート" }),
     ).toBeVisible();
     await expect(memberPage.getByText("太郎")).toBeVisible();
     await expect(memberPage.getByText("ロール：メンバー")).toBeVisible();
@@ -98,9 +98,9 @@ test("reset revokes existing member sessions", async ({
   const memberContext = await browser.newContext({ baseURL });
   try {
     const memberPage = await memberContext.newPage();
-    await asMember(memberPage, "taro", "member-password-1", "/chat");
+    await asMember(memberPage, "taro", "member-password-1", "/logs");
     await expect(
-      memberPage.getByRole("heading", { name: "会話練習" }),
+      memberPage.getByRole("heading", { name: "日付別の学習ノート" }),
     ).toBeVisible();
 
     await asAdmin(context);
@@ -110,13 +110,13 @@ test("reset revokes existing member sessions", async ({
     const newPassword = await readOutputPassword(page);
     expect(newPassword).not.toBe("member-password-1");
 
-    await memberPage.goto("/chat");
+    await memberPage.goto("/logs");
     await expect(memberPage).toHaveURL(/\/signin/);
 
     // The old password no longer works; the reissued one does.
     await signInWithPassword(memberPage, "taro", "member-password-1");
     await expect(memberPage.getByText(lockMessage)).toBeVisible();
-    await asMember(memberPage, "taro", newPassword, "/chat");
+    await asMember(memberPage, "taro", newPassword, "/logs");
   } finally {
     await memberContext.close();
   }
@@ -144,39 +144,4 @@ test("member changes own password", async ({ page, db }) => {
   await signInWithPassword(page, "taro", "member-password-1");
   await expect(page.getByText(lockMessage)).toBeVisible();
   await asMember(page, "taro", "member-password-2");
-});
-
-test("member conversations are private", async ({
-  page,
-  browser,
-  baseURL,
-  db,
-}) => {
-  const accountId = await createMember(db, "taro", "太郎", "member-password-1");
-  await db.query(
-    `INSERT INTO "ChatConversation"
-       ("id", "ownerId", "title", "modelName", "ended", "messages", "createdAt", "updatedAt")
-     VALUES ($1, $2, '太郎の会話', 'gpt-6.1-sol', false, $3, NOW(), NOW())`,
-    [
-      "00000000-0000-4000-8000-000000000901",
-      `password:${accountId}`,
-      JSON.stringify([{ id: "m0", role: "user", text: "你好" }]),
-    ],
-  );
-
-  await asMember(page, "taro", "member-password-1", "/conversations");
-  await expect(page.getByText("1件の会話ノート")).toBeVisible();
-
-  const adminContext = await browser.newContext({ baseURL });
-  try {
-    await asAdmin(adminContext);
-    const adminPage = await adminContext.newPage();
-    await adminPage.goto("/conversations");
-    await expect(
-      adminPage.getByText("まだ会話ノートがありません"),
-    ).toBeVisible();
-    await expect(adminPage.getByText("1件の会話ノート")).toHaveCount(0);
-  } finally {
-    await adminContext.close();
-  }
 });

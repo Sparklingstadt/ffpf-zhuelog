@@ -113,12 +113,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     authorized({ auth: session, request }) {
       const pathname = request.nextUrl.pathname;
       const isPublicRoute =
-        // These exact endpoints enforce their own auth: LINE HMAC for the
-        // webhook, the CRON_SECRET bearer token for the cron drain.
-        pathname === "/api/line/webhook" ||
-        pathname === "/api/line/drain" ||
-        pathname === "/signin" ||
-        pathname.startsWith("/api/auth/");
+        pathname === "/signin" || pathname.startsWith("/api/auth/");
       const permitted =
         isPublicRoute ||
         session?.user.role === "admin" ||

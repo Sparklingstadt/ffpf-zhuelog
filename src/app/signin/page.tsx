@@ -32,7 +32,6 @@ import {
   CardTitle,
 } from "@/presentation/components/ui/card";
 import { Separator } from "@/presentation/components/ui/separator";
-import { PracticeNotice } from "@/presentation/components/practice/practice-notice";
 import { getSafeCallbackPath } from "@/presentation/http/safe-callback-path";
 
 const errorMessages: Record<string, string> = {
@@ -78,7 +77,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
             </Badge>
             <CardTitle className="text-2xl">学习録にログイン</CardTitle>
             <CardDescription>
-              学習ノートはログインしたユーザーごとの記録です。ゲストは自分のAPIキーでの添削を利用できます。
+              学習ノートはログインしたユーザーごとの記録です。
             </CardDescription>
           </div>
         </CardHeader>
@@ -161,16 +160,8 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
               <Eye /> ゲストとして使う
             </Button>
           </form>
-          <form action={signInAsGuestAction.bind(null, "/practice")}>
-            <Button type="submit" className="w-full" variant="outline">
-              自分のAPIキーで添削
-            </Button>
-          </form>
-          <div className="rounded-lg border bg-muted/30 p-4">
-            <PracticeNotice />
-          </div>
           <p className="text-center text-xs leading-5 text-muted-foreground">
-            ゲストは学習ノート・CSVインポート・ChatGPT（管理者・メンバー専用）・LINE添削を利用できません。
+            ゲストは学習ノート・CSVインポートを利用できません。
             GitHub認証ではユーザー名・表示名・メールアドレス・プロフィール画像が利用されます。
             IDとパスワードのアカウントは管理者が発行します。
           </p>

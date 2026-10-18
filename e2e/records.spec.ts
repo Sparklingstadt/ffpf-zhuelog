@@ -6,7 +6,6 @@ import {
   createMember,
   expect,
   memberOwnerId,
-  seedConversation,
   seedNotes,
   test,
   upload,
@@ -206,28 +205,6 @@ test("a member cannot view others' records", async ({
   const id = await createMember(db, "taro", "太郎", "member-password-1");
   await seedNotes(db, memberOwnerId(id), [{ text: "太郎の記録" }]);
   await seedNotes(db, adminOwnerId, [{ text: "管理者の記録" }]);
-  await seedConversation(
-    db,
-    1,
-    adminOwnerId,
-    "2026-10-04T02:00:00Z",
-    "管理者会話",
-    [
-      ["user", "秘密"],
-      ["assistant", "了解"],
-    ],
-  );
-  await seedConversation(
-    db,
-    2,
-    memberOwnerId(id),
-    "2026-10-04T03:00:00Z",
-    "太郎会話",
-    [
-      ["user", "你好"],
-      ["assistant", "你好！"],
-    ],
-  );
   const member = await openAs(browser, baseURL, "taro", "member-password-1");
   try {
     const { page } = member;
@@ -257,147 +234,6 @@ test("a member cannot view others' records", async ({
     await expect(page).toHaveURL(
       (url) => url.pathname === "/" && url.search === "",
     );
-
-    await page.goto(`/conversations?user=${other}`);
-    await expect(page).toHaveURL(
-      (url) => url.pathname === "/conversations" && url.search === "",
-    );
-    await expect(page.getByText("1件の会話ノート")).toBeVisible();
-    await page.goto(`/conversations/2026/10/4?user=${other}`);
-    await expect(page).toHaveURL(
-      (url) => url.pathname === "/conversations/2026/10/4" && url.search === "",
-    );
-    await expect(page.getByText("太郎会話")).toBeVisible();
-    await expect(page.getByText("管理者会話")).toHaveCount(0);
-
-    // The export never falls back to the caller's own notes.
-    const denied = await page.request.get(
-      `/api/integrations/typle/export?user=${other}`,
-    );
-    expect(denied.status()).toBe(403);
-  } finally {
-    await member.context.close();
-  }
-});
-
-test("admin views a member's conversations read-only", async ({
-  context,
-  page,
-  db,
-}) => {
-  const id = await createMember(db, "taro", "太郎", "member-password-1");
-  const ownerId = memberOwnerId(id);
-  await seedConversation(
-    db,
-    1,
-    adminOwnerId,
-    "2026-10-04T02:00:00Z",
-    "管理者会話",
-    [
-      ["user", "你好"],
-      ["assistant", "你好！"],
-    ],
-  );
-  await seedConversation(db, 2, ownerId, "2026-10-04T03:00:00Z", "太郎会話", [
-    ["user", "天气"],
-    ["assistant", "今天天气很好。"],
-  ]);
-  await asAdmin(context);
-
-  await page.goto("/conversations");
-  await expect(page.getByText("1件の会話ノート")).toBeVisible();
-  await page
-    .getByLabel("表示するユーザー")
-    .selectOption({ label: "太郎（taro）" });
-  await page.getByRole("button", { name: "表示", exact: true }).click();
-  await expect(page).toHaveURL(
-    (url) =>
-      url.pathname === "/conversations" &&
-      url.searchParams.get("user") === ownerId,
-  );
-  await expect(
-    page.getByText("太郎さんの記録を表示中（閲覧のみ）"),
-  ).toBeVisible();
-
-  await page.getByRole("link", { name: /2026\/10\/4/ }).click();
-  await expect(page).toHaveURL(
-    (url) =>
-      url.pathname === "/conversations/2026/10/4" &&
-      url.searchParams.get("user") === ownerId,
-  );
-  await expect(page.getByText("太郎会話")).toBeVisible();
-  await expect(page.getByText("管理者会話")).toHaveCount(0);
-  await page.getByRole("link", { name: /太郎会話/ }).click();
-  await expect(page).toHaveURL(
-    (url) =>
-      url.pathname === "/conversations/2026/10/4/1" &&
-      url.searchParams.get("user") === ownerId,
-  );
-  await expect(
-    page.getByRole("article", { name: "ChatGPTのメッセージ" }),
-  ).toHaveText("今天天气很好。");
-  await expect(
-    page.getByText("太郎さんの記録を表示中（閲覧のみ）"),
-  ).toBeVisible();
-});
-
-test("the export contains only the shown owner's notes", async ({
-  browser,
-  baseURL,
-  context,
-  page,
-  db,
-}) => {
-  const id = await createMember(db, "taro", "太郎", "member-password-1");
-  const ownerId = memberOwnerId(id);
-  await seedNotes(db, adminOwnerId, [
-    { text: "管理者の文", hint: "料理を数える量詞は「道」" },
-  ]);
-  await seedNotes(db, ownerId, [
-    { text: "太郎の文", hint: "山を表す字は「山」" },
-  ]);
-  const words = async (response: {
-    status(): number;
-    json(): Promise<{ lists: { words: { display: string }[] }[] }>;
-  }) => {
-    expect(response.status()).toBe(200);
-    return (await response.json()).lists[0].words.map((w) => w.display);
-  };
-  await asAdmin(context);
-
-  expect(
-    await words(await page.request.get("/api/integrations/typle/export")),
-  ).toEqual(["道"]);
-  expect(
-    await words(
-      await page.request.get(
-        `/api/integrations/typle/export?user=${encodeURIComponent(ownerId)}`,
-      ),
-    ),
-  ).toEqual(["山"]);
-
-  // The preview page and its download link follow the shown owner.
-  await page.goto(`/integrations/typle?user=${encodeURIComponent(ownerId)}`);
-  await expect(page.getByText("山", { exact: true })).toBeVisible();
-  await expect(page.getByText("道", { exact: true })).toHaveCount(0);
-  await expect(
-    page.getByRole("link", { name: "Typle互換JSONをダウンロード" }),
-  ).toHaveAttribute("href", /user=password%3A/);
-
-  const member = await openAs(browser, baseURL, "taro", "member-password-1");
-  try {
-    expect(
-      await words(
-        await member.page.request.get("/api/integrations/typle/export"),
-      ),
-    ).toEqual(["山"]);
-    expect(
-      (
-        await member.page.request.get(
-          `/api/integrations/typle/export?user=${encodeURIComponent(adminOwnerId)}`,
-        )
-      ).status(),
-    ).toBe(403);
   } finally {
     await member.context.close();
   }

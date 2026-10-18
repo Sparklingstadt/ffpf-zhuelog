@@ -6,7 +6,7 @@ import { getRecordOwner } from "@/composition/identity-container";
 import { learningUseCases } from "@/composition/learning-container";
 import { loadRecordOwnerView } from "@/composition/record-owner-options";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
-import { ReauthNotice } from "@/presentation/components/chat/reauth-notice";
+import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { RecordOwnerControls } from "@/presentation/components/records/record-owner-controls";
 import { TrashLink } from "@/presentation/components/records/trash-notice";
 import { Badge } from "@/presentation/components/ui/badge";

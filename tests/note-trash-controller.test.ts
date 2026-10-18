@@ -7,7 +7,6 @@ import {
 } from "../src/presentation/controllers/note-trash-controller";
 import { trashedRedirectPath } from "../src/presentation/presenters/note-trash-href";
 
-const conversationId = "00000000-0000-4000-8000-000000000001";
 const unauthorized = { status: "error", message: "ログインし直してください。" };
 const notFound = {
   status: "error",
@@ -42,21 +41,10 @@ test("a note action uses the signed-in owner, never one from the form", async ()
   const { calls, run } = recorder();
   const state = await handleNoteAction(
     form({ id: "cmabc123", ownerId: "42", user: "password:ckabc" }),
-    { getMember: admin, kind: "learning", run },
+    { getMember: admin, run },
   );
   assert.deepEqual(state, { status: "success", message: "" });
   assert.deepEqual(calls, [["219588180", "cmabc123"]]);
-});
-
-test("a note action accepts a conversation uuid", async () => {
-  const { calls, run } = recorder();
-  const state = await handleNoteAction(form({ id: conversationId }), {
-    getMember: admin,
-    kind: "conversation",
-    run,
-  });
-  assert.equal(state.status, "success");
-  assert.deepEqual(calls, [["219588180", conversationId]]);
 });
 
 test("a note action asks signed-out users and old sessions to sign in", async () => {
@@ -64,7 +52,6 @@ test("a note action asks signed-out users and old sessions to sign in", async ()
     const { calls, run } = recorder();
     const state = await handleNoteAction(form({ id: "cmabc123" }), {
       getMember,
-      kind: "learning",
       run,
     });
     assert.deepEqual(state, unauthorized);
@@ -73,27 +60,19 @@ test("a note action asks signed-out users and old sessions to sign in", async ()
 });
 
 test("a note action treats a malformed id as a missing note", async () => {
-  for (const [kind, id] of [
-    ["learning", "../x"],
-    ["learning", ""],
-    ["learning", "A".repeat(10)],
-    ["conversation", "not-a-uuid"],
-    ["conversation", "cmabc123"],
-  ] as const) {
+  for (const id of ["../x", "", "A".repeat(10)]) {
     const { calls, run } = recorder();
     const state = await handleNoteAction(form({ id }), {
       getMember: admin,
-      kind,
       run,
     });
-    assert.deepEqual(state, notFound, `${kind} ${id}`);
+    assert.deepEqual(state, notFound, id);
     assert.deepEqual(calls, []);
   }
   const { calls, run } = recorder();
   assert.deepEqual(
     await handleNoteAction(new FormData(), {
       getMember: admin,
-      kind: "learning",
       run,
     }),
     notFound,
@@ -106,7 +85,6 @@ test("a note action reports a note the owner does not have", async () => {
   assert.deepEqual(
     await handleNoteAction(form({ id: "cmabc123" }), {
       getMember: admin,
-      kind: "learning",
       run,
     }),
     notFound,
@@ -122,7 +100,6 @@ test("a note action reports a database failure without details", async () => {
     assert.deepEqual(
       await handleNoteAction(form({ id: "cmabc123" }), {
         getMember: admin,
-        kind: "learning",
         run,
       }),
       failed,
@@ -173,13 +150,6 @@ test("after trashing, the user lands on that day's list", () => {
   assert.equal(
     trashedRedirectPath("/logs", form({ year: "2026", month: "10", day: "8" })),
     "/logs/2026/10/8?trashed=1",
-  );
-  assert.equal(
-    trashedRedirectPath(
-      "/conversations",
-      form({ year: "2026", month: "1", day: "31" }),
-    ),
-    "/conversations/2026/1/31?trashed=1",
   );
 });
 

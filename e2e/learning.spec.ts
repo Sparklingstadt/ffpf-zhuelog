@@ -1,4 +1,3 @@
-import { baseURL } from "./environment";
 import {
   adminOwnerId,
   asAdmin,
@@ -9,18 +8,7 @@ import {
 } from "./fixtures";
 
 test("unauthenticated pages redirect to signin", async ({ page }) => {
-  for (const path of [
-    "/",
-    "/logs",
-    "/logs/2026/9/20",
-    "/logs/2026/9/20/1",
-    "/chat",
-    "/conversations",
-    "/conversations/2026/10/4",
-    "/conversations/2026/10/4/1",
-    "/practice",
-    "/integrations/typle",
-  ]) {
+  for (const path of ["/", "/logs", "/logs/2026/9/20", "/logs/2026/9/20/1"]) {
     await page.goto(path);
     await expect(page).toHaveURL(/\/signin(?:\?|$)/);
     await expect(
@@ -29,32 +17,7 @@ test("unauthenticated pages redirect to signin", async ({ page }) => {
   }
 });
 
-test("integration pages keep sign-in callbacks and hide unknown ids", async ({
-  page,
-}) => {
-  // The Auth.js proxy redirects signed-out visitors before the page runs and
-  // encodes the return path; unknown ids get the same sign-in page, not a 404.
-  await page.goto("/integrations/typle");
-  await expect(page).toHaveURL(
-    /\/signin\?callbackUrl=%2Fintegrations%2Ftyple$/,
-  );
-  const unknown = await page.goto("/integrations/unknown");
-  expect(unknown?.status()).toBe(200);
-  await expect(page).toHaveURL(/\/signin\?callbackUrl=/);
-  await asGuest(page);
-  await page.goto("/integrations/unknown");
-  await expect(page).toHaveURL(/\/$/);
-});
-
-test("signed-out export request is unauthorized", async ({ request }) => {
-  const response = await request.get("/api/integrations/typle/export");
-  expect(response.status()).toBe(401);
-});
-
-test("guest sees the practice guidance, no notes, and cannot use chat or export", async ({
-  page,
-  db,
-}) => {
+test("guest sees no notes and no note tools", async ({ page, db }) => {
   // Notes exist, but they belong to someone else: a guest never sees them.
   await db.query(
     `INSERT INTO "ImportBatch" (id, "fileName", "rowCount") VALUES ('e2e-batch', 'fixture.csv', 1)`,
@@ -66,36 +29,17 @@ test("guest sees the practice guidance, no notes, and cannot use chat or export"
   await asGuest(page);
   await expect(
     page.getByText(
-      "学習ノートは、ログインしたユーザーごとの記録です。ゲストは自分のAPIキーでの添削を利用できます。",
+      "学習ノートは、ログインしたユーザーごとの記録です。ゲストは学習ノートを利用できません。",
     ),
   ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "自分のAPIキーで添削する", exact: true }),
-  ).toHaveAttribute("href", "/practice");
   await expect(page.getByText("他人の添削")).toHaveCount(0);
   await expect(page.getByText("まだ学習文がありません")).toHaveCount(0);
   await expect(page.getByLabel("CSVファイル", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "ChatGPTと話す" })).toHaveCount(
-    0,
-  );
-  await expect(page.getByRole("link", { name: "Typle用リスト" })).toHaveCount(
-    0,
-  );
   await expect(page.getByRole("link", { name: "日付から見る" })).toHaveCount(0);
-  const response = await page.request.post("/api/chat", {
-    data: { messages: [] },
-  });
-  expect(response.status()).toBe(403);
-  for (const path of ["/logs", "/logs/2026/9/20", "/chat"]) {
+  for (const path of ["/logs", "/logs/2026/9/20"]) {
     await page.goto(path);
     await expect(page).toHaveURL(/\/$/);
   }
-  await page.goto("/integrations/typle");
-  await expect(page).toHaveURL(/\/$/);
-  const typleResponse = await page.request.get(
-    "/api/integrations/typle/export",
-  );
-  expect(typleResponse.status()).toBe(403);
   await page.getByRole("button", { name: "ログアウト" }).click();
   await expect(
     page.getByRole("button", { name: "ゲストとして使う" }),
@@ -144,75 +88,6 @@ test("CSV persists variable hints, quoted fields and survives reload", async ({
   await expect(card.getByText("添削A", { exact: true })).toBeHidden();
   await card.locator("summary").click();
   await expect(card.getByText("添削A", { exact: true })).toBeVisible();
-});
-
-test("admin creates a Typle-compatible review list from corrections and hints", async ({
-  context,
-  page,
-}) => {
-  await asAdmin(context);
-  await page.goto("/");
-  await upload(
-    page,
-    "最初の文,添削後の文,ピン音,ヒント1\n这个菜很好吃。,这道菜很好吃。,Zhè dào cài hěn hǎochī.,料理を数える量詞は「道」",
-  );
-  await expect(page.getByText("1件の学習文を登録しました。")).toBeVisible();
-  await page.getByRole("link", { name: "Typle用リスト" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Typle用の復習リスト" }),
-  ).toBeVisible();
-  await expect(page.getByText("道", { exact: true })).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "Typle互換JSONをダウンロード" }),
-  ).toBeVisible();
-
-  const response = await page.request.get("/api/integrations/typle/export");
-  expect(response.status()).toBe(200);
-  expect(response.headers()["content-disposition"]).toContain(
-    "ffpf-zhuelog-typle-words.json",
-  );
-  const payload = await response.json();
-  expect(payload.version).toBe(1);
-  expect(payload.lists[0].words).toEqual([
-    expect.objectContaining({ display: "道", input: "道" }),
-  ]);
-});
-
-test("admin gets 404 for unknown integrations", async ({ context, page }) => {
-  await asAdmin(context);
-  const response = await page.goto("/integrations/unknown");
-  expect(response?.status()).toBe(404);
-  const api = await page.request.get("/api/integrations/unknown/export");
-  expect(api.status()).toBe(404);
-  expect(await api.json()).toEqual({ error: "連携が見つかりません。" });
-});
-
-test("admin preview shows 20 items while the download keeps all of them", async ({
-  context,
-  page,
-}) => {
-  await asAdmin(context);
-  await page.goto("/");
-  const words = Array.from("天地人山川日月水火木金土花草鳥魚犬猫馬牛羊");
-  await upload(
-    page,
-    [
-      "最初の文,添削後の文,ピン音,ヒント1",
-      ...words.map(
-        (word, index) => `row${index},row${index},pinyin,「${word}」`,
-      ),
-    ].join("\n"),
-  );
-  await expect(page.getByText("21件の学習文を登録しました。")).toBeVisible();
-  await page.goto("/integrations/typle");
-  await expect(page.getByText("21語", { exact: true })).toBeVisible();
-  await expect(page.locator('p[lang="zh-Hans"]')).toHaveCount(20);
-  await expect(
-    page.getByText("先頭20件を表示しています。出力には全21件が含まれます。"),
-  ).toBeVisible();
-  const response = await page.request.get("/api/integrations/typle/export");
-  expect(response.status()).toBe(200);
-  expect((await response.json()).lists[0].words).toHaveLength(21);
 });
 
 for (const [name, csv, error] of [
@@ -326,18 +201,4 @@ test("admin navigates date, detail and adjacent notes with JST grouping", async 
     const response = await page.goto(path);
     expect(response?.status()).toBe(404);
   }
-});
-
-test("admin chat validates input before contacting the provider", async ({
-  page,
-  context,
-}) => {
-  await asAdmin(context);
-  await page.goto("/chat");
-  await expect(page.getByRole("heading", { name: "会話練習" })).toBeVisible();
-  const response = await page.request.post("/api/chat", {
-    headers: { origin: baseURL },
-    data: { messages: [] },
-  });
-  expect(response.status()).toBe(400);
 });

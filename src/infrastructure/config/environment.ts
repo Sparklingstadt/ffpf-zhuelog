@@ -6,17 +6,3 @@ export function isAuthConfigured() {
     process.env.AUTH_ALLOWED_GITHUB_LOGINS,
   );
 }
-
-export function isOpenAiConfigured() {
-  return Boolean(process.env.OPENAI_API_KEY);
-}
-
-export function getOpenAiModelName() {
-  return process.env.OPENAI_MODEL?.trim() || "gpt-6.1-sol";
-}
-
-// Chat (/chat and /api/chat*) is off unless explicitly enabled. Saved
-// conversation notes stay readable either way.
-export function isChatEnabled() {
-  return process.env.CHAT_ENABLED === "true";
-}

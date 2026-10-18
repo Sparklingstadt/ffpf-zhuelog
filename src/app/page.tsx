@@ -3,9 +3,6 @@ import {
   CalendarDays,
   Database,
   Languages,
-  MessageCircle,
-  MessagesSquare,
-  Puzzle,
   Sparkles,
 } from "lucide-react";
 import Link from "next/link";
@@ -13,18 +10,13 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
 import type { RecordOwner } from "@ffpf-zhuelog/core/application/identity/use-cases/resolve-record-owner";
-import {
-  isMemberRole,
-  type AuthenticatedUser,
-} from "@ffpf-zhuelog/core/domain/identity/entities/authenticated-user";
+import type { AuthenticatedUser } from "@ffpf-zhuelog/core/domain/identity/entities/authenticated-user";
 import { getRecordOwner } from "@/composition/identity-container";
-import { integrations } from "@/composition/integration-container";
 import { learningUseCases } from "@/composition/learning-container";
 import { loadRecordOwnerView } from "@/composition/record-owner-options";
-import { isChatEnabled } from "@/infrastructure/config/environment";
 import type { LearningEntry } from "@ffpf-zhuelog/core/domain/learning/entities/learning-entry";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
-import { ReauthNotice } from "@/presentation/components/chat/reauth-notice";
+import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { CsvFormatGuide } from "@/presentation/components/learning/csv-format-guide";
 import { CsvImportForm } from "@/presentation/components/learning/csv-import-form";
 import { LearningEntryCard } from "@/presentation/components/learning/learning-entry-card";
@@ -106,50 +98,12 @@ function HomeHeader({
       <div className="flex flex-col items-start gap-2 sm:items-end">
         <AuthControls user={user} />
         <div className="flex flex-wrap gap-2 sm:justify-end">
-          <Button asChild variant="outline" size="sm">
-            <Link href="/practice">
-              <Sparkles /> 自分のAPIキーで添削
-            </Link>
-          </Button>
           {hasNotes ? (
             <Button asChild variant="outline" size="sm">
               <Link href={withRecordOwner("/logs", owner)}>
                 <CalendarDays /> 日付から見る
               </Link>
             </Button>
-          ) : null}
-          {isMemberRole(user.role) ? (
-            <>
-              {integrations.list().map((integration) => (
-                <Button
-                  key={integration.id}
-                  asChild
-                  variant="outline"
-                  size="sm"
-                >
-                  <Link
-                    href={withRecordOwner(
-                      `/integrations/${integration.id}`,
-                      owner,
-                    )}
-                  >
-                    <Puzzle /> {integration.text.navLabel}
-                  </Link>
-                </Button>
-              ))}
-              {isChatEnabled() ? (
-                <Button asChild variant="outline" size="sm">
-                  <Link href="/chat">
-                    <MessageCircle /> ChatGPTと話す
-                  </Link>
-                </Button>
-              ) : null}
-              <Button asChild variant="outline" size="sm">
-                <Link href={withRecordOwner("/conversations", owner)}>
-                  <MessagesSquare /> 会話ノート
-                </Link>
-              </Button>
-            </>
           ) : null}
         </div>
         {total === null ? null : (
@@ -183,7 +137,7 @@ export default async function Home({ searchParams }: HomeProps) {
     redirect("/signin");
   if (owner.kind === "redirect-self") redirect("/");
 
-  // Guests have no notes of their own: point them to the personal practice.
+  // Guests have no notes of their own.
   if (owner.kind === "denied" && owner.reason === "guest") {
     return (
       <HomeShell>
@@ -194,13 +148,8 @@ export default async function Home({ searchParams }: HomeProps) {
               <BookOpenText className="size-6 text-muted-foreground" />
             </div>
             <p className="max-w-xl text-sm leading-6 text-muted-foreground">
-              学習ノートは、ログインしたユーザーごとの記録です。ゲストは自分のAPIキーでの添削を利用できます。
+              学習ノートは、ログインしたユーザーごとの記録です。ゲストは学習ノートを利用できません。
             </p>
-            <Button asChild>
-              <Link href="/practice">
-                <Sparkles /> 自分のAPIキーで添削する
-              </Link>
-            </Button>
           </CardContent>
         </Card>
       </HomeShell>
