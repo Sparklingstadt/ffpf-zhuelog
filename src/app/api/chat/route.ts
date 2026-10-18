@@ -1,8 +1,12 @@
 import { isMemberRole } from "@ffpf-zhuelog/core/domain/identity/entities/authenticated-user";
 import { chatUseCases } from "@/composition/chat-container";
 import { getCurrentViewerUser } from "@/composition/identity-container";
-import { isOpenAiConfigured } from "@/infrastructure/config/environment";
+import {
+  isChatEnabled,
+  isOpenAiConfigured,
+} from "@/infrastructure/config/environment";
 import { handleChatRequest } from "@/presentation/controllers/chat-controller";
+import { chatDisabledResponse } from "@/presentation/http/chat-disabled-response";
 import {
   isCodexLocalRequested,
   isLocalChatRequest,
@@ -12,6 +16,7 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
+  if (!isChatEnabled()) return chatDisabledResponse();
   const user = await getCurrentViewerUser();
   if (!user) {
     return Response.json({ error: "認証が必要です。" }, { status: 401 });

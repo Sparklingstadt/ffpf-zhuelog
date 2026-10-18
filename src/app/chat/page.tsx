@@ -5,10 +5,11 @@ import {
   MessagesSquare,
 } from "lucide-react";
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { getCurrentMemberUser } from "@/composition/identity-container";
 import {
+  isChatEnabled,
   isOpenAiConfigured,
   getOpenAiModelName,
 } from "@/infrastructure/config/environment";
@@ -25,6 +26,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function ChatPage() {
+  if (!isChatEnabled()) notFound();
   const user = await getCurrentMemberUser();
   if (!user) redirect("/signin?callbackUrl=/chat");
 
