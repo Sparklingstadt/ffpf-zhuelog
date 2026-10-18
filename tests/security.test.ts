@@ -3,10 +3,6 @@ import { test } from "node:test";
 import { resolveSessionRole } from "../src/infrastructure/auth/session-role-policy";
 import { securePostgresConnectionString } from "../src/infrastructure/config/postgres-connection";
 import { contentSecurityPolicy } from "../src/infrastructure/security/content-security-policy";
-import {
-  readLimitedBody,
-  BodyLimitError,
-} from "../src/infrastructure/http/read-limited-body";
 import { CsvParseLearningParser } from "../src/infrastructure/csv/csv-parse-learning-parser";
 import {
   CsvValidationError,
@@ -14,7 +10,6 @@ import {
 } from "@ffpf-zhuelog/core/domain/learning/csv-validation-error";
 import { parseLogNumber } from "@ffpf-zhuelog/core/domain/calendar/value-objects/log-date";
 import { getSafeCallbackPath } from "../src/presentation/http/safe-callback-path";
-import { handleChatRequest } from "../src/presentation/controllers/chat-controller";
 
 test("admin JWTs lose privileges when their login leaves the current allowlist", () => {
   assert.equal(resolveSessionRole("admin", "Alice", "alice,bob"), "admin");
@@ -45,7 +40,7 @@ test("callbacks reject external, encoded slash, backslash, control and malformed
     getSafeCallbackPath("/logs/2026/9/24?view=all#note"),
     "/logs/2026/9/24?view=all#note",
   );
-  assert.equal(getSafeCallbackPath("/practice"), "/practice");
+  assert.equal(getSafeCallbackPath("/logs"), "/logs");
 });
 
 test("remote PostgreSQL always verifies hostname and certificate without weakening local dev", () => {
@@ -93,29 +88,6 @@ test("CSP permits only nonce scripts and same-origin connections in production",
   );
 });
 
-test("body reader bounds chunked input and stops stalled streams", async () => {
-  await assert.rejects(
-    readLimitedBody(new Response("12345"), 4),
-    BodyLimitError,
-  );
-  const announced = new Response("", { headers: { "Content-Length": "1000" } });
-  await assert.rejects(readLimitedBody(announced, 4), BodyLimitError);
-  let cancelled = false;
-  const stalled = new Response(
-    new ReadableStream({
-      cancel() {
-        cancelled = true;
-      },
-    }),
-  );
-  await assert.rejects(readLimitedBody(stalled, 100, 10), /BODY_TIMEOUT/);
-  assert.equal(cancelled, true);
-  assert.equal(
-    (await readLimitedBody(new Response("中文"), 6)).toString(),
-    "中文",
-  );
-});
-
 test("CSV limits records, fields and hints; unexpected database errors are redacted", () => {
   const parser = new CsvParseLearningParser();
   for (const source of [
@@ -142,87 +114,4 @@ test("CSV limits records, fields and hints; unexpected database errors are redac
   assert.equal(parseLogNumber("9007199254740991"), null);
   assert.equal(parseLogNumber("2147483648"), null);
   assert.equal(parseLogNumber("1"), 1);
-});
-
-test("chat validates origin, body and message roles before the provider and hides failures", async () => {
-  let calls = 0;
-  const gateway = {
-    execute() {
-      calls++;
-      return (async function* () {
-        yield "ok";
-      })();
-    },
-  };
-  const messages = [
-    { id: "1", role: "user", parts: [{ type: "text", text: "你好" }] },
-  ];
-  const request = (body: unknown, headers: Record<string, string> = {}) =>
-    new Request("https://app.example/api/chat", {
-      method: "POST",
-      headers: {
-        Origin: "https://app.example",
-        "Content-Type": "application/json",
-        ...headers,
-      },
-      body: JSON.stringify(body),
-    });
-  assert.equal(
-    (
-      await handleChatRequest(
-        request({ messages }, { Origin: "https://evil.example" }),
-        gateway,
-      )
-    ).status,
-    403,
-  );
-  assert.equal(
-    (
-      await handleChatRequest(
-        request({ messages }, { "Content-Type": "text/plain" }),
-        gateway,
-      )
-    ).status,
-    415,
-  );
-  assert.equal(
-    (
-      await handleChatRequest(
-        request({ payload: "x".repeat(256 * 1024) }),
-        gateway,
-      )
-    ).status,
-    413,
-  );
-  assert.equal(
-    (
-      await handleChatRequest(
-        request({ messages: [{ ...messages[0], role: "system" }] }),
-        gateway,
-      )
-    ).status,
-    400,
-  );
-  assert.equal(
-    (
-      await handleChatRequest(
-        request({ messages: Array(41).fill(messages[0]) }),
-        gateway,
-      )
-    ).status,
-    400,
-  );
-  assert.equal(calls, 0);
-  assert.equal(
-    (await handleChatRequest(request({ messages }), gateway)).status,
-    200,
-  );
-  assert.equal(calls, 1);
-  const failed = await handleChatRequest(request({ messages }), {
-    execute() {
-      throw new Error("sk-private-key");
-    },
-  });
-  assert.equal(failed.status, 502);
-  assert.doesNotMatch(await failed.text(), /sk-private/);
 });

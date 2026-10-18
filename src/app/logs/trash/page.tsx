@@ -10,7 +10,7 @@ import {
   restoreLearningEntryAction,
 } from "@/presentation/actions/note-trash-actions";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
-import { ReauthNotice } from "@/presentation/components/chat/reauth-notice";
+import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { LearningEntryCard } from "@/presentation/components/learning/learning-entry-card";
 import { NoteActionForm } from "@/presentation/components/records/note-action-form";
 import {

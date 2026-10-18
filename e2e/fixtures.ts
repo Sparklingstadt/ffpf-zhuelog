@@ -22,9 +22,7 @@ export const test = base.extend<{ db: Client }>({
         const { rows } = await db.query("SELECT current_database() AS name");
         if (rows[0].name !== "zhuelog_e2e")
           throw new Error("Refusing to reset a non-E2E database");
-        await db.query(
-          'TRUNCATE "LineLearningJob", "LineDevelopmentSession", "ChatConversation", "PasswordAccount", "Follow"',
-        );
+        await db.query('TRUNCATE "PasswordAccount", "Follow"');
         await db.query(
           'TRUNCATE "Hint", "LearningEntry", "ImportBatch" CASCADE',
         );
@@ -39,7 +37,7 @@ export const test = base.extend<{ db: Client }>({
 export { expect };
 
 // The githubId that asAdmin puts in the session, and so the owner of the
-// admin's notes (also LINE_NOTE_OWNER_ID in e2e/server.ts).
+// admin's notes.
 export const adminOwnerId = "10001";
 
 export async function asAdmin(context: BrowserContext) {
@@ -155,32 +153,4 @@ export async function seedNotes(
         [`h${randomBytes(8).toString("hex")}`, note.hint, id],
       );
   }
-}
-
-export async function seedConversation(
-  db: Client,
-  id: number,
-  ownerId: string,
-  createdAt: string,
-  title: string,
-  messages: [role: "user" | "assistant", text: string][],
-) {
-  await db.query(
-    `INSERT INTO "ChatConversation"
-       ("id", "ownerId", "title", "modelName", "ended", "messages", "createdAt", "updatedAt")
-     VALUES ($1, $2, $3, 'gpt-6.1-sol', false, $4, $5, $5)`,
-    [
-      `00000000-0000-4000-8000-${String(id).padStart(12, "0")}`,
-      ownerId,
-      title,
-      JSON.stringify(
-        messages.map(([role, text], index) => ({
-          id: `m${index}`,
-          role,
-          text,
-        })),
-      ),
-      createdAt,
-    ],
-  );
 }

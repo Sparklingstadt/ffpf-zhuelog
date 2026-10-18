@@ -7,7 +7,6 @@
   },
   "scripts": {
     "dev": "next dev",
-    "dev:codex": "CHAT_PROVIDER=codex-local next dev --hostname 127.0.0.1",
     "test:unit": "node scripts/test-unit.mjs",
     "build": "next build",
     "start": "next start",
@@ -29,14 +28,10 @@
     "test:regression": "pnpm run typecheck && pnpm run lint && pnpm run test:unit && pnpm run build && pnpm run test:e2e"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^4.0.83",
-    "@ai-sdk/react": "^4.0.129",
     "@ffpf-zhuelog/core": "workspace:*",
-    "@ffpf-zhuelog/typle-integrate-plugin": "workspace:*",
     "@next/env": "16.3.8",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
-    "ai": "^7.0.126",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
     "csv-parse": "^7.0.3",

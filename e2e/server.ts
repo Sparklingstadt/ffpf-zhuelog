@@ -1,17 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
-import {
-  authSecret,
-  baseURL,
-  cronSecret,
-  databaseUrl,
-  lineTestConfig,
-} from "./environment";
-import { startStubs } from "./stubs";
+import { authSecret, baseURL, databaseUrl } from "./environment";
 
 async function main() {
-  // Started first so a busy port fails before the long build.
-  const stubs = await startStubs();
-
   // Explicit values take precedence over .env.local/.env.production.local.
   const env: NodeJS.ProcessEnv = {
     ...process.env,
@@ -24,18 +14,6 @@ async function main() {
     AUTH_GITHUB_ID: "",
     AUTH_GITHUB_SECRET: "",
     AUTH_ALLOWED_GITHUB_LOGINS: "e2e-admin",
-    OPENAI_API_KEY: "e2e-test-only-never-use-upstream",
-    CHAT_PROVIDER: "openai",
-    LINE_INTEGRATION_ENABLED: "true",
-    LINE_CHANNEL_SECRET: lineTestConfig.secret,
-    LINE_CHANNEL_ACCESS_TOKEN: "test-only-never-send",
-    LINE_ALLOWED_USER_ID: lineTestConfig.userId,
-    LINE_BOT_USER_ID: lineTestConfig.botId,
-    // The E2E admin's githubId (see asAdmin in e2e/fixtures.ts).
-    LINE_NOTE_OWNER_ID: "10001",
-    OPENAI_API_BASE_URL: stubs.openaiUrl,
-    LINE_API_BASE_URL: stubs.lineUrl,
-    CRON_SECRET: cronSecret,
     NODE_ENV: "production",
   };
 
@@ -65,9 +43,7 @@ async function main() {
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.on(signal, () => server.kill(signal));
   }
-  server.on("exit", (code) => {
-    void stubs.close().finally(() => process.exit(code ?? 0));
-  });
+  server.on("exit", (code) => process.exit(code ?? 0));
 }
 
 main().catch((error) => {

@@ -5,8 +5,7 @@
 #   cd ffpf-zhuelog && ./scripts/deploy-cloud-run.sh
 #
 # Safe to re-run: existing secrets are kept, and a blank answer keeps the
-# current value. LINE is set up separately by enable-line-cloud-run.sh and is
-# left as it is here.
+# current value.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source scripts/cloud-run-common.sh
@@ -26,7 +25,6 @@ prompt_secret DATABASE_URL "DATABASE_URL（postgresql://...）" required
 if ! secret_exists AUTH_SECRET; then
   openssl rand -base64 32 | tr -d '\n' | create_secret AUTH_SECRET
 fi
-prompt_secret OPENAI_API_KEY "OPENAI_API_KEY（管理者のChatGPT用。空欄でスキップ）" optional
 prompt_secret AUTH_GITHUB_SECRET "GitHub OAuth AppのClient Secret（空欄でスキップ）" optional
 
 echo "== 公開してよい設定（空欄なら今の値のまま）"
@@ -43,7 +41,7 @@ if ((${#env_vars[@]})); then
 fi
 
 secrets="DATABASE_URL=zhuelog-DATABASE_URL:latest,AUTH_SECRET=zhuelog-AUTH_SECRET:latest"
-for name in OPENAI_API_KEY AUTH_GITHUB_SECRET; do
+for name in AUTH_GITHUB_SECRET; do
   if secret_exists "$name"; then
     secrets+=",$name=zhuelog-$name:latest"
   fi
@@ -79,5 +77,4 @@ cat <<EOF
 - GitHubでの管理者ログインを使うには、Cloud Run用のGitHub OAuth Appを作り、
   Authorization callback URL を次にしてから、このスクリプトをもう一度実行してください。
     $URL/api/auth/callback/github
-- LINE連携をCloud Runに移すには ./scripts/enable-line-cloud-run.sh を実行します。
 EOF

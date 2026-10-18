@@ -16,7 +16,7 @@ import {
   parseLogNumber,
 } from "@ffpf-zhuelog/core/domain/calendar/value-objects/log-date";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
-import { ReauthNotice } from "@/presentation/components/chat/reauth-notice";
+import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { shareLearningEntryAction } from "@/presentation/actions/follow-actions";
 import { trashLearningEntryAction } from "@/presentation/actions/note-trash-actions";
 import { LearningEntryCard } from "@/presentation/components/learning/learning-entry-card";

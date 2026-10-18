@@ -7,7 +7,7 @@ import { learningUseCases } from "@/composition/learning-container";
 import { loadRecordOwnerView } from "@/composition/record-owner-options";
 import { parseLogDate } from "@ffpf-zhuelog/core/domain/calendar/value-objects/log-date";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
-import { ReauthNotice } from "@/presentation/components/chat/reauth-notice";
+import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { LearningEntryCard } from "@/presentation/components/learning/learning-entry-card";
 import { RecordOwnerControls } from "@/presentation/components/records/record-owner-controls";
 import {

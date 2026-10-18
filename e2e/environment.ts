@@ -2,18 +2,7 @@
 export const databaseUrl =
   "postgresql://zhuelog_e2e:local-e2e-only@127.0.0.1:55439/zhuelog_e2e";
 export const baseURL = "http://127.0.0.1:3107";
-// Local stand-ins for OpenAI and LINE (see e2e/stubs.ts). Loopback only.
-export const openaiStubPort = 3108;
-export const lineStubPort = 3109;
-export const lineStubUrl = `http://127.0.0.1:${lineStubPort}`;
-// At least 32 characters, like the real secret.
-export const cronSecret = "e2e-cron-secret-only-".padEnd(40, "0");
 export const cookieName = "authjs.session-token";
-export const lineTestConfig = {
-  secret: "e2e-line-signature-only",
-  userId: `U${"1".repeat(32)}`,
-  botId: `U${"2".repeat(32)}`,
-};
 
 export function authSecret() {
   if (!process.env.ZHUELOG_E2E_SECRET)

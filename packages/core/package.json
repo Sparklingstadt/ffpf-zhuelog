@@ -4,8 +4,7 @@
   "private": true,
   "exports": {
     "./domain/*": "./src/domain/*.ts",
-    "./application/*": "./src/application/*.ts",
-    "./integration": "./src/integration/index.ts"
+    "./application/*": "./src/application/*.ts"
   },
   "dependencies": {
     "zod": "^4.6.5"

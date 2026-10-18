@@ -22,11 +22,8 @@ const failed: NoteActionState = {
 };
 
 // Learning note ids are Prisma cuids (seeded test notes use other lowercase
-// alphanumerics); conversations use the browser's UUIDs.
-const idSchemas = {
-  learning: z.string().regex(/^[a-z0-9]{1,64}$/),
-  conversation: z.uuid(),
-};
+// alphanumerics).
+const idSchema = z.string().regex(/^[a-z0-9]{1,64}$/);
 
 // Owner of the signed-in user's notes. The form never names the owner, so an
 // admin viewing someone else (or a crafted POST) still acts on their own.
@@ -50,13 +47,12 @@ export async function handleNoteAction(
   formData: FormData,
   dependencies: {
     getMember: Member;
-    kind: keyof typeof idSchemas;
     run: (ownerId: string, id: string) => Promise<boolean>;
   },
 ): Promise<NoteActionState> {
   const ownerId = await ownerOf(dependencies.getMember);
   if (!ownerId) return unauthorized;
-  const id = idSchemas[dependencies.kind].safeParse(formData.get("id"));
+  const id = idSchema.safeParse(formData.get("id"));
   if (!id.success) return notFound;
   return attempt(async () =>
     (await dependencies.run(ownerId, id.data)) ? success : notFound,
