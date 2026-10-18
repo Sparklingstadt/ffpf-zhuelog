@@ -26,6 +26,7 @@ async function main() {
     AUTH_ALLOWED_GITHUB_LOGINS: "e2e-admin",
     OPENAI_API_KEY: "e2e-test-only-never-use-upstream",
     CHAT_PROVIDER: "openai",
+    CHAT_ENABLED: "true",
     LINE_INTEGRATION_ENABLED: "true",
     LINE_CHANNEL_SECRET: lineTestConfig.secret,
     LINE_CHANNEL_ACCESS_TOKEN: "test-only-never-send",

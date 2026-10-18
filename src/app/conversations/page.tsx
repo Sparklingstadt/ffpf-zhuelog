@@ -11,6 +11,7 @@ import { redirect } from "next/navigation";
 import { conversationNoteUseCases } from "@/composition/conversation-container";
 import { getRecordOwner } from "@/composition/identity-container";
 import { loadRecordOwnerView } from "@/composition/record-owner-options";
+import { isChatEnabled } from "@/infrastructure/config/environment";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { ReauthNotice } from "@/presentation/components/chat/reauth-notice";
 import { RecordOwnerControls } from "@/presentation/components/records/record-owner-controls";
@@ -78,11 +79,13 @@ export default async function ConversationsPage({
                 <ArrowLeft /> 学習ノートへ
               </Link>
             </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/chat">
-                <MessageCircle /> ChatGPTと話す
-              </Link>
-            </Button>
+            {isChatEnabled() ? (
+              <Button asChild variant="outline" size="sm">
+                <Link href="/chat">
+                  <MessageCircle /> ChatGPTと話す
+                </Link>
+              </Button>
+            ) : null}
             {owner.kind === "self" ? (
               <TrashLink href="/conversations/trash" />
             ) : null}

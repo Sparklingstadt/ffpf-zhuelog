@@ -21,6 +21,7 @@ import { getRecordOwner } from "@/composition/identity-container";
 import { integrations } from "@/composition/integration-container";
 import { learningUseCases } from "@/composition/learning-container";
 import { loadRecordOwnerView } from "@/composition/record-owner-options";
+import { isChatEnabled } from "@/infrastructure/config/environment";
 import type { LearningEntry } from "@ffpf-zhuelog/core/domain/learning/entities/learning-entry";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { ReauthNotice } from "@/presentation/components/chat/reauth-notice";
@@ -136,11 +137,13 @@ function HomeHeader({
                   </Link>
                 </Button>
               ))}
-              <Button asChild variant="outline" size="sm">
-                <Link href="/chat">
-                  <MessageCircle /> ChatGPTと話す
-                </Link>
-              </Button>
+              {isChatEnabled() ? (
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/chat">
+                    <MessageCircle /> ChatGPTと話す
+                  </Link>
+                </Button>
+              ) : null}
               <Button asChild variant="outline" size="sm">
                 <Link href={withRecordOwner("/conversations", owner)}>
                   <MessagesSquare /> 会話ノート

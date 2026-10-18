@@ -14,3 +14,9 @@ export function isOpenAiConfigured() {
 export function getOpenAiModelName() {
   return process.env.OPENAI_MODEL?.trim() || "gpt-6.1-sol";
 }
+
+// Chat (/chat and /api/chat*) is off unless explicitly enabled. Saved
+// conversation notes stay readable either way.
+export function isChatEnabled() {
+  return process.env.CHAT_ENABLED === "true";
+}

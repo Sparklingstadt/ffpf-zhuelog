@@ -157,9 +157,12 @@ rm .env.production.local
 
 ## ChatGPT会話機能の設定
 
+ChatGPT会話（`/chat`・`/api/chat`・`/api/chat/conversations`）は、既定で停止しています。`CHAT_ENABLED="true"` のときだけ有効になり、未設定や `"true"` 以外の値では画面もAPIも404を返し、ホームと会話ノートの「ChatGPTと話す」ボタンも出ません。保存済みの会話は、停止中も会話ノート（`/conversations`）で見返せます。もう一度使うときは、Vercelの環境変数に `CHAT_ENABLED="true"` を追加して再デプロイしてください。DBマイグレーションは要りません。
+
 OpenAI PlatformでAPIキーを作成し、`.env` に設定してください。ChatGPTのサブスクリプションとは別に、OpenAI APIの利用料金が発生します。
 
 ```env
+CHAT_ENABLED="true"
 OPENAI_API_KEY="sk-..."
 OPENAI_MODEL="gpt-6.1-sol"
 ```
