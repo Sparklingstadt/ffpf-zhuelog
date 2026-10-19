@@ -122,16 +122,9 @@ rm .env.production.local
 
 ## 学習ノートの持ち主の本番への反映
 
-mainはVercelの本番へ自動でデプロイされますが、Cloud Run（LINEの処理）は自動では更新されません。手順の順番を守ってください。
+mainはVercelの本番へ自動でデプロイされますが、Cloud Runは自動では更新されません。手順の順番を守ってください。
 
-1. **Cloud Runに `LINE_NOTE_OWNER_ID=219588180` を設定します。** サービス名とリージョンは [`docs/cloud-run.md`](docs/cloud-run.md) の例（`zhuelog`・`asia-northeast1`）です。この操作は今のイメージの新しいリビジョンを作るだけで、今のコードは `LINE_NOTE_OWNER_ID` を読まないため、コードは新しくなりません。Vercelは、LINEが無効でCloud Runに取り次ぐだけなので設定は要りません。
-
-   ```bash
-   gcloud run services update zhuelog --region asia-northeast1 \
-     --update-env-vars LINE_NOTE_OWNER_ID=219588180
-   ```
-
-2. **マイグレーション** `20261008090000_learning_entry_owner`（`LearningEntry.ownerId` の追加）を本番DB（Neon）へ適用します。既存の学習ノートは、すべて持ち主 `219588180` のものになります。前節と同じ手順ですが、**Vercelとリンク済みのリポジトリで、このPRのブランチをチェックアウトして**実行してください。mainにはまだこのマイグレーションがないため、mainのまま実行すると「No pending migrations」と表示され、適用できたように見えてしまいます。
+1. **マイグレーション** `20261008090000_learning_entry_owner`（`LearningEntry.ownerId` の追加）を本番DB（Neon）へ適用します。既存の学習ノートは、すべて持ち主 `219588180` のものになります。前節と同じ手順ですが、**Vercelとリンク済みのリポジトリで、このPRのブランチをチェックアウトして**実行してください。mainにはまだこのマイグレーションがないため、mainのまま実行すると「No pending migrations」と表示され、適用できたように見えてしまいます。
 
    ```bash
    git fetch origin
@@ -145,28 +138,28 @@ mainはVercelの本番へ自動でデプロイされますが、Cloud Run（LINE
 
    `migrate status` で `20261008090000_learning_entry_owner` が適用済みになっていること（「Database schema is up to date!」）を、マージの前に必ず確認してください。ブランチをほかの作業場所でチェックアウトしている場合に備え、`git switch --detach` で取得したコミットを直接開いています。
 
-3. **マージし、VercelとCloud Runの両方に新しいコードを反映します。** マージしたら、Vercelの本番デプロイが Ready になるのを待ち、続けてCloud Runを新しいコードで再デプロイします。Cloud Runは `gcloud run services update` ではなく、[`docs/cloud-run.md`](docs/cloud-run.md) のとおり、Cloud Shellでソースからビルドして更新します。
+2. **マージし、VercelとCloud Runの両方に新しいコードを反映します。** マージしたら、Vercelの本番デプロイが Ready になるのを待ち、続けてCloud Runを新しいコードで再デプロイします。Cloud Runは `gcloud run services update` ではなく、[`docs/cloud-run.md`](docs/cloud-run.md) のとおり、Cloud Shellでソースからビルドして更新します。
 
    ```bash
    cd ffpf-zhuelog && git pull && ./scripts/deploy-cloud-run.sh
    ```
 
-   設定済みの値は空欄のまま進めれば今のままです（`LINE_NOTE_OWNER_ID` も保たれます）。終わったら、新しいリビジョンがすべてのトラフィックを受けていることを確認します。
+   設定済みの値は空欄のまま進めれば今のままです。終わったら、新しいリビジョンがすべてのトラフィックを受けていることを確認します。
 
    ```bash
    gcloud run services describe zhuelog --region asia-northeast1 \
      --format='value(status.latestReadyRevisionName,status.traffic)'
    ```
 
-4. **確認します。** 自分のLINEから文を1件送り、管理者として `/` を開いてそのノートが表示されることを確認します。DBで確認するには、NeonのSQL Editorで次を実行し、`219588180` が返ることを見ます。
+3. **確認します。** 管理者としてCSVを1件インポートし、`/` を開いてそのノートが表示されることを確認します。DBで確認するには、NeonのSQL Editorで次を実行し、`219588180` が返ることを見ます。
 
    ```sql
    SELECT "ownerId" FROM "LearningEntry" ORDER BY "createdAt" DESC LIMIT 1;
    ```
 
-**注意: 手順2から、手順3のVercelとCloud Runの両方のデプロイが終わるまでの間は、CSVインポートとLINEの保存が失敗します。** `ownerId` は必須の列で、今のコードはこの列に値を入れずに登録するため、登録できません。LINEは「保存できなかった」旨の返信になります。この間はCSVインポートとLINEを使わず、終わったあとに送り直してください。GitHub・パスワードでのログインと、ノートの閲覧は影響を受けません。
+**注意: 手順1から、手順2のVercelとCloud Runの両方のデプロイが終わるまでの間は、CSVインポートが失敗します。** `ownerId` は必須の列で、今のコードはこの列に値を入れずに登録するため、登録できません。この間はCSVインポートを使わず、終わったあとにやり直してください。GitHub・パスワードでのログインと、ノートの閲覧は影響を受けません。
 
-**ロールバック**: マージを取り消した（revertした）場合も、古いコードは `ownerId` を入れられないため、CSVインポートとLINEの保存が失敗します。ブランチをもう一度マージするまでの間は、NeonのSQL Editorで次を実行して、既定の持ち主を付けてください。再マージして新しいコードを反映したら、`ALTER TABLE "LearningEntry" ALTER COLUMN "ownerId" DROP DEFAULT;` で戻します。マイグレーションとスキーマには `DEFAULT` を入れていません。
+**ロールバック**: マージを取り消した（revertした）場合も、古いコードは `ownerId` を入れられないため、CSVインポートが失敗します。ブランチをもう一度マージするまでの間は、NeonのSQL Editorで次を実行して、既定の持ち主を付けてください。再マージして新しいコードを反映したら、`ALTER TABLE "LearningEntry" ALTER COLUMN "ownerId" DROP DEFAULT;` で戻します。マイグレーションとスキーマには `DEFAULT` を入れていません。
 
 ```sql
 ALTER TABLE "LearningEntry" ALTER COLUMN "ownerId" SET DEFAULT '219588180';
@@ -184,7 +177,7 @@ ALTER TABLE "LearningEntry" ALTER COLUMN "ownerId" SET DEFAULT '219588180';
 
 ### 本番への反映
 
-DBマイグレーション `20261008120000_add_note_trash`（`LearningEntry` と `ChatConversation` に `deletedAt` 列を追加）が必要です。null を許す列を足すだけなので、今のコードのまま先に適用しても動作は変わりません。マージの前に、Vercelとリンク済みのリポジトリで、このPRのブランチを `git switch --detach` で開いて、前節と同じ手順（`vercel env pull` → `migrate deploy` → `migrate status`）で本番DB（Neon）へ適用し、`migrate status` で適用済みになっていることを確認してください。Cloud Run（LINE）は学習ノートを作るだけで `deletedAt` を読まないため、再デプロイは要りません。
+DBマイグレーション `20261008120000_add_note_trash`（`LearningEntry` に `deletedAt` 列を追加）が必要です。null を許す列を足すだけなので、今のコードのまま先に適用しても動作は変わりません。マージの前に、Vercelとリンク済みのリポジトリで、このPRのブランチを `git switch --detach` で開いて、前節と同じ手順（`vercel env pull` → `migrate deploy` → `migrate status`）で本番DB（Neon）へ適用し、`migrate status` で適用済みになっていることを確認してください。
 
 マージを取り消した（revertした）場合、古いコードは `deletedAt` を見ないため、ゴミ箱に入っていたノートが一覧に戻って見えます。データは消えません。
 
@@ -200,7 +193,11 @@ DBマイグレーション `20261008120000_add_note_trash`（`LearningEntry` と
 
 ### 本番への反映
 
-DBマイグレーション `20261010000353_add_follows_and_shared_notes`（`Follow` テーブルの追加と、`LearningEntry` への `sharedAt` 列の追加）が必要です。マージの前に、Vercelとリンク済みのリポジトリで、このPRのブランチを `git switch --detach` で開いて、パスワードアカウントの節と同じ手順で本番DB（Neon）へ適用してください。Cloud Run（LINE）は共有の列を読まないため、再デプロイは要りません。
+DBマイグレーション `20261010000353_add_follows_and_shared_notes`（`Follow` テーブルの追加と、`LearningEntry` への `sharedAt` 列の追加）が必要です。マージの前に、Vercelとリンク済みのリポジトリで、このPRのブランチを `git switch --detach` で開いて、パスワードアカウントの節と同じ手順で本番DB（Neon）へ適用してください。
+
+## LINE・チャットのテーブルの削除
+
+DBマイグレーション `20261020090000_drop_line_and_chat` は、LINEと管理者チャットを削除したあとに残っていたテーブル（`LineLearningJob`・`LineDevelopmentSession`・`ChatConversation`）を削除します。今のコードはどれも読み書きしないので、適用する前にデプロイしても、あとにデプロイしても動作は変わりません。**適用すると、保存されていたLINEのジョブとチャットの履歴は元に戻せません。** 残したいデータがあれば、先にNeonでバックアップを取ってください。手順は、パスワードアカウントの節と同じです（`vercel env pull` → `migrate deploy` → `migrate status`）。
 
 ```bash
 vercel env pull .env.production.local --environment=production --yes

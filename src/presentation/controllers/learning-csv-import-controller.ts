@@ -24,7 +24,7 @@ export async function handleLearningCsvImport(
       message: "この操作を行う権限がありません。再度ログインしてください。",
     };
   }
-  // Older GitHub sessions have no owner ID: same guidance as saving a chat.
+  // Older GitHub sessions have no owner ID: ask the user to sign in again.
   if (!user.githubId) {
     return {
       status: "error",
