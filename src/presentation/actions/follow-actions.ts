@@ -5,17 +5,18 @@ import { revalidatePath } from "next/cache";
 import { getCurrentMemberUser } from "@/composition/identity-container";
 import { learningUseCases } from "@/composition/learning-container";
 import { socialUseCases } from "@/composition/social-container";
+import { revalidateNotes } from "@/presentation/actions/revalidate-notes";
+import type { ActionState } from "@/presentation/controllers/action-state";
 import {
   handleFollow,
   handleShare,
   handleUnfollow,
 } from "@/presentation/controllers/follow-controller";
-import type { NoteActionState } from "@/presentation/controllers/note-trash-controller";
 
 export async function followMemberAction(
-  _previous: NoteActionState,
+  _previous: ActionState,
   formData: FormData,
-): Promise<NoteActionState> {
+): Promise<ActionState> {
   const state = await handleFollow(formData, {
     getMember: getCurrentMemberUser,
     run: (followerId, followeeId) =>
@@ -26,9 +27,9 @@ export async function followMemberAction(
 }
 
 export async function unfollowMemberAction(
-  _previous: NoteActionState,
+  _previous: ActionState,
   formData: FormData,
-): Promise<NoteActionState> {
+): Promise<ActionState> {
   const state = await handleUnfollow(formData, {
     getMember: getCurrentMemberUser,
     run: (followerId, followeeId) =>
@@ -39,17 +40,16 @@ export async function unfollowMemberAction(
 }
 
 export async function shareLearningEntryAction(
-  _previous: NoteActionState,
+  _previous: ActionState,
   formData: FormData,
-): Promise<NoteActionState> {
+): Promise<ActionState> {
   const state = await handleShare(formData, {
     getMember: getCurrentMemberUser,
     run: (ownerId, id, shared) =>
       learningUseCases.shareLearningEntry.execute(ownerId, id, shared),
   });
   if (state.status === "success") {
-    revalidatePath("/");
-    revalidatePath("/logs", "layout");
+    revalidateNotes();
     revalidatePath("/follow");
   }
   return state;

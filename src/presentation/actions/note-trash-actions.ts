@@ -1,18 +1,16 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { redirect, RedirectType } from "next/navigation";
 
 import { getCurrentMemberUser } from "@/composition/identity-container";
 import { learningUseCases } from "@/composition/learning-container";
+import { revalidateNotes } from "@/presentation/actions/revalidate-notes";
+import type { ActionState } from "@/presentation/controllers/action-state";
 import {
   handleEmptyTrash,
   handleNoteAction,
-  type NoteActionState,
 } from "@/presentation/controllers/note-trash-controller";
 import { trashedRedirectPath } from "@/presentation/presenters/note-trash-href";
-
-export type { NoteActionState };
 
 // Replace, not push: the detail page's number now belongs to the next note,
 // so going back must not reopen it.
@@ -20,12 +18,6 @@ function redirectAfterTrash(path: string): never {
   redirect(path, RedirectType.replace);
 }
 type Run = (ownerId: string, id: string) => Promise<boolean>;
-
-// Every list, the home page's recent notes and the trash pages change.
-function revalidateNotes() {
-  revalidatePath("/");
-  revalidatePath("/logs", "layout");
-}
 
 async function noteAction(formData: FormData, run: Run) {
   const state = await handleNoteAction(formData, {
@@ -46,9 +38,9 @@ async function emptyAction(run: (ownerId: string) => Promise<number>) {
 }
 
 export async function trashLearningEntryAction(
-  _previous: NoteActionState,
+  _previous: ActionState,
   formData: FormData,
-): Promise<NoteActionState> {
+): Promise<ActionState> {
   const state = await noteAction(formData, (ownerId, id) =>
     learningUseCases.trashLearningEntry.execute(ownerId, id),
   );
@@ -58,24 +50,24 @@ export async function trashLearningEntryAction(
 }
 
 export async function restoreLearningEntryAction(
-  _previous: NoteActionState,
+  _previous: ActionState,
   formData: FormData,
-): Promise<NoteActionState> {
+): Promise<ActionState> {
   return noteAction(formData, (ownerId, id) =>
     learningUseCases.restoreLearningEntry.execute(ownerId, id),
   );
 }
 
 export async function purgeLearningEntryAction(
-  _previous: NoteActionState,
+  _previous: ActionState,
   formData: FormData,
-): Promise<NoteActionState> {
+): Promise<ActionState> {
   return noteAction(formData, (ownerId, id) =>
     learningUseCases.purgeLearningEntry.execute(ownerId, id),
   );
 }
 
-export async function emptyLearningTrashAction(): Promise<NoteActionState> {
+export async function emptyLearningTrashAction(): Promise<ActionState> {
   return emptyAction((ownerId) =>
     learningUseCases.emptyLearningTrash.execute(ownerId),
   );
