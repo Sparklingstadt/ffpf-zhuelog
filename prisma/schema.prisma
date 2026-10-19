@@ -46,57 +46,6 @@ model Hint {
   @@index([learningEntryId])
 }
 
-// Durable inbox + outbox. Kept separate so existing notes work before enabling LINE.
-model LineLearningJob {
-  id              String   @id @default(cuid())
-  kind            String   @default("correction")
-  eventId         String   @unique
-  userId          String
-  originalText    String
-  receivedAt      DateTime
-  createdAt       DateTime @default(now())
-  status          String   @default("PENDING")
-  leaseToken      String?
-  availableAt     DateTime @default(now())
-  generationTries Int      @default(0)
-  deliveryTries   Int      @default(0)
-  csv             String?
-  replyText       String?
-  entryId         String?  @unique
-  retryKey        String   @unique
-  firstDeliveryAt DateTime?
-  failureCode     String?
-  issueAttempted  Boolean  @default(false)
-
-  @@index([status, availableAt])
-}
-
-model LineDevelopmentSession {
-  userId      String   @id
-  expiresAt   DateTime?
-  lastEventAt DateTime
-}
-
-// Admin chat history, private to the saving GitHub account. Browsed by date
-// at /conversations like learning notes.
-model ChatConversation {
-  id        String   @id
-  ownerId   String
-  title     String
-  modelName String
-  ended     Boolean
-  messages  Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  // Set while the conversation is in its owner's trash.
-  deletedAt DateTime?
-
-  @@unique([id, ownerId])
-  @@index([ownerId, updatedAt])
-  @@index([ownerId, createdAt])
-  @@index([ownerId, deletedAt])
-}
-
 // Password sign-in for members. Managed by GitHub admins at /admin/accounts.
 model PasswordAccount {
   id             String    @id @default(cuid())
