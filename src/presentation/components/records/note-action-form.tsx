@@ -3,17 +3,14 @@
 import { LoaderCircle } from "lucide-react";
 import { useActionState, type ComponentProps, type ReactNode } from "react";
 
-import type { NoteActionState } from "@/presentation/actions/note-trash-actions";
+import type { ActionState } from "@/presentation/controllers/action-state";
 import { Button } from "@/presentation/components/ui/button";
 
-const initialState: NoteActionState = { status: "idle", message: "" };
+const initialState: ActionState = { status: "idle", message: "" };
 
 type Props = {
-  action: (
-    previous: NoteActionState,
-    formData: FormData,
-  ) => Promise<NoteActionState>;
-  // Hidden fields: the note id and, for moving to the trash, its date.
+  action: (previous: ActionState, formData: FormData) => Promise<ActionState>;
+  // Hidden fields, such as the note id and, for moving to the trash, its date.
   fields?: Record<string, string>;
   label: string;
   pendingLabel: string;
@@ -23,7 +20,7 @@ type Props = {
   confirmMessage?: string;
 };
 
-// One button that runs a trash action and shows its error beside it.
+// One button that runs a note or follow action and shows its error beside it.
 export function NoteActionForm({
   action,
   fields = {},

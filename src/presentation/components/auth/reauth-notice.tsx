@@ -1,19 +1,15 @@
 import { KeyRound } from "lucide-react";
 
-import { Card, CardContent } from "@/presentation/components/ui/card";
+import { EmptyState } from "@/presentation/components/layout/empty-state";
 
-// Saved conversations and learning notes belong to a stable owner ID, which
-// older sessions lack.
-export function ReauthNotice({ subject = "会話ノート" }: { subject?: string }) {
+// Learning notes and follows belong to a stable owner ID, which older
+// sessions lack.
+export function ReauthNotice({ subject }: { subject: string }) {
   return (
-    <Card className="border-dashed py-12 text-center shadow-none">
-      <CardContent>
-        <KeyRound className="mx-auto size-7 text-muted-foreground" />
-        <p className="mt-3 font-medium">再ログインが必要です</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {subject}を表示するには、一度ログアウトしてログインし直してください。
-        </p>
-      </CardContent>
-    </Card>
+    <EmptyState
+      icon={KeyRound}
+      title="再ログインが必要です"
+      description={`${subject}を表示するには、一度ログアウトしてログインし直してください。`}
+    />
   );
 }

@@ -2,46 +2,28 @@ import type { FollowResult } from "@/application/social/use-cases/follow-member"
 import type { AppRole } from "@/domain/identity/entities/authenticated-user";
 import { z } from "zod";
 
-import type { NoteActionState } from "@/presentation/controllers/note-trash-controller";
+import {
+  actionSuccess,
+  actionUnauthorized,
+  attemptAction,
+  noteIdSchema,
+  type ActionState,
+} from "@/presentation/controllers/action-state";
 
 type Member = () => Promise<{ githubId?: string; role: AppRole } | null>;
 
-const success: NoteActionState = { status: "success", message: "" };
-const unauthorized: NoteActionState = {
-  status: "error",
-  message: "ログインし直してください。",
-};
-const notFound: NoteActionState = {
+const notFound: ActionState = {
   status: "error",
   message: "見つかりませんでした。画面を更新してください。",
 };
-const selfFollow: NoteActionState = {
+const selfFollow: ActionState = {
   status: "error",
   message: "自分はフォローできません。",
 };
-const failed: NoteActionState = {
-  status: "error",
-  message: "処理できませんでした。時間をおいてもう一度お試しください。",
-};
 
-// Members are password accounts; learning note ids are Prisma cuids (seeded
-// test notes use other lowercase alphanumerics).
+// Members are password accounts.
 const followeeIdSchema = z.string().regex(/^password:[a-z0-9]{1,64}$/);
-const noteIdSchema = z.string().regex(/^[a-z0-9]{1,64}$/);
 const sharedSchema = z.enum(["true", "false"]);
-
-async function attempt(
-  code: "FOLLOW_FAILED" | "SHARE_FAILED",
-  run: () => Promise<NoteActionState>,
-) {
-  try {
-    return await run();
-  } catch {
-    // Fixed code only: never a member's name or a note's text.
-    console.error(code);
-    return failed;
-  }
-}
 
 // The follower is always the signed-in user; the form never names one.
 export async function handleFollow(
@@ -50,15 +32,15 @@ export async function handleFollow(
     getMember: Member;
     run: (followerId: string, followeeId: string) => Promise<FollowResult>;
   },
-): Promise<NoteActionState> {
+): Promise<ActionState> {
   const user = await dependencies.getMember();
-  if (!user?.githubId) return unauthorized;
+  if (!user?.githubId) return actionUnauthorized;
   const followerId = user.githubId;
   const followeeId = followeeIdSchema.safeParse(formData.get("followeeId"));
   if (!followeeId.success) return notFound;
-  return attempt("FOLLOW_FAILED", async () => {
+  return attemptAction("FOLLOW_FAILED", async () => {
     const result = await dependencies.run(followerId, followeeId.data);
-    if (result === "followed") return success;
+    if (result === "followed") return actionSuccess;
     return result === "self" ? selfFollow : notFound;
   });
 }
@@ -70,15 +52,15 @@ export async function handleUnfollow(
     getMember: Member;
     run: (followerId: string, followeeId: string) => Promise<boolean>;
   },
-): Promise<NoteActionState> {
+): Promise<ActionState> {
   const user = await dependencies.getMember();
-  if (!user?.githubId) return unauthorized;
+  if (!user?.githubId) return actionUnauthorized;
   const followerId = user.githubId;
   const followeeId = followeeIdSchema.safeParse(formData.get("followeeId"));
   if (!followeeId.success) return notFound;
-  return attempt("FOLLOW_FAILED", async () => {
+  return attemptAction("FOLLOW_FAILED", async () => {
     await dependencies.run(followerId, followeeId.data);
-    return success;
+    return actionSuccess;
   });
 }
 
@@ -89,16 +71,16 @@ export async function handleShare(
     getMember: Member;
     run: (ownerId: string, id: string, shared: boolean) => Promise<boolean>;
   },
-): Promise<NoteActionState> {
+): Promise<ActionState> {
   const user = await dependencies.getMember();
-  if (!user?.githubId || user.role !== "member") return unauthorized;
+  if (!user?.githubId || user.role !== "member") return actionUnauthorized;
   const ownerId = user.githubId;
   const id = noteIdSchema.safeParse(formData.get("id"));
   const shared = sharedSchema.safeParse(formData.get("shared"));
   if (!id.success || !shared.success) return notFound;
-  return attempt("SHARE_FAILED", async () =>
+  return attemptAction("SHARE_FAILED", async () =>
     (await dependencies.run(ownerId, id.data, shared.data === "true"))
-      ? success
+      ? actionSuccess
       : notFound,
   );
 }

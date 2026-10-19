@@ -7,16 +7,18 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import type { ReactNode } from "react";
 
-import type { RecordOwner } from "@/application/identity/use-cases/resolve-record-owner";
+import {
+  showsRecords,
+  type RecordOwner,
+} from "@/application/identity/use-cases/resolve-record-owner";
 import type { AuthenticatedUser } from "@/domain/identity/entities/authenticated-user";
-import { getRecordOwner } from "@/composition/identity-container";
 import { learningUseCases } from "@/composition/learning-container";
 import { loadRecordOwnerView } from "@/composition/record-owner-options";
 import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
 import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
+import { PageShell } from "@/presentation/components/layout/page-shell";
 import { CsvFormatGuide } from "@/presentation/components/learning/csv-format-guide";
 import { CsvImportForm } from "@/presentation/components/learning/csv-import-form";
 import { LearningEntryCard } from "@/presentation/components/learning/learning-entry-card";
@@ -35,6 +37,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/presentation/components/ui/card";
+import { requireSignedInOwner } from "@/presentation/guards/record-owner-guard";
 import { getLogDateHref } from "@/presentation/presenters/log-date-presenter";
 import {
   requestedRecordOwner,
@@ -79,7 +82,7 @@ function HomeHeader({
   // Number of entries for the viewed owner; null when no notes are shown.
   total: number | null;
 }) {
-  const hasNotes = owner.kind === "self" || owner.kind === "other";
+  const hasNotes = showsRecords(owner);
   return (
     <header className="flex flex-col gap-5 border-b pb-8 sm:flex-row sm:items-end sm:justify-between">
       <div className="space-y-3">
@@ -119,28 +122,17 @@ function HomeHeader({
   );
 }
 
-function HomeShell({ children }: { children: ReactNode }) {
-  return (
-    <main className="min-h-screen bg-background">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
-        {children}
-      </div>
-    </main>
-  );
-}
-
 export default async function Home({ searchParams }: HomeProps) {
-  const { user, owner } = await getRecordOwner(
+  const { user, owner } = await requireSignedInOwner(
     requestedRecordOwner((await searchParams).user),
+    "/signin",
   );
-  if (!user || (owner.kind === "denied" && owner.reason === "unauthenticated"))
-    redirect("/signin");
   if (owner.kind === "redirect-self") redirect("/");
 
   // Guests have no notes of their own.
   if (owner.kind === "denied" && owner.reason === "guest") {
     return (
-      <HomeShell>
+      <PageShell width="6xl" spacious>
         <HomeHeader user={user} owner={owner} total={null} />
         <Card className="border-dashed py-14 text-center shadow-none">
           <CardContent className="flex flex-col items-center gap-4">
@@ -152,16 +144,16 @@ export default async function Home({ searchParams }: HomeProps) {
             </p>
           </CardContent>
         </Card>
-      </HomeShell>
+      </PageShell>
     );
   }
 
   if (owner.kind === "denied") {
     return (
-      <HomeShell>
+      <PageShell width="6xl" spacious>
         <HomeHeader user={user} owner={owner} total={null} />
         <ReauthNotice subject="学習ノート" />
-      </HomeShell>
+      </PageShell>
     );
   }
 
@@ -172,7 +164,7 @@ export default async function Home({ searchParams }: HomeProps) {
   const ownNotes = owner.kind === "self";
 
   return (
-    <HomeShell>
+    <PageShell width="6xl" spacious>
       <HomeHeader user={user} owner={owner} total={total} />
 
       <RecordOwnerControls owner={owner} view={view} path="/" />
@@ -253,6 +245,6 @@ export default async function Home({ searchParams }: HomeProps) {
           </aside>
         ) : null}
       </section>
-    </HomeShell>
+    </PageShell>
   );
 }
