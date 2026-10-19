@@ -47,10 +47,6 @@ pnpm run dev
 
 ブラウザで <http://localhost:3000> を開きます。
 
-## Cloud Runへのデプロイ
-
-Web画面の本番はVercelで動かしています。Google Cloud Runにも、ルートの `Dockerfile` でデプロイできます（`AUTH_URL`（公開URL）の設定が必要です）。手順は [`docs/cloud-run.md`](docs/cloud-run.md) を参照してください。
-
 ## 認証・認可の設定
 
 GitHubの **Settings → Developer settings → OAuth Apps** でOAuth Appを作成します。
@@ -122,7 +118,7 @@ rm .env.production.local
 
 ## 学習ノートの持ち主の本番への反映
 
-mainはVercelの本番へ自動でデプロイされますが、Cloud Runは自動では更新されません。手順の順番を守ってください。
+mainはVercelの本番へ自動でデプロイされます。手順の順番を守ってください。
 
 1. **マイグレーション** `20261008090000_learning_entry_owner`（`LearningEntry.ownerId` の追加）を本番DB（Neon）へ適用します。既存の学習ノートは、すべて持ち主 `219588180` のものになります。前節と同じ手順ですが、**Vercelとリンク済みのリポジトリで、このPRのブランチをチェックアウトして**実行してください。mainにはまだこのマイグレーションがないため、mainのまま実行すると「No pending migrations」と表示され、適用できたように見えてしまいます。
 
@@ -138,18 +134,7 @@ mainはVercelの本番へ自動でデプロイされますが、Cloud Runは自�
 
    `migrate status` で `20261008090000_learning_entry_owner` が適用済みになっていること（「Database schema is up to date!」）を、マージの前に必ず確認してください。ブランチをほかの作業場所でチェックアウトしている場合に備え、`git switch --detach` で取得したコミットを直接開いています。
 
-2. **マージし、VercelとCloud Runの両方に新しいコードを反映します。** マージしたら、Vercelの本番デプロイが Ready になるのを待ち、続けてCloud Runを新しいコードで再デプロイします。Cloud Runは `gcloud run services update` ではなく、[`docs/cloud-run.md`](docs/cloud-run.md) のとおり、Cloud Shellでソースからビルドして更新します。
-
-   ```bash
-   cd ffpf-zhuelog && git pull && ./scripts/deploy-cloud-run.sh
-   ```
-
-   設定済みの値は空欄のまま進めれば今のままです。終わったら、新しいリビジョンがすべてのトラフィックを受けていることを確認します。
-
-   ```bash
-   gcloud run services describe zhuelog --region asia-northeast1 \
-     --format='value(status.latestReadyRevisionName,status.traffic)'
-   ```
+2. **マージし、Vercelの本番デプロイが Ready になるのを待ちます。**
 
 3. **確認します。** 管理者としてCSVを1件インポートし、`/` を開いてそのノートが表示されることを確認します。DBで確認するには、NeonのSQL Editorで次を実行し、`219588180` が返ることを見ます。
 
@@ -157,7 +142,7 @@ mainはVercelの本番へ自動でデプロイされますが、Cloud Runは自�
    SELECT "ownerId" FROM "LearningEntry" ORDER BY "createdAt" DESC LIMIT 1;
    ```
 
-**注意: 手順1から、手順2のVercelとCloud Runの両方のデプロイが終わるまでの間は、CSVインポートが失敗します。** `ownerId` は必須の列で、今のコードはこの列に値を入れずに登録するため、登録できません。この間はCSVインポートを使わず、終わったあとにやり直してください。GitHub・パスワードでのログインと、ノートの閲覧は影響を受けません。
+**注意: 手順1から、手順2のVercelのデプロイが終わるまでの間は、CSVインポートが失敗します。** `ownerId` は必須の列で、今のコードはこの列に値を入れずに登録するため、登録できません。この間はCSVインポートを使わず、終わったあとにやり直してください。GitHub・パスワードでのログインと、ノートの閲覧は影響を受けません。
 
 **ロールバック**: マージを取り消した（revertした）場合も、古いコードは `ownerId` を入れられないため、CSVインポートが失敗します。ブランチをもう一度マージするまでの間は、NeonのSQL Editorで次を実行して、既定の持ち主を付けてください。再マージして新しいコードを反映したら、`ALTER TABLE "LearningEntry" ALTER COLUMN "ownerId" DROP DEFAULT;` で戻します。マイグレーションとスキーマには `DEFAULT` を入れていません。
 
