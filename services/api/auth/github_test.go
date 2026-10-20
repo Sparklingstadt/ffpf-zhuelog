@@ -1,8 +1,11 @@
 package auth
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -178,6 +181,66 @@ func TestExchangeBadCode(t *testing.T) {
 	}
 	if f.userCalls.Load() != 0 {
 		t.Fatal("/user must not be called after a token error")
+	}
+}
+
+// tokenErrorLog runs one exchange against a token endpoint that answers
+// {"error": errField} and returns the client's log records.
+func tokenErrorLog(t *testing.T, errField func(r *http.Request) string) []map[string]any {
+	t.Helper()
+	f := newFakeGitHub(t,
+		func(w http.ResponseWriter, r *http.Request) {
+			_ = r.ParseForm()
+			b, _ := json.Marshal(map[string]string{"error": errField(r), "error_description": "desc " + r.PostForm.Get("code")})
+			_, _ = w.Write(b)
+		}, okUser)
+	var buf bytes.Buffer
+	c := f.client()
+	c.Logger = slog.New(slog.NewJSONHandler(&buf, nil))
+	if _, err := c.Exchange(context.Background(), testCode, testVerifier, testRedirectURI); !errors.Is(err, ErrUnauthorized) {
+		t.Fatalf("err = %v, want ErrUnauthorized", err)
+	}
+	for _, s := range []string{testCode, testClientSecret, testVerifier, testGHToken} {
+		if strings.Contains(buf.String(), s) {
+			t.Errorf("log %q contains secret %q", buf.String(), s)
+		}
+	}
+	var recs []map[string]any
+	dec := json.NewDecoder(&buf)
+	for dec.More() {
+		var rec map[string]any
+		if err := dec.Decode(&rec); err != nil {
+			t.Fatalf("decode log: %v", err)
+		}
+		recs = append(recs, rec)
+	}
+	return recs
+}
+
+func TestExchangeTokenErrorIsLogged(t *testing.T) {
+	recs := tokenErrorLog(t, func(*http.Request) string { return "bad_verification_code" })
+	if len(recs) != 1 {
+		t.Fatalf("got %d log records, want 1: %v", len(recs), recs)
+	}
+	if recs[0]["level"] != "WARN" || recs[0]["github_error"] != "bad_verification_code" {
+		t.Fatalf("log record = %v, want WARN with github_error=bad_verification_code", recs[0])
+	}
+}
+
+func TestExchangeTokenErrorLogOmitsSecrets(t *testing.T) {
+	// Worst case: GitHub echoes request values back as the error code.
+	echoes := map[string]func(r *http.Request) string{
+		"code":     func(r *http.Request) string { return r.PostForm.Get("code") },
+		"secret":   func(r *http.Request) string { return r.PostForm.Get("client_secret") },
+		"verifier": func(r *http.Request) string { return r.PostForm.Get("code_verifier") },
+	}
+	for name, field := range echoes {
+		t.Run(name, func(t *testing.T) {
+			recs := tokenErrorLog(t, field)
+			if len(recs) != 1 || recs[0]["github_error"] != "unrecognized" {
+				t.Fatalf("log records = %v, want one with github_error=unrecognized", recs)
+			}
+		})
 	}
 }
 

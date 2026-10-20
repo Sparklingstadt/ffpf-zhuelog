@@ -70,6 +70,7 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 			ClientID:     cfg.GitHubClientID,
 			ClientSecret: cfg.GitHubClientSecret,
 			RedirectURI:  cfg.GitHubRedirectURI,
+			Logger:       logger,
 		},
 		Allowlist: auth.ParseAllowlist(cfg.AllowedGitHubLogins),
 		Passwords: passwords,

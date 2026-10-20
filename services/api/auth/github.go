@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -16,6 +18,12 @@ const (
 	defaultGitHubAPIURL   = "https://api.github.com"
 	githubMaxBody         = 1 << 20
 )
+
+// githubErrorCode matches GitHub's OAuth error codes (bad_verification_code,
+// redirect_uri_mismatch, ...). Anything else is logged as "unrecognized", so a
+// response that echoes the code, verifier or client secret (hex or base64url,
+// with digits or hyphens) never reaches the log.
+var githubErrorCode = regexp.MustCompile(`^[a-z_]{1,64}$`)
 
 // ErrGitHubUnavailable means GitHub could not be reached or returned something
 // unusable (network error, timeout, 5xx, malformed JSON).
@@ -28,12 +36,15 @@ type GitHubUser struct {
 }
 
 // GitHubClient exchanges a mobile app's OAuth code (PKCE) for the GitHub user.
-// HTTP should carry a 10s timeout; main sets it.
+// HTTP should carry a 10s timeout; main sets it. When Logger is non-nil, a
+// token endpoint error code (never the code, verifier or secret) is logged at
+// warn level.
 type GitHubClient struct {
 	HTTP                                *http.Client
 	ClientID, ClientSecret, RedirectURI string
 	TokenURL                            string // default https://github.com/login/oauth/access_token
 	APIURL                              string // default https://api.github.com
+	Logger                              *slog.Logger
 }
 
 // Exchange trades code+verifier for a GitHub access token and returns the
@@ -86,6 +97,13 @@ func (g *GitHubClient) fetchToken(ctx context.Context, code, verifier, redirectU
 		return "", ErrGitHubUnavailable
 	}
 	if out.Error != "" {
+		if g.Logger != nil {
+			code := out.Error
+			if !githubErrorCode.MatchString(code) {
+				code = "unrecognized"
+			}
+			g.Logger.WarnContext(ctx, "github token exchange rejected", "github_error", code)
+		}
 		return "", ErrUnauthorized
 	}
 	if out.AccessToken == "" {
