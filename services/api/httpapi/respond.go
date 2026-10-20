@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
 
 // Fixed client-facing messages. They never include error details.
@@ -62,6 +63,8 @@ func writeServiceError(w http.ResponseWriter, r *http.Request, err error) {
 		writeError(w, http.StatusUnauthorized, "unauthorized", msgUnauthorized)
 	case errors.Is(err, auth.ErrForbidden):
 		writeError(w, http.StatusForbidden, "forbidden", msgForbidden)
+	case errors.Is(err, store.ErrNotFound):
+		writeError(w, http.StatusNotFound, "not_found", msgNotFound)
 	case errors.Is(err, auth.ErrGitHubUnavailable):
 		writeError(w, http.StatusBadGateway, "github_unavailable", msgGitHubUnavailable)
 	case errors.As(err, &tooLarge):

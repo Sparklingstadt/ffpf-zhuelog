@@ -74,6 +74,13 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("POST /v1/auth/refresh", limited(refresh(d.Auth)))
 	mux.Handle("POST /v1/auth/logout", limited(logout(d.Auth)))
 
+	authed := func(h http.Handler) http.Handler { return requireAuth(d.Auth, h) }
+	mux.Handle("GET /v1/entries", authed(listEntries(d.Entries)))
+	mux.Handle("GET /v1/entries/{id}", authed(getEntry(d.Entries)))
+	mux.Handle("POST /v1/batches", authed(createBatch(d.Entries, d.Now)))
+	mux.Handle("PATCH /v1/entries/{id}", authed(patchEntry(d.Entries)))
+	mux.Handle("DELETE /v1/entries/{id}", authed(deleteEntry(d.Entries, d.Now)))
+
 	return wrap(d, jsonMuxErrors(mux))
 }
 
