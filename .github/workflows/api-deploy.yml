@@ -1,0 +1,64 @@
+name: API deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/api/**"
+      - ".github/workflows/api-deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency: api-deploy
+
+jobs:
+  deploy:
+    # GCP の Variables を設定するまでは、デプロイ手順をスキップする（docs/api-deployment.md）。
+    if: vars.GCP_PROJECT_ID != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      REGION: ${{ vars.GCP_REGION }}
+      SERVICE: ${{ vars.API_SERVICE_NAME }}
+      AR_REPOSITORY: zhuelog-api
+      RUNTIME_SA: api-runtime
+      OAUTH_CLIENT_ID: ${{ vars.API_GITHUB_CLIENT_ID }}
+      OAUTH_REDIRECT_URI: ${{ vars.API_GITHUB_REDIRECT_URI }}
+      ALLOWED_LOGINS: ${{ vars.API_ALLOWED_GITHUB_LOGINS }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+      - name: Build and push image
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          image="${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPOSITORY}/${SERVICE}:${SHA}"
+          docker build --tag "$image" services/api
+          docker push "$image"
+          echo "IMAGE=$image" >> "$GITHUB_ENV"
+      - name: Deploy to Cloud Run
+        run: |
+          # AUTH_ALLOWED_GITHUB_LOGINS はカンマを含むため、区切り文字を @ に変える。
+          env_vars="^@^GITHUB_MOBILE_CLIENT_ID=${OAUTH_CLIENT_ID}@GITHUB_MOBILE_REDIRECT_URI=${OAUTH_REDIRECT_URI}@AUTH_ALLOWED_GITHUB_LOGINS=${ALLOWED_LOGINS}"
+          gcloud run deploy "$SERVICE" \
+            --image "$IMAGE" \
+            --region "$REGION" \
+            --project "$PROJECT_ID" \
+            --service-account "${RUNTIME_SA}@${PROJECT_ID}.iam.gserviceaccount.com" \
+            --min-instances 0 \
+            --max-instances 2 \
+            --set-secrets "DATABASE_URL=api-database-url:latest,API_JWT_SECRET=api-jwt-secret:latest,GITHUB_MOBILE_CLIENT_SECRET=api-github-client-secret:latest" \
+            --set-env-vars "$env_vars" \
+            --allow-unauthenticated

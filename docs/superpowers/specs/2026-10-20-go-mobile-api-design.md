@@ -54,6 +54,7 @@ model ApiRefreshToken {
   ownerId        String
   role           String    // "admin" | "member"
   sessionVersion Int?      // member のみ。発行時の PasswordAccount.sessionVersion
+  login          String?   // admin のみ。GitHub のログイン名（リフレッシュ時に許可リストを再確認する）
   tokenHash      String    @unique // SHA-256 の hex
   familyId       String
   expiresAt      DateTime
@@ -103,7 +104,7 @@ HS256 の JWT。有効期限 15 分。クレームは `iss`・`aud`（固定値�
 - 失効済みのトークンが提示されたら盗用とみなし、ファミリー全体を失効させて 401。
 - リフレッシュ時もアクセストークンと同じ失効確認を行う。member は行の `sessionVersion` と DB の値を比べる。失効していればファミリーを失効させて 401（admin が許可リストから外れた場合は 403）。
 - `POST /v1/auth/logout` は `{refreshToken}` のファミリーを失効させて 204。未知のトークンでも 204。
-- ログイン成功時に、その `ownerId` の期限切れ・失効済みの行を削除する。cron は使わない。
+- ログイン成功時に、その `ownerId` の期限切れの行を削除する。失効済みの行は、同じファミリーに未失効かつ期限内の行が残っていない場合に限って削除する（生きているファミリーの失効済みトークンを残すことで、再ログイン後も再利用検知が効く）。cron は使わない。
 
 ## エンドポイント
 
