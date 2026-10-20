@@ -47,7 +47,8 @@ func wrap(d Deps, next http.Handler) http.Handler {
 }
 
 func recoverer(logger *slog.Logger, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		w := &statusWriter{ResponseWriter: rw, status: http.StatusOK}
 		defer func() {
 			v := recover()
 			if v == nil {
@@ -57,6 +58,9 @@ func recoverer(logger *slog.Logger, next http.Handler) http.Handler {
 				panic(v)
 			}
 			logger.Error("panic recovered", "panic", v, "stack", string(debug.Stack()))
+			if w.wrote {
+				return // the response is already on the wire; a second status would be wrong
+			}
 			writeError(w, http.StatusInternalServerError, "internal", msgInternal)
 		}()
 		next.ServeHTTP(w, r)
@@ -96,7 +100,7 @@ func accessLog(logger *slog.Logger, now func() time.Time, next http.Handler) htt
 		completed := false
 		defer func() {
 			status := sw.status
-			if !completed { // a panic is unwinding; recoverer answers 500
+			if !completed && !sw.wrote { // a panic is unwinding; recoverer answers 500
 				status = http.StatusInternalServerError
 			}
 			logger.Info("request",
@@ -202,10 +206,12 @@ func (r *RateLimiter) Allow(key string) bool {
 // X-Forwarded-For (the one our own proxy appended) if present, otherwise the
 // host part of RemoteAddr.
 func clientKey(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		last := xff
-		if i := strings.LastIndexByte(xff, ','); i >= 0 {
-			last = xff[i+1:]
+	// A client can send several X-Forwarded-For lines; only the last value of
+	// the last line was appended by our own proxy.
+	if vals := r.Header.Values("X-Forwarded-For"); len(vals) > 0 {
+		last := vals[len(vals)-1]
+		if i := strings.LastIndexByte(last, ','); i >= 0 {
+			last = last[i+1:]
 		}
 		if last = strings.TrimSpace(last); last != "" {
 			return last

@@ -48,6 +48,25 @@ func TestRecoverReturns500(t *testing.T) {
 	}
 }
 
+func TestRecoverAfterHeadersSentKeepsResponse(t *testing.T) {
+	buf := &bytes.Buffer{}
+	d := Deps{Logger: slog.New(slog.NewJSONHandler(buf, nil)), Now: newClock().Now}
+	h := wrap(d, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte("partial"))
+		panic("late-boom")
+	}))
+
+	w := do(h, http.MethodGet, "/x", "", nil)
+
+	if w.Code != http.StatusAccepted || w.Body.String() != "partial" {
+		t.Fatalf("response = %d %q, want the already-sent 202 \"partial\" untouched", w.Code, w.Body.String())
+	}
+	if !strings.Contains(buf.String(), "late-boom") {
+		t.Fatalf("panic not logged: %s", buf.String())
+	}
+}
+
 func TestRecoverRepanicsAbortHandler(t *testing.T) {
 	d := Deps{Logger: slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil)), Now: newClock().Now}
 	h := wrap(d, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
@@ -161,6 +180,8 @@ func TestClientKey(t *testing.T) {
 	cases := []struct {
 		name, remote, xff, want string
 	}{
+		{"trailing comma falls back", "192.0.2.7:5555", "1.1.1.1,", "192.0.2.7"},
+		{"trailing whitespace", "10.0.0.1:1", "1.1.1.1, 203.0.113.9   ", "203.0.113.9"},
 		{"remote addr host", "192.0.2.7:5555", "", "192.0.2.7"},
 		{"remote addr without port", "192.0.2.7", "", "192.0.2.7"},
 		{"ipv6 remote", "[2001:db8::1]:80", "", "2001:db8::1"},
@@ -179,6 +200,45 @@ func TestClientKey(t *testing.T) {
 				t.Fatalf("clientKey = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestClientKeyMultipleXFFLines(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.RemoteAddr = "192.0.2.7:5555"
+	r.Header.Add("X-Forwarded-For", "6.6.6.6")
+	r.Header.Add("X-Forwarded-For", "1.1.1.1, 203.0.113.9")
+	if got := clientKey(r); got != "203.0.113.9" {
+		t.Fatalf("clientKey = %q, want the last value of the last line", got)
+	}
+
+	r = httptest.NewRequest(http.MethodGet, "/", nil)
+	r.RemoteAddr = "192.0.2.7:5555"
+	r.Header.Add("X-Forwarded-For", "6.6.6.6")
+	r.Header.Add("X-Forwarded-For", "")
+	if got := clientKey(r); got != "192.0.2.7" {
+		t.Fatalf("clientKey = %q, want RemoteAddr host when the last line is empty", got)
+	}
+}
+
+func TestAuthRateLimitIgnoresClientControlledXFFLines(t *testing.T) {
+	a := &fakeAuth{password: func(context.Context, string, string) (auth.TokenPair, error) {
+		return auth.TokenPair{}, auth.ErrUnauthorized
+	}}
+	h, _ := testRouter(t, a, fakePinger{}, nil)
+	body := `{"loginId":"someone","password":"pw"}`
+	for i := range 11 {
+		r := httptest.NewRequest(http.MethodPost, "/v1/auth/password", strings.NewReader(body))
+		r.Header.Add("X-Forwarded-For", fmt.Sprintf("10.9.9.%d", i)) // client-chosen line
+		r.Header.Add("X-Forwarded-For", "203.0.113.77")              // proxy-appended line
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if i < 10 && w.Code != http.StatusUnauthorized {
+			t.Fatalf("request %d: status = %d, want 401", i+1, w.Code)
+		}
+		if i == 10 {
+			wantError(t, w, http.StatusTooManyRequests, "rate_limited")
+		}
 	}
 }
 

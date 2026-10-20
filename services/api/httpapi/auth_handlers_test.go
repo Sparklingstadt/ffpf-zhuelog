@@ -273,6 +273,62 @@ func TestLogoutHandler(t *testing.T) {
 	})
 }
 
+func TestNullAndNonObjectBodiesAreRejected(t *testing.T) {
+	// The fake has no hooks, so reaching the service would yield 500, not 400.
+	routes := map[string]string{
+		"/v1/auth/github":   `{"code":"c","codeVerifier":"v","redirectUri":"r"}`,
+		"/v1/auth/password": `{"loginId":"a","password":"b"}`,
+		"/v1/auth/refresh":  `{"refreshToken":"t"}`,
+		"/v1/auth/logout":   `{"refreshToken":"t"}`,
+	}
+	nullField := map[string]string{
+		"/v1/auth/github":   `{"code":null,"codeVerifier":"v","redirectUri":"r"}`,
+		"/v1/auth/password": `{"loginId":"a","password":null}`,
+		"/v1/auth/refresh":  `{"refreshToken":null}`,
+		"/v1/auth/logout":   `{"refreshToken":null}`,
+	}
+	for path := range routes {
+		for name, body := range map[string]string{
+			"null body":   `null`,
+			"array":       `[]`,
+			"string":      `"x"`,
+			"number":      `1`,
+			"bool":        `true`,
+			"null field":  nullField[path],
+			"null spaced": ` null `,
+		} {
+			t.Run(path+" "+name, func(t *testing.T) {
+				h, _ := testRouter(t, &fakeAuth{}, fakePinger{}, nil)
+				wantError(t, do(h, http.MethodPost, path, body, nil), http.StatusBadRequest, "invalid_request")
+			})
+		}
+	}
+	// A valid object with surrounding whitespace is still fine.
+	a := &fakeAuth{logout: func(context.Context, string) error { return nil }}
+	h, _ := testRouter(t, a, fakePinger{}, nil)
+	if w := do(h, http.MethodPost, "/v1/auth/logout", " \n"+routes["/v1/auth/logout"]+"\n ", nil); w.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", w.Code)
+	}
+}
+
+func TestBodyOfExactlyLimitIsNotTooLarge(t *testing.T) {
+	a := &fakeAuth{password: func(context.Context, string, string) (auth.TokenPair, error) {
+		return auth.TokenPair{}, auth.ErrUnauthorized
+	}}
+	h, _ := testRouter(t, a, fakePinger{}, nil)
+
+	prefix, suffix := `{"loginId":"a","password":"`, `"}`
+	body := prefix + strings.Repeat("x", 1<<20-len(prefix)-len(suffix)) + suffix
+	if len(body) != 1<<20 {
+		t.Fatalf("test body is %d bytes", len(body))
+	}
+	w := do(h, http.MethodPost, "/v1/auth/password", body, nil)
+	if w.Code == http.StatusRequestEntityTooLarge {
+		t.Fatal("a body of exactly 1 MiB was rejected as too large")
+	}
+	wantError(t, w, http.StatusUnauthorized, "unauthorized") // decoded fine and reached the service
+}
+
 func TestBodyTooLarge(t *testing.T) {
 	a := &fakeAuth{password: func(context.Context, string, string) (auth.TokenPair, error) {
 		t.Error("service called for an oversized body")

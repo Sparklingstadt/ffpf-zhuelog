@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -23,12 +24,30 @@ func writeTokens(w http.ResponseWriter, pair auth.TokenPair) {
 	})
 }
 
-// decodeBody reads exactly one JSON value from the request body into dst,
-// rejecting unknown fields and any data after the value.
+var errInvalidBody = errors.New("httpapi: request body is not a JSON object")
+
+// jsonString is a string field that, unlike a plain string, rejects JSON null.
+type jsonString string
+
+func (s *jsonString) UnmarshalJSON(b []byte) error {
+	if bytes.Equal(bytes.TrimSpace(b), []byte("null")) {
+		return errors.New("httpapi: null is not a string")
+	}
+	var v string
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+	*s = jsonString(v)
+	return nil
+}
+
+// decodeBody reads exactly one JSON object from the request body into dst,
+// rejecting null and other non-objects, unknown fields and any data after the
+// object.
 func decodeBody(r *http.Request, dst any) error {
+	var raw json.RawMessage
 	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(dst); err != nil {
+	if err := dec.Decode(&raw); err != nil {
 		return err
 	}
 	if err := dec.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
@@ -37,14 +56,19 @@ func decodeBody(r *http.Request, dst any) error {
 		}
 		return err
 	}
-	return nil
+	if len(raw) == 0 || raw[0] != '{' {
+		return errInvalidBody
+	}
+	inner := json.NewDecoder(bytes.NewReader(raw))
+	inner.DisallowUnknownFields()
+	return inner.Decode(dst)
 }
 
 func loginGitHub(a Auth) http.Handler {
 	type request struct {
-		Code         string `json:"code"`
-		CodeVerifier string `json:"codeVerifier"`
-		RedirectURI  string `json:"redirectUri"`
+		Code         jsonString `json:"code"`
+		CodeVerifier jsonString `json:"codeVerifier"`
+		RedirectURI  jsonString `json:"redirectUri"`
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req request
@@ -56,7 +80,7 @@ func loginGitHub(a Auth) http.Handler {
 			writeError(w, http.StatusBadRequest, "invalid_request", msgBadRequest)
 			return
 		}
-		pair, err := a.LoginGitHub(r.Context(), req.Code, req.CodeVerifier, req.RedirectURI)
+		pair, err := a.LoginGitHub(r.Context(), string(req.Code), string(req.CodeVerifier), string(req.RedirectURI))
 		if err != nil {
 			writeServiceError(w, r, err)
 			return
@@ -67,8 +91,8 @@ func loginGitHub(a Auth) http.Handler {
 
 func loginPassword(a Auth) http.Handler {
 	type request struct {
-		LoginID  string `json:"loginId"`
-		Password string `json:"password"`
+		LoginID  jsonString `json:"loginId"`
+		Password jsonString `json:"password"`
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req request
@@ -76,7 +100,7 @@ func loginPassword(a Auth) http.Handler {
 			writeBodyError(w, r, err)
 			return
 		}
-		pair, err := a.LoginPassword(r.Context(), req.LoginID, req.Password)
+		pair, err := a.LoginPassword(r.Context(), string(req.LoginID), string(req.Password))
 		if err != nil {
 			writeServiceError(w, r, err)
 			return
@@ -86,7 +110,7 @@ func loginPassword(a Auth) http.Handler {
 }
 
 type refreshTokenRequest struct {
-	RefreshToken string `json:"refreshToken"`
+	RefreshToken jsonString `json:"refreshToken"`
 }
 
 func refresh(a Auth) http.Handler {
@@ -96,7 +120,7 @@ func refresh(a Auth) http.Handler {
 			writeBodyError(w, r, err)
 			return
 		}
-		pair, err := a.Refresh(r.Context(), req.RefreshToken)
+		pair, err := a.Refresh(r.Context(), string(req.RefreshToken))
 		if err != nil {
 			writeServiceError(w, r, err)
 			return
@@ -112,7 +136,7 @@ func logout(a Auth) http.Handler {
 			writeBodyError(w, r, err)
 			return
 		}
-		if err := a.Logout(r.Context(), req.RefreshToken); err != nil {
+		if err := a.Logout(r.Context(), string(req.RefreshToken)); err != nil {
 			writeServiceError(w, r, err)
 			return
 		}
