@@ -100,6 +100,10 @@ rm .env.production.local
 
 開発用PostgreSQLはDockerホストの `127.0.0.1` にだけ公開されます。`.env` はGit管理対象外です。秘密情報をコミットせず、公開・漏洩した可能性がある場合は該当する認証情報を直ちに失効・再発行してください。
 
+## ネイティブアプリ向け API
+
+`services/api/` に、ネイティブアプリ（iOS など）から自分の学習ノートを読み書きするための Go 製 API があります。Web とは別のプロセスとして Cloud Run で動かし、DB は本番と同じ Neon を共有します。ローカルでのテストは `pnpm run test:unit` に含まれます（DB を使うテストは `API_TEST_DATABASE_URL` が無いと skip されます）。GCP の準備、モバイル用 GitHub OAuth App の登録、本番へのマイグレーション適用、デプロイの手順は [docs/api-deployment.md](docs/api-deployment.md) を参照してください。
+
 ## 表示テーマ
 
 全ページ右上の「システム / ライト / ダーク」から切り替えられます。初期値は「システム」で、OSの配色変更にも自動で追従します。手動で選んだテーマだけを端末の `zhuelog:theme:v1` に保存し、再読み込み・ページ移動・同じブラウザーの別タブでも反映します。DBやアカウントには保存しません。

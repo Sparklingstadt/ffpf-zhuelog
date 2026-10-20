@@ -29,12 +29,59 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: pnpm
+      # test:unit also runs the Go API tests (DB tests skip without API_TEST_DATABASE_URL).
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: services/api/go.mod
+          cache-dependency-path: services/api/go.sum
       - run: pnpm install --frozen-lockfile
       - run: pnpm audit
       - run: pnpm run typecheck
       - run: pnpm run lint
       - run: pnpm run test:unit
       - run: pnpm run build
+
+  go:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://zhuelog_api_test:zhuelog_api_test@127.0.0.1:5432/zhuelog_api_test
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: zhuelog_api_test
+          POSTGRES_PASSWORD: zhuelog_api_test
+          POSTGRES_DB: zhuelog_api_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U zhuelog_api_test -d zhuelog_api_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24 # the Vercel runtime
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # The schema is owned by Prisma; Go never runs DDL.
+      - run: pnpm exec prisma migrate deploy
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: services/api/go.mod
+          cache-dependency-path: services/api/go.sum
+      - run: go vet ./...
+        working-directory: services/api
+      - run: go test -race ./...
+        working-directory: services/api
+        env:
+          API_TEST_DATABASE_URL: ${{ env.DATABASE_URL }}
 
   e2e:
     runs-on: ubuntu-latest
