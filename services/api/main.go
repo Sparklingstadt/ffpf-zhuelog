@@ -17,8 +17,8 @@ import (
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
 
-// shutdownTimeout stays under Cloud Run's 10-second grace period between
-// SIGTERM and SIGKILL.
+// shutdownTimeout stays well under ECS's stop timeout (30 seconds by default)
+// between SIGTERM and SIGKILL.
 const shutdownTimeout = 8 * time.Second
 
 func main() {

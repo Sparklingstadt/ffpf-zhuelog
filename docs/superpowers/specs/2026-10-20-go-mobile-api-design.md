@@ -2,7 +2,7 @@
 
 ## 目的と承認済みの要件
 
-ネイティブアプリ（iOS など）から、自分の学習データ（`LearningEntry`・`Hint`）を読み書きできる API を Go で新設する。Web（Next.js）とは別プロセスとして Cloud Run で常駐させ、DB は本番と同じ Neon を共有する。
+ネイティブアプリ（iOS など）から、自分の学習データ（`LearningEntry`・`Hint`）を読み書きできる API を Go で新設する。Web（Next.js）とは別プロセスとして AWS ECS Express Mode（`ap-northeast-1`）で常駐させ、DB は本番と同じ Neon を共有する。
 
 - 利用者は GitHub の admin（`AUTH_ALLOWED_GITHUB_LOGINS`）とパスワード会員（`PasswordAccount`）。ゲストはログインできない。
 - アプリはログイン後、Go API が発行するアクセス JWT とリフレッシュトークンで API を呼ぶ。
@@ -33,7 +33,7 @@ services/api/
 
 | 名前                                                      | 内容                                                                           |
 | --------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `PORT`                                                    | 待ち受けポート（Cloud Run が設定。既定 8080）                                  |
+| `PORT`                                                    | 待ち受けポート（既定 8080。ECS ではコンテナポート 8080 を使う）                |
 | `DATABASE_URL`                                            | Neon の接続文字列（pooled）                                                    |
 | `API_JWT_SECRET`                                          | アクセス JWT の HS256 鍵。32 バイト以上。Auth.js の `AUTH_SECRET` とは別       |
 | `GITHUB_MOBILE_CLIENT_ID` / `GITHUB_MOBILE_CLIENT_SECRET` | モバイル用に新規登録する GitHub OAuth App                                      |
@@ -121,10 +121,10 @@ HS256 の JWT。有効期限 15 分。クレームは `iss`・`aud`（固定値�
 | POST     | `/v1/batches`                | 一括作成。201                                             |
 | PATCH    | `/v1/entries/{id}`           | 部分更新                                                  |
 | DELETE   | `/v1/entries/{id}`           | ゴミ箱へ移動。204                                         |
-| GET      | `/health`                    | DB に ping して 200。失敗時 503。Cloud Run の確認用       |
-| GET      | `/healthz`                   | `/health` と同じ。ローカル用（Cloud Run では予約済み）    |
+| GET      | `/health`                    | DB に ping して 200。失敗時 503。ALB のヘルスチェック用   |
+| GET      | `/healthz`                   | `/health` と同じ。ローカル用                              |
 
-Cloud Run は `/healthz` を予約しており、このパスへのリクエストはコンテナに届かない。そのため Cloud Run での確認には `/health` を使い、`/healthz` はローカルでの確認用に残す。どちらもレート制限と認証の対象外。
+本番の確認と ALB のヘルスチェックには `/health` を使い、`/healthz` はローカルでの確認用に残す（当初の候補だった Cloud Run が `/healthz` を予約していたため `/health` を正とした）。どちらもレート制限と認証の対象外。
 
 ### 所有者とゴミ箱
 
@@ -183,7 +183,7 @@ Cloud Run は `/healthz` を予約しており、このパスへのリクエス�
 | 502  | `github_unavailable` | GitHub との通信失敗                      |
 | 500  | `internal`           | その他。詳細はログにだけ出す             |
 
-panic はミドルウェアで捕まえて 500 にする。`/v1/auth/*` には IP ごとにメモリ上で 1 分 10 回の制限をかける（インスタンスごとの制限で、パスワードの総当たりは DB のロックで防ぐ）。IP は Cloud Run が付ける `X-Forwarded-For` の末尾の値を使う。
+panic はミドルウェアで捕まえて 500 にする。`/v1/auth/*` には IP ごとにメモリ上で 1 分 10 回の制限をかける（インスタンスごとの制限で、パスワードの総当たりは DB のロックで防ぐ）。IP は ALB が付ける `X-Forwarded-For` の末尾の値を使う。
 
 ## テスト
 
@@ -195,10 +195,11 @@ panic はミドルウェアで捕まえて 500 にする。`/v1/auth/*` には I
 ## デプロイ
 
 - `services/api/Dockerfile`: `golang` イメージで `CGO_ENABLED=0` の静的バイナリを作り、`gcr.io/distroless/static` で動かす。非 root ユーザー。
-- `.github/workflows/api-deploy.yml`: main への push のうち `services/api/**` に変更があるときに、Workload Identity Federation で GCP に認証し、Artifact Registry へ push して `gcloud run deploy` する。
-- 秘密情報（`DATABASE_URL`・`GITHUB_MOBILE_CLIENT_SECRET`・`API_JWT_SECRET`）は Secret Manager から注入する。
-- Cloud Run は最小インスタンス 0、最大インスタンス 2（Neon の接続数を抑える）。
-- GCP 側の準備（WIF プール・サービスアカウント・Artifact Registry・シークレットの登録）と、モバイル用 GitHub OAuth App の登録はユーザーが行う。手順は `docs/api-deployment.md` に書く。
+- AWS ECS Express Mode（`ap-northeast-1`）で動かす。詳細は `docs/superpowers/specs/2026-10-20-go-api-aws-deploy-design.md`。
+- `.github/workflows/api-deploy.yml`: main への push のうち `services/api/**` に変更があるときに、GitHub OIDC で AWS のロールを引き受け、ECR へ push して `aws-actions/amazon-ecs-deploy-express-service` でデプロイする。
+- 秘密情報（`DATABASE_URL`・`GITHUB_MOBILE_CLIENT_SECRET`・`API_JWT_SECRET`）は Secrets Manager から注入する。
+- タスクは最小 1、最大 2（Neon の接続数を抑える）。
+- AWS 側の準備（ECR・IAM・Secrets Manager）と、モバイル用 GitHub OAuth App の登録はユーザーが行う。手順は `docs/api-deployment.md` に書く。
 
 ## 範囲外
 

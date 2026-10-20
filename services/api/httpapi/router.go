@@ -65,8 +65,8 @@ func NewRouter(d Deps) http.Handler {
 	}
 
 	mux := http.NewServeMux()
-	// Cloud Run reserves /healthz (requests never reach the container), so its
-	// checks use /health; /healthz is kept for local use.
+	// Production and the ALB health check use /health; /healthz is kept for
+	// local use.
 	health := healthz(d.DB)
 	mux.Handle("GET /health", health)
 	mux.Handle("GET /healthz", health)

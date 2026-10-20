@@ -108,8 +108,8 @@ func TestNotFoundAndMethodNotAllowed(t *testing.T) {
 	wantError(t, w, http.StatusMethodNotAllowed, "method_not_allowed")
 }
 
-// healthPaths are the health-check routes. Cloud Run reserves /healthz (it
-// never reaches the container), so /health is the one used there.
+// healthPaths are the health-check routes: /health for production and the
+// ALB, /healthz for local use.
 var healthPaths = []string{"/health", "/healthz"}
 
 func TestHealthz(t *testing.T) {
