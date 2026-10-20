@@ -75,7 +75,7 @@ gcloud iam service-accounts add-iam-policy-binding "$RUNTIME_SA" --project "$PRO
 
 ### Workload Identity Federation
 
-GitHub Actions がキーなしで GCP に認証するための設定です。**このリポジトリだけ** が使えるように、属性条件で `Sparklingstadt/ffpf-zhuelog` に限定します。
+GitHub Actions がキーなしで GCP に認証するための設定です。属性条件で、**このリポジトリ（`Sparklingstadt/ffpf-zhuelog`）の main ブランチで動くワークフローだけ** に限定します（`assertion.ref == 'refs/heads/main'`）。ほかのブランチや pull request のワークフローは認証できないので、手動実行（`workflow_dispatch`）も main を選んで行います。
 
 ```bash
 gcloud iam workload-identity-pools create github --location global --project "$PROJECT_ID"
@@ -84,11 +84,19 @@ gcloud iam workload-identity-pools providers create-oidc github-actions \
   --location global --workload-identity-pool github --project "$PROJECT_ID" \
   --issuer-uri "https://token.actions.githubusercontent.com" \
   --attribute-mapping "google.subject=assertion.sub,attribute.repository=assertion.repository" \
-  --attribute-condition 'attribute.repository == "Sparklingstadt/ffpf-zhuelog"'
+  --attribute-condition "attribute.repository == 'Sparklingstadt/ffpf-zhuelog' && assertion.ref == 'refs/heads/main'"
 
 gcloud iam service-accounts add-iam-policy-binding "$DEPLOY_SA" --project "$PROJECT_ID" \
   --role roles/iam.workloadIdentityUser \
   --member "principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/attribute.repository/Sparklingstadt/ffpf-zhuelog"
+```
+
+プロバイダを `assertion.ref` の条件なしで作成済みの場合は、次のコマンドで条件を更新してください。
+
+```bash
+gcloud iam workload-identity-pools providers update-oidc github-actions \
+  --location global --workload-identity-pool github --project "$PROJECT_ID" \
+  --attribute-condition "attribute.repository == 'Sparklingstadt/ffpf-zhuelog' && assertion.ref == 'refs/heads/main'"
 ```
 
 プロバイダのリソース名は、Actions Variable `GCP_WIF_PROVIDER` に設定します。
@@ -107,11 +115,16 @@ workflow が参照するシークレットは次の 3 つです。名前は変�
 | `api-jwt-secret`           | アクセス JWT の HS256 鍵。`openssl rand -base64 48` で作る |
 | `api-github-client-secret` | モバイル用 GitHub OAuth App の Client Secret               |
 
+値はコマンドラインに書かず、`read -rs` で入力します（入力した文字は画面に表示されません）。値はシェル変数から標準入力で `gcloud` に渡すので、シェルの履歴にもファイルにも残りません（`printf` はシェルの組み込みコマンドなので、プロセス一覧にも出ません）。`api-jwt-secret` は `openssl` で作った値をそのまま渡すため、値を入力することも目にすることもありません。
+
 ```bash
-# 値は標準入力から渡し、シェルの履歴やファイルに残さない
-printf '%s' "<Neon の接続文字列>" | gcloud secrets create api-database-url --data-file=- --project "$PROJECT_ID"
+# Neon の接続文字列を貼り付けて Enter
+read -rs V && printf '%s' "$V" | gcloud secrets create api-database-url --data-file=- --project "$PROJECT_ID"; unset V
+
 openssl rand -base64 48 | tr -d '\n' | gcloud secrets create api-jwt-secret --data-file=- --project "$PROJECT_ID"
-printf '%s' "<Client Secret>" | gcloud secrets create api-github-client-secret --data-file=- --project "$PROJECT_ID"
+
+# モバイル用 GitHub OAuth App の Client Secret を貼り付けて Enter
+read -rs V && printf '%s' "$V" | gcloud secrets create api-github-client-secret --data-file=- --project "$PROJECT_ID"; unset V
 
 for s in api-database-url api-jwt-secret api-github-client-secret; do
   gcloud secrets add-iam-policy-binding "$s" --project "$PROJECT_ID" \
@@ -139,6 +152,8 @@ GitHub のリポジトリの **Settings → Secrets and variables → Actions �
 | `API_ALLOWED_GITHUB_LOGINS` | admin の許可リスト。Web の `AUTH_ALLOWED_GITHUB_LOGINS` と同じ値（カンマ区切り）  |
 
 最後の 3 つは Cloud Run の環境変数として渡されます。`API_ALLOWED_GITHUB_LOGINS` はカンマを含むため、workflow は `gcloud run deploy --set-env-vars` に区切り文字 `@` を指定して渡しています（`^@^KEY=値@KEY2=値`）。値の中に `@` を含めないでください。
+
+**`API_SERVICE_NAME` に `zhuelog` を使わないでください。** これは、削除した Web の Cloud Run デプロイが使っていたサービス名です。GCP にそのサービスが残っていると、`gcloud run deploy` は新しいサービスを作らずにその古いサービスへ Go API のリビジョンを追加し、今回指定していない設定（ドメインの割り当て、IAM、リソースの設定など）を引き継いだまま置き換えてしまいます。`zhuelog-api` のような新しい名前にしてください。
 
 ## 4. マージの前に: 本番 Neon へのマイグレーション適用
 
