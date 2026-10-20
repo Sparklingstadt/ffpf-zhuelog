@@ -69,3 +69,22 @@ model Follow {
   @@id([followerId, followeeId])
   @@index([followeeId])
 }
+
+// Refresh tokens issued by the Go mobile API (services/api). Only the SHA-256
+// hash of the token is stored. Tokens of one login share a familyId so reuse of
+// a rotated token can revoke the whole family. ownerId has no foreign key:
+// admins have no row in the database.
+model ApiRefreshToken {
+  id             String    @id @default(cuid())
+  ownerId        String
+  role           String // "admin" | "member"
+  sessionVersion Int? // member only: PasswordAccount.sessionVersion at issue time
+  tokenHash      String    @unique // SHA-256 hex
+  familyId       String
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([familyId])
+  @@index([ownerId])
+}
