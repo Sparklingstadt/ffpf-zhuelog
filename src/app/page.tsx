@@ -12,11 +12,9 @@ import {
   showsRecords,
   type RecordOwner,
 } from "@/application/identity/use-cases/resolve-record-owner";
-import type { AuthenticatedUser } from "@/domain/identity/entities/authenticated-user";
 import { learningUseCases } from "@/composition/learning-container";
 import { loadRecordOwnerView } from "@/composition/record-owner-options";
 import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
-import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { PageShell } from "@/presentation/components/layout/page-shell";
 import { CsvFormatGuide } from "@/presentation/components/learning/csv-format-guide";
@@ -73,11 +71,9 @@ type HomeProps = {
 };
 
 function HomeHeader({
-  user,
   owner,
   total,
 }: {
-  user: AuthenticatedUser;
   owner: RecordOwner;
   // Number of entries for the viewed owner; null when no notes are shown.
   total: number | null;
@@ -98,25 +94,22 @@ function HomeHeader({
           </p>
         </div>
       </div>
-      <div className="flex flex-col items-start gap-2 sm:items-end">
-        <AuthControls user={user} />
-        <div className="flex flex-wrap gap-2 sm:justify-end">
-          {hasNotes ? (
-            <Button asChild variant="outline" size="sm">
-              <Link href={withRecordOwner("/logs", owner)}>
-                <CalendarDays /> 日付から見る
-              </Link>
-            </Button>
-          ) : null}
-        </div>
+      <div className="flex flex-wrap items-center gap-2">
         {total === null ? null : (
-          <div className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3 text-sm shadow-xs">
+          <div className="flex h-9 items-center gap-2 rounded-lg border bg-card px-3 text-sm shadow-xs">
             <Database className="size-4 text-muted-foreground" />
             <span className="text-muted-foreground">登録済み</span>
-            <strong className="font-mono text-lg">{total}</strong>
+            <strong className="font-mono text-base">{total}</strong>
             <span className="text-muted-foreground">文</span>
           </div>
         )}
+        {hasNotes ? (
+          <Button asChild variant="outline" size="lg">
+            <Link href={withRecordOwner("/logs", owner)}>
+              <CalendarDays /> 日付から見る
+            </Link>
+          </Button>
+        ) : null}
       </div>
     </header>
   );
@@ -132,8 +125,8 @@ export default async function Home({ searchParams }: HomeProps) {
   // Guests have no notes of their own.
   if (owner.kind === "denied" && owner.reason === "guest") {
     return (
-      <PageShell width="6xl" spacious>
-        <HomeHeader user={user} owner={owner} total={null} />
+      <PageShell user={user} width="6xl" spacious>
+        <HomeHeader owner={owner} total={null} />
         <Card className="border-dashed py-14 text-center shadow-none">
           <CardContent className="flex flex-col items-center gap-4">
             <div className="rounded-full bg-muted p-3">
@@ -150,8 +143,8 @@ export default async function Home({ searchParams }: HomeProps) {
 
   if (owner.kind === "denied") {
     return (
-      <PageShell width="6xl" spacious>
-        <HomeHeader user={user} owner={owner} total={null} />
+      <PageShell user={user} width="6xl" spacious>
+        <HomeHeader owner={owner} total={null} />
         <ReauthNotice subject="学習ノート" />
       </PageShell>
     );
@@ -164,8 +157,8 @@ export default async function Home({ searchParams }: HomeProps) {
   const ownNotes = owner.kind === "self";
 
   return (
-    <PageShell width="6xl" spacious>
-      <HomeHeader user={user} owner={owner} total={total} />
+    <PageShell user={user} width="6xl" spacious>
+      <HomeHeader owner={owner} total={total} />
 
       <RecordOwnerControls owner={owner} view={view} path="/" />
 
@@ -226,7 +219,7 @@ export default async function Home({ searchParams }: HomeProps) {
         {/* Imports always go to the signed-in user's own notes, so the form
             only appears on them. */}
         {ownNotes ? (
-          <aside className="order-1 lg:order-2 lg:sticky lg:top-8">
+          <aside className="order-1 lg:order-2 lg:sticky lg:top-24">
             <Card>
               <CardHeader>
                 <div className="mb-2 flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">

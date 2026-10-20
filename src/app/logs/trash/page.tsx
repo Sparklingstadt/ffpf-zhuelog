@@ -7,7 +7,6 @@ import {
   purgeLearningEntryAction,
   restoreLearningEntryAction,
 } from "@/presentation/actions/note-trash-actions";
-import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
@@ -39,7 +38,7 @@ export default async function LearningTrashPage() {
       : null;
 
   return (
-    <PageShell width="5xl">
+    <PageShell user={user} width="5xl">
       <PageHeader
         icon={Languages}
         eyebrow="Learning notes trash"
@@ -62,7 +61,6 @@ export default async function LearningTrashPage() {
                 confirmMessage={emptyConfirmMessage(trash.total)}
               />
             ) : null}
-            <AuthControls user={user} />
           </>
         }
       />

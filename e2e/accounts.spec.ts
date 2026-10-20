@@ -27,7 +27,7 @@ test("admin creates a member who can open their notes", async ({
 }) => {
   await asAdmin(context);
   await page.goto("/");
-  await expect(page.getByText("ロール：管理者")).toBeVisible();
+  await expect(page.getByText("管理者", { exact: true })).toBeVisible();
   await page.goto("/admin/accounts");
   await page.getByLabel("ログインID", { exact: true }).fill("taro");
   await page.getByLabel("表示名").fill("太郎");
@@ -44,7 +44,9 @@ test("admin creates a member who can open their notes", async ({
       memberPage.getByRole("heading", { name: "日付別の学習ノート" }),
     ).toBeVisible();
     await expect(memberPage.getByText("太郎")).toBeVisible();
-    await expect(memberPage.getByText("ロール：メンバー")).toBeVisible();
+    await expect(
+      memberPage.getByText("メンバー", { exact: true }),
+    ).toBeVisible();
   } finally {
     await memberContext.close();
   }

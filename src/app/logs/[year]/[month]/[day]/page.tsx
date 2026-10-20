@@ -6,7 +6,6 @@ import { showsRecords } from "@/application/identity/use-cases/resolve-record-ow
 import { learningUseCases } from "@/composition/learning-container";
 import { loadRecordOwnerView } from "@/composition/record-owner-options";
 import { parseLogDate } from "@/domain/calendar/value-objects/log-date";
-import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { EmptyState } from "@/presentation/components/layout/empty-state";
 import { PageHeader } from "@/presentation/components/layout/page-header";
@@ -63,7 +62,7 @@ export default async function LogDatePage({
     : [[], null];
 
   return (
-    <PageShell width="5xl">
+    <PageShell user={user} width="5xl">
       <PageHeader
         icon={Languages}
         eyebrow="Daily learning log"
@@ -79,7 +78,6 @@ export default async function LogDatePage({
               </Link>
             </Button>
             {owner.kind === "self" ? <TrashLink href="/logs/trash" /> : null}
-            <AuthControls user={user} />
           </>
         }
       />
