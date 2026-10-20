@@ -185,7 +185,7 @@ panic はミドルウェアで捕まえて 500 にする。`/v1/auth/*` には I
 
 - `auth`: JWT の発行と検証（期限切れ・署名違い・`aud` 違い）、許可リストの照合、`sessionVersion` による失効、リフレッシュのローテーションと再利用検知、Web が作った scrypt ハッシュの検証（Node で作ったハッシュをテストデータに含める）、GitHub のコード交換（`httptest.Server`）。
 - `httpapi`: `httptest` で全エンドポイントの成功とエラーを確認する。store はモック。
-- `store`: `compose.yaml` の Postgres に `prisma migrate deploy` を適用した DB で、所有者の絞り込み、ゴミ箱、トランザクション、Cascade、ログイン試行の予約とロックを確認する。`DATABASE_URL` が無ければ skip する。
+- `store`: `compose.yaml` の Postgres に `prisma migrate deploy` を適用した DB で、所有者の絞り込み、ゴミ箱、トランザクション、Cascade、ログイン試行の予約とロックを確認する。本番 DB を誤って書き換えないよう、接続先は `DATABASE_URL` ではなく専用の `API_TEST_DATABASE_URL` から読み、無ければ skip する。
 - `scripts/test-unit.mjs` に `services/api` の `go vet` と `go test -race` を加える。CI の `ci.yml` には Postgres のサービスコンテナつきの Go ジョブを追加する。
 
 ## デプロイ
