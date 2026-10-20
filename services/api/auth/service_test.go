@@ -142,10 +142,29 @@ func (f *fakeStore) RevokeFamily(_ context.Context, familyID string, now time.Ti
 	return nil
 }
 
-func (f *fakeStore) PruneRefreshTokens(_ context.Context, ownerID string, _ time.Time) error {
+// PruneRefreshTokens mirrors the store: it deletes ownerID's expired rows and
+// its revoked rows whose family has no unrevoked, unexpired row.
+func (f *fakeStore) PruneRefreshTokens(_ context.Context, ownerID string, now time.Time) error {
 	f.log.add("PruneRefreshTokens")
 	f.pruned = append(f.pruned, ownerID)
-	return f.pruneErr
+	if f.pruneErr != nil {
+		return f.pruneErr
+	}
+	liveFamilies := map[string]bool{}
+	for _, t := range f.tokens {
+		if t.OwnerID == ownerID && t.RevokedAt == nil && t.ExpiresAt.After(now) {
+			liveFamilies[t.FamilyID] = true
+		}
+	}
+	for hash, t := range f.tokens {
+		if t.OwnerID != ownerID {
+			continue
+		}
+		if !t.ExpiresAt.After(now) || (t.RevokedAt != nil && !liveFamilies[t.FamilyID]) {
+			delete(f.tokens, hash)
+		}
+	}
+	return nil
 }
 
 // row returns the stored row for a refresh token, failing if it is missing.
@@ -551,6 +570,80 @@ func TestRefreshExpired(t *testing.T) {
 	}
 	if f.log.has("RotateRefreshToken") {
 		t.Fatalf("expired token was rotated")
+	}
+	if len(f.store.revoked) != 0 || f.store.row(t, pair.RefreshToken).RevokedAt != nil {
+		t.Fatalf("expired token revoked its family (revoked %v)", f.store.revoked)
+	}
+}
+
+func TestRefreshReuseDetectedAfterRelogin(t *testing.T) {
+	f := newFixture()
+	stolen := f.loginMember(t)
+	f.clock.Advance(time.Minute)
+	live, err := f.svc.Refresh(context.Background(), stolen.RefreshToken)
+	if err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	family := f.store.row(t, live.RefreshToken).FamilyID
+
+	// The owner signs in again; pruning must keep the rotated row of the
+	// still-live family.
+	f.clock.Advance(time.Minute)
+	other := f.loginMember(t)
+
+	if _, err := f.svc.Refresh(context.Background(), stolen.RefreshToken); err != ErrUnauthorized {
+		t.Fatalf("replay err = %v, want ErrUnauthorized", err)
+	}
+	if !f.store.familyRevoked(family) {
+		t.Fatalf("replaying the rotated token did not revoke its family")
+	}
+	if _, err := f.svc.Refresh(context.Background(), live.RefreshToken); err != ErrUnauthorized {
+		t.Fatalf("live token of revoked family err = %v, want ErrUnauthorized", err)
+	}
+	// The newer, separate session is unaffected.
+	if _, err := f.svc.Refresh(context.Background(), other.RefreshToken); err != nil {
+		t.Fatalf("other family Refresh: %v", err)
+	}
+}
+
+func TestRefreshMalformedRowRevokesFamily(t *testing.T) {
+	cases := map[string]store.RefreshToken{
+		"member without session version": {ID: "cbad1", OwnerID: "password:cacc1", Role: RoleMember, FamilyID: "fam-bad"},
+		"unknown role":                   {ID: "cbad2", OwnerID: "42", Role: "owner", Login: "Alice", FamilyID: "fam-bad"},
+	}
+	for name, row := range cases {
+		t.Run(name, func(t *testing.T) {
+			f := newFixture()
+			f.store.addAccount("cacc1", "alice", "pw", 0)
+			row.ExpiresAt = serviceEpoch.Add(time.Hour)
+			f.store.insert(row, hashRefreshToken("malformed-token"))
+
+			if _, err := f.svc.Refresh(context.Background(), "malformed-token"); err != ErrUnauthorized {
+				t.Fatalf("err = %v, want ErrUnauthorized", err)
+			}
+			if !f.store.familyRevoked("fam-bad") {
+				t.Fatalf("family not revoked")
+			}
+			if f.log.has("RotateRefreshToken") {
+				t.Fatalf("malformed row was rotated")
+			}
+		})
+	}
+}
+
+func TestRefreshSessionVersionStoreError(t *testing.T) {
+	f := newFixture()
+	pair := f.loginMember(t)
+	f.store.sessionErr = errors.New("connection reset")
+	_, err := f.svc.Refresh(context.Background(), pair.RefreshToken)
+	if err == nil || errors.Is(err, ErrUnauthorized) || errors.Is(err, ErrForbidden) {
+		t.Fatalf("err = %v, want a non-sentinel error", err)
+	}
+	if len(f.store.revoked) != 0 || f.store.row(t, pair.RefreshToken).RevokedAt != nil {
+		t.Fatalf("store error revoked the family (revoked %v)", f.store.revoked)
+	}
+	if f.log.has("RotateRefreshToken") {
+		t.Fatalf("token rotated despite store error")
 	}
 }
 

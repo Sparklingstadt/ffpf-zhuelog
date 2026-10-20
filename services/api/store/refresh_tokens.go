@@ -107,10 +107,17 @@ func (s *Store) RevokeFamily(ctx context.Context, familyID string, now time.Time
 	return err
 }
 
-// PruneRefreshTokens deletes ownerID's tokens that are expired or revoked.
+// PruneRefreshTokens deletes ownerID's expired tokens, and its revoked tokens
+// whose family has no unrevoked, unexpired token left. Rotated tokens of a
+// still-live family are kept, so replaying one is still detected as reuse and
+// revokes the family.
 func (s *Store) PruneRefreshTokens(ctx context.Context, ownerID string, now time.Time) error {
-	_, err := s.pool.Exec(ctx,
-		`DELETE FROM "ApiRefreshToken" WHERE "ownerId" = $1 AND ("expiresAt" <= $2 OR "revokedAt" IS NOT NULL)`,
+	_, err := s.pool.Exec(ctx, `
+DELETE FROM "ApiRefreshToken" WHERE "ownerId" = $1 AND (
+  "expiresAt" <= $2 OR (
+    "revokedAt" IS NOT NULL AND "familyId" NOT IN (
+      SELECT "familyId" FROM "ApiRefreshToken"
+      WHERE "ownerId" = $1 AND "revokedAt" IS NULL AND "expiresAt" > $2)))`,
 		ownerID, dbTime(now))
 	return err
 }

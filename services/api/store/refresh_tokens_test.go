@@ -188,11 +188,30 @@ func TestRevokeFamilyAndPrune(t *testing.T) {
 		}
 		return tok
 	}
+	insertRevoked := func(owner, family string, expires time.Time) RefreshToken {
+		revokedAt := now.Add(-time.Minute)
+		tok := RefreshToken{ID: newID(), OwnerID: owner, Role: "member", FamilyID: family, ExpiresAt: expires, RevokedAt: &revokedAt}
+		if err := s.InsertRefreshToken(ctx, tok, "hash-"+tok.ID); err != nil {
+			t.Fatalf("Insert: %v", err)
+		}
+		return tok
+	}
 	a := insert(owner, family, now.Add(time.Hour))
 	b := insert(owner, family, now.Add(time.Hour))
 	live := insert(owner, newID(), now.Add(time.Hour))
 	expired := insert(owner, newID(), now.Add(-time.Hour))
 	foreignExpired := insert(other, newID(), now.Add(-time.Hour))
+	// A live family after one rotation: the rotated row must survive pruning
+	// so that replaying it is still detected as reuse.
+	liveFamily := newID()
+	rotated := insertRevoked(owner, liveFamily, now.Add(time.Hour))
+	current := insert(owner, liveFamily, now.Add(time.Hour))
+	// A family whose only unrevoked row has expired is dead: all of it goes.
+	deadFamily := newID()
+	deadRotated := insertRevoked(owner, deadFamily, now.Add(time.Hour))
+	deadExpired := insert(owner, deadFamily, now)
+	// Another owner's fully revoked family is untouched.
+	foreignRevoked := insertRevoked(other, newID(), now.Add(time.Hour))
 
 	if err := s.RevokeFamily(ctx, family, now); err != nil {
 		t.Fatalf("RevokeFamily: %v", err)
@@ -211,15 +230,20 @@ func TestRevokeFamilyAndPrune(t *testing.T) {
 	if err := s.PruneRefreshTokens(ctx, owner, now); err != nil {
 		t.Fatalf("Prune: %v", err)
 	}
-	for _, gone := range []RefreshToken{a, b, expired} {
+	for name, gone := range map[string]RefreshToken{
+		"revoked family a": a, "revoked family b": b, "expired": expired,
+		"dead family rotated": deadRotated, "dead family expired": deadExpired,
+	} {
 		if _, err := s.FindRefreshToken(ctx, "hash-"+gone.ID); !errors.Is(err, ErrNotFound) {
-			t.Fatalf("token %s should be pruned, err=%v", gone.ID, err)
+			t.Fatalf("%s token should be pruned, err=%v", name, err)
 		}
 	}
-	if _, err := s.FindRefreshToken(ctx, "hash-"+live.ID); err != nil {
-		t.Fatalf("live token should remain: %v", err)
-	}
-	if _, err := s.FindRefreshToken(ctx, "hash-"+foreignExpired.ID); err != nil {
-		t.Fatalf("other owner's token should remain: %v", err)
+	for name, kept := range map[string]RefreshToken{
+		"live": live, "live family rotated": rotated, "live family current": current,
+		"other owner expired": foreignExpired, "other owner revoked": foreignRevoked,
+	} {
+		if _, err := s.FindRefreshToken(ctx, "hash-"+kept.ID); err != nil {
+			t.Fatalf("%s token should remain: %v", name, err)
+		}
 	}
 }
