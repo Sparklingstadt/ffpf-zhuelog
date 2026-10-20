@@ -108,8 +108,8 @@ func TestNotFoundAndMethodNotAllowed(t *testing.T) {
 	wantError(t, w, http.StatusMethodNotAllowed, "method_not_allowed")
 }
 
-// healthPaths are the health-check routes. Cloud Run reserves /healthz (it
-// never reaches the container), so /health is the one used there.
+// healthPaths are the health-check routes: /health for production and the
+// ALB, /healthz for local use.
 var healthPaths = []string{"/health", "/healthz"}
 
 func TestHealthz(t *testing.T) {
@@ -135,6 +135,21 @@ func TestHealthz(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// /ping answers without touching the database, so the ALB health check
+// neither keeps Neon awake nor replaces tasks during a database outage.
+func TestPingDoesNotTouchDatabase(t *testing.T) {
+	h, _ := testRouter(t, &fakeAuth{}, fakePinger{err: errors.New("down")}, nil)
+	for i := range 50 {
+		w := do(h, http.MethodGet, "/ping", "", nil)
+		if w.Code != http.StatusOK {
+			t.Fatalf("request %d: status = %d, want 200", i+1, w.Code)
+		}
+	}
+	if w := do(h, http.MethodPost, "/ping", "", nil); w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("POST /ping status = %d, want 405", w.Code)
 	}
 }
 

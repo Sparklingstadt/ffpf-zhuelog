@@ -16,51 +16,93 @@ concurrency: api-deploy
 
 jobs:
   deploy:
-    # GCP の Variables を設定するまでは、デプロイ手順をスキップする（docs/api-deployment.md）。
-    if: vars.GCP_PROJECT_ID != ''
+    # AWS の Variables を設定するまでは、デプロイ手順をスキップする（docs/api-deployment.md）。
+    if: vars.AWS_ROLE_ARN != ''
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
-      PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
-      REGION: ${{ vars.GCP_REGION }}
+      AWS_REGION: ap-northeast-1
       SERVICE: ${{ vars.API_SERVICE_NAME }}
-      AR_REPOSITORY: zhuelog-api
-      RUNTIME_SA: api-runtime
+      ECR_REPOSITORY: ${{ vars.AWS_ECR_REPOSITORY }}
       OAUTH_CLIENT_ID: ${{ vars.API_GITHUB_CLIENT_ID }}
       OAUTH_REDIRECT_URI: ${{ vars.API_GITHUB_REDIRECT_URI }}
       ALLOWED_LOGINS: ${{ vars.API_ALLOWED_GITHUB_LOGINS }}
+      SECRET_DATABASE_URL_ARN: ${{ vars.API_SECRET_DATABASE_URL_ARN }}
+      SECRET_JWT_ARN: ${{ vars.API_SECRET_JWT_ARN }}
+      SECRET_GITHUB_CLIENT_SECRET_ARN: ${{ vars.API_SECRET_GITHUB_CLIENT_SECRET_ARN }}
     steps:
+      - name: Check required Variables
+        # 空の値があると、イメージの push とサービスの更新のあとでタスクが起動に失敗する。先に止める。
+        env:
+          EXECUTION_ROLE_ARN: ${{ vars.AWS_ECS_EXECUTION_ROLE_ARN }}
+          INFRASTRUCTURE_ROLE_ARN: ${{ vars.AWS_ECS_INFRASTRUCTURE_ROLE_ARN }}
+        run: |
+          missing=0
+          for v in SERVICE ECR_REPOSITORY EXECUTION_ROLE_ARN INFRASTRUCTURE_ROLE_ARN \
+            OAUTH_CLIENT_ID OAUTH_REDIRECT_URI ALLOWED_LOGINS \
+            SECRET_DATABASE_URL_ARN SECRET_JWT_ARN SECRET_GITHUB_CLIENT_SECRET_ARN; do
+            if [ -z "${!v}" ]; then
+              echo "::error::Actions Variable for ${v} is empty (docs/api-deployment.md section 3)"
+              missing=1
+            fi
+          done
+          exit "$missing"
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: google-github-actions/auth@v3
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
-          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
-          service_account: ${{ vars.GCP_DEPLOY_SA }}
-      - uses: google-github-actions/setup-gcloud@v3
-      - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
       - name: Build and push image
         env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
           SHA: ${{ github.sha }}
         run: |
-          image="${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPOSITORY}/${SERVICE}:${SHA}"
+          image="${REGISTRY}/${ECR_REPOSITORY}:${SHA}"
           docker build --tag "$image" services/api
           docker push "$image"
           echo "IMAGE=$image" >> "$GITHUB_ENV"
-      - name: Deploy to Cloud Run
+      - id: config
+        name: Build container settings
+        # jq で組み立てるので、許可リストのカンマや値の中の引用符で JSON が壊れない。
         run: |
-          # AUTH_ALLOWED_GITHUB_LOGINS はカンマを含むため、区切り文字を @ に変える。
-          env_vars="^@^GITHUB_MOBILE_CLIENT_ID=${OAUTH_CLIENT_ID}@GITHUB_MOBILE_REDIRECT_URI=${OAUTH_REDIRECT_URI}@AUTH_ALLOWED_GITHUB_LOGINS=${ALLOWED_LOGINS}"
-          gcloud run deploy "$SERVICE" \
-            --image "$IMAGE" \
-            --region "$REGION" \
-            --project "$PROJECT_ID" \
-            --service-account "${RUNTIME_SA}@${PROJECT_ID}.iam.gserviceaccount.com" \
-            --min-instances 0 \
-            --max-instances 2 \
-            --memory 1Gi \
-            --concurrency 20 \
-            --set-secrets "DATABASE_URL=api-database-url:latest,API_JWT_SECRET=api-jwt-secret:latest,GITHUB_MOBILE_CLIENT_SECRET=api-github-client-secret:latest" \
-            --set-env-vars "$env_vars" \
-            --allow-unauthenticated
+          environment=$(jq -cn \
+            --arg id "$OAUTH_CLIENT_ID" \
+            --arg uri "$OAUTH_REDIRECT_URI" \
+            --arg logins "$ALLOWED_LOGINS" \
+            '[{name: "GITHUB_MOBILE_CLIENT_ID", value: $id},
+              {name: "GITHUB_MOBILE_REDIRECT_URI", value: $uri},
+              {name: "AUTH_ALLOWED_GITHUB_LOGINS", value: $logins}]')
+          secrets=$(jq -cn \
+            --arg db "$SECRET_DATABASE_URL_ARN" \
+            --arg jwt "$SECRET_JWT_ARN" \
+            --arg gh "$SECRET_GITHUB_CLIENT_SECRET_ARN" \
+            '[{name: "DATABASE_URL", valueFrom: $db},
+              {name: "API_JWT_SECRET", valueFrom: $jwt},
+              {name: "GITHUB_MOBILE_CLIENT_SECRET", valueFrom: $gh}]')
+          echo "environment=$environment" >> "$GITHUB_OUTPUT"
+          echo "secrets=$secrets" >> "$GITHUB_OUTPUT"
+      - id: deploy
+        uses: aws-actions/amazon-ecs-deploy-express-service@v1
+        with:
+          service-name: ${{ env.SERVICE }}
+          image: ${{ env.IMAGE }}
+          execution-role-arn: ${{ vars.AWS_ECS_EXECUTION_ROLE_ARN }}
+          infrastructure-role-arn: ${{ vars.AWS_ECS_INFRASTRUCTURE_ROLE_ARN }}
+          container-port: 8080
+          health-check-path: /ping
+          cpu: "512"
+          memory: "1024"
+          min-task-count: 1
+          max-task-count: 2
+          log-group: /ecs/${{ env.SERVICE }}
+          environment-variables: ${{ steps.config.outputs.environment }}
+          secrets: ${{ steps.config.outputs.secrets }}
+      - name: Show endpoint
+        env:
+          ENDPOINT: ${{ steps.deploy.outputs.endpoint }}
+        run: |
+          echo "API endpoint: ${ENDPOINT}" >> "$GITHUB_STEP_SUMMARY"

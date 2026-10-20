@@ -278,9 +278,9 @@ func TestRunEndToEnd(t *testing.T) {
 	}
 }
 
-func TestShutdownTimeoutFitsCloudRunGrace(t *testing.T) {
-	// Cloud Run sends SIGKILL 10 seconds after SIGTERM.
+func TestShutdownTimeoutFitsStopGrace(t *testing.T) {
+	// ECS sends SIGKILL 30 seconds after SIGTERM by default.
 	if shutdownTimeout != 8*time.Second {
-		t.Fatalf("shutdownTimeout = %v, want 8s (under Cloud Run's 10s grace)", shutdownTimeout)
+		t.Fatalf("shutdownTimeout = %v, want 8s (well under ECS's 30s stop timeout)", shutdownTimeout)
 	}
 }
