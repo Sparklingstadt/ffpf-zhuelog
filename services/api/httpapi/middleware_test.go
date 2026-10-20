@@ -138,6 +138,21 @@ func TestHealthz(t *testing.T) {
 	}
 }
 
+// /ping answers without touching the database, so the ALB health check
+// neither keeps Neon awake nor replaces tasks during a database outage.
+func TestPingDoesNotTouchDatabase(t *testing.T) {
+	h, _ := testRouter(t, &fakeAuth{}, fakePinger{err: errors.New("down")}, nil)
+	for i := range 50 {
+		w := do(h, http.MethodGet, "/ping", "", nil)
+		if w.Code != http.StatusOK {
+			t.Fatalf("request %d: status = %d, want 200", i+1, w.Code)
+		}
+	}
+	if w := do(h, http.MethodPost, "/ping", "", nil); w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("POST /ping status = %d, want 405", w.Code)
+	}
+}
+
 func TestHealthzNotRateLimited(t *testing.T) {
 	for _, path := range healthPaths {
 		h, _ := testRouter(t, &fakeAuth{}, fakePinger{}, nil)

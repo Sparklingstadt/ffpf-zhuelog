@@ -123,8 +123,9 @@ HS256 の JWT。有効期限 15 分。クレームは `iss`・`aud`（固定値�
 | DELETE   | `/v1/entries/{id}`           | ゴミ箱へ移動。204                                         |
 | GET      | `/health`                    | DB に ping して 200。失敗時 503。ALB のヘルスチェック用   |
 | GET      | `/healthz`                   | `/health` と同じ。ローカル用                              |
+| GET      | `/ping`                      | DB にアクセスせず 200。ALB のヘルスチェック用             |
 
-本番の確認と ALB のヘルスチェックには `/health` を使い、`/healthz` はローカルでの確認用に残す（当初の候補だった Cloud Run が `/healthz` を予約していたため `/health` を正とした）。どちらもレート制限と認証の対象外。
+本番の手動の確認には `/health` を、ALB のヘルスチェックには DB にアクセスしない `/ping` を使い、`/healthz` はローカルでの確認用に残す（当初の候補だった Cloud Run が `/healthz` を予約していたため `/health` を正とした）。どちらもレート制限と認証の対象外。
 
 ### 所有者とゴミ箱
 

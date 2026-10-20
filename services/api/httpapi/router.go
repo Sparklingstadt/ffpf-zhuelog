@@ -70,6 +70,10 @@ func NewRouter(d Deps) http.Handler {
 	health := healthz(d.DB)
 	mux.Handle("GET /health", health)
 	mux.Handle("GET /healthz", health)
+	// The ALB health check uses /ping, which does not touch the database: a
+	// DB check every few seconds would keep Neon from ever suspending, and a
+	// database outage would make ECS replace healthy tasks.
+	mux.Handle("GET /ping", ping())
 
 	limiter := NewRateLimiter(authRateLimit, authRateWindow, d.Now)
 	limited := func(h http.Handler) http.Handler { return rateLimit(limiter, h) }
@@ -86,6 +90,12 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("DELETE /v1/entries/{id}", authed(deleteEntry(d.Entries, d.Now)))
 
 	return wrap(d, jsonMuxErrors(mux))
+}
+
+func ping() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	})
 }
 
 func healthz(db Pinger) http.Handler {

@@ -25,12 +25,16 @@ Web 用とは別の OAuth App を新しく作ります。GitHub の **Settings �
 
 ## 2. AWS の準備
 
-AWS CLI v2 で、管理者権限のあるプロファイルから実行します。以下の `ACCOUNT_ID` は自分の値に置き換えます。Express Mode は、ネットワークを指定しなければ `ap-northeast-1` の既定の VPC を使います（既定の VPC を削除している場合は、作り直すか、workflow に `subnets` と `security-groups` を足してください）。
+AWS CLI v2 で、管理者権限のあるプロファイルから実行します。この節のコマンドは、**すべて同じターミナルで続けて** 実行してください（途中で作ったシェル変数を後のコマンドが使います）。Express Mode は、ネットワークを指定しなければ `ap-northeast-1` の既定の VPC を使います（既定の VPC を削除している場合は、作り直すか、workflow に `subnets` と `security-groups` を足してください）。
 
 ```bash
 export AWS_REGION=ap-northeast-1
-ACCOUNT_ID="123456789012"
+ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
 SERVICE=zhuelog-api        # Actions Variable API_SERVICE_NAME と同じ値
+echo "$ACCOUNT_ID"         # デプロイ先のアカウントか確認する
+
+# ECS のサービスリンクロール。新しいアカウントには無いことがある（既にあればエラーになるが問題ない）
+aws iam create-service-linked-role --aws-service-name ecs.amazonaws.com || true
 ```
 
 ### ECR リポジトリとロググループ
@@ -55,18 +59,20 @@ aws logs put-retention-policy --log-group-name "/ecs/${SERVICE}" --retention-in-
 
 ```bash
 # Neon の接続文字列を貼り付けて Enter
-read -rs V && printf '%s' "$V" | aws secretsmanager create-secret \
-  --name zhuelog-api/database-url --secret-string file:///dev/stdin --query ARN --output text; unset V
+read -rs V && DB_SECRET_ARN="$(printf '%s' "$V" | aws secretsmanager create-secret \
+  --name zhuelog-api/database-url --secret-string file:///dev/stdin --query ARN --output text)"; unset V
 
-openssl rand -base64 48 | tr -d '\n' | aws secretsmanager create-secret \
-  --name zhuelog-api/jwt-secret --secret-string file:///dev/stdin --query ARN --output text
+JWT_SECRET_ARN="$(openssl rand -base64 48 | tr -d '\n' | aws secretsmanager create-secret \
+  --name zhuelog-api/jwt-secret --secret-string file:///dev/stdin --query ARN --output text)"
 
 # モバイル用 GitHub OAuth App の Client Secret を貼り付けて Enter
-read -rs V && printf '%s' "$V" | aws secretsmanager create-secret \
-  --name zhuelog-api/github-secret --secret-string file:///dev/stdin --query ARN --output text; unset V
+read -rs V && GH_SECRET_ARN="$(printf '%s' "$V" | aws secretsmanager create-secret \
+  --name zhuelog-api/github-secret --secret-string file:///dev/stdin --query ARN --output text)"; unset V
+
+printf '%s\n' "$DB_SECRET_ARN" "$JWT_SECRET_ARN" "$GH_SECRET_ARN"
 ```
 
-表示された 3 つの ARN（末尾にランダムな 6 文字が付いた完全な ARN）を、手順 3 の `API_SECRET_*_ARN` に設定します。
+表示された 3 つの ARN（末尾にランダムな 6 文字が付いた完全な ARN）を、手順 3 の `API_SECRET_*_ARN` に設定します。貼り付ける値の前後に空白や改行を入れないでください。
 
 **`zhuelog-api/database-url` には、Neon の pooled 接続文字列（ホスト名に `-pooler` を含むもの）を、`?schema=` パラメータを付けずに入れてください。** Neon の既定のスキーマは `public` なので、付けなくても同じテーブルを読み書きします。Go API は `schema=public` を無視しますが、それ以外のスキーマを指定すると `search_path` の起動パラメータに変換するため、プーラーに拒否されることがあります。
 
@@ -80,7 +86,7 @@ Express Mode には 2 つのロールが必要です。
 - **インフラロール**: ECS が ALB・ターゲットグループ・セキュリティグループ・証明書・オートスケールを作るのに使います。
 
 ```bash
-SECRET_ARNS='["<database-url の ARN>", "<jwt-secret の ARN>", "<github-secret の ARN>"]'
+SECRET_ARNS="[\"${DB_SECRET_ARN}\", \"${JWT_SECRET_ARN}\", \"${GH_SECRET_ARN}\"]"
 
 aws iam create-role --role-name zhuelog-api-execution --assume-role-policy-document '{
   "Version": "2012-10-17",
@@ -146,7 +152,7 @@ aws iam put-role-policy --role-name zhuelog-api-deploy --policy-name deploy-api 
 }"
 ```
 
-ECS の権限は、[`aws-actions/amazon-ecs-deploy-express-service`](https://github.com/aws-actions/amazon-ecs-deploy-express-service) の README が示す一覧に合わせています。`iam:PassRole` は、上の 2 つのロールだけに絞っています。
+ECS の権限は、[`aws-actions/amazon-ecs-deploy-express-service`](https://github.com/aws-actions/amazon-ecs-deploy-express-service) の README が示す一覧に合わせています。`iam:PassRole` は、上の 2 つのロールだけに絞っています。この権限の組み合わせは初回のデプロイで初めて実際に使われるので、手順 5 の確認を必ず行ってください。権限不足で失敗した場合は、ジョブのログに出る `AccessDenied` の操作名を `deploy-api` に足します。
 
 ## 3. Actions Variables の設定
 
@@ -168,7 +174,7 @@ GitHub のリポジトリの **Settings → Secrets and variables → Actions �
 
 最後の 3 つはコンテナの環境変数として渡されます。workflow は `jq` で JSON を組み立てるので、許可リストのカンマや値の中の引用符はそのまま使えます。
 
-`AWS_ROLE_ARN` は、ほかの 10 個をすべて設定してから最後に設定してください。`AWS_ROLE_ARN` を設定した時点でデプロイが動くようになります。
+`AWS_ROLE_ARN` は、ほかの 10 個をすべて設定してから最後に設定してください。`AWS_ROLE_ARN` を設定した時点でデプロイが動くようになります。ほかに空の Variable があると、workflow は最初のステップで名前を示して止まります（イメージの push もサービスの更新もしません）。
 
 ## 4. Prisma マイグレーション（参考）
 
@@ -193,7 +199,9 @@ rm .env.production.local
 curl -i https://<エンドポイント>/health
 ```
 
-`200` が返れば、DB への接続まで確認できています（失敗時は `503`）。ALB のヘルスチェックも `/health` を使います。アプリからのログインは、`POST /v1/auth/password` か `POST /v1/auth/github` で確認します。
+`200` が返れば、DB への接続まで確認できています（失敗時は `503`）。
+
+ALB のヘルスチェックは `/health` ではなく `/ping` を使います。`/ping` は DB にアクセスせずに `200` を返します。数秒ごとのヘルスチェックで DB にアクセスすると Neon のコンピュートが休止できずに費用がかかり続け、DB の障害時には ECS が正常なタスクまで入れ替えてしまうためです。アプリからのログインは、`POST /v1/auth/password` か `POST /v1/auth/github` で確認します。
 
 ALB はホスト名で振り分けるので、ALB の IP アドレスや別のホスト名でアクセスすると `404` になります。必ずエンドポイントのホスト名を使ってください。
 

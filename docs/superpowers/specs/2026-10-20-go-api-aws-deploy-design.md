@@ -13,7 +13,7 @@
 
 - ECS Express Mode のサービス 1 つ。公開 URL は Express Mode が発行する HTTPS エンドポイント（独自ドメインは扱わない）。
 - タスク: 0.5 vCPU / 1 GB。最小 1、最大 2 タスク（Neon の接続数を抑える）。
-- ヘルスチェックのパスは `/health`。
+- ALB のヘルスチェックのパスは `/ping`（DB にアクセスしない）。DB まで確かめる `/health` は手動の確認用。数秒ごとに DB へアクセスすると Neon が休止できず、DB 障害時に ECS が正常なタスクまで入れ替えるため。
 - ログは CloudWatch Logs（slog の JSON をそのまま出す）。
 
 ## シークレットと設定
@@ -47,7 +47,7 @@ GitHub OAuth App の登録、AWS で 1 回だけ行う準備（ECR、IAM の OID
 | `image`                                          | `<ECR リポジトリ>:${{ github.sha }}`                                               |
 | `execution-role-arn` / `infrastructure-role-arn` | Actions Variables `AWS_ECS_EXECUTION_ROLE_ARN` / `AWS_ECS_INFRASTRUCTURE_ROLE_ARN` |
 | `container-port`                                 | `8080`                                                                             |
-| `health-check-path`                              | `/health`（既定の `/ping` から変える）                                             |
+| `health-check-path`                              | `/ping`（Go API が DB にアクセスせず 200 を返す）                                  |
 | `cpu` / `memory`                                 | `512` / `1024`                                                                     |
 | `min-task-count` / `max-task-count`              | `1` / `2`                                                                          |
 | `environment-variables`                          | 秘密でない 3 つ（JSON 配列）                                                       |
