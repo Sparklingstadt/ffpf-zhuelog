@@ -59,6 +59,8 @@ jobs:
             --service-account "${RUNTIME_SA}@${PROJECT_ID}.iam.gserviceaccount.com" \
             --min-instances 0 \
             --max-instances 2 \
+            --memory 1Gi \
+            --concurrency 20 \
             --set-secrets "DATABASE_URL=api-database-url:latest,API_JWT_SECRET=api-jwt-secret:latest,GITHUB_MOBILE_CLIENT_SECRET=api-github-client-secret:latest" \
             --set-env-vars "$env_vars" \
             --allow-unauthenticated

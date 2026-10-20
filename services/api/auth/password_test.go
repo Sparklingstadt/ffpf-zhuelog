@@ -1,9 +1,14 @@
 package auth
 
 import (
+	"context"
+	"errors"
 	"os"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func nodeHash(t *testing.T) string {
@@ -18,11 +23,12 @@ func nodeHash(t *testing.T) string {
 func TestVerifyNodeHash(t *testing.T) {
 	var v PasswordVerifier
 	hash := nodeHash(t)
-	if !v.Verify("correct horse battery", hash) {
-		t.Fatal("correct password rejected")
+	ctx := context.Background()
+	if ok, err := v.Verify(ctx, "correct horse battery", hash); !ok || err != nil {
+		t.Fatalf("correct password: ok=%v err=%v, want true, nil", ok, err)
 	}
-	if v.Verify("wrong", hash) {
-		t.Fatal("wrong password accepted")
+	if ok, err := v.Verify(ctx, "wrong", hash); ok || err != nil {
+		t.Fatalf("wrong password: ok=%v err=%v, want false, nil", ok, err)
 	}
 }
 
@@ -63,8 +69,8 @@ func TestVerifyRejectsBadHashes(t *testing.T) {
 	}
 	for name, hash := range cases {
 		t.Run(name, func(t *testing.T) {
-			if v.Verify("correct horse battery", hash) {
-				t.Fatal("accepted")
+			if ok, err := v.Verify(context.Background(), "correct horse battery", hash); ok || err != nil {
+				t.Fatalf("ok=%v err=%v, want false, nil", ok, err)
 			}
 		})
 	}
@@ -81,13 +87,148 @@ func TestVerifyTamperedKeyIsFalse(t *testing.T) {
 		k[0] = 'A'
 	}
 	parts[5] = string(k)
-	if v.Verify("correct horse battery", strings.Join(parts, ":")) {
-		t.Fatal("tampered key accepted")
+	if ok, err := v.Verify(context.Background(), "correct horse battery", strings.Join(parts, ":")); ok || err != nil {
+		t.Fatalf("tampered key: ok=%v err=%v, want false, nil", ok, err)
 	}
 }
 
 func TestSimulateDoesNotPanic(t *testing.T) {
 	var v PasswordVerifier
-	v.Simulate("x")
-	v.Simulate("x")
+	for range 2 {
+		if err := v.Simulate(context.Background(), "x"); err != nil {
+			t.Fatalf("Simulate: %v", err)
+		}
+	}
+}
+
+// countingKey replaces scrypt in a PasswordVerifier. It records how many
+// derivations run at once and blocks each one until release is closed.
+type countingKey struct {
+	running, max, total atomic.Int32
+	release             chan struct{}
+}
+
+func newCountingKey() *countingKey { return &countingKey{release: make(chan struct{})} }
+
+func (c *countingKey) derive(_, _ []byte, _, _, _, keyLen int) ([]byte, error) {
+	n := c.running.Add(1)
+	for {
+		m := c.max.Load()
+		if n <= m || c.max.CompareAndSwap(m, n) {
+			break
+		}
+	}
+	c.total.Add(1)
+	<-c.release
+	c.running.Add(-1)
+	return make([]byte, keyLen), nil
+}
+
+func waitFor(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s", what)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func TestConcurrentHashesAreBounded(t *testing.T) {
+	ck := newCountingKey()
+	v := &PasswordVerifier{deriveKey: ck.derive}
+	close(ck.release) // let Warm's derivation finish
+	v.Warm()
+	ck.release = make(chan struct{})
+	ck.total.Store(0)
+	ck.max.Store(0)
+	hash := nodeHash(t)
+
+	const callers = 12
+	var wg sync.WaitGroup
+	errs := make(chan error, callers)
+	for i := range callers {
+		wg.Go(func() {
+			// Verify and Simulate share the bound.
+			if i%2 == 0 {
+				_, err := v.Verify(context.Background(), "pw", hash)
+				errs <- err
+				return
+			}
+			errs <- v.Simulate(context.Background(), "pw")
+		})
+	}
+
+	waitFor(t, "4 running derivations", func() bool { return ck.running.Load() == maxConcurrentHashes })
+	time.Sleep(50 * time.Millisecond) // give any excess caller time to get in
+	if got := ck.running.Load(); got != maxConcurrentHashes {
+		t.Fatalf("running = %d, want %d", got, maxConcurrentHashes)
+	}
+	close(ck.release)
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("hash: %v", err)
+		}
+	}
+	if got := ck.max.Load(); got != maxConcurrentHashes {
+		t.Fatalf("max concurrent derivations = %d, want %d", got, maxConcurrentHashes)
+	}
+	if got := ck.total.Load(); got != callers {
+		t.Fatalf("derivations = %d, want %d (one per call)", got, callers)
+	}
+}
+
+func TestHashWaitRespectsContext(t *testing.T) {
+	ck := newCountingKey()
+	v := &PasswordVerifier{deriveKey: ck.derive}
+	close(ck.release)
+	v.Warm()
+	ck.release = make(chan struct{})
+	hash := nodeHash(t)
+
+	// Occupy every slot.
+	var wg sync.WaitGroup
+	for range maxConcurrentHashes {
+		wg.Go(func() { _, _ = v.Verify(context.Background(), "pw", hash) })
+	}
+	waitFor(t, "all slots taken", func() bool { return ck.running.Load() == maxConcurrentHashes })
+	defer func() { close(ck.release); wg.Wait() }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if ok, err := v.Verify(ctx, "pw", hash); ok || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Verify: ok=%v err=%v, want false, DeadlineExceeded", ok, err)
+	}
+	if err := v.Simulate(ctx, "pw"); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Simulate: err=%v, want DeadlineExceeded", err)
+	}
+
+	cancelled, cancelNow := context.WithCancel(context.Background())
+	cancelNow()
+	if _, err := v.Verify(cancelled, "pw", hash); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Verify with cancelled ctx: err=%v, want Canceled", err)
+	}
+}
+
+func TestWarmBuildsDummyHashOnce(t *testing.T) {
+	ck := newCountingKey()
+	close(ck.release)
+	v := &PasswordVerifier{deriveKey: ck.derive}
+	v.Warm()
+	v.Warm()
+	if got := ck.total.Load(); got != 1 {
+		t.Fatalf("Warm derivations = %d, want 1", got)
+	}
+	// After Warm, each Simulate costs exactly one derivation.
+	for i := range 2 {
+		if err := v.Simulate(context.Background(), "pw"); err != nil {
+			t.Fatalf("Simulate: %v", err)
+		}
+		if got, want := ck.total.Load(), int32(2+i); got != want {
+			t.Fatalf("derivations after %d Simulate = %d, want %d", i+1, got, want)
+		}
+	}
 }

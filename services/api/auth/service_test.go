@@ -192,23 +192,29 @@ func (f *fakeStore) familyRevoked(familyID string) bool {
 }
 
 // fakeHasher counts every Verify and Simulate as one hash computation.
+// A non-nil err is returned by both, as if waiting for a hashing slot failed.
 type fakeHasher struct {
 	log       *callLog
 	count     int
 	passwords []string
+	err       error
 }
 
-func (h *fakeHasher) Verify(password, hash string) bool {
+func (h *fakeHasher) Verify(_ context.Context, password, hash string) (bool, error) {
 	h.log.add("Verify")
 	h.count++
 	h.passwords = append(h.passwords, password)
-	return hash == "hash:"+password
+	if h.err != nil {
+		return false, h.err
+	}
+	return hash == "hash:"+password, nil
 }
 
-func (h *fakeHasher) Simulate(password string) {
+func (h *fakeHasher) Simulate(_ context.Context, password string) error {
 	h.log.add("Simulate")
 	h.count++
 	h.passwords = append(h.passwords, password)
+	return h.err
 }
 
 type stubGitHub struct {
@@ -500,6 +506,28 @@ func TestLoginPasswordStoreErrorIsNotUnauthorized(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "s3cret-pw") {
 		t.Fatalf("error leaks the password: %v", err)
+	}
+}
+
+func TestLoginPasswordHasherErrorIsNotUnauthorized(t *testing.T) {
+	cases := []struct{ name, loginID, password string }{
+		{"malformed (Simulate)", "a", "pw"},
+		{"unknown login id (Simulate)", "nobody", "pw"},
+		{"known account (Verify)", "alice", "pw"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture()
+			f.store.addAccount("cacc1", "alice", "pw", 0)
+			f.hasher.err = context.Canceled
+			_, err := f.svc.LoginPassword(context.Background(), tc.loginID, tc.password)
+			if !errors.Is(err, context.Canceled) || errors.Is(err, ErrUnauthorized) {
+				t.Fatalf("err = %v, want a wrapped context.Canceled, not ErrUnauthorized", err)
+			}
+			if f.log.has("ClearFailures") || len(f.store.tokens) != 0 {
+				t.Fatalf("hasher failure must not sign in (calls %v)", f.log.calls)
+			}
+		})
 	}
 }
 

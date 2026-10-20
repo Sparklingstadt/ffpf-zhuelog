@@ -57,6 +57,11 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 	}
 	defer db.Close()
 
+	// Build the dummy hash now so the first unknown-user login after a cold
+	// start costs the same as every other failed login.
+	passwords := &auth.PasswordVerifier{}
+	passwords.Warm()
+
 	service := &auth.Service{
 		Store:  db,
 		Signer: auth.NewSigner(cfg.JWTSecret, time.Now),
@@ -67,7 +72,7 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 			RedirectURI:  cfg.GitHubRedirectURI,
 		},
 		Allowlist: auth.ParseAllowlist(cfg.AllowedGitHubLogins),
-		Passwords: &auth.PasswordVerifier{},
+		Passwords: passwords,
 	}
 	handler := httpapi.NewRouter(httpapi.Deps{
 		Auth:    service,

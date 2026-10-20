@@ -50,10 +50,12 @@ type GitHub interface {
 	Exchange(ctx context.Context, code, verifier, redirectURI string) (GitHubUser, error)
 }
 
-// Hasher checks passwords; *PasswordVerifier satisfies it.
+// Hasher checks passwords; *PasswordVerifier satisfies it. Errors mean the
+// computation did not run (for example ctx was done while waiting for a slot);
+// a wrong password or malformed hash is (false, nil).
 type Hasher interface {
-	Verify(password, hash string) bool
-	Simulate(password string)
+	Verify(ctx context.Context, password, hash string) (bool, error)
+	Simulate(ctx context.Context, password string) error
 }
 
 // TokenPair is what a login or refresh returns. ExpiresIn is the access
@@ -101,18 +103,18 @@ func (s *Service) LoginGitHub(ctx context.Context, code, verifier, redirectURI s
 
 // LoginPassword signs in a member. Every credential failure (malformed input,
 // unknown loginId, lockout, wrong password) returns ErrUnauthorized after
-// exactly one password-hash computation, so they are indistinguishable.
+// exactly one password-hash computation, so they are indistinguishable. If the
+// hash cannot be computed (ctx done while waiting), the hasher's error is
+// returned wrapped instead.
 func (s *Service) LoginPassword(ctx context.Context, loginID, password string) (TokenPair, error) {
 	loginID = strings.ToLower(strings.TrimSpace(loginID))
 	if !loginIDPattern.MatchString(loginID) || password == "" || utf8.RuneCountInString(password) > maxPasswordRunes {
-		s.Passwords.Simulate(truncateRunes(password, maxPasswordRunes))
-		return TokenPair{}, ErrUnauthorized
+		return TokenPair{}, s.rejectPassword(ctx, truncateRunes(password, maxPasswordRunes))
 	}
 
 	account, err := s.Store.FindPasswordAccountByLoginID(ctx, loginID)
 	if errors.Is(err, store.ErrNotFound) {
-		s.Passwords.Simulate(password)
-		return TokenPair{}, ErrUnauthorized
+		return TokenPair{}, s.rejectPassword(ctx, password)
 	}
 	if err != nil {
 		return TokenPair{}, fmt.Errorf("auth: find password account: %w", err)
@@ -123,10 +125,13 @@ func (s *Service) LoginPassword(ctx context.Context, loginID, password string) (
 		return TokenPair{}, fmt.Errorf("auth: reserve attempt: %w", err)
 	}
 	if !reserved {
-		s.Passwords.Simulate(password)
-		return TokenPair{}, ErrUnauthorized
+		return TokenPair{}, s.rejectPassword(ctx, password)
 	}
-	if !s.Passwords.Verify(password, account.PasswordHash) {
+	ok, err := s.Passwords.Verify(ctx, password, account.PasswordHash)
+	if err != nil {
+		return TokenPair{}, fmt.Errorf("auth: verify password: %w", err)
+	}
+	if !ok {
 		return TokenPair{}, ErrUnauthorized
 	}
 	if err := s.Store.ClearFailures(ctx, account.ID); err != nil {
@@ -138,6 +143,15 @@ func (s *Service) LoginPassword(ctx context.Context, loginID, password string) (
 		Role:           RoleMember,
 		SessionVersion: account.SessionVersion,
 	})
+}
+
+// rejectPassword spends one simulated hash computation and returns
+// ErrUnauthorized, or the hasher's error if it could not compute.
+func (s *Service) rejectPassword(ctx context.Context, password string) error {
+	if err := s.Passwords.Simulate(ctx, password); err != nil {
+		return fmt.Errorf("auth: simulate password: %w", err)
+	}
+	return ErrUnauthorized
 }
 
 // Refresh rotates a refresh token. Presenting an already-rotated token revokes

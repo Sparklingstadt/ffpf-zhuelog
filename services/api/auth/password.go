@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
@@ -21,14 +22,48 @@ const (
 	scryptSaltBytes = 16
 	scryptKeyBytes  = 64
 	generatedBytes  = 15
+
+	// maxConcurrentHashes bounds the scrypt computations running at once in a
+	// PasswordVerifier. Each one allocates 128*N*r bytes (32 MiB for new
+	// hashes), so unbounded parallel logins could exhaust the instance's memory.
+	maxConcurrentHashes = 4
 )
 
 // PasswordVerifier checks passwords against the web app's scrypt hashes. The
-// zero value is ready to use.
+// zero value is ready to use. At most maxConcurrentHashes Verify and Simulate
+// computations run at once; the rest wait for a slot.
 type PasswordVerifier struct {
+	semOnce   sync.Once
+	sem       chan struct{}
 	dummyOnce sync.Once
 	dummyHash string
+	// deriveKey is scrypt.Key when nil; tests replace it.
+	deriveKey func(password, salt []byte, N, r, p, keyLen int) ([]byte, error)
 }
+
+func (v *PasswordVerifier) derive(password, salt []byte, n, r, p, keyLen int) ([]byte, error) {
+	if v.deriveKey != nil {
+		return v.deriveKey(password, salt, n, r, p, keyLen)
+	}
+	return scrypt.Key(password, salt, n, r, p, keyLen)
+}
+
+// acquire waits for a hashing slot. It returns ctx's error if ctx is done
+// first; otherwise the caller must call release.
+func (v *PasswordVerifier) acquire(ctx context.Context) error {
+	v.semOnce.Do(func() { v.sem = make(chan struct{}, maxConcurrentHashes) })
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	select {
+	case v.sem <- struct{}{}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (v *PasswordVerifier) release() { <-v.sem }
 
 type scryptHash struct {
 	n, r, p   int
@@ -91,28 +126,43 @@ func parseScryptHash(hash string) (scryptHash, bool) {
 }
 
 // Verify reports whether password matches hash. Malformed hashes and any
-// scrypt failure return false.
-func (v *PasswordVerifier) Verify(password, hash string) bool {
+// scrypt failure return false with a nil error. The only error is ctx's, when
+// it is done before a hashing slot frees up.
+func (v *PasswordVerifier) Verify(ctx context.Context, password, hash string) (bool, error) {
 	h, ok := parseScryptHash(hash)
 	if !ok {
-		return false
+		return false, nil
 	}
-	actual, err := scrypt.Key([]byte(password), h.salt, h.n, h.r, h.p, len(h.key))
+	if err := v.acquire(ctx); err != nil {
+		return false, err
+	}
+	defer v.release()
+	actual, err := v.derive([]byte(password), h.salt, h.n, h.r, h.p, len(h.key))
 	if err != nil {
-		return false
+		return false, nil
 	}
-	return subtle.ConstantTimeCompare(actual, h.key) == 1
+	return subtle.ConstantTimeCompare(actual, h.key) == 1, nil
 }
 
 // Simulate spends the same work as Verify on a valid hash, for unknown users.
-func (v *PasswordVerifier) Simulate(password string) {
+// Like Verify, it returns an error only when ctx is done before a slot frees up.
+func (v *PasswordVerifier) Simulate(ctx context.Context, password string) error {
+	v.Warm()
+	_, err := v.Verify(ctx, password, v.dummyHash)
+	return err
+}
+
+// Warm builds the dummy hash Simulate verifies against. Call it at startup so
+// the first unknown-user login is not slower than the rest; Simulate calls it
+// too. It runs outside the concurrency bound and only once.
+func (v *PasswordVerifier) Warm() {
 	v.dummyOnce.Do(func() {
 		pw := make([]byte, generatedBytes)
 		salt := make([]byte, scryptSaltBytes)
 		// crypto/rand.Read never returns an error on supported platforms.
 		_, _ = rand.Read(pw)
 		_, _ = rand.Read(salt)
-		key, err := scrypt.Key(pw, salt, scryptN, scryptR, scryptP, scryptKeyBytes)
+		key, err := v.derive(pw, salt, scryptN, scryptR, scryptP, scryptKeyBytes)
 		if err != nil {
 			return
 		}
@@ -123,5 +173,4 @@ func (v *PasswordVerifier) Simulate(password string) {
 			enc.EncodeToString(salt), enc.EncodeToString(key),
 		}, ":")
 	})
-	v.Verify(password, v.dummyHash)
 }
