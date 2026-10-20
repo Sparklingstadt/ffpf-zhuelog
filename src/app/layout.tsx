@@ -3,7 +3,6 @@ import { headers } from "next/headers";
 import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
 import { THEME_BOOTSTRAP_SCRIPT } from "@/infrastructure/theme/theme-bootstrap";
-import { ThemeSwitcher } from "@/presentation/components/theme/theme-switcher";
 import "./globals.css";
 
 // Request-specific CSP nonces cannot be used in a statically cached document.
@@ -29,12 +28,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }}
         />
       </head>
-      <body className="flex min-h-full flex-col">
-        <header className="mx-auto flex w-full max-w-6xl justify-end px-4 pt-4 sm:px-6 lg:px-8">
-          <ThemeSwitcher />
-        </header>
-        {children}
-      </body>
+      <body className="flex min-h-full flex-col">{children}</body>
     </html>
   );
 }

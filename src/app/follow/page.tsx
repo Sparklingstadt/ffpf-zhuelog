@@ -2,7 +2,6 @@ import { ArrowLeft, UsersRound } from "lucide-react";
 import Link from "next/link";
 
 import { socialUseCases } from "@/composition/social-container";
-import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { FollowMemberList } from "@/presentation/components/follow/follow-member-list";
 import { FollowTimeline } from "@/presentation/components/follow/follow-timeline";
@@ -29,7 +28,7 @@ export default async function FollowPage() {
     : [null, null];
 
   return (
-    <PageShell width="5xl">
+    <PageShell user={user} width="5xl">
       <PageHeader
         icon={UsersRound}
         eyebrow="Follow"
@@ -40,14 +39,11 @@ export default async function FollowPage() {
             : null
         }
         actions={
-          <>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/">
-                <ArrowLeft /> ホームへ
-              </Link>
-            </Button>
-            <AuthControls user={user} />
-          </>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/">
+              <ArrowLeft /> ホームへ
+            </Link>
+          </Button>
         }
       />
 
