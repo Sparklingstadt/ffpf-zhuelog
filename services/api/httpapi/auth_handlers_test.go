@@ -1,0 +1,322 @@
+package httpapi
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"strings"
+	"testing"
+
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
+)
+
+var testPair = auth.TokenPair{AccessToken: "access-tok-123", RefreshToken: "refresh-tok-456", ExpiresIn: 900}
+
+func wantPair(t *testing.T, body []byte) {
+	t.Helper()
+	var got map[string]any
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("body is not JSON: %q", body)
+	}
+	want := map[string]any{"accessToken": "access-tok-123", "refreshToken": "refresh-tok-456", "expiresIn": float64(900)}
+	if len(got) != len(want) {
+		t.Fatalf("body = %v, want exactly %v", got, want)
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Fatalf("body[%q] = %v, want %v", k, got[k], v)
+		}
+	}
+}
+
+func TestLoginGitHubHandler(t *testing.T) {
+	const valid = `{"code":"c1","codeVerifier":"v1","redirectUri":"app://cb"}`
+
+	t.Run("success passes the fields through", func(t *testing.T) {
+		var gotCode, gotVerifier, gotRedirect string
+		a := &fakeAuth{github: func(_ context.Context, code, verifier, redirectURI string) (auth.TokenPair, error) {
+			gotCode, gotVerifier, gotRedirect = code, verifier, redirectURI
+			return testPair, nil
+		}}
+		h, _ := testRouter(t, a, fakePinger{}, nil)
+		w := do(h, http.MethodPost, "/v1/auth/github", valid, nil)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, body %q", w.Code, w.Body.String())
+		}
+		wantPair(t, w.Body.Bytes())
+		if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+			t.Fatalf("Content-Type = %q", ct)
+		}
+		if w.Header().Get("Cache-Control") != "no-store" {
+			t.Fatal("missing Cache-Control: no-store")
+		}
+		if gotCode != "c1" || gotVerifier != "v1" || gotRedirect != "app://cb" {
+			t.Fatalf("service got (%q, %q, %q)", gotCode, gotVerifier, gotRedirect)
+		}
+	})
+
+	bad := map[string]string{
+		"unknown field":      `{"code":"c","codeVerifier":"v","redirectUri":"r","extra":1}`,
+		"invalid json":       `{"code":`,
+		"empty body":         ``,
+		"empty code":         `{"code":"","codeVerifier":"v","redirectUri":"r"}`,
+		"missing code":       `{"codeVerifier":"v","redirectUri":"r"}`,
+		"empty verifier":     `{"code":"c","codeVerifier":"","redirectUri":"r"}`,
+		"empty redirect":     `{"code":"c","codeVerifier":"v","redirectUri":""}`,
+		"wrong type":         `{"code":1,"codeVerifier":"v","redirectUri":"r"}`,
+		"trailing data":      valid + ` {}`,
+		"trailing garbage":   valid + `x`,
+		"array":              `[]`,
+		"null":               `null`,
+		"password-style key": `{"loginId":"a","password":"b"}`,
+	}
+	for name, body := range bad {
+		t.Run("400 "+name, func(t *testing.T) {
+			h, _ := testRouter(t, &fakeAuth{}, fakePinger{}, nil) // service must not be called
+			wantError(t, do(h, http.MethodPost, "/v1/auth/github", body, nil), http.StatusBadRequest, "invalid_request")
+		})
+	}
+
+	errs := []struct {
+		name   string
+		err    error
+		status int
+		code   string
+	}{
+		{"unauthorized", auth.ErrUnauthorized, 401, "unauthorized"},
+		{"forbidden", auth.ErrForbidden, 403, "forbidden"},
+		{"github unavailable", auth.ErrGitHubUnavailable, 502, "github_unavailable"},
+		{"wrapped github unavailable", fmt.Errorf("exchange: %w", auth.ErrGitHubUnavailable), 502, "github_unavailable"},
+		{"other", errors.New("db exploded"), 500, "internal"},
+	}
+	for _, tc := range errs {
+		t.Run(tc.name, func(t *testing.T) {
+			a := &fakeAuth{github: func(context.Context, string, string, string) (auth.TokenPair, error) {
+				return auth.TokenPair{}, tc.err
+			}}
+			h, buf := testRouter(t, a, fakePinger{}, nil)
+			w := do(h, http.MethodPost, "/v1/auth/github", valid, nil)
+			wantError(t, w, tc.status, tc.code)
+			if tc.status == 500 {
+				if strings.Contains(w.Body.String(), "db exploded") {
+					t.Fatal("internal error detail leaked to the client")
+				}
+				if !strings.Contains(buf.String(), "db exploded") {
+					t.Fatalf("internal error not logged: %s", buf.String())
+				}
+			}
+		})
+	}
+}
+
+func TestErrorMessagesAreJapanese(t *testing.T) {
+	cases := []struct {
+		err  error
+		want string
+	}{
+		{auth.ErrUnauthorized, "認証が必要です。"},
+		{auth.ErrForbidden, "このアカウントは利用できません。"},
+		{auth.ErrGitHubUnavailable, "GitHub に接続できませんでした。"},
+		{errors.New("x"), "サーバーでエラーが発生しました。"},
+	}
+	for _, tc := range cases {
+		a := &fakeAuth{password: func(context.Context, string, string) (auth.TokenPair, error) { return auth.TokenPair{}, tc.err }}
+		h, _ := testRouter(t, a, fakePinger{}, nil)
+		w := do(h, http.MethodPost, "/v1/auth/password", `{"loginId":"a","password":"b"}`, nil)
+		if got := decodeError(t, w).Error.Message; got != tc.want {
+			t.Errorf("message for %v = %q, want %q", tc.err, got, tc.want)
+		}
+	}
+	h, _ := testRouter(t, &fakeAuth{}, fakePinger{}, nil)
+	if got := decodeError(t, do(h, http.MethodPost, "/v1/auth/password", `{`, nil)).Error.Message; got != "リクエストが不正です。" {
+		t.Errorf("400 message = %q", got)
+	}
+}
+
+func TestLoginPasswordHandler(t *testing.T) {
+	t.Run("success passes values unchanged", func(t *testing.T) {
+		var gotID, gotPW string
+		a := &fakeAuth{password: func(_ context.Context, loginID, password string) (auth.TokenPair, error) {
+			gotID, gotPW = loginID, password
+			return testPair, nil
+		}}
+		h, _ := testRouter(t, a, fakePinger{}, nil)
+		w := do(h, http.MethodPost, "/v1/auth/password", `{"loginId":" Alice ","password":"pw"}`, nil)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, body %q", w.Code, w.Body.String())
+		}
+		wantPair(t, w.Body.Bytes())
+		if gotID != " Alice " || gotPW != "pw" {
+			t.Fatalf("service got (%q, %q)", gotID, gotPW)
+		}
+	})
+
+	t.Run("empty strings reach the service", func(t *testing.T) {
+		called := false
+		a := &fakeAuth{password: func(_ context.Context, loginID, password string) (auth.TokenPair, error) {
+			called = true
+			if loginID != "" || password != "" {
+				t.Errorf("service got (%q, %q)", loginID, password)
+			}
+			return auth.TokenPair{}, auth.ErrUnauthorized
+		}}
+		h, _ := testRouter(t, a, fakePinger{}, nil)
+		wantError(t, do(h, http.MethodPost, "/v1/auth/password", `{"loginId":"","password":""}`, nil), 401, "unauthorized")
+		if !called {
+			t.Fatal("service not called for empty strings")
+		}
+	})
+
+	t.Run("unauthorized", func(t *testing.T) {
+		a := &fakeAuth{password: func(context.Context, string, string) (auth.TokenPair, error) {
+			return auth.TokenPair{}, auth.ErrUnauthorized
+		}}
+		h, _ := testRouter(t, a, fakePinger{}, nil)
+		wantError(t, do(h, http.MethodPost, "/v1/auth/password", `{"loginId":"a","password":"b"}`, nil), 401, "unauthorized")
+	})
+
+	for name, body := range map[string]string{
+		"wrong type":    `{"loginId":123,"password":"b"}`,
+		"unknown field": `{"loginId":"a","password":"b","x":true}`,
+		"trailing":      `{"loginId":"a","password":"b"}{}`,
+		"invalid":       `nope`,
+	} {
+		t.Run("400 "+name, func(t *testing.T) {
+			h, _ := testRouter(t, &fakeAuth{}, fakePinger{}, nil)
+			wantError(t, do(h, http.MethodPost, "/v1/auth/password", body, nil), 400, "invalid_request")
+		})
+	}
+}
+
+func TestRefreshHandler(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		var got string
+		a := &fakeAuth{refresh: func(_ context.Context, token string) (auth.TokenPair, error) {
+			got = token
+			return testPair, nil
+		}}
+		h, _ := testRouter(t, a, fakePinger{}, nil)
+		w := do(h, http.MethodPost, "/v1/auth/refresh", `{"refreshToken":"old-token"}`, nil)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, body %q", w.Code, w.Body.String())
+		}
+		wantPair(t, w.Body.Bytes())
+		if got != "old-token" {
+			t.Fatalf("service got %q", got)
+		}
+	})
+
+	t.Run("empty token reaches the service", func(t *testing.T) {
+		a := &fakeAuth{refresh: func(_ context.Context, token string) (auth.TokenPair, error) {
+			if token != "" {
+				t.Errorf("service got %q", token)
+			}
+			return auth.TokenPair{}, auth.ErrUnauthorized
+		}}
+		h, _ := testRouter(t, a, fakePinger{}, nil)
+		wantError(t, do(h, http.MethodPost, "/v1/auth/refresh", `{"refreshToken":""}`, nil), 401, "unauthorized")
+	})
+
+	t.Run("unauthorized", func(t *testing.T) {
+		a := &fakeAuth{refresh: func(context.Context, string) (auth.TokenPair, error) {
+			return auth.TokenPair{}, auth.ErrUnauthorized
+		}}
+		h, _ := testRouter(t, a, fakePinger{}, nil)
+		wantError(t, do(h, http.MethodPost, "/v1/auth/refresh", `{"refreshToken":"x"}`, nil), 401, "unauthorized")
+	})
+
+	t.Run("forbidden", func(t *testing.T) {
+		a := &fakeAuth{refresh: func(context.Context, string) (auth.TokenPair, error) {
+			return auth.TokenPair{}, auth.ErrForbidden
+		}}
+		h, _ := testRouter(t, a, fakePinger{}, nil)
+		wantError(t, do(h, http.MethodPost, "/v1/auth/refresh", `{"refreshToken":"x"}`, nil), 403, "forbidden")
+	})
+
+	t.Run("400 wrong type", func(t *testing.T) {
+		h, _ := testRouter(t, &fakeAuth{}, fakePinger{}, nil)
+		wantError(t, do(h, http.MethodPost, "/v1/auth/refresh", `{"refreshToken":["a"]}`, nil), 400, "invalid_request")
+	})
+}
+
+func TestLogoutHandler(t *testing.T) {
+	t.Run("204 without body", func(t *testing.T) {
+		var got string
+		a := &fakeAuth{logout: func(_ context.Context, token string) error { got = token; return nil }}
+		h, _ := testRouter(t, a, fakePinger{}, nil)
+		w := do(h, http.MethodPost, "/v1/auth/logout", `{"refreshToken":"tok"}`, nil)
+		if w.Code != http.StatusNoContent {
+			t.Fatalf("status = %d", w.Code)
+		}
+		if w.Body.Len() != 0 {
+			t.Fatalf("body = %q, want empty", w.Body.String())
+		}
+		if w.Header().Get("Cache-Control") != "no-store" {
+			t.Fatal("missing Cache-Control: no-store")
+		}
+		if got != "tok" {
+			t.Fatalf("service got %q", got)
+		}
+	})
+
+	t.Run("store failure is 500", func(t *testing.T) {
+		a := &fakeAuth{logout: func(context.Context, string) error { return errors.New("db down") }}
+		h, _ := testRouter(t, a, fakePinger{}, nil)
+		wantError(t, do(h, http.MethodPost, "/v1/auth/logout", `{"refreshToken":"tok"}`, nil), 500, "internal")
+	})
+
+	t.Run("400 invalid body", func(t *testing.T) {
+		h, _ := testRouter(t, &fakeAuth{}, fakePinger{}, nil)
+		wantError(t, do(h, http.MethodPost, "/v1/auth/logout", `{"refreshToken":1}`, nil), 400, "invalid_request")
+	})
+}
+
+func TestBodyTooLarge(t *testing.T) {
+	a := &fakeAuth{password: func(context.Context, string, string) (auth.TokenPair, error) {
+		t.Error("service called for an oversized body")
+		return auth.TokenPair{}, auth.ErrUnauthorized
+	}}
+	h, _ := testRouter(t, a, fakePinger{}, nil)
+
+	prefix := `{"loginId":"a","password":"`
+	// 1 MiB + 1 bytes in total, shaped like otherwise valid JSON.
+	body := prefix + strings.Repeat("x", 1<<20+1-len(prefix)-2) + `"}`
+	if len(body) != 1<<20+1 {
+		t.Fatalf("test body is %d bytes", len(body))
+	}
+	wantError(t, do(h, http.MethodPost, "/v1/auth/password", body, nil), http.StatusRequestEntityTooLarge, "too_large")
+
+	// Exactly 1 MiB of trailing data after a valid document is also too large,
+	// not a plain 400.
+	trailing := `{"loginId":"a","password":"b"}` + strings.Repeat(" ", 1<<20)
+	wantError(t, do(h, http.MethodPost, "/v1/auth/password", trailing, nil), http.StatusRequestEntityTooLarge, "too_large")
+}
+
+func TestLogsOmitSecrets(t *testing.T) {
+	secrets := []string{"gh-code-SECRET", "verifier-SECRET", "pw-SECRET", "old-refresh-SECRET", "access-tok-123", "refresh-tok-456"}
+	a := &fakeAuth{
+		github:   func(context.Context, string, string, string) (auth.TokenPair, error) { return testPair, nil },
+		password: func(context.Context, string, string) (auth.TokenPair, error) { return testPair, nil },
+		refresh:  func(context.Context, string) (auth.TokenPair, error) { return testPair, nil },
+		logout:   func(context.Context, string) error { return nil },
+	}
+	h, buf := testRouter(t, a, fakePinger{}, nil)
+
+	do(h, http.MethodPost, "/v1/auth/github?code=gh-code-SECRET", `{"code":"gh-code-SECRET","codeVerifier":"verifier-SECRET","redirectUri":"app://cb"}`, nil)
+	do(h, http.MethodPost, "/v1/auth/password", `{"loginId":"alice","password":"pw-SECRET"}`, nil)
+	do(h, http.MethodPost, "/v1/auth/refresh", `{"refreshToken":"old-refresh-SECRET"}`, map[string]string{"Authorization": "Bearer old-refresh-SECRET"})
+	do(h, http.MethodPost, "/v1/auth/logout", `{"refreshToken":"old-refresh-SECRET"}`, nil)
+	// Failure paths log too.
+	do(h, http.MethodPost, "/v1/auth/password", `{"loginId":"alice","password":"pw-SECRET"`, nil)
+
+	if buf.Len() == 0 {
+		t.Fatal("nothing was logged")
+	}
+	for _, s := range secrets {
+		if strings.Contains(buf.String(), s) {
+			t.Errorf("log contains secret %q:\n%s", s, buf.String())
+		}
+	}
+}
