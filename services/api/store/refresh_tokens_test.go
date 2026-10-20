@@ -40,7 +40,7 @@ func TestRefreshTokenRoundTrip(t *testing.T) {
 
 	cases := []RefreshToken{
 		{ID: newID(), OwnerID: owner, Role: "member", SessionVersion: intp(3), FamilyID: newID(), ExpiresAt: now.Add(time.Hour)},
-		{ID: newID(), OwnerID: owner, Role: "admin", SessionVersion: nil, FamilyID: newID(), ExpiresAt: now.Add(2 * time.Hour)},
+		{ID: newID(), OwnerID: owner, Role: "admin", Login: "Alice", SessionVersion: nil, FamilyID: newID(), ExpiresAt: now.Add(2 * time.Hour)},
 	}
 	for _, want := range cases {
 		hash := "hash-" + want.ID
@@ -51,7 +51,7 @@ func TestRefreshTokenRoundTrip(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Find: %v", err)
 		}
-		if got.ID != want.ID || got.OwnerID != want.OwnerID || got.Role != want.Role || got.FamilyID != want.FamilyID {
+		if got.ID != want.ID || got.OwnerID != want.OwnerID || got.Role != want.Role || got.Login != want.Login || got.FamilyID != want.FamilyID {
 			t.Fatalf("got %+v, want %+v", got, want)
 		}
 		if (got.SessionVersion == nil) != (want.SessionVersion == nil) ||
@@ -63,6 +63,16 @@ func TestRefreshTokenRoundTrip(t *testing.T) {
 		}
 	}
 
+	// Rotation carries the admin login into the new row.
+	admin := cases[1]
+	nextAdmin := RefreshToken{ID: newID(), OwnerID: owner, Role: "admin", Login: admin.Login, FamilyID: admin.FamilyID, ExpiresAt: now.Add(3 * time.Hour)}
+	if ok, err := s.RotateRefreshToken(ctx, admin.ID, nextAdmin, "hash-"+nextAdmin.ID, now); err != nil || !ok {
+		t.Fatalf("Rotate admin: ok=%v err=%v", ok, err)
+	}
+	if got, err := s.FindRefreshToken(ctx, "hash-"+nextAdmin.ID); err != nil || got.Login != "Alice" {
+		t.Fatalf("rotated admin = %+v, %v; want Login Alice", got, err)
+	}
+
 	if _, err := s.FindRefreshToken(ctx, "missing-"+newID()); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("missing hash: err=%v, want ErrNotFound", err)
 	}
@@ -72,8 +82,8 @@ func TestRefreshTokenRoundTrip(t *testing.T) {
 	if err := s.InsertRefreshToken(ctx, noID, "hash-noid-"+newID()); err != nil {
 		t.Fatalf("Insert without ID: %v", err)
 	}
-	if n := countTokens(t, s, owner); n != 3 {
-		t.Fatalf("token count = %d, want 3", n)
+	if n := countTokens(t, s, owner); n != 4 {
+		t.Fatalf("token count = %d, want 4", n)
 	}
 }
 

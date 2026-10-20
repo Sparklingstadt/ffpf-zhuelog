@@ -78,6 +78,7 @@ model ApiRefreshToken {
   id             String    @id @default(cuid())
   ownerId        String
   role           String // "admin" | "member"
+  login          String? // admin only: GitHub login at issue time
   sessionVersion Int? // member only: PasswordAccount.sessionVersion at issue time
   tokenHash      String    @unique // SHA-256 hex
   familyId       String

@@ -10,9 +10,11 @@ import (
 )
 
 // RefreshToken is the stored metadata of a refresh token. The token itself is
-// never stored, only its hash. SessionVersion is nil for admin tokens.
+// never stored, only its hash. SessionVersion is nil for admin tokens; Login is
+// the admin's GitHub login and empty (NULL) for member tokens.
 type RefreshToken struct {
 	ID, OwnerID, Role string
+	Login             string
 	SessionVersion    *int
 	FamilyID          string
 	ExpiresAt         time.Time
@@ -37,25 +39,33 @@ func insertRefreshToken(ctx context.Context, e execer, t RefreshToken, tokenHash
 		v := dbTime(*t.RevokedAt)
 		revoked = &v
 	}
+	var login *string
+	if t.Login != "" {
+		login = &t.Login
+	}
 	_, err := e.Exec(ctx, `
-INSERT INTO "ApiRefreshToken" ("id", "ownerId", "role", "sessionVersion", "tokenHash", "familyId", "expiresAt", "revokedAt")
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		t.ID, t.OwnerID, t.Role, t.SessionVersion, tokenHash, t.FamilyID, dbTime(t.ExpiresAt), revoked)
+INSERT INTO "ApiRefreshToken" ("id", "ownerId", "role", "login", "sessionVersion", "tokenHash", "familyId", "expiresAt", "revokedAt")
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		t.ID, t.OwnerID, t.Role, login, t.SessionVersion, tokenHash, t.FamilyID, dbTime(t.ExpiresAt), revoked)
 	return err
 }
 
 // FindRefreshToken returns the token stored under tokenHash, or ErrNotFound.
 func (s *Store) FindRefreshToken(ctx context.Context, tokenHash string) (RefreshToken, error) {
 	var t RefreshToken
+	var login *string
 	err := s.pool.QueryRow(ctx, `
-SELECT "id", "ownerId", "role", "sessionVersion", "familyId", "expiresAt", "revokedAt"
+SELECT "id", "ownerId", "role", "login", "sessionVersion", "familyId", "expiresAt", "revokedAt"
 FROM "ApiRefreshToken" WHERE "tokenHash" = $1`, tokenHash).
-		Scan(&t.ID, &t.OwnerID, &t.Role, &t.SessionVersion, &t.FamilyID, &t.ExpiresAt, &t.RevokedAt)
+		Scan(&t.ID, &t.OwnerID, &t.Role, &login, &t.SessionVersion, &t.FamilyID, &t.ExpiresAt, &t.RevokedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return RefreshToken{}, ErrNotFound
 	}
 	if err != nil {
 		return RefreshToken{}, err
+	}
+	if login != nil {
+		t.Login = *login
 	}
 	return t, nil
 }
