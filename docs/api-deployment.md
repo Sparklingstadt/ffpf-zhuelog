@@ -119,7 +119,9 @@ for s in api-database-url api-jwt-secret api-github-client-secret; do
 done
 ```
 
-**`api-database-url` には、Neon の pooled 接続文字列（ホスト名に `-pooler` を含むもの）を入れ、`?schema=` パラメータは付けないでください。** Go API は `schema` を `search_path` の起動パラメータに変換しますが、プーラーがこの起動パラメータを拒否することがあります。Neon の既定のスキーマは `public` なので、付けなくても同じテーブルを読み書きします。`sslmode=require` は付けたままにします。
+**`api-database-url` には、Neon の pooled 接続文字列（ホスト名に `-pooler` を含むもの）を、`?schema=` パラメータを付けずに入れてください。** Neon の既定のスキーマは `public` なので、付けなくても同じテーブルを読み書きします。Go API は `schema=public` を無視しますが、それ以外のスキーマを指定すると `search_path` の起動パラメータに変換するため、プーラーに拒否されることがあります。
+
+DB への接続は、Web と同じく TLS で証明書まで検証します。Go API は、ホストが `localhost`・`127.0.0.1`・`::1` 以外のとき（または `sslmode` が `prefer`・`require`・`verify-ca` のとき）、`sslmode` を `verify-full` に置き換え、`uselibpqcompat`・`ssl` パラメータを取り除きます。Neon の接続文字列に付いている `sslmode=require` は、そのままで構いません（`verify-full` に格上げされます）。
 
 ## 3. Actions Variables の設定
 

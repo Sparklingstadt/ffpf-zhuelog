@@ -38,28 +38,67 @@ func Open(ctx context.Context, url string) (*Store, error) {
 	return &Store{pool: pool}, nil
 }
 
-// parseConfig builds the pool config. Prisma-style URLs may carry a
-// "?schema=public" parameter that PostgreSQL rejects as a runtime setting, so it
-// is removed and applied as search_path instead.
+// errInvalidURL deliberately carries no detail: parse errors can echo the
+// connection string, password included.
+var errInvalidURL = errors.New("store: invalid database url")
+
+// parseConfig builds the pool config from a URL rewritten by secureURL.
 func parseConfig(rawURL string) (*pgxpool.Config, error) {
-	schema := ""
-	if u, err := neturl.Parse(rawURL); err == nil && u.Query().Has("schema") {
-		q := u.Query()
-		schema = q.Get("schema")
-		q.Del("schema")
-		u.RawQuery = q.Encode()
-		rawURL = u.String()
+	rawURL, schema, err := secureURL(rawURL)
+	if err != nil {
+		return nil, err
 	}
 	cfg, err := pgxpool.ParseConfig(rawURL)
 	if err != nil {
-		// Do not wrap the pgx error text: it can echo the connection string.
-		return nil, errors.New("store: invalid database url")
+		return nil, errInvalidURL
 	}
 	if schema != "" {
 		cfg.ConnConfig.RuntimeParams["search_path"] = schema
 	}
 	cfg.MaxConns = 5
 	return cfg, nil
+}
+
+// secureURL mirrors the web's securePostgresConnectionString
+// (src/infrastructure/config/postgres-connection.ts): for a host other than
+// localhost, 127.0.0.1 or ::1, or when sslmode is prefer, require or
+// verify-ca, it forces sslmode=verify-full and drops the libpq-compat "ssl"
+// and "uselibpqcompat" params.
+//
+// It also removes Prisma's "schema" param, which PostgreSQL rejects as a
+// runtime setting, and returns it so a non-public schema can become
+// search_path. "public" (the default) is dropped silently: poolers may reject
+// a search_path startup parameter.
+func secureURL(rawURL string) (string, string, error) {
+	u, err := neturl.Parse(rawURL)
+	if err != nil || (u.Scheme != "postgres" && u.Scheme != "postgresql") {
+		return "", "", errInvalidURL
+	}
+	q := u.Query()
+
+	schema := q.Get("schema")
+	q.Del("schema")
+	if schema == "public" {
+		schema = ""
+	}
+
+	upgrade := true
+	switch u.Hostname() {
+	case "localhost", "127.0.0.1", "::1":
+		upgrade = false
+	}
+	switch q.Get("sslmode") {
+	case "prefer", "require", "verify-ca":
+		upgrade = true
+	}
+	if upgrade {
+		q.Set("sslmode", "verify-full")
+		q.Del("uselibpqcompat")
+		q.Del("ssl")
+	}
+
+	u.RawQuery = q.Encode()
+	return u.String(), schema, nil
 }
 
 // Ping checks that the database is reachable.
