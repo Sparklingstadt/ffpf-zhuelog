@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/big"
 	neturl "net/url"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -21,12 +22,19 @@ type Store struct {
 	pool *pgxpool.Pool
 }
 
-// Open connects to the database at url and verifies the connection.
+// openTimeout bounds Open's initial connect and ping; a var so tests can
+// shorten it.
+var openTimeout = 15 * time.Second
+
+// Open connects to the database at url and verifies the connection, giving up
+// after 15 seconds (or when ctx is done).
 func Open(ctx context.Context, url string) (*Store, error) {
 	cfg, err := parseConfig(url)
 	if err != nil {
 		return nil, err
 	}
+	ctx, cancel := context.WithTimeout(ctx, openTimeout)
+	defer cancel()
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("store: connect: %w", err)

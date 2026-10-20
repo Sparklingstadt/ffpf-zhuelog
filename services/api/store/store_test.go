@@ -2,8 +2,11 @@ package store
 
 import (
 	"context"
+	"net"
 	neturl "net/url"
 	"regexp"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -156,5 +159,60 @@ func TestParseConfigRemoteUsesVerifiedTLS(t *testing.T) {
 		if fb.TLSConfig == nil {
 			t.Fatal("plaintext fallback configured for a remote host")
 		}
+	}
+}
+
+func TestOpenBoundsInitialConnect(t *testing.T) {
+	// A server that accepts connections and never answers.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	var (
+		mu   sync.Mutex
+		held []net.Conn
+	)
+	t.Cleanup(func() {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, c := range held {
+			_ = c.Close()
+		}
+	})
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			mu.Lock()
+			held = append(held, c)
+			mu.Unlock()
+		}
+	}()
+
+	old := openTimeout
+	openTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { openTimeout = old })
+
+	done := make(chan error, 1)
+	go func() {
+		s, err := Open(context.Background(), "postgresql://u:hunter2@"+ln.Addr().String()+"/db?sslmode=disable")
+		if s != nil {
+			s.Close()
+		}
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("Open succeeded against a silent server")
+		}
+		if strings.Contains(err.Error(), "hunter2") {
+			t.Fatalf("error leaks the password: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Open did not give up on a silent server")
 	}
 }

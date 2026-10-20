@@ -277,3 +277,10 @@ func TestRunEndToEnd(t *testing.T) {
 		t.Fatal("run did not return within 10s of cancel")
 	}
 }
+
+func TestShutdownTimeoutFitsCloudRunGrace(t *testing.T) {
+	// Cloud Run sends SIGKILL 10 seconds after SIGTERM.
+	if shutdownTimeout != 8*time.Second {
+		t.Fatalf("shutdownTimeout = %v, want 8s (under Cloud Run's 10s grace)", shutdownTimeout)
+	}
+}

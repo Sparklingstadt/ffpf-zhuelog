@@ -17,7 +17,9 @@ import (
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
 
-const shutdownTimeout = 10 * time.Second
+// shutdownTimeout stays under Cloud Run's 10-second grace period between
+// SIGTERM and SIGKILL.
+const shutdownTimeout = 8 * time.Second
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
