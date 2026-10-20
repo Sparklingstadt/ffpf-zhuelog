@@ -82,7 +82,7 @@ func TestRecoverRepanicsAbortHandler(t *testing.T) {
 
 func TestNoStoreHeader(t *testing.T) {
 	h, _ := testRouter(t, &fakeAuth{}, fakePinger{}, nil)
-	for _, target := range []string{"/healthz", "/nope"} {
+	for _, target := range []string{"/health", "/healthz", "/nope"} {
 		w := do(h, http.MethodGet, target, "", nil)
 		if got := w.Header().Get("Cache-Control"); got != "no-store" {
 			t.Errorf("%s: Cache-Control = %q, want no-store", target, got)
@@ -96,15 +96,21 @@ func TestNotFoundAndMethodNotAllowed(t *testing.T) {
 	w := do(h, http.MethodGet, "/nope", "", nil)
 	wantError(t, w, http.StatusNotFound, "not_found")
 
-	w = do(h, http.MethodPost, "/healthz", "", nil)
-	wantError(t, w, http.StatusMethodNotAllowed, "method_not_allowed")
-	if allow := w.Header().Get("Allow"); !strings.Contains(allow, "GET") {
-		t.Fatalf("Allow = %q, want it to list GET", allow)
+	for _, path := range healthPaths {
+		w = do(h, http.MethodPost, path, "", nil)
+		wantError(t, w, http.StatusMethodNotAllowed, "method_not_allowed")
+		if allow := w.Header().Get("Allow"); !strings.Contains(allow, "GET") {
+			t.Fatalf("%s: Allow = %q, want it to list GET", path, allow)
+		}
 	}
 
 	w = do(h, http.MethodGet, "/v1/auth/password", "", nil)
 	wantError(t, w, http.StatusMethodNotAllowed, "method_not_allowed")
 }
+
+// healthPaths are the health-check routes. Cloud Run reserves /healthz (it
+// never reaches the container), so /health is the one used there.
+var healthPaths = []string{"/health", "/healthz"}
 
 func TestHealthz(t *testing.T) {
 	cases := []struct {
@@ -115,25 +121,30 @@ func TestHealthz(t *testing.T) {
 		{"ok", fakePinger{}, http.StatusOK},
 		{"db down", fakePinger{err: errors.New("down")}, http.StatusServiceUnavailable},
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			h, _ := testRouter(t, &fakeAuth{}, tc.db, nil)
-			w := do(h, http.MethodGet, "/healthz", "", nil)
-			if w.Code != tc.want {
-				t.Fatalf("status = %d, want %d", w.Code, tc.want)
-			}
-			if tc.want != http.StatusOK {
-				wantError(t, w, tc.want, "unavailable")
-			}
-		})
+	for _, path := range healthPaths {
+		for _, tc := range cases {
+			t.Run(path+" "+tc.name, func(t *testing.T) {
+				h, _ := testRouter(t, &fakeAuth{}, tc.db, nil)
+				// No Authorization header: health checks are unauthenticated.
+				w := do(h, http.MethodGet, path, "", nil)
+				if w.Code != tc.want {
+					t.Fatalf("status = %d, want %d", w.Code, tc.want)
+				}
+				if tc.want != http.StatusOK {
+					wantError(t, w, tc.want, "unavailable")
+				}
+			})
+		}
 	}
 }
 
 func TestHealthzNotRateLimited(t *testing.T) {
-	h, _ := testRouter(t, &fakeAuth{}, fakePinger{}, nil)
-	for i := range 50 {
-		if w := do(h, http.MethodGet, "/healthz", "", nil); w.Code != http.StatusOK {
-			t.Fatalf("request %d: status = %d", i+1, w.Code)
+	for _, path := range healthPaths {
+		h, _ := testRouter(t, &fakeAuth{}, fakePinger{}, nil)
+		for i := range 50 {
+			if w := do(h, http.MethodGet, path, "", nil); w.Code != http.StatusOK {
+				t.Fatalf("%s request %d: status = %d", path, i+1, w.Code)
+			}
 		}
 	}
 }

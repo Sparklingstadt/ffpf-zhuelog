@@ -108,7 +108,7 @@ HS256 の JWT。有効期限 15 分。クレームは `iss`・`aud`（固定値�
 
 ## エンドポイント
 
-本文と応答はすべて JSON。`/v1/auth/*` と `/healthz` 以外はアクセストークンが必要。応答には `Cache-Control: no-store` を付ける。
+本文と応答はすべて JSON。`/v1/auth/*` と `/health`・`/healthz` 以外はアクセストークンが必要。応答には `Cache-Control: no-store` を付ける。
 
 | メソッド | パス                         | 内容                                                      |
 | -------- | ---------------------------- | --------------------------------------------------------- |
@@ -121,7 +121,10 @@ HS256 の JWT。有効期限 15 分。クレームは `iss`・`aud`（固定値�
 | POST     | `/v1/batches`                | 一括作成。201                                             |
 | PATCH    | `/v1/entries/{id}`           | 部分更新                                                  |
 | DELETE   | `/v1/entries/{id}`           | ゴミ箱へ移動。204                                         |
-| GET      | `/healthz`                   | DB に ping して 200。失敗時 503                           |
+| GET      | `/health`                    | DB に ping して 200。失敗時 503。Cloud Run の確認用       |
+| GET      | `/healthz`                   | `/health` と同じ。ローカル用（Cloud Run では予約済み）    |
+
+Cloud Run は `/healthz` を予約しており、このパスへのリクエストはコンテナに届かない。そのため Cloud Run での確認には `/health` を使い、`/healthz` はローカルでの確認用に残す。どちらもレート制限と認証の対象外。
 
 ### 所有者とゴミ箱
 

@@ -206,8 +206,10 @@ func TestRunEndToEnd(t *testing.T) {
 	}
 	c := apiClient{t: t, base: "http://" + net.JoinHostPort("127.0.0.1", port)}
 
-	if code := c.do("GET", "/healthz", "", nil, nil); code != http.StatusOK {
-		t.Fatalf("healthz = %d", code)
+	for _, path := range []string{"/health", "/healthz"} {
+		if code := c.do("GET", path, "", nil, nil); code != http.StatusOK {
+			t.Fatalf("%s = %d", path, code)
+		}
 	}
 
 	var first tokens

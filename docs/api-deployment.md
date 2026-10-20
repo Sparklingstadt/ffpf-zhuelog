@@ -160,10 +160,10 @@ rm .env.production.local
 デプロイ後は、Cloud Run のサービス URL（`gcloud run services describe <API_SERVICE_NAME> --region <REGION> --format 'value(status.url)'`）で確認します。
 
 ```bash
-curl -i https://<サービスURL>/healthz
+curl -i https://<サービスURL>/health
 ```
 
-`200` が返れば、DB への接続まで確認できています（失敗時は `503`）。アプリからのログインは、`POST /v1/auth/password` か `POST /v1/auth/github` で確認します。
+`200` が返れば、DB への接続まで確認できています（失敗時は `503`）。`/healthz` は使わないでください。Cloud Run は `/healthz` を予約しており、リクエストがコンテナに届きません（Go API は同じ内容の `/healthz` も持っていますが、ローカルでの確認用です）。アプリからのログインは、`POST /v1/auth/password` か `POST /v1/auth/github` で確認します。
 
 ## 運用上の注意
 

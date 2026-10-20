@@ -65,7 +65,11 @@ func NewRouter(d Deps) http.Handler {
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("GET /healthz", healthz(d.DB))
+	// Cloud Run reserves /healthz (requests never reach the container), so its
+	// checks use /health; /healthz is kept for local use.
+	health := healthz(d.DB)
+	mux.Handle("GET /health", health)
+	mux.Handle("GET /healthz", health)
 
 	limiter := NewRateLimiter(authRateLimit, authRateWindow, d.Now)
 	limited := func(h http.Handler) http.Handler { return rateLimit(limiter, h) }
