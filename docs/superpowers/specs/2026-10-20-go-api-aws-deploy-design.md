@@ -37,6 +37,23 @@ GitHub OAuth App の登録、AWS で 1 回だけ行う準備（ECR、IAM の OID
 - Cloud Run を前提にしたコメントを ALB / ECS 向けに直す（`X-Forwarded-For`、停止の猶予時間、`/healthz` の理由）。
 - 停止の待ち時間 8s は ECS の既定の猶予 30s に収まるので変えない。
 
-## 実装前に確認すること
+## Express Mode に渡す値（確認済み）
 
-- Express Mode の CLI と GitHub Action で、ヘルスチェックのパス・CPU / メモリ・最小 / 最大タスク数・Secrets Manager の注入が指定できること（AWS のドキュメントと Action の README で確認する）。
+`aws-actions/amazon-ecs-deploy-express-service@v1` の入力として次を渡す（CLI の `create-express-gateway-service` でも同じ項目が指定できる）。
+
+| 入力                                             | 値                                                                                 |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| `service-name`                                   | Actions Variable `API_SERVICE_NAME`                                                |
+| `image`                                          | `<ECR リポジトリ>:${{ github.sha }}`                                               |
+| `execution-role-arn` / `infrastructure-role-arn` | Actions Variables `AWS_ECS_EXECUTION_ROLE_ARN` / `AWS_ECS_INFRASTRUCTURE_ROLE_ARN` |
+| `container-port`                                 | `8080`                                                                             |
+| `health-check-path`                              | `/health`（既定の `/ping` から変える）                                             |
+| `cpu` / `memory`                                 | `512` / `1024`                                                                     |
+| `min-task-count` / `max-task-count`              | `1` / `2`                                                                          |
+| `environment-variables`                          | 秘密でない 3 つ（JSON 配列）                                                       |
+| `secrets`                                        | 3 つのシークレットの Secrets Manager ARN（JSON 配列、`valueFrom` は完全な ARN）    |
+| `log-group`                                      | `/ecs/<API_SERVICE_NAME>`                                                          |
+
+- CPU アーキテクチャは既定の `X86_64`（GitHub の ubuntu ランナーでビルドするイメージと一致する）。
+- エンドポイントは Express Mode が発行する `https://….ecs.ap-northeast-1.on.aws`。証明書は Express Mode が作る。ALB はホスト名でルーティングするので、IP 直打ちや別ホスト名では 404 になる。
+- ALB は `X-Forwarded-For` の末尾にクライアントの IP を追加する（既定の append モード）ので、今のレート制限のキーの取り方をそのまま使える。
