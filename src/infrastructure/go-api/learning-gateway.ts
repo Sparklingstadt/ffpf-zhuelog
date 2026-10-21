@@ -1,7 +1,13 @@
 import type { LogDate } from "@/domain/calendar/value-objects/log-date";
 import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
 
-import { goApiAuthed, withUserParam, type GoApiCall } from "./authed";
+import {
+  goApiAuthed,
+  goUploadAuthed,
+  withUserParam,
+  type GoApiCall,
+  type GoUploadCall,
+} from "./authed";
 import { GoApiError } from "./client";
 import { toDate, toLearningEntry, type GoEntryJson } from "./learning-json";
 
@@ -34,7 +40,10 @@ type TrashJson = {
 // The trash page lists one page of notes.
 const TRASH_LIST_LIMIT = 100;
 
-export function createLearningGateway(call: GoApiCall = goApiAuthed) {
+export function createLearningGateway(
+  call: GoApiCall = goApiAuthed,
+  upload: GoUploadCall = goUploadAuthed,
+) {
   const read = <T>(path: string, owner: ViewedOwner) =>
     call<T>(
       withUserParam(path, owner.kind === "other" ? owner.ownerId : undefined),
@@ -136,6 +145,15 @@ export function createLearningGateway(call: GoApiCall = goApiAuthed) {
           shared ? "PUT" : "DELETE",
         ),
       );
+    },
+
+    // Go checks and stores the CSV in the signed-in user's own notes and
+    // answers how many notes it added.
+    async importCsv(file: File): Promise<number> {
+      const form = new FormData();
+      form.set("csvFile", file, file.name);
+      const json = await upload<{ count: number }>("/v1/imports/csv", form);
+      return json.count;
     },
   };
 

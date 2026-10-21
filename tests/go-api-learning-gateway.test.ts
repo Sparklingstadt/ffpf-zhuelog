@@ -200,3 +200,22 @@ test("listTrashed reads one page of 100 in Go's order with the total", async () 
     ],
   );
 });
+
+test("importCsv uploads the file as csvFile and returns Go's count", async () => {
+  const uploads: { path: string; file: FormDataEntryValue | null }[] = [];
+  const upload = (async (path: string, form: FormData) => {
+    uploads.push({ path, file: form.get("csvFile") });
+    return { batch: { id: "b1" }, count: 3 };
+  }) as Parameters<typeof createLearningGateway>[1];
+  const file = new File(["a,b,c"], "notes.csv", { type: "text/csv" });
+  const count = await createLearningGateway(
+    fakeCall({}).call,
+    upload,
+  ).importCsv(file);
+  assert.equal(count, 3);
+  assert.equal(uploads.length, 1);
+  assert.equal(uploads[0].path, "/v1/imports/csv");
+  assert.ok(uploads[0].file instanceof File);
+  assert.equal((uploads[0].file as File).name, "notes.csv");
+  assert.equal(await (uploads[0].file as File).text(), "a,b,c");
+});

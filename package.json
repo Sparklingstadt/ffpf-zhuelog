@@ -39,7 +39,6 @@
     "@prisma/client": "^7.10.1",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
-    "csv-parse": "^7.0.3",
     "dotenv": "18.0.8",
     "geist": "^1.8.1",
     "lucide-react": "^1.58.0",

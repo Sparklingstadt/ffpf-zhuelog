@@ -9,6 +9,9 @@ export type GoApiCall = <T>(
   init: Omit<GoApiInit, "accessToken">,
 ) => Promise<T>;
 
+// How a gateway uploads a multipart form: goUploadAuthed in the app.
+export type GoUploadCall = <T>(path: string, form: FormData) => Promise<T>;
+
 // Go API calls as the signed-in user, for Server Components and Server
 // Actions only (they read the zl_access cookie). Without a token, or when Go
 // answers 401, the user is sent to /signin. Every other failure is thrown as
