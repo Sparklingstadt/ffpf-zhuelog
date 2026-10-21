@@ -266,7 +266,7 @@ func TestDeleteExpiredRefreshTokens(t *testing.T) {
 	}
 }
 
-func TestFamilyActive(t *testing.T) {
+func TestInsertSiblingIfFamilyActive(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	owner := newOwner(t, s)
@@ -282,32 +282,50 @@ func TestFamilyActive(t *testing.T) {
 			t.Fatalf("Insert: %v", err)
 		}
 	}
+	familyRows := func(family string) int {
+		return countRows(t, s, `SELECT count(*) FROM "ApiRefreshToken" WHERE "familyId" = $1`, family)
+	}
+
 	active := newID()
 	insert(active, now.Add(time.Hour), true)
 	insert(active, now.Add(time.Hour), false)
 	allRevoked := newID()
 	insert(allRevoked, now.Add(time.Hour), true)
-	insert(allRevoked, now.Add(time.Hour), true)
 	expired := newID()
 	insert(expired, now.Add(-time.Hour), false)
 	insert(expired, now, false) // expiresAt == now is expired
-	insert(expired, now.Add(time.Hour), true)
+	revokedNow := newID()
+	insert(revokedNow, now.Add(time.Hour), true)
+	insert(revokedNow, now.Add(time.Hour), false)
+	if err := s.RevokeFamily(ctx, revokedNow, now); err != nil {
+		t.Fatalf("RevokeFamily: %v", err)
+	}
 
 	for name, tc := range map[string]struct {
 		family string
 		want   bool
 	}{
-		"active token":   {active, true},
-		"all revoked":    {allRevoked, false},
-		"all expired":    {expired, false},
-		"unknown family": {newID(), false},
+		"active family":      {active, true},
+		"all revoked":        {allRevoked, false},
+		"all expired":        {expired, false},
+		"after RevokeFamily": {revokedNow, false},
+		"unknown family":     {newID(), false},
 	} {
-		got, err := s.FamilyActive(ctx, tc.family, now)
+		before := familyRows(tc.family)
+		next := RefreshToken{ID: newID(), OwnerID: owner, Role: "member", SessionVersion: intp(0), FamilyID: tc.family, ExpiresAt: now.Add(time.Hour)}
+		got, err := s.InsertSiblingIfFamilyActive(ctx, next, "hash-"+next.ID, now)
 		if err != nil {
-			t.Fatalf("%s: FamilyActive: %v", name, err)
+			t.Fatalf("%s: InsertSiblingIfFamilyActive: %v", name, err)
 		}
 		if got != tc.want {
-			t.Fatalf("%s: FamilyActive = %v, want %v", name, got, tc.want)
+			t.Fatalf("%s: inserted = %v, want %v", name, got, tc.want)
+		}
+		_, findErr := s.FindRefreshToken(ctx, "hash-"+next.ID)
+		if tc.want && (findErr != nil || familyRows(tc.family) != before+1) {
+			t.Fatalf("%s: sibling not stored (find err %v)", name, findErr)
+		}
+		if !tc.want && (!errors.Is(findErr, ErrNotFound) || familyRows(tc.family) != before) {
+			t.Fatalf("%s: sibling stored for an inactive family", name)
 		}
 	}
 }

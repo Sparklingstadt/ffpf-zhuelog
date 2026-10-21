@@ -13,40 +13,33 @@ import (
 )
 
 // Refresh rotates a refresh token. Presenting an already-rotated token revokes
-// its whole family (token theft); so does failing the revocation check or
-// losing a concurrent rotation.
+// its whole family (token theft); so does failing the revocation check.
 //
 // Browsers send parallel requests, so several of them can refresh with the
-// same token at once: one rotates it and the others then present a token that
-// was just revoked. To keep that from logging the user out, a token rotated
-// at most RefreshReuseGrace ago (or "in the future", from clock skew) whose
-// family still has an active token gets a new pair in the same family, after
-// the same revocation check, and its family is left alive. Past the grace, or
-// once the family is dead (logout, reuse detected), it is theft as before.
+// same token at once: one rotates it and the others then present (or lose the
+// rotation race on) a token that was just revoked. To keep that from logging
+// the user out, a token revoked within RefreshReuseGrace of now (in either
+// direction, to allow for clock skew) gets a new pair in the same family,
+// after the same revocation check, provided the family still has an active
+// token; the check and the insert are atomic with respect to family
+// revocation. Past the grace, or once the family is dead (logout, reuse
+// detected), it is theft as before. The tradeoff: a stolen token used within
+// the same RefreshReuseGrace as the victim's own refresh goes undetected.
 func (s *Service) Refresh(ctx context.Context, refreshToken string) (TokenPair, error) {
 	if refreshToken == "" {
 		return TokenPair{}, ErrUnauthorized
 	}
 	now := s.now()
-	row, err := s.Store.FindRefreshToken(ctx, hashRefreshToken(refreshToken))
+	hash := hashRefreshToken(refreshToken)
+	row, err := s.Store.FindRefreshToken(ctx, hash)
 	if errors.Is(err, store.ErrNotFound) {
 		return TokenPair{}, ErrUnauthorized
 	}
 	if err != nil {
 		return TokenPair{}, fmt.Errorf("auth: find refresh token: %w", err)
 	}
-	grace := row.RevokedAt != nil
-	if grace {
-		if now.Sub(*row.RevokedAt) > RefreshReuseGrace {
-			return TokenPair{}, s.revokeFamily(ctx, row.FamilyID, now, ErrUnauthorized)
-		}
-		active, err := s.Store.FamilyActive(ctx, row.FamilyID, now)
-		if err != nil {
-			return TokenPair{}, fmt.Errorf("auth: family active: %w", err)
-		}
-		if !active {
-			return TokenPair{}, s.revokeFamily(ctx, row.FamilyID, now, ErrUnauthorized)
-		}
+	if row.RevokedAt != nil && !withinReuseGrace(now, *row.RevokedAt) {
+		return TokenPair{}, s.revokeFamily(ctx, row.FamilyID, now, ErrUnauthorized)
 	}
 	if !row.ExpiresAt.After(now) {
 		return TokenPair{}, ErrUnauthorized
@@ -67,21 +60,43 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (TokenPair, 
 	if err != nil {
 		return TokenPair{}, err
 	}
-	if grace {
-		// The presented row is already revoked; add a sibling to its family.
-		if err := s.Store.InsertRefreshToken(ctx, next, nextHash); err != nil {
-			return TokenPair{}, fmt.Errorf("auth: insert refresh token: %w", err)
+	if row.RevokedAt == nil {
+		rotated, err := s.Store.RotateRefreshToken(ctx, row.ID, next, nextHash, now)
+		if err != nil {
+			return TokenPair{}, fmt.Errorf("auth: rotate refresh token: %w", err)
 		}
-		return pair, nil
+		if rotated {
+			return pair, nil
+		}
+		// A concurrent refresh rotated it first. Fall through to the grace
+		// path only if it really was just rotated.
+		again, err := s.Store.FindRefreshToken(ctx, hash)
+		if errors.Is(err, store.ErrNotFound) {
+			return TokenPair{}, s.revokeFamily(ctx, row.FamilyID, now, ErrUnauthorized)
+		}
+		if err != nil {
+			return TokenPair{}, fmt.Errorf("auth: find refresh token: %w", err)
+		}
+		if again.RevokedAt == nil || !withinReuseGrace(now, *again.RevokedAt) {
+			return TokenPair{}, s.revokeFamily(ctx, row.FamilyID, now, ErrUnauthorized)
+		}
 	}
-	rotated, err := s.Store.RotateRefreshToken(ctx, row.ID, next, nextHash, now)
+	// The presented row is already revoked; add a sibling to its family.
+	inserted, err := s.Store.InsertSiblingIfFamilyActive(ctx, next, nextHash, now)
 	if err != nil {
-		return TokenPair{}, fmt.Errorf("auth: rotate refresh token: %w", err)
+		return TokenPair{}, fmt.Errorf("auth: insert sibling refresh token: %w", err)
 	}
-	if !rotated {
+	if !inserted {
 		return TokenPair{}, s.revokeFamily(ctx, row.FamilyID, now, ErrUnauthorized)
 	}
 	return pair, nil
+}
+
+// withinReuseGrace reports whether revokedAt is at most RefreshReuseGrace
+// away from now, in either direction.
+func withinReuseGrace(now, revokedAt time.Time) bool {
+	d := now.Sub(revokedAt)
+	return d >= -RefreshReuseGrace && d <= RefreshReuseGrace
 }
 
 // Logout revokes the refresh token's family. Unknown and empty tokens are not

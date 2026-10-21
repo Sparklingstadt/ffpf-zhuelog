@@ -71,13 +71,26 @@ FROM "ApiRefreshToken" WHERE "tokenHash" = $1`, tokenHash).
 	return t, nil
 }
 
-// RotateRefreshToken revokes the token oldID and stores next in one
-// transaction. It returns false, changing nothing, when oldID is already
-// revoked (or missing). The conditional UPDATE locks the row, so of several
-// concurrent callers exactly one wins.
+// lockFamily takes a transaction-scoped advisory lock on familyID. Every
+// family-level write (rotation, sibling insert, family revocation) takes it,
+// so a revocation cannot interleave with an insert into the same family and
+// be undone by it.
+func lockFamily(ctx context.Context, tx pgx.Tx, familyID string) error {
+	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1))`, familyID)
+	return err
+}
+
+// RotateRefreshToken revokes the token oldID and stores next (of the same
+// family) in one transaction under the family lock. It returns false,
+// changing nothing, when oldID is already revoked (or missing). The
+// conditional UPDATE locks the row, so of several concurrent callers exactly
+// one wins.
 func (s *Store) RotateRefreshToken(ctx context.Context, oldID string, next RefreshToken, nextHash string, now time.Time) (bool, error) {
 	rotated := false
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := lockFamily(ctx, tx, next.FamilyID); err != nil {
+			return err
+		}
 		tag, err := tx.Exec(ctx,
 			`UPDATE "ApiRefreshToken" SET "revokedAt" = $2 WHERE "id" = $1 AND "revokedAt" IS NULL`,
 			oldID, dbTime(now))
@@ -99,29 +112,54 @@ func (s *Store) RotateRefreshToken(ctx context.Context, oldID string, next Refre
 	return rotated, nil
 }
 
-// RevokeFamily revokes every still-active token of the family.
+// InsertSiblingIfFamilyActive stores next under nextHash if its family still
+// has an unrevoked, unexpired token, checking and inserting in one
+// transaction under the family lock. It returns false, inserting nothing,
+// when the family is not active.
+func (s *Store) InsertSiblingIfFamilyActive(ctx context.Context, next RefreshToken, nextHash string, now time.Time) (bool, error) {
+	inserted := false
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := lockFamily(ctx, tx, next.FamilyID); err != nil {
+			return err
+		}
+		var active bool
+		if err := tx.QueryRow(ctx, `
+SELECT EXISTS (SELECT 1 FROM "ApiRefreshToken"
+  WHERE "familyId" = $1 AND "revokedAt" IS NULL AND "expiresAt" > $2)`,
+			next.FamilyID, dbTime(now)).Scan(&active); err != nil {
+			return err
+		}
+		if !active {
+			return nil
+		}
+		if err := insertRefreshToken(ctx, tx, next, nextHash); err != nil {
+			return err
+		}
+		inserted = true
+		return nil
+	})
+	if err != nil {
+		return false, fmt.Errorf("store: insert sibling refresh token: %w", err)
+	}
+	return inserted, nil
+}
+
+// RevokeFamily revokes every still-active token of the family, under the
+// family lock.
 func (s *Store) RevokeFamily(ctx context.Context, familyID string, now time.Time) error {
-	_, err := s.pool.Exec(ctx,
-		`UPDATE "ApiRefreshToken" SET "revokedAt" = $2 WHERE "familyId" = $1 AND "revokedAt" IS NULL`,
-		familyID, dbTime(now))
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := lockFamily(ctx, tx, familyID); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx,
+			`UPDATE "ApiRefreshToken" SET "revokedAt" = $2 WHERE "familyId" = $1 AND "revokedAt" IS NULL`,
+			familyID, dbTime(now))
+		return err
+	})
 	if err != nil {
 		return fmt.Errorf("store: revoke family: %w", err)
 	}
 	return nil
-}
-
-// FamilyActive reports whether familyID still has an unrevoked, unexpired
-// token.
-func (s *Store) FamilyActive(ctx context.Context, familyID string, now time.Time) (bool, error) {
-	var active bool
-	err := s.pool.QueryRow(ctx, `
-SELECT EXISTS (SELECT 1 FROM "ApiRefreshToken"
-  WHERE "familyId" = $1 AND "revokedAt" IS NULL AND "expiresAt" > $2)`,
-		familyID, dbTime(now)).Scan(&active)
-	if err != nil {
-		return false, fmt.Errorf("store: family active: %w", err)
-	}
-	return active, nil
 }
 
 // PruneRefreshTokens deletes ownerID's expired tokens, and its revoked tokens

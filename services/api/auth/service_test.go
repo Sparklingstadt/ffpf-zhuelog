@@ -44,7 +44,9 @@ type fakeStore struct {
 	pruned         []string // ownerIDs passed to PruneRefreshTokens
 	deletedExpired []string // ownerIDs passed to DeleteExpiredRefreshTokens
 	revoked        []string // familyIDs passed to RevokeFamily
-	rotateLoses    bool     // RotateRefreshToken returns false
+	// rotateRace, if set, makes RotateRefreshToken lose a race: it runs (as
+	// the concurrent winner would) and RotateRefreshToken returns false.
+	rotateRace     func(oldID string, now time.Time)
 	findAccountErr error
 	sessionErr     error
 	pruneErr       error
@@ -190,7 +192,8 @@ func (f *fakeStore) FindRefreshToken(_ context.Context, hash string) (store.Refr
 
 func (f *fakeStore) RotateRefreshToken(_ context.Context, oldID string, next store.RefreshToken, nextHash string, now time.Time) (bool, error) {
 	f.log.add("RotateRefreshToken")
-	if f.rotateLoses {
+	if f.rotateRace != nil {
+		f.rotateRace(oldID, now)
 		return false, nil
 	}
 	for _, t := range f.tokens {
@@ -214,16 +217,26 @@ func (f *fakeStore) RevokeFamily(_ context.Context, familyID string, now time.Ti
 	return nil
 }
 
-// FamilyActive mirrors the store: whether familyID has an unrevoked,
-// unexpired row.
-func (f *fakeStore) FamilyActive(_ context.Context, familyID string, now time.Time) (bool, error) {
-	f.log.add("FamilyActive")
+// InsertSiblingIfFamilyActive mirrors the store: it inserts next only if its
+// family has an unrevoked, unexpired row.
+func (f *fakeStore) InsertSiblingIfFamilyActive(_ context.Context, next store.RefreshToken, nextHash string, now time.Time) (bool, error) {
+	f.log.add("InsertSiblingIfFamilyActive")
 	for _, t := range f.tokens {
-		if t.FamilyID == familyID && t.RevokedAt == nil && t.ExpiresAt.After(now) {
+		if t.FamilyID == next.FamilyID && t.RevokedAt == nil && t.ExpiresAt.After(now) {
+			f.insert(next, nextHash)
 			return true, nil
 		}
 	}
 	return false, nil
+}
+
+// revokeID revokes the row with id at now, as a concurrent rotation would.
+func (f *fakeStore) revokeID(id string, now time.Time) {
+	for _, t := range f.tokens {
+		if t.ID == id && t.RevokedAt == nil {
+			t.RevokedAt = &now
+		}
+	}
 }
 
 // PruneRefreshTokens mirrors the store: it deletes ownerID's expired rows and
@@ -1070,15 +1083,56 @@ func TestRefreshRemovedAdmin(t *testing.T) {
 }
 
 func TestRefreshLostRace(t *testing.T) {
-	f := newFixture()
-	pair := f.loginMember(t)
-	f.store.rotateLoses = true
-	if _, err := f.svc.Refresh(context.Background(), pair.RefreshToken); err != ErrUnauthorized {
-		t.Fatalf("err = %v, want ErrUnauthorized", err)
-	}
-	if !f.store.familyRevoked(f.store.row(t, pair.RefreshToken).FamilyID) {
-		t.Fatalf("family not revoked")
-	}
+	t.Run("within grace", func(t *testing.T) {
+		// Both requests read the row unrevoked; the other one rotates first.
+		f := newFixture()
+		pair := f.loginMember(t)
+		winner := f.store.row(t, pair.RefreshToken)
+		f.store.rotateRace = func(oldID string, now time.Time) {
+			f.store.revokeID(oldID, now)
+			w := winner
+			w.ID, w.RevokedAt = "", nil
+			f.store.insert(w, "winner-hash")
+		}
+		got, err := f.svc.Refresh(context.Background(), pair.RefreshToken)
+		if err != nil {
+			t.Fatalf("lost race within grace: %v", err)
+		}
+		if len(f.store.revoked) != 0 {
+			t.Fatalf("lost race revoked families %v", f.store.revoked)
+		}
+		row := f.store.row(t, got.RefreshToken)
+		if row.FamilyID != winner.FamilyID || row.RevokedAt != nil {
+			t.Fatalf("new row %+v, want active row in family %s", row, winner.FamilyID)
+		}
+	})
+	t.Run("family revoked meanwhile", func(t *testing.T) {
+		f := newFixture()
+		pair := f.loginMember(t)
+		family := f.store.row(t, pair.RefreshToken).FamilyID
+		f.store.rotateRace = func(_ string, now time.Time) {
+			_ = f.store.RevokeFamily(context.Background(), family, now) // e.g. a logout
+		}
+		n := len(f.store.tokens)
+		if _, err := f.svc.Refresh(context.Background(), pair.RefreshToken); err != ErrUnauthorized {
+			t.Fatalf("err = %v, want ErrUnauthorized", err)
+		}
+		if len(f.store.tokens) != n || !f.store.familyRevoked(family) {
+			t.Fatalf("a token was issued into the revoked family")
+		}
+	})
+	t.Run("row not revoked", func(t *testing.T) {
+		// The store reports a lost race but the row is still active.
+		f := newFixture()
+		pair := f.loginMember(t)
+		f.store.rotateRace = func(string, time.Time) {}
+		if _, err := f.svc.Refresh(context.Background(), pair.RefreshToken); err != ErrUnauthorized {
+			t.Fatalf("err = %v, want ErrUnauthorized", err)
+		}
+		if !f.store.familyRevoked(f.store.row(t, pair.RefreshToken).FamilyID) {
+			t.Fatalf("family not revoked")
+		}
+	})
 }
 
 func TestRefreshConcurrentWithinGrace(t *testing.T) {
@@ -1200,16 +1254,65 @@ func TestRefreshGraceStillChecksRevocation(t *testing.T) {
 }
 
 func TestRefreshGraceClockSkew(t *testing.T) {
-	// A revokedAt slightly in the future (another instance's clock ahead)
-	// still counts as within the grace.
+	// A revokedAt in the future (another instance's clock ahead) counts as
+	// within the grace only while it is at most RefreshReuseGrace ahead.
+	t.Run("within bound", func(t *testing.T) {
+		f := newFixture()
+		rt1 := f.loginMember(t)
+		if _, err := f.svc.Refresh(context.Background(), rt1.RefreshToken); err != nil {
+			t.Fatalf("Refresh: %v", err)
+		}
+		f.clock.Advance(-RefreshReuseGrace)
+		if _, err := f.svc.Refresh(context.Background(), rt1.RefreshToken); err != nil {
+			t.Fatalf("Refresh with revokedAt %v ahead: %v", RefreshReuseGrace, err)
+		}
+	})
+	t.Run("beyond bound", func(t *testing.T) {
+		f := newFixture()
+		rt1 := f.loginMember(t)
+		family := f.store.row(t, rt1.RefreshToken).FamilyID
+		f.clock.Advance(time.Hour)
+		if _, err := f.svc.Refresh(context.Background(), rt1.RefreshToken); err != nil {
+			t.Fatalf("Refresh: %v", err)
+		}
+		f.clock.Advance(-RefreshReuseGrace - time.Second)
+		if _, err := f.svc.Refresh(context.Background(), rt1.RefreshToken); err != ErrUnauthorized {
+			t.Fatalf("err = %v, want ErrUnauthorized", err)
+		}
+		if !f.store.familyRevoked(family) {
+			t.Fatalf("family not revoked")
+		}
+	})
+}
+
+func TestRefreshGraceDoesNotReviveFamilyRevokedByReuse(t *testing.T) {
 	f := newFixture()
 	rt1 := f.loginMember(t)
-	if _, err := f.svc.Refresh(context.Background(), rt1.RefreshToken); err != nil {
-		t.Fatalf("Refresh: %v", err)
+	family := f.store.row(t, rt1.RefreshToken).FamilyID
+	rt2, err := f.svc.Refresh(context.Background(), rt1.RefreshToken)
+	if err != nil {
+		t.Fatalf("Refresh RT1: %v", err)
 	}
-	f.clock.Advance(-5 * time.Second)
-	if _, err := f.svc.Refresh(context.Background(), rt1.RefreshToken); err != nil {
-		t.Fatalf("Refresh with revokedAt in the future: %v", err)
+	rt3, err := f.svc.Refresh(context.Background(), rt2.RefreshToken)
+	if err != nil {
+		t.Fatalf("Refresh RT2: %v", err)
+	}
+	// RT1 is replayed past the grace: reuse detected, family revoked.
+	f.clock.Advance(RefreshReuseGrace + time.Second)
+	if _, err := f.svc.Refresh(context.Background(), rt1.RefreshToken); err != ErrUnauthorized {
+		t.Fatalf("replay err = %v, want ErrUnauthorized", err)
+	}
+	// RT3 was revoked just now by that detection, so it is within the grace,
+	// but the family is dead and must stay dead.
+	f.clock.Advance(5 * time.Second)
+	n := len(f.store.tokens)
+	for name, tok := range map[string]string{"RT2": rt2.RefreshToken, "RT3": rt3.RefreshToken} {
+		if _, err := f.svc.Refresh(context.Background(), tok); err != ErrUnauthorized {
+			t.Fatalf("%s err = %v, want ErrUnauthorized", name, err)
+		}
+	}
+	if len(f.store.tokens) != n || !f.store.familyRevoked(family) {
+		t.Fatalf("grace request revived the revoked family")
 	}
 }
 
