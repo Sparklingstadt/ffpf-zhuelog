@@ -99,13 +99,33 @@ func Parse(r io.Reader) ([]store.EntryDraft, error) {
 			Hints:         hints,
 		}
 	}
+	// Postgres cannot store NUL. The web fails only when saving; here it is a
+	// format error, raised after every check the web makes so those still win.
+	for _, d := range drafts {
+		if hasNUL(d.OriginalText, d.CorrectedText, d.Pinyin) || hasNUL(d.Hints...) {
+			return nil, &ValidationError{msgFormat}
+		}
+	}
 	return drafts, nil
 }
 
+func hasNUL(ss ...string) bool {
+	for _, s := range ss {
+		if strings.IndexByte(s, 0) >= 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // FileName is what the web stores for an uploaded file name: decoded as UTF-8
-// and cut to 255 UTF-16 code units.
-func FileName(name string) string {
-	return TruncateUTF16(string(decodeUTF8([]byte(name))), maxFileName)
+// and cut to 255 UTF-16 code units. A name with NUL, which Postgres cannot
+// store, is a *ValidationError with the format message.
+func FileName(name string) (string, error) {
+	if hasNUL(name) {
+		return "", &ValidationError{msgFormat}
+	}
+	return TruncateUTF16(string(decodeUTF8([]byte(name))), maxFileName), nil
 }
 
 // TruncateUTF16 keeps the first n UTF-16 code units of s, like JS
@@ -140,7 +160,10 @@ func isHeader(row []string) bool {
 		return false
 	}
 	for i, names := range headerNames {
-		cell := strings.ToLower(strings.ReplaceAll(jsTrim(row[i]), " ", ""))
+		// ASCII lowercasing gives the same matches as JS toLowerCase: no other
+		// character lowercases to the ASCII letters of these names
+		// (strings.ToLower would turn U+0130 into "i", JS into "i\u0307").
+		cell := asciiLower(strings.ReplaceAll(jsTrim(row[i]), " ", ""))
 		found := false
 		for _, n := range names {
 			if cell == n {
@@ -152,6 +175,16 @@ func isHeader(row []string) bool {
 		}
 	}
 	return true
+}
+
+func asciiLower(s string) string {
+	b := []byte(s)
+	for i, c := range b {
+		if 'A' <= c && c <= 'Z' {
+			b[i] = c + 'a' - 'A'
+		}
+	}
+	return string(b)
 }
 
 func utf16Len(s string) int {

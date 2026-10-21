@@ -197,3 +197,34 @@ func TestTruncateUTF16(t *testing.T) {
 		}
 	}
 }
+
+func TestParseRejectsNUL(t *testing.T) {
+	// Postgres cannot store NUL, so it is reported as a format problem before
+	// anything is saved. Other problems the web reports first still win.
+	cases := []struct{ name, in, want string }{
+		{"in a required cell", "a\x00b,c,d\n", msgFormat},
+		{"in a hint", "a,b,c,h\x00\n", msgFormat},
+		{"in a later row", "a,b,c\nd,e,\x00f\n", msgFormat},
+		{"row errors first", "a\x00,b,c\nd,e\n", "2行目は3列未満です。"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Parse(strings.NewReader(tc.in))
+			var ve *ValidationError
+			if !errors.As(err, &ve) || ve.Message != tc.want {
+				t.Fatalf("err = %v, want ValidationError %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestFileName(t *testing.T) {
+	if got, err := FileName(strings.Repeat("字", 300)); err != nil || got != strings.Repeat("字", 255) {
+		t.Fatalf("FileName = %q, %v", got, err)
+	}
+	_, err := FileName("a\x00.csv")
+	var ve *ValidationError
+	if !errors.As(err, &ve) || ve.Message != msgFormat {
+		t.Fatalf("NUL in name: err = %v", err)
+	}
+}

@@ -193,12 +193,14 @@ func execBatch(ctx context.Context, tx pgx.Tx, b *pgx.Batch) error {
 }
 
 // CreateBatch stores drafts as one import batch named "mobile:<now>" in a
-// single transaction. Every entry gets createdAt = now.
+// single transaction; see CreateImportBatch.
 func (s *Store) CreateBatch(ctx context.Context, ownerID string, drafts []EntryDraft, now time.Time) (Batch, []Entry, error) {
 	return s.CreateImportBatch(ctx, ownerID, "mobile:"+dbTime(now).Format("2006-01-02T15:04:05.000Z07:00"), drafts, now)
 }
 
-// CreateImportBatch is CreateBatch with the batch's fileName given.
+// CreateImportBatch is CreateBatch with the batch's fileName given. The batch
+// is imported at now; entry i is created at now + i ms so that (createdAt, id)
+// order follows the input order, as the web's one-by-one inserts do.
 func (s *Store) CreateImportBatch(ctx context.Context, ownerID, fileName string, drafts []EntryDraft, now time.Time) (Batch, []Entry, error) {
 	now = dbTime(now)
 	batch := Batch{ID: newID(), ImportedAt: now}
@@ -215,11 +217,11 @@ func (s *Store) CreateImportBatch(ctx context.Context, ownerID, fileName string,
 				OriginalText:  d.OriginalText,
 				CorrectedText: d.CorrectedText,
 				Pinyin:        d.Pinyin,
-				CreatedAt:     now,
+				CreatedAt:     now.Add(time.Duration(i) * time.Millisecond),
 			}
 			b.Queue(`INSERT INTO "LearningEntry" ("id", "kind", "originalText", "correctedText", "pinyin", "createdAt", "ownerId", "batchId")
 			         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-				e.ID, e.Kind, e.OriginalText, e.CorrectedText, e.Pinyin, now, ownerID, batch.ID)
+				e.ID, e.Kind, e.OriginalText, e.CorrectedText, e.Pinyin, e.CreatedAt, ownerID, batch.ID)
 			e.Hints = queueHints(b, e.ID, d.Hints)
 			entries[i] = e
 		}

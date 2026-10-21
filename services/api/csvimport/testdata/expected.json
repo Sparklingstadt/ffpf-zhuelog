@@ -108,6 +108,22 @@
   "empty_required_fullwidth.csv": {
     "error": "1行目の「最初の文」「添削後の文」「ピン音」は必須です。"
   },
+  "header_dotted_i.csv": {
+    "entries": [
+      {
+        "originalText": "orİgİnal",
+        "correctedText": "corrected",
+        "pinyin": "pinyin",
+        "hints": []
+      },
+      {
+        "originalText": "x",
+        "correctedText": "y",
+        "pinyin": "z",
+        "hints": []
+      }
+    ]
+  },
   "header_only.csv": {
     "error": "CSVにデータ行がありません。"
   },

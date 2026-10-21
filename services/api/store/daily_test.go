@@ -14,11 +14,7 @@ func createAt(t *testing.T, s *Store, owner string, at time.Time, n int) []Entry
 	for i := range drafts {
 		drafts[i] = draft(string(rune('a'+i)), "h0")
 	}
-	_, created, err := s.CreateBatch(context.Background(), owner, drafts, at)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return created
+	return createTied(t, s, owner, drafts, at)
 }
 
 func TestListLogDates(t *testing.T) {

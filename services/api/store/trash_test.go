@@ -15,11 +15,7 @@ func createEntries(t *testing.T, s *Store, owner string, n int) []Entry {
 	for i := range drafts {
 		drafts[i] = draft(string(rune('a'+i)), "h0", "h1")
 	}
-	_, created, err := s.CreateBatch(context.Background(), owner, drafts, fixedNow())
-	if err != nil {
-		t.Fatal(err)
-	}
-	return created
+	return createTied(t, s, owner, drafts, fixedNow())
 }
 
 func TestListTrashed(t *testing.T) {

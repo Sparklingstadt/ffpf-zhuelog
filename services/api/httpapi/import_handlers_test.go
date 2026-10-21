@@ -176,6 +176,30 @@ func TestImportCSVHandlerRejectsFiles(t *testing.T) {
 	}
 }
 
+func TestImportCSVHandlerRejectsNUL(t *testing.T) {
+	const msgFormat = "CSVの形式を確認してください。引用符が閉じていないか、1行が長すぎる可能性があります。"
+	// A raw NUL in a part header is malformed MIME, but RFC 5987 filename*
+	// can carry one.
+	cases := map[string]struct{ disposition, content string }{
+		"NUL in a cell":        {`form-data; name="csvFile"; filename="a.csv"`, "a,b\x00,c\n"},
+		"NUL in the file name": {`form-data; name="csvFile"; filename*=UTF-8''a%00b.csv`, "a,b,c\n"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			h, calls, logs := importRouter(t, auth.RoleMember, nil)
+			body := "--X\r\nContent-Disposition: " + tc.disposition + "\r\n\r\n" + tc.content + "\r\n--X--\r\n"
+			w := do(h, http.MethodPost, "/v1/imports/csv", body, map[string]string{"Authorization": "Bearer tok", "Content-Type": "multipart/form-data; boundary=X"})
+			wantErrorMessage(t, w, http.StatusBadRequest, "invalid_csv", msgFormat)
+			if len(*calls) != 0 {
+				t.Fatal("store called")
+			}
+			if strings.Contains(logs.String(), `"level":"ERROR"`) {
+				t.Fatalf("error logged: %s", logs.String())
+			}
+		})
+	}
+}
+
 func TestImportCSVHandlerAllowsExactly5MiB(t *testing.T) {
 	// 5 MiB passes the size check (and the 6 MiB body limit of this route,
 	// above the 1 MiB used elsewhere); it then fails on the row limit.

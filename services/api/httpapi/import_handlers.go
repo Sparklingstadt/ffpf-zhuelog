@@ -61,6 +61,10 @@ func importCSV(e Entries, now func() time.Time) http.Handler {
 			return
 		}
 		drafts, err := csvimport.Parse(bytes.NewReader(content))
+		var fileName string
+		if err == nil {
+			fileName, err = csvimport.FileName(name)
+		}
 		var invalid *csvimport.ValidationError
 		if errors.As(err, &invalid) {
 			writeError(w, http.StatusBadRequest, "invalid_csv", invalid.Message)
@@ -70,7 +74,7 @@ func importCSV(e Entries, now func() time.Time) http.Handler {
 			writeServiceError(w, r, err)
 			return
 		}
-		batch, _, err := e.CreateImportBatch(r.Context(), p.OwnerID, csvimport.FileName(name), drafts, now())
+		batch, _, err := e.CreateImportBatch(r.Context(), p.OwnerID, fileName, drafts, now())
 		if err != nil {
 			writeServiceError(w, r, err)
 			return
