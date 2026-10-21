@@ -41,6 +41,12 @@ export function publicOrigin(fallback: string): string {
   return fallback;
 }
 
+// PKCE S256 (RFC 7636): the verifier is a one-time random value, not a
+// password, so a single SHA-256 is what the spec requires.
+export function pkceChallenge(verifier: string): string {
+  return createHash("sha256").update(verifier).digest("base64url");
+}
+
 export function createOAuthStart(callbackPath: string): {
   state: string;
   verifier: string;
@@ -49,7 +55,7 @@ export function createOAuthStart(callbackPath: string): {
 } {
   const state = randomBytes(32).toString("base64url");
   const verifier = randomBytes(32).toString("base64url");
-  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  const challenge = pkceChallenge(verifier);
   const cookieValue = Buffer.from(
     JSON.stringify({ state, verifier, callbackPath }),
   ).toString("base64url");

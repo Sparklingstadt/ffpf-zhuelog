@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { afterEach, test } from "node:test";
 import { NextRequest } from "next/server";
 import { GoApiError, type GoTokens } from "../src/infrastructure/go-api/client";
@@ -8,6 +7,7 @@ import {
   githubAuthorizeUrl,
   githubRedirectUri,
   parseOAuthCookie,
+  pkceChallenge,
   publicOrigin,
   requestOrigin,
 } from "../src/infrastructure/go-api/github-oauth";
@@ -50,9 +50,13 @@ test("an OAuth start has fresh random values and an S256 challenge", () => {
     assert.match(value, /^[A-Za-z0-9_-]+$/);
     assert.equal(Buffer.from(value, "base64url").length, 32);
   }
+  assert.equal(a.challenge, pkceChallenge(a.verifier));
+});
+
+test("the PKCE challenge matches the RFC 7636 example", () => {
   assert.equal(
-    a.challenge,
-    createHash("sha256").update(a.verifier).digest("base64url"),
+    pkceChallenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"),
+    "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
   );
 });
 
