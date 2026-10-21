@@ -64,3 +64,54 @@ func TestOnlyReadRoutesAcceptUserParam(t *testing.T) {
 		t.Errorf("routes accepting ?user=\n got: %q\nwant: %q", got, want)
 	}
 }
+
+// TestPublicRouteSetIsExactlyTheSevenKnownRoutes pins the routes that are not
+// behind requireAuth. Both the route table and real behaviour are checked: a
+// request without a token must get 401 on every route except these seven, so
+// a private route registered with public(...) by mistake fails here.
+func TestPublicRouteSetIsExactlyTheSevenKnownRoutes(t *testing.T) {
+	d := Deps{
+		Auth: &fakeAuth{}, Entries: &fakeEntries{}, Follows: &fakeFollows{},
+		Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
+	}.withDefaults()
+	mux, routes := newMux(d)
+	h := wrap(d, jsonMuxErrors(mux))
+
+	want := []string{
+		"GET /health",
+		"GET /healthz",
+		"GET /ping",
+		"POST /v1/auth/github",
+		"POST /v1/auth/password",
+		"POST /v1/auth/refresh",
+		"POST /v1/auth/logout",
+	}
+	isPublic := map[string]bool{}
+	for _, p := range want {
+		isPublic[p] = true
+	}
+
+	paths := strings.NewReplacer("{id}", "abc", "{ownerId}", "12345", "{date}", "2026-01-01", "{number}", "1")
+	var got []string
+	for _, rt := range routes {
+		if !rt.authed {
+			got = append(got, rt.pattern)
+		}
+		method, path, _ := strings.Cut(rt.pattern, " ")
+		w := do(h, method, paths.Replace(path), "", nil)
+		if isPublic[rt.pattern] {
+			if w.Code == http.StatusUnauthorized {
+				t.Errorf("%s: public route answered 401 without a token", rt.pattern)
+			}
+			continue
+		}
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("%s: no token got %d, want 401 (route is not in the public set)", rt.pattern, w.Code)
+		}
+	}
+	sort.Strings(got)
+	sort.Strings(want)
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("routes not behind requireAuth\n got: %q\nwant: %q", got, want)
+	}
+}

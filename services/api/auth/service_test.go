@@ -983,17 +983,17 @@ func TestChangePasswordOrder(t *testing.T) {
 	}
 }
 
-func TestChangePasswordNewPasswordLengthIsRunes(t *testing.T) {
+func TestChangePasswordNewPasswordBoundsAndNoTrim(t *testing.T) {
 	ctx := context.Background()
 	for _, next := range []string{
-		strings.Repeat("パ", 12),  // 36 bytes, 12 runes
+		strings.Repeat("パ", 12),  // 12 UTF-16 units
 		strings.Repeat("x", 128), // upper bound
-		strings.Repeat("パ", 128), // 384 bytes, 128 runes
-		"  leading sp",           // whitespace is not trimmed: 12 runes
+		strings.Repeat("パ", 128), // 128 UTF-16 units
+		"  leading sp",           // whitespace is not trimmed: 12 units
 	} {
 		f := memberFixture()
 		if err := f.svc.ChangePassword(ctx, memberPrincipal(), memberCurrent, next, next); err != nil {
-			t.Fatalf("%d-rune new password: err = %v, want nil", utf8.RuneCountInString(next), err)
+			t.Fatalf("new password %q: err = %v, want nil", next, err)
 		}
 		if got := f.store.accounts["alice"].PasswordHash; got != "hash:"+next {
 			t.Fatalf("stored hash = %q, want the new password's hash (not trimmed)", got)
@@ -1001,7 +1001,7 @@ func TestChangePasswordNewPasswordLengthIsRunes(t *testing.T) {
 	}
 	f := memberFixture()
 	if err := f.svc.ChangePassword(ctx, memberPrincipal(), memberCurrent, " eleven run", " eleven run"); err != ErrInvalidNewPassword {
-		t.Fatalf("11 runes with a space: err = %v, want ErrInvalidNewPassword", err)
+		t.Fatalf("11 UTF-16 units with a space: err = %v, want ErrInvalidNewPassword", err)
 	}
 }
 
