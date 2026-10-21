@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -336,17 +337,46 @@ func TestImportCSVExtendsDeadlines(t *testing.T) {
 }
 
 func TestOtherRoutesKeepServerDeadlines(t *testing.T) {
-	h, calls, _ := importRouter(t, auth.RoleMember, nil)
-	srv := slowServer(t, h)
-	body := `{"entries":[{"kind":"correction","originalText":"a","correctedText":"b"}]}`
-	resp, err := slowPost(t, srv.URL+"/v1/batches", "application/json", body)
+	var creates atomic.Int32
+	e := &fakeEntries{create: func(_ context.Context, _ string, drafts []store.EntryDraft, now time.Time) (store.Batch, []store.Entry, error) {
+		creates.Add(1)
+		return store.Batch{ID: "b", ImportedAt: now}, make([]store.Entry, len(drafts)), nil
+	}}
+	a := &fakeAuth{authenticate: func(_ context.Context, tok string) (auth.Principal, error) {
+		if tok != "tok" {
+			return auth.Principal{}, auth.ErrUnauthorized
+		}
+		return auth.Principal{OwnerID: testOwner, Role: auth.RoleMember}, nil
+	}}
+	srv := slowServer(t, NewRouter(Deps{Auth: a, Entries: e, Logger: slog.New(slog.NewJSONHandler(io.Discard, nil))}))
+	body := `{"entries":[{"kind":"correction","originalText":"a","correctedText":"b","pinyin":"c"}]}`
+
+	// Positive control: the same body sent at once is accepted.
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/v1/batches", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer tok")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated || creates.Load() != 1 {
+		t.Fatalf("control: status = %d, creates = %d", resp.StatusCode, creates.Load())
+	}
+
+	// Sent slowly, it must not get through the 200 ms server deadlines.
+	resp, err = slowPost(t, srv.URL+"/v1/batches", "application/json", body)
 	if err == nil {
-		defer resp.Body.Close()
+		resp.Body.Close()
+		// The read deadline fires mid-body, so the handler may still answer 400.
 		if resp.StatusCode == http.StatusCreated {
 			t.Fatal("slow /v1/batches upload succeeded; server deadlines were extended")
 		}
 	}
-	if len(*calls) != 0 {
-		t.Fatalf("calls = %d", len(*calls))
+	if creates.Load() != 1 {
+		t.Fatalf("creates = %d, want 1 (only the control)", creates.Load())
 	}
 }
