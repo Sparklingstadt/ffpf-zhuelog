@@ -65,8 +65,8 @@ func TestListMembers(t *testing.T) {
 		if m.Following != w[0] || m.FollowsMe != w[1] {
 			t.Errorf("%s: following=%v followsMe=%v, want %v", id, m.Following, m.FollowsMe, w)
 		}
-		if m.DisplayName == "" || m.LoginID == "" {
-			t.Errorf("%s: empty names %+v", id, m)
+		if m.DisplayName == "" {
+			t.Errorf("%s: empty display name %+v", id, m)
 		}
 	}
 	// Other test members may exist in the shared DB but are never followed by

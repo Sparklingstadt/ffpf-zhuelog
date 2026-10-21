@@ -11,14 +11,21 @@ import {
 import { parseLogNumber } from "../src/domain/calendar/value-objects/log-date";
 import { getSafeCallbackPath } from "../src/presentation/http/safe-callback-path";
 
-test("admin JWTs lose privileges when their login leaves the current allowlist", () => {
-  assert.equal(resolveSessionRole("admin", "Alice", "alice,bob"), "admin");
-  assert.equal(resolveSessionRole("admin", "Alice", "bob"), "revoked");
-  assert.equal(resolveSessionRole("admin", "Alice", ""), "revoked");
-  assert.equal(resolveSessionRole("admin", null, "alice"), "revoked");
-  assert.equal(resolveSessionRole("guest", "guest", ""), "guest");
-  assert.equal(resolveSessionRole("member", "taro", ""), "member");
-  assert.equal(resolveSessionRole("revoked", "alice", "alice"), "revoked");
+test("admin JWTs lose privileges when their GitHub id leaves the current allowlist", () => {
+  assert.equal(resolveSessionRole("admin", "583231", " 583231 ,9"), "admin");
+  assert.equal(resolveSessionRole("admin", "583231", "9"), "revoked");
+  assert.equal(resolveSessionRole("admin", "583231", ""), "revoked");
+  assert.equal(resolveSessionRole("admin", null, "583231"), "revoked");
+  assert.equal(resolveSessionRole("guest", undefined, ""), "guest");
+  assert.equal(resolveSessionRole("member", "password:c1", ""), "member");
+  assert.equal(resolveSessionRole("revoked", "583231", "583231"), "revoked");
+});
+
+test("the admin allowlist matches numeric GitHub ids, never logins", () => {
+  // A login (renamable, re-registrable by someone else) is never an admin.
+  assert.equal(resolveSessionRole("admin", "octocat", "octocat"), "revoked");
+  assert.equal(resolveSessionRole("admin", "0583231", "583231"), "revoked");
+  assert.equal(resolveSessionRole("admin", "", ","), "revoked");
 });
 
 test("callbacks reject external, encoded slash, backslash, control and malformed paths", () => {

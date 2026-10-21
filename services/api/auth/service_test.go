@@ -35,23 +35,36 @@ type fakeStore struct {
 	log      *callLog
 	accounts map[string]*store.PasswordAccount // by loginID
 	tokens   map[string]*store.RefreshToken    // by token hash
+	throttle map[string]*throttleEntry         // by key
 	nextID   int
 
 	lookups        []string // loginIDs passed to FindPasswordAccountByLoginID
+	consumed       []string // keys passed to ConsumeThrottle
+	resets         []string // keys passed to ResetThrottle
 	pruned         []string // ownerIDs passed to PruneRefreshTokens
 	revoked        []string // familyIDs passed to RevokeFamily
-	locked         bool     // ReserveAttempt returns false
 	rotateLoses    bool     // RotateRefreshToken returns false
 	findAccountErr error
 	sessionErr     error
 	pruneErr       error
+	throttleErr    error
 	setPasswordErr error
 	setPasswordAt  []time.Time // now passed to each SetPassword
-	clearedAt      []time.Time // now passed to each ClearFailures
+}
+
+// throttleEntry is one fixed window, as in the SignInThrottle table.
+type throttleEntry struct {
+	count   int
+	expires time.Time
 }
 
 func newFakeStore(log *callLog) *fakeStore {
-	return &fakeStore{log: log, accounts: map[string]*store.PasswordAccount{}, tokens: map[string]*store.RefreshToken{}}
+	return &fakeStore{
+		log:      log,
+		accounts: map[string]*store.PasswordAccount{},
+		tokens:   map[string]*store.RefreshToken{},
+		throttle: map[string]*throttleEntry{},
+	}
 }
 
 func (f *fakeStore) addAccount(id, loginID, password string, sv int) *store.PasswordAccount {
@@ -100,7 +113,7 @@ func (f *fakeStore) FindPasswordAccountByID(_ context.Context, id string) (store
 }
 
 // SetPassword mirrors the store: it replaces the hash and bumps the session
-// version (the real one also clears the failures and the lock).
+// version.
 func (f *fakeStore) SetPassword(_ context.Context, id, hash string, now time.Time) error {
 	f.log.add("SetPassword")
 	f.setPasswordAt = append(f.setPasswordAt, now)
@@ -117,15 +130,38 @@ func (f *fakeStore) SetPassword(_ context.Context, id, hash string, now time.Tim
 	return store.ErrNotFound
 }
 
-func (f *fakeStore) ReserveAttempt(_ context.Context, _ string, _ time.Time) (bool, error) {
-	f.log.add("ReserveAttempt")
-	return !f.locked, nil
+// ConsumeThrottle mirrors the store: an ended window (expires <= now) restarts
+// at 1, otherwise the count goes up, even past the limit.
+func (f *fakeStore) ConsumeThrottle(_ context.Context, key string, limit int, window time.Duration, now time.Time) (bool, error) {
+	f.log.add("ConsumeThrottle")
+	f.consumed = append(f.consumed, key)
+	if f.throttleErr != nil {
+		return false, f.throttleErr
+	}
+	if window != 15*time.Minute {
+		return false, fmt.Errorf("window = %v, want 15m", window)
+	}
+	e := f.throttle[key]
+	if e == nil || !e.expires.After(now) {
+		e = &throttleEntry{expires: now.Add(window)}
+		f.throttle[key] = e
+	}
+	e.count++
+	return e.count <= limit, nil
 }
 
-func (f *fakeStore) ClearFailures(_ context.Context, _ string, now time.Time) error {
-	f.log.add("ClearFailures")
-	f.clearedAt = append(f.clearedAt, now)
+func (f *fakeStore) ResetThrottle(_ context.Context, key string) error {
+	f.log.add("ResetThrottle")
+	f.resets = append(f.resets, key)
+	delete(f.throttle, key)
 	return nil
+}
+
+func (f *fakeStore) throttleCount(key string) int {
+	if e := f.throttle[key]; e != nil {
+		return e.count
+	}
+	return 0
 }
 
 func (f *fakeStore) insert(t store.RefreshToken, hash string) {
@@ -286,6 +322,10 @@ type fixture struct {
 
 var serviceEpoch = time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
 
+// testClient is the caller address the tests sign in from, as normalised by
+// ClientAddress.
+const testClient = "203.0.113.9"
+
 func newFixture() *fixture {
 	log := &callLog{}
 	clk := &testClock{t: serviceEpoch}
@@ -300,7 +340,7 @@ func newFixture() *fixture {
 		Store:     f.store,
 		Signer:    NewSigner(testSecret, clk.Now),
 		GitHub:    f.github,
-		Allowlist: ParseAllowlist("alice"),
+		Allowlist: ParseAllowlist("42"),
 		Passwords: f.hasher,
 		Now:       clk.Now,
 	}
@@ -321,7 +361,7 @@ func (f *fixture) loginMember(t *testing.T) TokenPair {
 	if _, ok := f.store.accounts["alice"]; !ok {
 		f.store.addAccount("cacc1", "alice", "correct horse", 3)
 	}
-	pair, err := f.svc.LoginPassword(context.Background(), "alice", "correct horse")
+	pair, err := f.svc.LoginPassword(context.Background(), testClient, "alice", "correct horse")
 	if err != nil {
 		t.Fatalf("LoginPassword: %v", err)
 	}
@@ -391,14 +431,39 @@ func TestLoginGitHubAllowed(t *testing.T) {
 }
 
 func TestLoginGitHubForbidden(t *testing.T) {
-	f := newFixture()
-	f.svc.Allowlist = ParseAllowlist("bob")
-	_, err := f.svc.LoginGitHub(context.Background(), "code", "verifier", "app://callback")
-	if !errors.Is(err, ErrForbidden) {
-		t.Fatalf("err = %v, want ErrForbidden", err)
+	// Listing the login instead of the ID does not make an admin: logins can
+	// be renamed and then registered by someone else.
+	for _, list := range []string{"7", "alice", "Alice", "042"} {
+		t.Run(list, func(t *testing.T) {
+			f := newFixture()
+			f.svc.Allowlist = ParseAllowlist(list)
+			_, err := f.svc.LoginGitHub(context.Background(), "code", "verifier", "app://callback")
+			if !errors.Is(err, ErrForbidden) {
+				t.Fatalf("err = %v, want ErrForbidden", err)
+			}
+			if len(f.store.tokens) != 0 || len(f.store.pruned) != 0 {
+				t.Fatalf("forbidden login touched tokens: %d rows, pruned %v", len(f.store.tokens), f.store.pruned)
+			}
+		})
 	}
-	if len(f.store.tokens) != 0 || len(f.store.pruned) != 0 {
-		t.Fatalf("forbidden login touched tokens: %d rows, pruned %v", len(f.store.tokens), f.store.pruned)
+}
+
+func TestLoginGitHubAllowsByIDWhateverTheLogin(t *testing.T) {
+	f := newFixture()
+	f.github.user = GitHubUser{ID: 42, Login: "renamed-alice"}
+	pair := f.loginAdmin(t)
+	want := Principal{OwnerID: "42", Role: RoleAdmin, Login: "renamed-alice"}
+	if got := verifyAccess(t, f, pair.AccessToken); got != want {
+		t.Fatalf("principal = %+v, want %+v", got, want)
+	}
+	if _, err := f.svc.Authenticate(context.Background(), pair.AccessToken); err != nil {
+		t.Fatalf("Authenticate: %v", err)
+	}
+
+	// Someone else who takes over the login "Alice" gets a different ID.
+	f.github.user = GitHubUser{ID: 99, Login: "Alice"}
+	if _, err := f.svc.LoginGitHub(context.Background(), "code", "verifier", "app://callback"); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("err = %v, want ErrForbidden", err)
 	}
 }
 
@@ -423,7 +488,7 @@ func TestLoginPruneErrorFailsLogin(t *testing.T) {
 		t.Fatalf("LoginGitHub succeeded despite prune error")
 	}
 	f.store.addAccount("cacc1", "alice", "pw", 0)
-	if _, err := f.svc.LoginPassword(context.Background(), "alice", "pw"); err == nil {
+	if _, err := f.svc.LoginPassword(context.Background(), testClient, "alice", "pw"); err == nil {
 		t.Fatalf("LoginPassword succeeded despite prune error")
 	}
 	if len(f.store.tokens) != 0 {
@@ -437,13 +502,24 @@ func TestLoginPasswordSuccess(t *testing.T) {
 	f := newFixture()
 	f.store.addAccount("cacc1", "alice", "correct horse", 3)
 
-	pair, err := f.svc.LoginPassword(context.Background(), "alice", "correct horse")
+	pair, err := f.svc.LoginPassword(context.Background(), testClient, "alice", "correct horse")
 	if err != nil {
 		t.Fatalf("LoginPassword: %v", err)
 	}
-	wantCalls := []string{"FindPasswordAccountByLoginID", "ReserveAttempt", "Verify", "ClearFailures", "PruneRefreshTokens", "InsertRefreshToken"}
+	wantCalls := []string{"ConsumeThrottle", "ConsumeThrottle", "FindPasswordAccountByLoginID", "Verify", "ResetThrottle", "PruneRefreshTokens", "InsertRefreshToken"}
 	if !slices.Equal(f.log.calls, wantCalls) {
 		t.Fatalf("calls = %v, want %v", f.log.calls, wantCalls)
+	}
+	// Key formats are shared with the web app and must match exactly.
+	if want := []string{"client:203.0.113.9", "login:203.0.113.9:alice"}; !slices.Equal(f.store.consumed, want) {
+		t.Fatalf("consumed = %q, want %q", f.store.consumed, want)
+	}
+	if want := []string{"login:203.0.113.9:alice"}; !slices.Equal(f.store.resets, want) {
+		t.Fatalf("resets = %q, want %q", f.store.resets, want)
+	}
+	// Only the per-login count is reset; the per-client count stays.
+	if n := f.store.throttleCount("client:203.0.113.9"); n != 1 {
+		t.Fatalf("client count = %d, want 1", n)
 	}
 	if pair.ExpiresIn != 900 {
 		t.Fatalf("ExpiresIn = %d, want 900", pair.ExpiresIn)
@@ -467,8 +543,9 @@ func TestLoginPasswordSuccess(t *testing.T) {
 	if f.hasher.count != 1 {
 		t.Fatalf("hash computations = %d, want 1", f.hasher.count)
 	}
-	if len(f.store.clearedAt) != 1 || !f.store.clearedAt[0].Equal(serviceEpoch) {
-		t.Fatalf("ClearFailures now = %v, want the service clock %v", f.store.clearedAt, serviceEpoch)
+	// The throttle window is opened at the service clock, not time.Now.
+	if e := f.store.throttle["client:203.0.113.9"]; e == nil || !e.expires.Equal(serviceEpoch.Add(15*time.Minute)) {
+		t.Fatalf("client throttle window = %+v, want expiry at the service clock + 15m", e)
 	}
 }
 
@@ -477,7 +554,7 @@ func TestLoginPasswordSessionVersionZeroAndMultibyte(t *testing.T) {
 	pw := strings.Repeat("パ", 128) // 128 runes, 384 bytes
 	f.store.addAccount("cacc2", "bob.k_9-x", pw, 0)
 
-	pair, err := f.svc.LoginPassword(context.Background(), "bob.k_9-x", pw)
+	pair, err := f.svc.LoginPassword(context.Background(), testClient, "bob.k_9-x", pw)
 	if err != nil {
 		t.Fatalf("LoginPassword: %v", err)
 	}
@@ -492,11 +569,14 @@ func TestLoginPasswordSessionVersionZeroAndMultibyte(t *testing.T) {
 func TestLoginPasswordNormalizesLoginID(t *testing.T) {
 	f := newFixture()
 	f.store.addAccount("cacc1", "alice", "pw", 0)
-	if _, err := f.svc.LoginPassword(context.Background(), "  Alice ", "pw"); err != nil {
+	if _, err := f.svc.LoginPassword(context.Background(), testClient, "  Alice ", "pw"); err != nil {
 		t.Fatalf("LoginPassword: %v", err)
 	}
 	if !slices.Equal(f.store.lookups, []string{"alice"}) {
 		t.Fatalf("lookups = %q, want [alice]", f.store.lookups)
+	}
+	if f.store.consumed[1] != "login:"+testClient+":alice" {
+		t.Fatalf("login key = %q, want the normalised loginId", f.store.consumed[1])
 	}
 }
 
@@ -519,7 +599,7 @@ func TestLoginPasswordNormalizesLoginIDLikeJS(t *testing.T) {
 			f.store.addAccount("cacc1", "alice", "pw", 0)
 			f.store.addAccount("cacc2", "iabc", "pw", 0)
 			f.store.addAccount("cacc3", "kabc", "pw", 0)
-			_, err := f.svc.LoginPassword(context.Background(), tc.loginID, "pw")
+			_, err := f.svc.LoginPassword(context.Background(), testClient, tc.loginID, "pw")
 			if tc.wantLookups == nil {
 				if !errors.Is(err, ErrUnauthorized) {
 					t.Fatalf("err = %v, want ErrUnauthorized", err)
@@ -537,7 +617,6 @@ func TestLoginPasswordNormalizesLoginIDLikeJS(t *testing.T) {
 func TestLoginPasswordFailuresAreUniform(t *testing.T) {
 	cases := []struct {
 		name, loginID, password string
-		locked                  bool
 		wantLookup              bool
 	}{
 		{name: "short login id", loginID: "a", password: "pw"},
@@ -547,16 +626,14 @@ func TestLoginPasswordFailuresAreUniform(t *testing.T) {
 		{name: "129-rune password", loginID: "alice", password: strings.Repeat("x", 129)},
 		{name: "129-rune multibyte password", loginID: "alice", password: strings.Repeat("パ", 129)},
 		{name: "unknown login id", loginID: "nobody", password: "pw", wantLookup: true},
-		{name: "locked", loginID: "alice", password: "pw", locked: true, wantLookup: true},
 		{name: "wrong password", loginID: "alice", password: "wrong", wantLookup: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFixture()
 			f.store.addAccount("cacc1", "alice", "pw", 0)
-			f.store.locked = tc.locked
 
-			_, err := f.svc.LoginPassword(context.Background(), tc.loginID, tc.password)
+			_, err := f.svc.LoginPassword(context.Background(), testClient, tc.loginID, tc.password)
 			if err != ErrUnauthorized {
 				t.Fatalf("err = %v, want exactly ErrUnauthorized", err)
 			}
@@ -568,11 +645,20 @@ func TestLoginPasswordFailuresAreUniform(t *testing.T) {
 					t.Fatalf("hasher got a %d-rune password", utf8.RuneCountInString(p))
 				}
 			}
-			if f.log.has("ClearFailures") {
-				t.Fatalf("ClearFailures called on failure")
+			if f.log.has("ResetThrottle") {
+				t.Fatalf("ResetThrottle called on failure")
 			}
 			if got := len(f.store.lookups) > 0; got != tc.wantLookup {
 				t.Fatalf("store lookup = %v, want %v", got, tc.wantLookup)
+			}
+			// Malformed input counts only per client; anything well-formed,
+			// known or not, also counts per loginId.
+			wantKeys := []string{"client:" + testClient}
+			if tc.wantLookup {
+				wantKeys = append(wantKeys, "login:"+testClient+":"+tc.loginID)
+			}
+			if !slices.Equal(f.store.consumed, wantKeys) {
+				t.Fatalf("consumed = %q, want %q", f.store.consumed, wantKeys)
 			}
 			if len(f.store.tokens) != 0 || len(f.store.pruned) != 0 {
 				t.Fatalf("failed login touched tokens")
@@ -584,7 +670,7 @@ func TestLoginPasswordFailuresAreUniform(t *testing.T) {
 func TestLoginPasswordStoreErrorIsNotUnauthorized(t *testing.T) {
 	f := newFixture()
 	f.store.findAccountErr = errors.New("connection reset")
-	_, err := f.svc.LoginPassword(context.Background(), "alice", "s3cret-pw")
+	_, err := f.svc.LoginPassword(context.Background(), testClient, "alice", "s3cret-pw")
 	if err == nil || errors.Is(err, ErrUnauthorized) || errors.Is(err, ErrForbidden) {
 		t.Fatalf("err = %v, want a non-sentinel error", err)
 	}
@@ -604,14 +690,161 @@ func TestLoginPasswordHasherErrorIsNotUnauthorized(t *testing.T) {
 			f := newFixture()
 			f.store.addAccount("cacc1", "alice", "pw", 0)
 			f.hasher.err = context.Canceled
-			_, err := f.svc.LoginPassword(context.Background(), tc.loginID, tc.password)
+			_, err := f.svc.LoginPassword(context.Background(), testClient, tc.loginID, tc.password)
 			if !errors.Is(err, context.Canceled) || errors.Is(err, ErrUnauthorized) {
 				t.Fatalf("err = %v, want a wrapped context.Canceled, not ErrUnauthorized", err)
 			}
-			if f.log.has("ClearFailures") || len(f.store.tokens) != 0 {
+			if f.log.has("ResetThrottle") || len(f.store.tokens) != 0 {
 				t.Fatalf("hasher failure must not sign in (calls %v)", f.log.calls)
 			}
 		})
+	}
+}
+
+// --- LoginPassword throttling --------------------------------------------
+
+func TestLoginPasswordClientLimitBlocksBeforeHashing(t *testing.T) {
+	f := newFixture()
+	f.store.addAccount("cacc1", "alice", "pw", 0)
+	ctx := context.Background()
+
+	// 20 attempts from one client, spread over loginIds so the per-login
+	// limit is never reached; malformed ones count too.
+	for i := range maxAttemptsPerClient {
+		loginID := fmt.Sprintf("user%d", i)
+		if i%4 == 0 {
+			loginID = "x" // malformed
+		}
+		if _, err := f.svc.LoginPassword(ctx, testClient, loginID, "pw"); err != ErrUnauthorized {
+			t.Fatalf("attempt %d: err = %v, want ErrUnauthorized", i+1, err)
+		}
+	}
+	hashes, lookups := f.hasher.count, len(f.store.lookups)
+
+	// The 21st is refused, even with the right password, before any hashing
+	// or lookup.
+	if _, err := f.svc.LoginPassword(ctx, testClient, "alice", "pw"); err != ErrThrottled {
+		t.Fatalf("21st: err = %v, want ErrThrottled", err)
+	}
+	if f.hasher.count != hashes || len(f.store.lookups) != lookups {
+		t.Fatalf("throttled attempt hashed (%d -> %d) or looked up the account", hashes, f.hasher.count)
+	}
+	if f.store.consumed[len(f.store.consumed)-1] != "client:"+testClient {
+		t.Fatalf("throttled attempt consumed %q after the client key", f.store.consumed[len(f.store.consumed)-1])
+	}
+	if len(f.store.tokens) != 0 {
+		t.Fatalf("throttled attempt signed in")
+	}
+
+	// Another client is unaffected, and the window ends after 15 minutes.
+	if _, err := f.svc.LoginPassword(ctx, "198.51.100.1", "alice", "pw"); err != nil {
+		t.Fatalf("other client: %v", err)
+	}
+	f.clock.Advance(15 * time.Minute)
+	if _, err := f.svc.LoginPassword(ctx, testClient, "alice", "pw"); err != nil {
+		t.Fatalf("after the window: %v", err)
+	}
+}
+
+func TestLoginPasswordLoginLimit(t *testing.T) {
+	f := newFixture()
+	f.store.addAccount("cacc1", "alice", "pw", 0)
+	ctx := context.Background()
+
+	for i := range maxFailuresPerLogin {
+		if _, err := f.svc.LoginPassword(ctx, testClient, "alice", "wrong"); err != ErrUnauthorized {
+			t.Fatalf("attempt %d: err = %v, want ErrUnauthorized", i+1, err)
+		}
+	}
+	hashes := f.hasher.count
+
+	// The 6th is refused before hashing, even with the right password and a
+	// differently cased loginId.
+	if _, err := f.svc.LoginPassword(ctx, testClient, " ALICE ", "pw"); err != ErrThrottled {
+		t.Fatalf("6th: err = %v, want ErrThrottled", err)
+	}
+	if f.hasher.count != hashes || len(f.store.lookups) != maxFailuresPerLogin {
+		t.Fatalf("throttled attempt hashed or looked up (calls %v)", f.log.calls)
+	}
+
+	// Not a lockout: the member can still sign in from another client, and
+	// this client can still try other loginIds.
+	if _, err := f.svc.LoginPassword(ctx, "198.51.100.1", "alice", "pw"); err != nil {
+		t.Fatalf("other client: %v", err)
+	}
+	if _, err := f.svc.LoginPassword(ctx, testClient, "bob", "pw"); err != ErrUnauthorized {
+		t.Fatalf("other loginId: err = %v, want ErrUnauthorized", err)
+	}
+
+	f.clock.Advance(15 * time.Minute)
+	if _, err := f.svc.LoginPassword(ctx, testClient, "alice", "pw"); err != nil {
+		t.Fatalf("after the window: %v", err)
+	}
+}
+
+func TestLoginPasswordSuccessResetsLoginCount(t *testing.T) {
+	f := newFixture()
+	f.store.addAccount("cacc1", "alice", "pw", 0)
+	ctx := context.Background()
+
+	for range maxFailuresPerLogin - 1 {
+		if _, err := f.svc.LoginPassword(ctx, testClient, "alice", "wrong"); err != ErrUnauthorized {
+			t.Fatalf("err = %v, want ErrUnauthorized", err)
+		}
+	}
+	if _, err := f.svc.LoginPassword(ctx, testClient, "alice", "pw"); err != nil {
+		t.Fatalf("LoginPassword: %v", err)
+	}
+	if n := f.store.throttleCount("login:" + testClient + ":alice"); n != 0 {
+		t.Fatalf("login count after success = %d, want 0", n)
+	}
+	// A fresh allowance of failures, not one left over.
+	for i := range maxFailuresPerLogin {
+		if _, err := f.svc.LoginPassword(ctx, testClient, "alice", "wrong"); err != ErrUnauthorized {
+			t.Fatalf("attempt %d after success: err = %v, want ErrUnauthorized", i+1, err)
+		}
+	}
+}
+
+func TestLoginPasswordUnknownLoginIsThrottledLikeKnown(t *testing.T) {
+	f := newFixture()
+	ctx := context.Background()
+
+	for i := range maxFailuresPerLogin {
+		if _, err := f.svc.LoginPassword(ctx, testClient, "nobody", "pw"); err != ErrUnauthorized {
+			t.Fatalf("attempt %d: err = %v, want ErrUnauthorized", i+1, err)
+		}
+	}
+	if f.hasher.count != maxFailuresPerLogin {
+		t.Fatalf("hash computations = %d, want one per attempt", f.hasher.count)
+	}
+	if _, err := f.svc.LoginPassword(ctx, testClient, "nobody", "pw"); err != ErrThrottled {
+		t.Fatalf("6th: err = %v, want ErrThrottled", err)
+	}
+	if f.hasher.count != maxFailuresPerLogin {
+		t.Fatalf("throttled attempt hashed")
+	}
+	if n := f.store.throttleCount("client:" + testClient); n != maxFailuresPerLogin+1 {
+		t.Fatalf("client count = %d, want %d", n, maxFailuresPerLogin+1)
+	}
+	if n := f.store.throttleCount("login:" + testClient + ":nobody"); n != maxFailuresPerLogin+1 {
+		t.Fatalf("login count = %d, want %d", n, maxFailuresPerLogin+1)
+	}
+}
+
+func TestLoginPasswordThrottleStoreError(t *testing.T) {
+	f := newFixture()
+	f.store.addAccount("cacc1", "alice", "pw", 0)
+	f.store.throttleErr = errors.New("connection reset")
+	_, err := f.svc.LoginPassword(context.Background(), testClient, "alice", "s3cret-pw")
+	if err == nil || errors.Is(err, ErrUnauthorized) || errors.Is(err, ErrThrottled) {
+		t.Fatalf("err = %v, want a non-sentinel error", err)
+	}
+	if strings.Contains(err.Error(), "s3cret-pw") {
+		t.Fatalf("error leaks the password: %v", err)
+	}
+	if f.hasher.count != 0 || len(f.store.lookups) != 0 || len(f.store.tokens) != 0 {
+		t.Fatalf("store error did not stop the sign-in (calls %v)", f.log.calls)
 	}
 }
 
@@ -799,7 +1032,7 @@ func TestRefreshRevokedMember(t *testing.T) {
 func TestRefreshRemovedAdmin(t *testing.T) {
 	f := newFixture()
 	pair := f.loginAdmin(t)
-	f.svc.Allowlist = ParseAllowlist("bob")
+	f.svc.Allowlist = ParseAllowlist("7")
 	if _, err := f.svc.Refresh(context.Background(), pair.RefreshToken); err != ErrForbidden {
 		t.Fatalf("err = %v, want ErrForbidden", err)
 	}
@@ -860,7 +1093,7 @@ func TestAuthenticate(t *testing.T) {
 		if err != nil || p != (Principal{OwnerID: "42", Role: RoleAdmin, Login: "Alice"}) {
 			t.Fatalf("Authenticate = %+v, %v", p, err)
 		}
-		f.svc.Allowlist = ParseAllowlist("bob")
+		f.svc.Allowlist = ParseAllowlist("7")
 		if _, err := f.svc.Authenticate(ctx, pair.AccessToken); err != ErrForbidden {
 			t.Fatalf("removed admin err = %v, want ErrForbidden", err)
 		}
@@ -1029,22 +1262,24 @@ func TestChangePasswordUniformFailures(t *testing.T) {
 		name        string
 		ownerID     string
 		current     string
-		locked      bool
-		wantReserve bool
+		throttled   bool // the password-change key is already at the limit
+		wantConsume bool
 	}{
 		{name: "account missing", ownerID: "password:cnobody", current: memberCurrent},
 		{name: "owner without prefix", ownerID: "cacc1", current: memberCurrent},
 		{name: "empty owner id", ownerID: "password:", current: memberCurrent},
-		{name: "empty current password", ownerID: "password:cacc1", current: "", wantReserve: true},
-		{name: "129-rune current password", ownerID: "password:cacc1", current: strings.Repeat("x", 129), wantReserve: true},
-		{name: "129-rune multibyte current password", ownerID: "password:cacc1", current: strings.Repeat("パ", 129), wantReserve: true},
-		{name: "locked", ownerID: "password:cacc1", current: memberCurrent, locked: true, wantReserve: true},
-		{name: "wrong password", ownerID: "password:cacc1", current: "wrong", wantReserve: true},
+		{name: "empty current password", ownerID: "password:cacc1", current: "", wantConsume: true},
+		{name: "129-rune current password", ownerID: "password:cacc1", current: strings.Repeat("x", 129), wantConsume: true},
+		{name: "129-rune multibyte current password", ownerID: "password:cacc1", current: strings.Repeat("パ", 129), wantConsume: true},
+		{name: "too many tries", ownerID: "password:cacc1", current: memberCurrent, throttled: true, wantConsume: true},
+		{name: "wrong password", ownerID: "password:cacc1", current: "wrong", wantConsume: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			f := memberFixture()
-			f.store.locked = tc.locked
+			if tc.throttled {
+				f.store.throttle["password-change:cacc1"] = &throttleEntry{count: maxFailuresPerLogin, expires: serviceEpoch.Add(time.Minute)}
+			}
 			p := Principal{OwnerID: tc.ownerID, Role: RoleMember, SessionVersion: 3}
 
 			err := f.svc.ChangePassword(context.Background(), p, tc.current, newPassword12, newPassword12)
@@ -1059,11 +1294,14 @@ func TestChangePasswordUniformFailures(t *testing.T) {
 					t.Fatalf("hasher got a %d-rune password", utf8.RuneCountInString(pw))
 				}
 			}
-			if f.log.has("SetPassword") || f.log.has("Hash") || f.log.has("ClearFailures") {
+			if f.log.has("SetPassword") || f.log.has("Hash") || f.log.has("ResetThrottle") {
 				t.Fatalf("failure changed the account (calls %v)", f.log.calls)
 			}
-			if got := f.log.has("ReserveAttempt"); got != tc.wantReserve {
-				t.Fatalf("ReserveAttempt called = %v, want %v (calls %v)", got, tc.wantReserve, f.log.calls)
+			if got := f.log.has("ConsumeThrottle"); got != tc.wantConsume {
+				t.Fatalf("ConsumeThrottle called = %v, want %v (calls %v)", got, tc.wantConsume, f.log.calls)
+			}
+			if tc.wantConsume && !slices.Equal(f.store.consumed, []string{"password-change:cacc1"}) {
+				t.Fatalf("consumed = %v, want only the password-change key", f.store.consumed)
 			}
 			if f.store.accounts["alice"].PasswordHash != "hash:"+memberCurrent || f.store.accounts["alice"].SessionVersion != 3 {
 				t.Fatal("password or session version changed")
@@ -1077,9 +1315,12 @@ func TestChangePasswordSuccess(t *testing.T) {
 	if err := f.svc.ChangePassword(context.Background(), memberPrincipal(), memberCurrent, newPassword12, newPassword12); err != nil {
 		t.Fatalf("ChangePassword: %v", err)
 	}
-	want := []string{"FindPasswordAccountByID", "ReserveAttempt", "Verify", "Hash", "SetPassword"}
+	want := []string{"FindPasswordAccountByID", "ConsumeThrottle", "Verify", "Hash", "SetPassword", "ResetThrottle"}
 	if !slices.Equal(f.log.calls, want) {
 		t.Fatalf("calls = %v, want %v", f.log.calls, want)
+	}
+	if !slices.Equal(f.store.resets, []string{"password-change:cacc1"}) {
+		t.Fatalf("resets = %v, want the password-change key", f.store.resets)
 	}
 	if !slices.Equal(f.hasher.passwords, []string{memberCurrent}) {
 		t.Fatalf("verified passwords = %q, want only the current one", f.hasher.passwords)
@@ -1111,10 +1352,10 @@ func TestChangePasswordRevokesSessions(t *testing.T) {
 	if _, err := f.svc.Refresh(ctx, pair.RefreshToken); err != ErrUnauthorized {
 		t.Fatalf("old refresh token: err = %v, want ErrUnauthorized", err)
 	}
-	if _, err := f.svc.LoginPassword(ctx, "alice", "correct horse"); err != ErrUnauthorized {
+	if _, err := f.svc.LoginPassword(ctx, testClient, "alice", "correct horse"); err != ErrUnauthorized {
 		t.Fatalf("login with the old password: err = %v, want ErrUnauthorized", err)
 	}
-	if _, err := f.svc.LoginPassword(ctx, "alice", newPassword12); err != nil {
+	if _, err := f.svc.LoginPassword(ctx, testClient, "alice", newPassword12); err != nil {
 		t.Fatalf("login with the new password: %v", err)
 	}
 }

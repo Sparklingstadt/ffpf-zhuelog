@@ -53,10 +53,26 @@ model PasswordAccount {
   displayName    String
   passwordHash   String
   sessionVersion Int       @default(0)
+  // Unused since sign-in throttling moved to SignInThrottle. Kept so the
+  // previous deployment keeps working while the migration is rolled out;
+  // drop them in a later migration.
   failedAttempts Int       @default(0)
   lockedUntil    DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+}
+
+// Fixed-window sign-in attempt counters, shared by the web app and the Go API.
+// Keys always include the client address ("client:<ip>",
+// "login:<ip>:<loginId>"), so nobody can lock another person out from
+// elsewhere; "password-change:<accountId>" is only reachable by the signed-in
+// member. Rows past expiresAt are dead and pruned opportunistically.
+model SignInThrottle {
+  key       String   @id
+  count     Int
+  expiresAt DateTime
+
+  @@index([expiresAt])
 }
 
 // One-way follow. Admins have no row in the database, so neither column has a

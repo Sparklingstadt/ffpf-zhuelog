@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -118,11 +119,12 @@ func TestErrorMessagesAreJapanese(t *testing.T) {
 	}{
 		{auth.ErrUnauthorized, "認証が必要です。"},
 		{auth.ErrForbidden, "このアカウントは利用できません。"},
+		{auth.ErrThrottled, "しばらくしてから再度お試しください。"},
 		{auth.ErrGitHubUnavailable, "GitHub に接続できませんでした。"},
 		{errors.New("x"), "サーバーでエラーが発生しました。"},
 	}
 	for _, tc := range cases {
-		a := &fakeAuth{password: func(context.Context, string, string) (auth.TokenPair, error) { return auth.TokenPair{}, tc.err }}
+		a := &fakeAuth{password: func(context.Context, string, string, string) (auth.TokenPair, error) { return auth.TokenPair{}, tc.err }}
 		h, _ := testRouter(t, a, fakePinger{}, nil)
 		w := do(h, http.MethodPost, "/v1/auth/password", `{"loginId":"a","password":"b"}`, nil)
 		if got := decodeError(t, w).Error.Message; got != tc.want {
@@ -138,7 +140,7 @@ func TestErrorMessagesAreJapanese(t *testing.T) {
 func TestLoginPasswordHandler(t *testing.T) {
 	t.Run("success passes values unchanged", func(t *testing.T) {
 		var gotID, gotPW string
-		a := &fakeAuth{password: func(_ context.Context, loginID, password string) (auth.TokenPair, error) {
+		a := &fakeAuth{password: func(_ context.Context, _, loginID, password string) (auth.TokenPair, error) {
 			gotID, gotPW = loginID, password
 			return testPair, nil
 		}}
@@ -155,7 +157,7 @@ func TestLoginPasswordHandler(t *testing.T) {
 
 	t.Run("empty strings reach the service", func(t *testing.T) {
 		called := false
-		a := &fakeAuth{password: func(_ context.Context, loginID, password string) (auth.TokenPair, error) {
+		a := &fakeAuth{password: func(_ context.Context, _, loginID, password string) (auth.TokenPair, error) {
 			called = true
 			if loginID != "" || password != "" {
 				t.Errorf("service got (%q, %q)", loginID, password)
@@ -170,12 +172,50 @@ func TestLoginPasswordHandler(t *testing.T) {
 	})
 
 	t.Run("unauthorized", func(t *testing.T) {
-		a := &fakeAuth{password: func(context.Context, string, string) (auth.TokenPair, error) {
+		a := &fakeAuth{password: func(context.Context, string, string, string) (auth.TokenPair, error) {
 			return auth.TokenPair{}, auth.ErrUnauthorized
 		}}
 		h, _ := testRouter(t, a, fakePinger{}, nil)
 		wantError(t, do(h, http.MethodPost, "/v1/auth/password", `{"loginId":"a","password":"b"}`, nil), 401, "unauthorized")
 	})
+
+	t.Run("throttled", func(t *testing.T) {
+		a := &fakeAuth{password: func(context.Context, string, string, string) (auth.TokenPair, error) {
+			return auth.TokenPair{}, fmt.Errorf("wrapped: %w", auth.ErrThrottled)
+		}}
+		h, _ := testRouter(t, a, fakePinger{}, nil)
+		wantError(t, do(h, http.MethodPost, "/v1/auth/password", `{"loginId":"a","password":"b"}`, nil), 429, "rate_limited")
+	})
+
+	// The client address is the one clientKey picks, normalised for the
+	// shared throttle keys.
+	clients := []struct{ name, remote, xff, want string }{
+		{"remote ipv4", "192.0.2.7:5555", "", "192.0.2.7"},
+		{"last xff value", "10.0.0.1:1", "1.1.1.1, 203.0.113.9", "203.0.113.9"},
+		{"ipv6 by /64", "[2001:db8:0:1::5]:443", "", "2001:db8:0:1::/64"},
+		{"ipv4-mapped xff", "10.0.0.1:1", "::ffff:198.51.100.4", "198.51.100.4"},
+		{"garbage xff", "10.0.0.1:1", "not-an-ip", "unknown"},
+	}
+	for _, tc := range clients {
+		t.Run("client "+tc.name, func(t *testing.T) {
+			var got string
+			a := &fakeAuth{password: func(_ context.Context, client, _, _ string) (auth.TokenPair, error) {
+				got = client
+				return testPair, nil
+			}}
+			h, _ := testRouter(t, a, fakePinger{}, nil)
+			r := httptest.NewRequest(http.MethodPost, "/v1/auth/password", strings.NewReader(`{"loginId":"a","password":"b"}`))
+			r.RemoteAddr = tc.remote
+			if tc.xff != "" {
+				r.Header.Set("X-Forwarded-For", tc.xff)
+			}
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			if w.Code != http.StatusOK || got != tc.want {
+				t.Fatalf("status = %d, client = %q; want 200, %q", w.Code, got, tc.want)
+			}
+		})
+	}
 
 	for name, body := range map[string]string{
 		"wrong type":    `{"loginId":123,"password":"b"}`,
@@ -316,7 +356,7 @@ func TestNullAndNonObjectBodiesAreRejected(t *testing.T) {
 }
 
 func TestBodyOfExactlyLimitIsNotTooLarge(t *testing.T) {
-	a := &fakeAuth{password: func(context.Context, string, string) (auth.TokenPair, error) {
+	a := &fakeAuth{password: func(context.Context, string, string, string) (auth.TokenPair, error) {
 		return auth.TokenPair{}, auth.ErrUnauthorized
 	}}
 	h, _ := testRouter(t, a, fakePinger{}, nil)
@@ -334,7 +374,7 @@ func TestBodyOfExactlyLimitIsNotTooLarge(t *testing.T) {
 }
 
 func TestBodyTooLarge(t *testing.T) {
-	a := &fakeAuth{password: func(context.Context, string, string) (auth.TokenPair, error) {
+	a := &fakeAuth{password: func(context.Context, string, string, string) (auth.TokenPair, error) {
 		t.Error("service called for an oversized body")
 		return auth.TokenPair{}, auth.ErrUnauthorized
 	}}
@@ -358,7 +398,7 @@ func TestLogsOmitSecrets(t *testing.T) {
 	secrets := []string{"gh-code-SECRET", "verifier-SECRET", "pw-SECRET", "old-refresh-SECRET", "access-tok-123", "refresh-tok-456"}
 	a := &fakeAuth{
 		github:   func(context.Context, string, string, string) (auth.TokenPair, error) { return testPair, nil },
-		password: func(context.Context, string, string) (auth.TokenPair, error) { return testPair, nil },
+		password: func(context.Context, string, string, string) (auth.TokenPair, error) { return testPair, nil },
 		refresh:  func(context.Context, string) (auth.TokenPair, error) { return testPair, nil },
 		logout:   func(context.Context, string) error { return nil },
 	}

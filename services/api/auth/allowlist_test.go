@@ -3,25 +3,28 @@ package auth
 import "testing"
 
 func TestAllowlist(t *testing.T) {
-	a := ParseAllowlist(" Alice, bob ,,")
+	a := ParseAllowlist(" 42, 1001 ,,octocat, -7, 12a, 3.0, ")
 	if len(a) != 2 {
-		t.Fatalf("len = %d, want 2", len(a))
+		t.Fatalf("len = %d, want 2 (%v)", len(a), a)
 	}
-	for _, login := range []string{"alice", " BOB ", "Alice"} {
-		if !a.Allows(login) {
-			t.Errorf("Allows(%q) = false", login)
+	for _, id := range []string{"42", "1001"} {
+		if !a.Allows(id) {
+			t.Errorf("Allows(%q) = false", id)
 		}
 	}
-	for _, login := range []string{"", "  ", "carol"} {
-		if a.Allows(login) {
-			t.Errorf("Allows(%q) = true", login)
+	for _, id := range []string{"", "  ", " 42", "42 ", "042", "+42", "octocat", "-7", "12a", "43"} {
+		if a.Allows(id) {
+			t.Errorf("Allows(%q) = true", id)
 		}
 	}
 	if ParseAllowlist("").Allows("") {
-		t.Error("empty allowlist allows empty login")
+		t.Error("empty allowlist allows empty id")
+	}
+	if ParseAllowlist("alice,bob").Allows("alice") {
+		t.Error("login names must not be accepted as entries")
 	}
 	var nilList Allowlist
-	if nilList.Allows("alice") {
-		t.Error("nil allowlist allows login")
+	if nilList.Allows("42") {
+		t.Error("nil allowlist allows id")
 	}
 }

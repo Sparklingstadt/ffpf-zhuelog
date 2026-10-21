@@ -100,6 +100,8 @@ func writeServiceError(w http.ResponseWriter, r *http.Request, err error) {
 		writeError(w, http.StatusUnauthorized, codeUnauthorized, msgUnauthorized)
 	case errors.Is(err, auth.ErrForbidden):
 		writeError(w, http.StatusForbidden, codeForbidden, msgForbidden)
+	case errors.Is(err, auth.ErrThrottled):
+		writeError(w, http.StatusTooManyRequests, codeRateLimited, msgRateLimited)
 	case errors.Is(err, auth.ErrInvalidNewPassword):
 		writeError(w, http.StatusBadRequest, codeInvalidRequest, msgInvalidNewPassword)
 	case errors.Is(err, auth.ErrPasswordMismatch):

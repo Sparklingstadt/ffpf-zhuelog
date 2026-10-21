@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net"
@@ -50,13 +51,13 @@ func TestNewGitHubHTTPClientRefusesRedirects(t *testing.T) {
 func TestRunStartupFailureDoesNotLeakDatabaseURL(t *testing.T) {
 	const secret = "s3cret-password"
 	cfg := Config{
-		Port:                "0",
-		DatabaseURL:         "postgres://user:" + secret + "@127.0.0.1:1/db?sslmode=disable&connect_timeout=1",
-		JWTSecret:           bytes.Repeat([]byte("k"), 32),
-		GitHubClientID:      "id",
-		GitHubClientSecret:  "secret",
-		GitHubRedirectURI:   "app://callback",
-		AllowedGitHubLogins: "someone",
+		Port:               "0",
+		DatabaseURL:        "postgres://user:" + secret + "@127.0.0.1:1/db?sslmode=disable&connect_timeout=1",
+		JWTSecret:          bytes.Repeat([]byte("k"), 32),
+		GitHubClientID:     "id",
+		GitHubClientSecret: "secret",
+		GitHubRedirectURI:  "app://callback",
+		AllowedGitHubIDs:   "1",
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -198,18 +199,40 @@ func TestRunEndToEnd(t *testing.T) {
 		return m
 	}
 	memberB, memberC := newMember("b"), newMember("c")
+
+	// Every sign-in below comes from 127.0.0.1, whose per-client count lives
+	// in the shared DB; start each run from zero so reruns within the
+	// 15-minute window are not throttled.
+	clearThrottle := func() {
+		_, _ = conn.Exec(context.Background(),
+			`DELETE FROM "SignInThrottle" WHERE "key" = 'client:127.0.0.1' OR "key" LIKE 'login:127.0.0.1:e2e-%'`)
+	}
+	clearThrottle()
+	t.Cleanup(clearThrottle)
+	throttleCount := func(key string) int {
+		t.Helper()
+		var n int
+		err := conn.QueryRow(context.Background(), `SELECT "count" FROM "SignInThrottle" WHERE "key" = $1`, key).Scan(&n)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0
+		}
+		if err != nil {
+			t.Fatalf("read throttle %s: %v", key, err)
+		}
+		return n
+	}
 	t.Cleanup(func() {
 		_, _ = conn.Exec(context.Background(), `DELETE FROM "Follow" WHERE "followerId" = $1 OR "followeeId" = $1`, owner)
 	})
 
 	cfg := Config{
-		Port:                "0",
-		DatabaseURL:         dbURL,
-		JWTSecret:           bytes.Repeat([]byte("e2e-secret-"), 4),
-		GitHubClientID:      "dummy-client-id",
-		GitHubClientSecret:  "dummy-client-secret",
-		GitHubRedirectURI:   "zhuelog://oauth/callback",
-		AllowedGitHubLogins: "nobody",
+		Port:               "0",
+		DatabaseURL:        dbURL,
+		JWTSecret:          bytes.Repeat([]byte("e2e-secret-"), 4),
+		GitHubClientID:     "dummy-client-id",
+		GitHubClientSecret: "dummy-client-secret",
+		GitHubRedirectURI:  "zhuelog://oauth/callback",
+		AllowedGitHubIDs:   "1",
 	}
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	ctx, cancel := context.WithCancel(context.Background())
@@ -245,6 +268,22 @@ func TestRunEndToEnd(t *testing.T) {
 	}
 	if first.AccessToken == "" || first.RefreshToken == "" {
 		t.Fatalf("empty tokens: %+v", first)
+	}
+
+	// Throttle keys shared with the web: a wrong password counts per client
+	// and per loginId; a success resets only the loginId count.
+	if code := c.do("POST", "/v1/auth/password", "",
+		map[string]string{"loginId": memberC.loginID, "password": "wrong password"}, nil); code != http.StatusUnauthorized {
+		t.Fatalf("wrong password = %d, want 401", code)
+	}
+	if n := throttleCount("login:127.0.0.1:" + memberC.loginID); n != 1 {
+		t.Fatalf("login throttle count = %d, want 1", n)
+	}
+	if n := throttleCount("login:127.0.0.1:" + loginID); n != 0 {
+		t.Fatalf("login throttle count after success = %d, want 0", n)
+	}
+	if n := throttleCount("client:127.0.0.1"); n != 2 {
+		t.Fatalf("client throttle count = %d, want 2", n)
 	}
 
 	var created struct {

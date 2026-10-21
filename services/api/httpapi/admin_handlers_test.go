@@ -20,15 +20,13 @@ type fakeAccounts struct {
 	hashes   map[string]string // id -> last hash
 	setCalls []string          // ids passed to SetPassword
 	created  []string          // hashes passed to CreatePasswordAccount
-	listNow  time.Time
 }
 
 func newFakeAccounts() *fakeAccounts {
 	return &fakeAccounts{taken: map[string]bool{}, hashes: map[string]string{}}
 }
 
-func (f *fakeAccounts) ListPasswordAccounts(_ context.Context, now time.Time) ([]store.AccountSummary, error) {
-	f.listNow = now
+func (f *fakeAccounts) ListPasswordAccounts(_ context.Context) ([]store.AccountSummary, error) {
 	return f.accounts, nil
 }
 
@@ -81,7 +79,6 @@ type accountResp struct {
 	LoginID     string `json:"loginId"`
 	DisplayName string `json:"displayName"`
 	CreatedAt   string `json:"createdAt"`
-	Locked      bool   `json:"locked"`
 }
 
 type createResp struct {
@@ -117,7 +114,7 @@ func TestAdminListAccounts(t *testing.T) {
 	acc := newFakeAccounts()
 	at := time.Date(2026, 10, 1, 2, 3, 4, 5_000_000, time.UTC)
 	acc.accounts = []store.AccountSummary{
-		{ID: "ca", LoginID: "alice", DisplayName: "Alice", CreatedAt: at, Locked: true},
+		{ID: "ca", LoginID: "alice", DisplayName: "Alice", CreatedAt: at},
 		{ID: "cb", LoginID: "bob", DisplayName: "Bob", CreatedAt: at.Add(time.Hour)},
 	}
 	h, _ := adminRouter(t, acc, auth.RoleAdmin)
@@ -132,16 +129,14 @@ func TestAdminListAccounts(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []accountResp{
-		{ID: "ca", OwnerID: "password:ca", LoginID: "alice", DisplayName: "Alice", CreatedAt: "2026-10-01T02:03:04.005Z", Locked: true},
+		{ID: "ca", OwnerID: "password:ca", LoginID: "alice", DisplayName: "Alice", CreatedAt: "2026-10-01T02:03:04.005Z"},
 		{ID: "cb", OwnerID: "password:cb", LoginID: "bob", DisplayName: "Bob", CreatedAt: "2026-10-01T03:03:04.005Z"},
 	}
 	if len(resp.Accounts) != 2 || resp.Accounts[0] != want[0] || resp.Accounts[1] != want[1] {
 		t.Fatalf("accounts = %+v, want %+v", resp.Accounts, want)
 	}
-	if !acc.listNow.Equal(newClock().Now()) {
-		t.Fatalf("list now = %v", acc.listNow)
-	}
-	if strings.Contains(w.Body.String(), "hash") || strings.Contains(w.Body.String(), "failed") {
+	if strings.Contains(w.Body.String(), "hash") || strings.Contains(w.Body.String(), "failed") ||
+		strings.Contains(w.Body.String(), "locked") {
 		t.Fatalf("body leaks internals: %s", w.Body.String())
 	}
 
@@ -179,7 +174,7 @@ func TestAdminCreateAccount(t *testing.T) {
 			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 				t.Fatal(err)
 			}
-			if resp.Account.LoginID != "alice.w" || resp.Account.DisplayName != "Alice" || resp.Account.Locked ||
+			if resp.Account.LoginID != "alice.w" || resp.Account.DisplayName != "Alice" ||
 				resp.Account.OwnerID != "password:"+resp.Account.ID || resp.Account.CreatedAt != "2026-10-20T12:00:00.000Z" {
 				t.Fatalf("account = %+v", resp.Account)
 			}

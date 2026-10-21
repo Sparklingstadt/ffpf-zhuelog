@@ -14,11 +14,6 @@ import (
 // already used.
 var ErrLoginIDTaken = errors.New("store: login id taken")
 
-const (
-	maxFailedAttempts = 5
-	lockDuration      = 15 * time.Minute
-)
-
 // MemberOwnerPrefix starts every member's ownerId: "password:" + account id.
 const MemberOwnerPrefix = "password:"
 
@@ -71,15 +66,12 @@ func (s *Store) FindPasswordAccountByID(ctx context.Context, id string) (Passwor
 
 // SetPassword stores a new password hash in one statement, mirroring the web
 // app's setPassword: it bumps sessionVersion (revoking every existing API and
-// web session) and clears the failure count and the lock. It returns
-// ErrNotFound when no account has the id.
+// web session). It returns ErrNotFound when no account has the id.
 func (s *Store) SetPassword(ctx context.Context, id, hash string, now time.Time) error {
 	tag, err := s.pool.Exec(ctx, `
 UPDATE "PasswordAccount" SET
   "passwordHash" = $2,
   "sessionVersion" = "sessionVersion" + 1,
-  "failedAttempts" = 0,
-  "lockedUntil" = NULL,
   "updatedAt" = CAST($3 AS TIMESTAMP(3))
 WHERE "id" = $1`, id, hash, dbTime(now))
 	if err != nil {
@@ -105,55 +97,20 @@ func (s *Store) SessionVersion(ctx context.Context, accountID string) (int, erro
 	return v, nil
 }
 
-// ReserveAttempt counts one sign-in attempt before the password is checked. It
-// returns false when the account is currently locked (or does not exist). The
-// statement mirrors the web app's reserveAttempt so both share one lockout
-// state: an expired lock restarts the count at 1, and reaching
-// maxFailedAttempts locks the account for lockDuration.
-func (s *Store) ReserveAttempt(ctx context.Context, accountID string, now time.Time) (bool, error) {
-	now = dbTime(now)
-	lockEnd := now.Add(lockDuration)
-	tag, err := s.pool.Exec(ctx, `
-UPDATE "PasswordAccount" SET
-  "failedAttempts" = CASE WHEN "lockedUntil" IS NOT NULL THEN 1 ELSE "failedAttempts" + 1 END,
-  "lockedUntil" = CASE WHEN (CASE WHEN "lockedUntil" IS NOT NULL THEN 1 ELSE "failedAttempts" + 1 END) >= $2 THEN CAST($3 AS TIMESTAMP(3)) ELSE NULL END,
-  "updatedAt" = CAST($4 AS TIMESTAMP(3))
-WHERE "id" = $1 AND ("lockedUntil" IS NULL OR "lockedUntil" <= CAST($4 AS TIMESTAMP(3)))`,
-		accountID, maxFailedAttempts, lockEnd, now)
-	if err != nil {
-		return false, fmt.Errorf("store: reserve attempt: %w", err)
-	}
-	return tag.RowsAffected() == 1, nil
-}
-
-// ClearFailures resets the failure counter and lock after a successful sign-in
-// at now.
-func (s *Store) ClearFailures(ctx context.Context, accountID string, now time.Time) error {
-	_, err := s.pool.Exec(ctx, `
-UPDATE "PasswordAccount" SET "failedAttempts" = 0, "lockedUntil" = NULL, "updatedAt" = CAST($2 AS TIMESTAMP(3))
-WHERE "id" = $1`, accountID, dbTime(now))
-	if err != nil {
-		return fmt.Errorf("store: clear failures: %w", err)
-	}
-	return nil
-}
-
-// AccountSummary is what an administrator sees of a member: never the hash or
-// the failure counter.
+// AccountSummary is what an administrator sees of a member: never the hash.
 type AccountSummary struct {
 	ID          string
 	LoginID     string
 	DisplayName string
 	CreatedAt   time.Time
-	Locked      bool
 }
 
 // ListPasswordAccounts returns every member account ordered by (createdAt,
-// id). Locked is lockedUntil > now.
-func (s *Store) ListPasswordAccounts(ctx context.Context, now time.Time) ([]AccountSummary, error) {
+// id).
+func (s *Store) ListPasswordAccounts(ctx context.Context) ([]AccountSummary, error) {
 	rows, err := s.pool.Query(ctx, `
-SELECT "id", "loginId", "displayName", "createdAt", COALESCE("lockedUntil" > CAST($1 AS TIMESTAMP(3)), false)
-FROM "PasswordAccount" ORDER BY "createdAt" ASC, "id" ASC`, dbTime(now))
+SELECT "id", "loginId", "displayName", "createdAt"
+FROM "PasswordAccount" ORDER BY "createdAt" ASC, "id" ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("store: list password accounts: %w", err)
 	}
@@ -161,7 +118,7 @@ FROM "PasswordAccount" ORDER BY "createdAt" ASC, "id" ASC`, dbTime(now))
 	out := []AccountSummary{}
 	for rows.Next() {
 		var a AccountSummary
-		if err := rows.Scan(&a.ID, &a.LoginID, &a.DisplayName, &a.CreatedAt, &a.Locked); err != nil {
+		if err := rows.Scan(&a.ID, &a.LoginID, &a.DisplayName, &a.CreatedAt); err != nil {
 			return nil, fmt.Errorf("store: list password accounts: %w", err)
 		}
 		a.CreatedAt = a.CreatedAt.UTC()

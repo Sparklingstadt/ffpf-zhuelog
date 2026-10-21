@@ -11,7 +11,6 @@ import (
 type Member struct {
 	OwnerID     string // "password:<id>"
 	DisplayName string
-	LoginID     string
 	Following   bool // the viewer follows this member
 	FollowsMe   bool // this member follows the viewer
 }
@@ -34,7 +33,7 @@ type TimelineItem struct {
 // state. The viewer may be an admin id, which matches no member.
 func (s *Store) ListMembers(ctx context.Context, viewerID string) (MemberDirectory, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT $2 || a."id", a."displayName", a."loginId",
+		`SELECT $2 || a."id", a."displayName",
 		        EXISTS (SELECT 1 FROM "Follow" f WHERE f."followerId" = $1 AND f."followeeId" = $2 || a."id"),
 		        EXISTS (SELECT 1 FROM "Follow" f WHERE f."followerId" = $2 || a."id" AND f."followeeId" = $1)
 		 FROM "PasswordAccount" a
@@ -47,7 +46,7 @@ func (s *Store) ListMembers(ctx context.Context, viewerID string) (MemberDirecto
 	dir := MemberDirectory{Members: []Member{}}
 	for rows.Next() {
 		var m Member
-		if err := rows.Scan(&m.OwnerID, &m.DisplayName, &m.LoginID, &m.Following, &m.FollowsMe); err != nil {
+		if err := rows.Scan(&m.OwnerID, &m.DisplayName, &m.Following, &m.FollowsMe); err != nil {
 			return MemberDirectory{}, fmt.Errorf("store: list members: %w", err)
 		}
 		if m.Following {

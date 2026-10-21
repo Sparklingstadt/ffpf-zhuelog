@@ -27,14 +27,17 @@ var (
 //  2. next must be 12 to 128 UTF-16 units, spaces included
 //     (ErrInvalidNewPassword);
 //  3. confirm must equal next (ErrPasswordMismatch);
-//  4. a missing account, a current password that is not 1 to 128 runes, a
-//     lockout or a wrong password all return ErrInvalidCurrentPassword after
-//     exactly one password-hash computation. An attempt is counted
-//     (ReserveAttempt) for an existing account before current is checked.
+//  4. a missing account, a current password that is not 1 to 128 runes, too
+//     many recent tries or a wrong password all return
+//     ErrInvalidCurrentPassword after exactly one password-hash computation.
+//     For an existing account an attempt is counted against the
+//     "password-change:<accountId>" throttle key (maxFailuresPerLogin per
+//     throttleWindow, like the web) before current is checked. Only the
+//     signed-in member reaches that key, and it never blocks sign-in.
 //
 // Steps 1 to 3 count no attempt and compute no hash. On success the new hash
 // is stored with SetPassword, which bumps the session version (revoking every
-// existing session, this one included) and clears the failures and the lock.
+// existing session, this one included), and the throttle key is reset.
 func (s *Service) ChangePassword(ctx context.Context, p Principal, current, next, confirm string) error {
 	if p.Role != RoleMember {
 		return ErrForbidden
@@ -60,11 +63,12 @@ func (s *Service) ChangePassword(ctx context.Context, p Principal, current, next
 		return fmt.Errorf("auth: find password account: %w", err)
 	}
 
-	reserved, err := s.Store.ReserveAttempt(ctx, account.ID, s.now())
+	key := "password-change:" + account.ID
+	allowed, err := s.Store.ConsumeThrottle(ctx, key, maxFailuresPerLogin, throttleWindow, s.now())
 	if err != nil {
-		return fmt.Errorf("auth: reserve attempt: %w", err)
+		return fmt.Errorf("auth: consume throttle: %w", err)
 	}
-	if !reserved || current == "" || utf8.RuneCountInString(current) > maxPasswordRunes {
+	if !allowed || current == "" || utf8.RuneCountInString(current) > maxPasswordRunes {
 		return s.reject(ctx, simulated, ErrInvalidCurrentPassword)
 	}
 	match, err := s.Passwords.Verify(ctx, current, account.PasswordHash)
@@ -86,6 +90,9 @@ func (s *Service) ChangePassword(ctx context.Context, p Principal, current, next
 	}
 	if err != nil {
 		return fmt.Errorf("auth: set password: %w", err)
+	}
+	if err := s.Store.ResetThrottle(ctx, key); err != nil {
+		return fmt.Errorf("auth: reset throttle: %w", err)
 	}
 	return nil
 }

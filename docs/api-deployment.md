@@ -158,21 +158,23 @@ ECS の権限は、[`aws-actions/amazon-ecs-deploy-express-service`](https://git
 
 GitHub のリポジトリの **Settings → Secrets and variables → Actions → Variables** に設定します。Secrets ではなく **Variables** です（ARN や ID は秘密情報ではないため）。
 
-| 名前                                  | 内容                                                                             |
-| ------------------------------------- | -------------------------------------------------------------------------------- |
-| `AWS_ROLE_ARN`                        | `arn:aws:iam::<ACCOUNT_ID>:role/zhuelog-api-deploy`。**空のあいだはスキップ**    |
-| `AWS_ECS_EXECUTION_ROLE_ARN`          | `arn:aws:iam::<ACCOUNT_ID>:role/zhuelog-api-execution`                           |
-| `AWS_ECS_INFRASTRUCTURE_ROLE_ARN`     | `arn:aws:iam::<ACCOUNT_ID>:role/zhuelog-api-infrastructure`                      |
-| `AWS_ECR_REPOSITORY`                  | ECR のリポジトリ名（`zhuelog-api`）                                              |
-| `API_SERVICE_NAME`                    | Express Mode のサービス名（`zhuelog-api`）。ロググループは `/ecs/<この名前>`     |
-| `API_SECRET_DATABASE_URL_ARN`         | `zhuelog-api/database-url` の完全な ARN                                          |
-| `API_SECRET_JWT_ARN`                  | `zhuelog-api/jwt-secret` の完全な ARN                                            |
-| `API_SECRET_GITHUB_CLIENT_SECRET_ARN` | `zhuelog-api/github-secret` の完全な ARN                                         |
-| `API_GITHUB_CLIENT_ID`                | モバイル用 GitHub OAuth App の Client ID（`GITHUB_MOBILE_CLIENT_ID`）            |
-| `API_GITHUB_REDIRECT_URI`             | アプリのカスタム URL スキーム（`GITHUB_MOBILE_REDIRECT_URI`）                    |
-| `API_ALLOWED_GITHUB_LOGINS`           | admin の許可リスト。Web の `AUTH_ALLOWED_GITHUB_LOGINS` と同じ値（カンマ区切り） |
+| 名前                                  | 内容                                                                                                      |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `AWS_ROLE_ARN`                        | `arn:aws:iam::<ACCOUNT_ID>:role/zhuelog-api-deploy`。**空のあいだはスキップ**                             |
+| `AWS_ECS_EXECUTION_ROLE_ARN`          | `arn:aws:iam::<ACCOUNT_ID>:role/zhuelog-api-execution`                                                    |
+| `AWS_ECS_INFRASTRUCTURE_ROLE_ARN`     | `arn:aws:iam::<ACCOUNT_ID>:role/zhuelog-api-infrastructure`                                               |
+| `AWS_ECR_REPOSITORY`                  | ECR のリポジトリ名（`zhuelog-api`）                                                                       |
+| `API_SERVICE_NAME`                    | Express Mode のサービス名（`zhuelog-api`）。ロググループは `/ecs/<この名前>`                              |
+| `API_SECRET_DATABASE_URL_ARN`         | `zhuelog-api/database-url` の完全な ARN                                                                   |
+| `API_SECRET_JWT_ARN`                  | `zhuelog-api/jwt-secret` の完全な ARN                                                                     |
+| `API_SECRET_GITHUB_CLIENT_SECRET_ARN` | `zhuelog-api/github-secret` の完全な ARN                                                                  |
+| `API_GITHUB_CLIENT_ID`                | モバイル用 GitHub OAuth App の Client ID（`GITHUB_MOBILE_CLIENT_ID`）                                     |
+| `API_GITHUB_REDIRECT_URI`             | アプリのカスタム URL スキーム（`GITHUB_MOBILE_REDIRECT_URI`）                                             |
+| `API_ALLOWED_GITHUB_IDS`              | admin の許可リスト。GitHub の数値のユーザー ID（カンマ区切り）。Web の `AUTH_ALLOWED_GITHUB_IDS` と同じ値 |
 
 最後の 3 つはコンテナの環境変数として渡されます。workflow は `jq` で JSON を組み立てるので、許可リストのカンマや値の中の引用符はそのまま使えます。
+
+`API_ALLOWED_GITHUB_IDS` には、GitHub のログイン名ではなく**数値のユーザー ID** を入れます（例: `583231`）。ID は `https://api.github.com/users/<ログイン名>` の `id` で確認できます（`curl -s https://api.github.com/users/<ログイン名> | jq .id`）。ログイン名は本人が変更でき、手放された名前は他人が取得できるため、許可には使いません（ログイン名はトークンに情報として残るだけです）。数字以外の値は無視されます。以前の `API_ALLOWED_GITHUB_LOGINS` は使われなくなったので、`API_ALLOWED_GITHUB_IDS` を設定してから削除してください。
 
 `AWS_ROLE_ARN` は、ほかの 10 個をすべて設定してから最後に設定してください。`AWS_ROLE_ARN` を設定した時点でデプロイが動くようになります。ほかに空の Variable があると、workflow は最初のステップで名前を示して止まります（イメージの push もサービスの更新もしません）。
 
@@ -186,6 +188,8 @@ node --env-file=.env.production.local node_modules/prisma/build/index.js migrate
 node --env-file=.env.production.local node_modules/prisma/build/index.js migrate status
 rm .env.production.local
 ```
+
+パスワードログインの試行回数を数える `SignInThrottle` テーブル（マイグレーション `20261021090000_add_sign_in_throttle`）も Go API が使います。本番に適用する前に Go API をデプロイすると、パスワードログインが `500` で失敗します。
 
 `prisma.config.ts` は `.env` だけを読むため、`--env-file` で取得したファイルを明示的に渡しています。`P1001`（DB に届かない）が出たら、Neon のコンピュートが休止から起きるのを待って、もう一度実行してください。
 
@@ -222,7 +226,12 @@ openssl rand -base64 48 | tr -d '\n' | aws secretsmanager put-secret-value \
 
 ### レート制限と `X-Forwarded-For`
 
-`/v1/auth/*` のレート制限は、IP ごとにメモリ上で数えます。IP には `X-Forwarded-For` の **最後の値** を使います。これは ALB が付ける値で、クライアントが偽装できないため正しく動きます。**ALB を通らずにタスクへ直接届く経路（タスクのパブリック IP への直接アクセス、別のロードバランサー、API Gateway など）を作らないでください。** 経路が増えると、攻撃者が `X-Forwarded-For` を偽装して制限を回避できるか、すべてのクライアントが 1 つの IP として数えられます。パスワードの総当たりは、DB 側のロック（5 回失敗で 15 分）でも防ぎます。
+`/v1/auth/*` には 2 種類の制限があります。
+
+- **IP ごとのレート制限**: タスクのメモリ上で数え、1 分に 10 回までです。
+- **パスワードログインの試行回数**: DB の `SignInThrottle` テーブルで数えます。Web と同じテーブル・同じキーを使うので、同じクライアントからの Web と API の試行は合わせて数えられます。15 分の固定の枠で、1 つのクライアントからのパスワードログインは 20 回まで、同じクライアントから同じ loginId へは 5 回まで（ログインに成功すると、その loginId の回数は 0 に戻ります）。超えるとパスワードのハッシュ計算をせずに `429`（`rate_limited`）を返します。回数は必ずクライアントのアドレスごとに数えるので、他人が間違ったパスワードを繰り返しても、別の場所からの本人のログインは止まりません（以前のアカウント単位のロックは廃止しました）。アドレスは、IPv4 はそのまま、IPv6 は上位 64 ビット（/64）単位で数えます。
+
+どちらも、クライアントのアドレスには `X-Forwarded-For` の **最後の値** を使います。これは ALB が付け足す値で、クライアントが偽装できないため正しく動きます。そのため、**タスクには ALB からしか届かないようにしてください。ALB を通らずにタスクへ直接届く経路（タスクのパブリック IP への直接アクセス、別のロードバランサー、API Gateway など）を作らないでください。** 経路が増えると、攻撃者が `X-Forwarded-For` を偽装して制限を回避したり、他人のアドレスを名乗ってその人のパスワードログインを止めたりできるか、すべてのクライアントが 1 つのアドレスとして数えられます。
 
 ### 認証と公開範囲
 

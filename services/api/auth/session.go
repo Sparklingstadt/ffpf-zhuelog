@@ -79,8 +79,9 @@ func (s *Service) Logout(ctx context.Context, refreshToken string) error {
 }
 
 // Authenticate verifies an access token and checks that its holder is still
-// allowed: admins must still be allowlisted (else ErrForbidden) and members'
-// session version must still match (else ErrUnauthorized).
+// allowed: admins' GitHub user ID must still be allowlisted (else
+// ErrForbidden) and members' session version must still match (else
+// ErrUnauthorized).
 func (s *Service) Authenticate(ctx context.Context, accessToken string) (Principal, error) {
 	p, err := s.Signer.Verify(accessToken)
 	if err != nil {
@@ -96,7 +97,8 @@ func (s *Service) Authenticate(ctx context.Context, accessToken string) (Princip
 func (s *Service) checkCurrent(ctx context.Context, p Principal) error {
 	switch p.Role {
 	case RoleAdmin:
-		if !s.Allowlist.Allows(p.Login) {
+		// OwnerID is the numeric GitHub user ID; Login is informational only.
+		if !s.Allowlist.Allows(p.OwnerID) {
 			return ErrForbidden
 		}
 		return nil

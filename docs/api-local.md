@@ -53,7 +53,9 @@ curl -s "$API_LOCAL_URL/v1/entries?limit=5" -H "Authorization: Bearer $TOKEN" | 
 curl -s "$API_LOCAL_URL/v1/members" -H "Authorization: Bearer $TOKEN" | jq
 ```
 
-アクセストークンの有効期限は 15 分です。切れたら `POST /v1/auth/refresh` か、もう一度ログインしてください。`/v1/auth/*` には IP ごとに 1 分 10 回の制限があります。
+アクセストークンの有効期限は 15 分です。切れたら `POST /v1/auth/refresh` か、もう一度ログインしてください。`/v1/auth/*` には IP ごとに 1 分 10 回の制限があります。パスワードログインはさらに、15 分のあいだに同じ IP から 20 回まで、同じ IP から同じ loginId へは 5 回まで（成功すると 0 に戻ります）で、超えると `429` が返ります。止まったときは 15 分待ってください。
+
+`GET /v1/members` は会員の `ownerId`・`displayName`・フォローの状態だけを返し、loginId は返しません（ログインに使う ID を他の会員に見せないため）。
 
 ## 片付け
 

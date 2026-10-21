@@ -2,10 +2,11 @@ import { ownerIdForAccount } from "../../../domain/identity/entities/password-ac
 import type { PasswordAccountRepository } from "../../../domain/identity/repositories/password-account-repository";
 import type { FollowRepository } from "../../../domain/social/repositories/follow-repository";
 
+// No login ID: it is half of a member's credentials, so other members only
+// see display names.
 export type FollowDirectoryMember = {
   ownerId: string;
   displayName: string;
-  loginId: string;
   following: boolean;
   followsMe: boolean;
 };
@@ -36,7 +37,6 @@ export class ListFollowDirectory {
       .map((account) => ({
         ownerId: ownerIdForAccount(account.id),
         displayName: account.displayName,
-        loginId: account.loginId,
       }))
       .filter((member) => member.ownerId !== viewerId)
       .sort((a, b) => a.displayName.localeCompare(b.displayName, "ja"))

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -17,6 +18,20 @@ const (
 	familyIDBytes     = 16
 )
 
+// Sign-in throttling, shared with the web app through the SignInThrottle
+// table: the values and key formats must match the web's
+// (src/domain/identity/entities/password-account.ts and
+// authenticate-password-account.ts). Keys always include the client address,
+// so nobody can lock a member out from elsewhere.
+const (
+	throttleWindow       = 15 * time.Minute
+	maxAttemptsPerClient = 20 // every password sign-in attempt from one client
+	maxFailuresPerLogin  = 5  // attempts per client and loginId, reset on success
+)
+
+// ErrThrottled means the client made too many sign-in attempts recently.
+var ErrThrottled = errors.New("auth: too many sign-in attempts")
+
 var (
 	_ Store  = (*store.Store)(nil)
 	_ GitHub = (*GitHubClient)(nil)
@@ -29,8 +44,8 @@ type Store interface {
 	FindPasswordAccountByID(ctx context.Context, id string) (store.PasswordAccount, error)
 	SetPassword(ctx context.Context, id, hash string, now time.Time) error
 	SessionVersion(ctx context.Context, accountID string) (int, error)
-	ReserveAttempt(ctx context.Context, accountID string, now time.Time) (bool, error)
-	ClearFailures(ctx context.Context, accountID string, now time.Time) error
+	ConsumeThrottle(ctx context.Context, key string, limit int, window time.Duration, now time.Time) (bool, error)
+	ResetThrottle(ctx context.Context, key string) error
 	InsertRefreshToken(ctx context.Context, t store.RefreshToken, tokenHash string) error
 	FindRefreshToken(ctx context.Context, tokenHash string) (store.RefreshToken, error)
 	RotateRefreshToken(ctx context.Context, oldID string, next store.RefreshToken, nextHash string, now time.Time) (bool, error)
@@ -61,9 +76,9 @@ type TokenPair struct {
 
 // Service runs sign-in, refresh-token rotation, logout, the per-request
 // revocation check, and members' own password changes. Errors are
-// ErrUnauthorized, ErrForbidden, the GitHub client's sentinels, ChangePassword's
-// sentinels, or (for store failures) other errors; none of them contain
-// tokens, hashes, codes or passwords.
+// ErrUnauthorized, ErrForbidden, ErrThrottled, the GitHub client's sentinels,
+// ChangePassword's sentinels, or (for store failures) other errors; none of
+// them contain tokens, hashes, codes or passwords.
 type Service struct {
 	Store     Store
 	Signer    *Signer
@@ -94,6 +109,19 @@ func (s *Service) reject(ctx context.Context, password string, sentinel error) e
 		return fmt.Errorf("auth: simulate password: %w", err)
 	}
 	return sentinel
+}
+
+// consumeThrottle counts one attempt against key and returns ErrThrottled
+// when it is over limit.
+func (s *Service) consumeThrottle(ctx context.Context, key string, limit int, now time.Time) error {
+	allowed, err := s.Store.ConsumeThrottle(ctx, key, limit, throttleWindow, now)
+	if err != nil {
+		return fmt.Errorf("auth: consume throttle: %w", err)
+	}
+	if !allowed {
+		return ErrThrottled
+	}
+	return nil
 }
 
 func randomBytes(n int) []byte {

@@ -23,7 +23,7 @@ var (
 // Auth is what the handlers need from *auth.Service.
 type Auth interface {
 	LoginGitHub(ctx context.Context, code, verifier, redirectURI string) (auth.TokenPair, error)
-	LoginPassword(ctx context.Context, loginID, password string) (auth.TokenPair, error)
+	LoginPassword(ctx context.Context, client, loginID, password string) (auth.TokenPair, error)
 	Refresh(ctx context.Context, token string) (auth.TokenPair, error)
 	Logout(ctx context.Context, token string) error
 	Authenticate(ctx context.Context, accessToken string) (auth.Principal, error)
@@ -61,7 +61,7 @@ type Follows interface {
 // Accounts is what the handlers need from *store.Store for admin member
 // management.
 type Accounts interface {
-	ListPasswordAccounts(ctx context.Context, now time.Time) ([]store.AccountSummary, error)
+	ListPasswordAccounts(ctx context.Context) ([]store.AccountSummary, error)
 	CreatePasswordAccount(ctx context.Context, loginID, displayName, hash string, now time.Time) (store.AccountSummary, error)
 	FindPasswordAccountByID(ctx context.Context, id string) (store.PasswordAccount, error)
 	SetPassword(ctx context.Context, id, hash string, now time.Time) error
@@ -186,7 +186,7 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	private("POST /v1/account/password", limited(authed(changePassword(d.Auth))))
 	// Admin-only member management. Passwords are hashed with the shared
 	// scrypt semaphore and are never logged.
-	private("GET /v1/admin/accounts", adminOnly(listAccounts(d.Accounts, d.Now)))
+	private("GET /v1/admin/accounts", adminOnly(listAccounts(d.Accounts)))
 	private("POST /v1/admin/accounts", adminOnly(createAccount(d.Accounts, d.Hasher, d.Now)))
 	private("POST /v1/admin/accounts/{id}/password", adminOnly(resetAccountPassword(d.Accounts, d.Hasher, d.Now)))
 
