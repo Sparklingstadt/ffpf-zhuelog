@@ -5,12 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log/slog"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -36,15 +37,7 @@ func importRouter(t *testing.T, role string, fail error) (http.Handler, *[]impor
 		}
 		return store.Batch{ID: "batch1", ImportedAt: now}, make([]store.Entry, len(drafts)), nil
 	}}
-	a := &fakeAuth{authenticate: func(_ context.Context, tok string) (auth.Principal, error) {
-		if tok != "tok" {
-			return auth.Principal{}, auth.ErrUnauthorized
-		}
-		return auth.Principal{OwnerID: testOwner, Role: role}, nil
-	}}
-	logs := &bytes.Buffer{}
-	c := newClock()
-	h := NewRouter(Deps{Auth: a, Entries: e, Logger: slog.New(slog.NewJSONHandler(logs, nil)), Now: c.Now})
+	h, _, logs := routerWith(t, role, Deps{Entries: e})
 	return h, calls, logs
 }
 
@@ -271,5 +264,105 @@ func TestImportCSVHandlerNeverLogsContents(t *testing.T) {
 				t.Fatalf("CSV contents leaked: logs %s body %s", logs.String(), w.Body.String())
 			}
 		})
+	}
+}
+
+// slowServer serves h with 200 ms server deadlines, like main.go's but short.
+func slowServer(t *testing.T, h http.Handler) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewUnstartedServer(h)
+	srv.Config.ReadTimeout = 200 * time.Millisecond
+	srv.Config.WriteTimeout = 200 * time.Millisecond
+	srv.Start()
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// slowBody returns a reader that delivers body in three chunks, sleeping
+// between them for about 600 ms in total.
+func slowBody(body string) io.Reader {
+	pr, pw := io.Pipe()
+	go func() {
+		n := len(body)
+		cuts := []int{0, n / 3, 2 * n / 3, n}
+		for i := 0; i < 3; i++ {
+			if i > 0 {
+				time.Sleep(300 * time.Millisecond)
+			}
+			if _, err := pw.Write([]byte(body[cuts[i]:cuts[i+1]])); err != nil {
+				return
+			}
+		}
+		pw.Close()
+	}()
+	return pr
+}
+
+func slowPost(t *testing.T, url, contentType, body string) (*http.Response, error) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, url, slowBody(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer tok")
+	req.Header.Set("Content-Type", contentType)
+	return (&http.Client{Timeout: 10 * time.Second}).Do(req)
+}
+
+func TestImportCSVExtendsDeadlines(t *testing.T) {
+	old := csvUploadTimeout
+	csvUploadTimeout = 5 * time.Second
+	t.Cleanup(func() { csvUploadTimeout = old })
+
+	h, calls, _ := importRouter(t, auth.RoleMember, nil)
+	srv := slowServer(t, h)
+	body, ct := multipartBody(t, formPart{name: "csvFile", fileName: "a.csv", content: []byte("a,b,c\n")})
+	resp, err := slowPost(t, srv.URL+csvImportPath, ct, body)
+	if err != nil {
+		t.Fatalf("slow upload failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated || len(*calls) != 1 {
+		t.Fatalf("status = %d, calls = %d", resp.StatusCode, len(*calls))
+	}
+}
+
+func TestOtherRoutesKeepServerDeadlines(t *testing.T) {
+	var creates atomic.Int32
+	e := &fakeEntries{create: func(_ context.Context, _ string, drafts []store.EntryDraft, now time.Time) (store.Batch, []store.Entry, error) {
+		creates.Add(1)
+		return store.Batch{ID: "b", ImportedAt: now}, make([]store.Entry, len(drafts)), nil
+	}}
+	h, _, _ := routerWith(t, auth.RoleMember, Deps{Entries: e})
+	srv := slowServer(t, h)
+	body := `{"entries":[{"kind":"correction","originalText":"a","correctedText":"b","pinyin":"c"}]}`
+
+	// Positive control: the same body sent at once is accepted.
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/v1/batches", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer tok")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated || creates.Load() != 1 {
+		t.Fatalf("control: status = %d, creates = %d", resp.StatusCode, creates.Load())
+	}
+
+	// Sent slowly, it must not get through the 200 ms server deadlines.
+	resp, err = slowPost(t, srv.URL+"/v1/batches", "application/json", body)
+	if err == nil {
+		resp.Body.Close()
+		// The read deadline fires mid-body, so the handler may still answer 400.
+		if resp.StatusCode == http.StatusCreated {
+			t.Fatal("slow /v1/batches upload succeeded; server deadlines were extended")
+		}
+	}
+	if creates.Load() != 1 {
+		t.Fatalf("creates = %d, want 1 (only the control)", creates.Load())
 	}
 }

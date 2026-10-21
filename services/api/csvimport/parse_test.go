@@ -179,25 +179,6 @@ type errReader struct{ err error }
 
 func (r errReader) Read([]byte) (int, error) { return 0, r.err }
 
-func TestTruncateUTF16(t *testing.T) {
-	cases := []struct {
-		in   string
-		n    int
-		want string
-	}{
-		{"abc", 5, "abc"},
-		{"abcdef", 3, "abc"},
-		{"字字字", 2, "字字"},
-		{"a😀b", 2, "a\uFFFD"}, // JS slice keeps a lone high surrogate, stored as U+FFFD
-		{"a😀b", 3, "a😀"},
-	}
-	for _, c := range cases {
-		if got := TruncateUTF16(c.in, c.n); got != c.want {
-			t.Errorf("TruncateUTF16(%q, %d) = %q, want %q", c.in, c.n, got, c.want)
-		}
-	}
-}
-
 func TestParseRejectsNUL(t *testing.T) {
 	// Postgres cannot store NUL, so it is reported as a format problem before
 	// anything is saved. Other problems the web reports first still win.

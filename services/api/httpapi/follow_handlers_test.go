@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
-	"log/slog"
 	"maps"
 	"net/http"
 	"slices"
@@ -61,14 +60,8 @@ func (f *fakeFollows) ListTimeline(ctx context.Context, viewerID string, after *
 
 func followsRouter(t *testing.T, f Follows, role string) (http.Handler, *clock) {
 	t.Helper()
-	c := newClock()
-	a := &fakeAuth{authenticate: func(_ context.Context, tok string) (auth.Principal, error) {
-		if tok != "tok" {
-			return auth.Principal{}, auth.ErrUnauthorized
-		}
-		return auth.Principal{OwnerID: testOwner, Role: role}, nil
-	}}
-	return NewRouter(Deps{Auth: a, Follows: f, Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: c.Now}), c
+	h, c, _ := routerWith(t, role, Deps{Follows: f})
+	return h, c
 }
 
 func TestAllFollowRoutesRequireAuth(t *testing.T) {

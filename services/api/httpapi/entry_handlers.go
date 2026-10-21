@@ -53,6 +53,16 @@ func toEntryJSON(e store.Entry) entryJSON {
 	return out
 }
 
+// batchJSON is the batch object in the create-batch and CSV-import responses.
+type batchJSON struct {
+	ID         string `json:"id"`
+	ImportedAt string `json:"importedAt"`
+}
+
+func toBatchJSON(b store.Batch) batchJSON {
+	return batchJSON{ID: b.ID, ImportedAt: formatTime(b.ImportedAt)}
+}
+
 func toEntriesJSON(entries []store.Entry) []entryJSON {
 	out := make([]entryJSON, len(entries))
 	for i, e := range entries {
@@ -61,35 +71,54 @@ func toEntriesJSON(entries []store.Entry) []entryJSON {
 	return out
 }
 
-func writeBadRequest(w http.ResponseWriter) {
-	writeError(w, http.StatusBadRequest, "invalid_request", msgBadRequest)
+// decimalUpTo parses s as base-10 digits only (leading zeros allowed, so the
+// caller rejects them if it must) and reports false when it is empty,
+// contains anything else, or exceeds max.
+func decimalUpTo(s string, max int) (int, bool) {
+	if s == "" {
+		return 0, false
+	}
+	n := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return 0, false
+		}
+		n = n*10 + int(s[i]-'0')
+		if n > max {
+			return 0, false
+		}
+	}
+	return n, true
 }
 
-// parseListQuery reads limit and cursor from the query string.
-func parseListQuery(q url.Values) (int, *store.Cursor, bool) {
+// readListQuery reads limit (1..100, default 50) and cursor from the query
+// string. On failure it has already written the 400 and returns false.
+func readListQuery(w http.ResponseWriter, r *http.Request) (int, *store.Cursor, bool) {
+	q, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		writeBadRequest(w)
+		return 0, nil, false
+	}
 	limit := defaultListLimit
 	if vals, ok := q["limit"]; ok {
-		if len(vals) != 1 || !isDecimal(vals[0]) {
-			return 0, nil, false
+		n, valid := 0, len(vals) == 1
+		if valid {
+			n, valid = decimalUpTo(vals[0], maxListLimit)
 		}
-		n := 0
-		for _, c := range vals[0] {
-			n = n*10 + int(c-'0')
-			if n > maxListLimit {
-				return 0, nil, false
-			}
-		}
-		if n < 1 {
+		if !valid || n < 1 {
+			writeBadRequest(w)
 			return 0, nil, false
 		}
 		limit = n
 	}
 	var after *store.Cursor
 	if vals := q["cursor"]; len(vals) > 1 {
+		writeBadRequest(w)
 		return 0, nil, false
 	} else if len(vals) == 1 && vals[0] != "" {
 		c, err := decodeCursor(vals[0])
 		if err != nil {
+			writeBadRequest(w)
 			return 0, nil, false
 		}
 		after = &c
@@ -97,16 +126,15 @@ func parseListQuery(q url.Values) (int, *store.Cursor, bool) {
 	return limit, after, true
 }
 
-func isDecimal(s string) bool {
-	if s == "" {
-		return false
+// paginate trims a page fetched with limit+1 rows to limit and, when a row was
+// trimmed, returns the cursor for the next page built from the last kept row.
+func paginate[T any](items []T, limit int, key func(T) store.Cursor) ([]T, *string) {
+	if len(items) <= limit {
+		return items, nil
 	}
-	for i := 0; i < len(s); i++ {
-		if s[i] < '0' || s[i] > '9' {
-			return false
-		}
-	}
-	return true
+	items = items[:limit]
+	c := encodeCursor(key(items[limit-1]))
+	return items, &c
 }
 
 func listEntries(e Entries) http.Handler {
@@ -115,14 +143,8 @@ func listEntries(e Entries) http.Handler {
 		NextCursor *string     `json:"nextCursor"`
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		q, err := url.ParseQuery(r.URL.RawQuery)
-		if err != nil {
-			writeBadRequest(w)
-			return
-		}
-		limit, after, ok := parseListQuery(q)
+		limit, after, ok := readListQuery(w, r)
 		if !ok {
-			writeBadRequest(w)
 			return
 		}
 		owner, ok := readOwner(w, r)
@@ -134,32 +156,17 @@ func listEntries(e Entries) http.Handler {
 			writeServiceError(w, r, err)
 			return
 		}
-		resp := response{}
-		if len(entries) > limit {
-			entries = entries[:limit]
-			last := entries[limit-1]
-			c := encodeCursor(store.Cursor{CreatedAt: last.CreatedAt, ID: last.ID})
-			resp.NextCursor = &c
-		}
-		resp.Entries = toEntriesJSON(entries)
+		entries, next := paginate(entries, limit, func(e store.Entry) store.Cursor {
+			return store.Cursor{CreatedAt: e.CreatedAt, ID: e.ID}
+		})
+		resp := response{Entries: toEntriesJSON(entries), NextCursor: next}
 		writeJSON(w, http.StatusOK, resp)
 	})
 }
 
-// entryID returns the {id} path value, answering 404 itself when it cannot be
-// the ID of any row.
-func entryID(w http.ResponseWriter, r *http.Request) (string, bool) {
-	id := r.PathValue("id")
-	if !validID(id) {
-		writeError(w, http.StatusNotFound, "not_found", msgNotFound)
-		return "", false
-	}
-	return id, true
-}
-
 func getEntry(e Entries) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := entryID(w, r)
+		id, ok := pathValue(w, r, "id", validID)
 		if !ok {
 			return
 		}
@@ -179,10 +186,6 @@ func getEntry(e Entries) http.Handler {
 func createBatch(e Entries, now func() time.Time) http.Handler {
 	type request struct {
 		Entries []entryBody `json:"entries"`
-	}
-	type batchJSON struct {
-		ID         string `json:"id"`
-		ImportedAt string `json:"importedAt"`
 	}
 	type response struct {
 		Batch   batchJSON   `json:"batch"`
@@ -213,7 +216,7 @@ func createBatch(e Entries, now func() time.Time) http.Handler {
 			return
 		}
 		writeJSON(w, http.StatusCreated, response{
-			Batch:   batchJSON{ID: batch.ID, ImportedAt: formatTime(batch.ImportedAt)},
+			Batch:   toBatchJSON(batch),
 			Entries: toEntriesJSON(entries),
 		})
 	})
@@ -221,7 +224,7 @@ func createBatch(e Entries, now func() time.Time) http.Handler {
 
 func patchEntry(e Entries) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := entryID(w, r)
+		id, ok := pathValue(w, r, "id", validID)
 		if !ok {
 			return
 		}
@@ -246,7 +249,7 @@ func patchEntry(e Entries) http.Handler {
 
 func deleteEntry(e Entries, now func() time.Time) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := entryID(w, r)
+		id, ok := pathValue(w, r, "id", validID)
 		if !ok {
 			return
 		}

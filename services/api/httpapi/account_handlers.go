@@ -1,9 +1,15 @@
 package httpapi
 
-import "net/http"
+import (
+	"errors"
+	"net/http"
+
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
+)
 
 // changePassword lets a member replace their own password. The service checks
-// the role and the inputs; on success every existing session, this one
+// the role (its ErrForbidden here means "not a member", since the caller was
+// already authenticated) and the inputs; on success every existing session, this one
 // included, is revoked and the app has to sign in again. Passwords are never
 // logged or echoed.
 func changePassword(a Auth) http.Handler {
@@ -20,6 +26,10 @@ func changePassword(a Auth) http.Handler {
 		}
 		err := a.ChangePassword(r.Context(), principalFrom(r.Context()),
 			string(req.CurrentPassword), string(req.NewPassword), string(req.ConfirmPassword))
+		if errors.Is(err, auth.ErrForbidden) {
+			writeForbidden(w, msgMembersOnly)
+			return
+		}
 		if err != nil {
 			writeServiceError(w, r, err)
 			return

@@ -543,6 +543,10 @@ func TestLoginPasswordSuccess(t *testing.T) {
 	if f.hasher.count != 1 {
 		t.Fatalf("hash computations = %d, want 1", f.hasher.count)
 	}
+	// The throttle window is opened at the service clock, not time.Now.
+	if e := f.store.throttle["client:203.0.113.9"]; e == nil || !e.expires.Equal(serviceEpoch.Add(15*time.Minute)) {
+		t.Fatalf("client throttle window = %+v, want expiry at the service clock + 15m", e)
+	}
 }
 
 func TestLoginPasswordSessionVersionZeroAndMultibyte(t *testing.T) {
@@ -573,6 +577,40 @@ func TestLoginPasswordNormalizesLoginID(t *testing.T) {
 	}
 	if f.store.consumed[1] != "login:"+testClient+":alice" {
 		t.Fatalf("login key = %q, want the normalised loginId", f.store.consumed[1])
+	}
+}
+
+// The loginId is trimmed and lowercased like the web's zod
+// .trim().toLowerCase(): JS trim removes U+FEFF but not U+0085, and
+// toLowerCase turns U+0130 into "i" + U+0307.
+func TestLoginPasswordNormalizesLoginIDLikeJS(t *testing.T) {
+	cases := []struct {
+		name, loginID string
+		wantLookups   []string
+	}{
+		{"BOM is trimmed", string(rune(0xFEFF)) + "alice", []string{"alice"}},
+		{"NEL is not trimmed", string(rune(0x0085)) + "alice", nil},
+		{"dotted capital I does not become i", string(rune(0x0130)) + "abc", nil},
+		{"Kelvin sign becomes k", string(rune(0x212A)) + "abc", []string{"kabc"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture()
+			f.store.addAccount("cacc1", "alice", "pw", 0)
+			f.store.addAccount("cacc2", "iabc", "pw", 0)
+			f.store.addAccount("cacc3", "kabc", "pw", 0)
+			_, err := f.svc.LoginPassword(context.Background(), testClient, tc.loginID, "pw")
+			if tc.wantLookups == nil {
+				if !errors.Is(err, ErrUnauthorized) {
+					t.Fatalf("err = %v, want ErrUnauthorized", err)
+				}
+			} else if err != nil {
+				t.Fatalf("LoginPassword: %v", err)
+			}
+			if !slices.Equal(f.store.lookups, tc.wantLookups) {
+				t.Fatalf("lookups = %q, want %q", f.store.lookups, tc.wantLookups)
+			}
+		})
 	}
 }
 
@@ -1178,17 +1216,17 @@ func TestChangePasswordOrder(t *testing.T) {
 	}
 }
 
-func TestChangePasswordNewPasswordLengthIsRunes(t *testing.T) {
+func TestChangePasswordNewPasswordBoundsAndNoTrim(t *testing.T) {
 	ctx := context.Background()
 	for _, next := range []string{
-		strings.Repeat("パ", 12),  // 36 bytes, 12 runes
+		strings.Repeat("パ", 12),  // 12 UTF-16 units
 		strings.Repeat("x", 128), // upper bound
-		strings.Repeat("パ", 128), // 384 bytes, 128 runes
-		"  leading sp",           // whitespace is not trimmed: 12 runes
+		strings.Repeat("パ", 128), // 128 UTF-16 units
+		"  leading sp",           // whitespace is not trimmed: 12 units
 	} {
 		f := memberFixture()
 		if err := f.svc.ChangePassword(ctx, memberPrincipal(), memberCurrent, next, next); err != nil {
-			t.Fatalf("%d-rune new password: err = %v, want nil", utf8.RuneCountInString(next), err)
+			t.Fatalf("new password %q: err = %v, want nil", next, err)
 		}
 		if got := f.store.accounts["alice"].PasswordHash; got != "hash:"+next {
 			t.Fatalf("stored hash = %q, want the new password's hash (not trimmed)", got)
@@ -1196,7 +1234,26 @@ func TestChangePasswordNewPasswordLengthIsRunes(t *testing.T) {
 	}
 	f := memberFixture()
 	if err := f.svc.ChangePassword(ctx, memberPrincipal(), memberCurrent, " eleven run", " eleven run"); err != ErrInvalidNewPassword {
-		t.Fatalf("11 runes with a space: err = %v, want ErrInvalidNewPassword", err)
+		t.Fatalf("11 UTF-16 units with a space: err = %v, want ErrInvalidNewPassword", err)
+	}
+}
+
+// New passwords are measured in UTF-16 code units, like the web's zod
+// .min(12).max(128) on a JS string.
+func TestChangePasswordNewPasswordLengthIsUTF16Units(t *testing.T) {
+	ctx := context.Background()
+	emoji6 := strings.Repeat("😀", 6) // 6 runes, 12 UTF-16 units
+	f := memberFixture()
+	if err := f.svc.ChangePassword(ctx, memberPrincipal(), memberCurrent, emoji6, emoji6); err != nil {
+		t.Fatalf("12-unit emoji password: err = %v, want nil", err)
+	}
+	emoji65 := strings.Repeat("😀", 65) // 65 runes, 130 UTF-16 units
+	f = memberFixture()
+	if err := f.svc.ChangePassword(ctx, memberPrincipal(), memberCurrent, emoji65, emoji65); err != ErrInvalidNewPassword {
+		t.Fatalf("130-unit emoji password: err = %v, want ErrInvalidNewPassword", err)
+	}
+	if len(f.log.calls) != 0 {
+		t.Fatalf("store or hasher called: %v", f.log.calls)
 	}
 }
 

@@ -19,12 +19,7 @@ type TrashedEntry struct {
 // (deletedAt DESC, id DESC), starting after the cursor. Cursor.CreatedAt holds
 // the deletedAt position.
 func (s *Store) ListTrashed(ctx context.Context, ownerID string, after *Cursor, limit int) ([]TrashedEntry, error) {
-	var afterAt *time.Time
-	var afterID *string
-	if after != nil {
-		t := dbTime(after.CreatedAt)
-		afterAt, afterID = &t, &after.ID
-	}
+	afterAt, afterID := cursorArgs(after)
 	rows, err := s.pool.Query(ctx,
 		`SELECT `+entryColumns+`, "deletedAt" FROM "LearningEntry"
 		 WHERE "ownerId" = $1 AND "deletedAt" IS NOT NULL
@@ -38,15 +33,12 @@ func (s *Store) ListTrashed(ctx context.Context, ownerID string, after *Cursor, 
 	if err != nil {
 		return nil, fmt.Errorf("store: list trashed: %w", err)
 	}
-	entries := make([]Entry, len(trashed))
-	for i, t := range trashed {
-		entries[i] = t.Entry
-	}
-	if err := attachHints(ctx, s.pool, entries); err != nil {
-		return nil, fmt.Errorf("store: list trashed hints: %w", err)
-	}
+	targets := make([]*Entry, len(trashed))
 	for i := range trashed {
-		trashed[i].Entry = entries[i]
+		targets[i] = &trashed[i].Entry
+	}
+	if err := attachHints(ctx, s.pool, targets); err != nil {
+		return nil, fmt.Errorf("store: list trashed hints: %w", err)
 	}
 	return trashed, nil
 }
@@ -56,7 +48,7 @@ func scanTrashed(rows pgx.Rows) ([]TrashedEntry, error) {
 	out := []TrashedEntry{}
 	for rows.Next() {
 		var e TrashedEntry
-		if err := rows.Scan(&e.ID, &e.Kind, &e.OriginalText, &e.CorrectedText, &e.Pinyin, &e.CreatedAt, &e.SharedAt, &e.DeletedAt); err != nil {
+		if err := rows.Scan(append(entryDest(&e.Entry), &e.DeletedAt)...); err != nil {
 			return nil, err
 		}
 		e.Hints = []Hint{}

@@ -14,9 +14,9 @@ import (
 	"io"
 	"strconv"
 	"strings"
-	"unicode/utf16"
 	"unicode/utf8"
 
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/jsstr"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
 
@@ -80,7 +80,7 @@ func Parse(r io.Reader) ([]store.EntryDraft, error) {
 		}
 		cells := make([]string, len(row))
 		for j, c := range row {
-			cells[j] = jsTrim(c)
+			cells[j] = jsstr.Trim(c)
 		}
 		if cells[0] == "" || cells[1] == "" || cells[2] == "" {
 			return nil, &ValidationError{line + "行目の「最初の文」「添削後の文」「ピン音」は必須です。"}
@@ -125,28 +125,7 @@ func FileName(name string) (string, error) {
 	if hasNUL(name) {
 		return "", &ValidationError{msgFormat}
 	}
-	return TruncateUTF16(string(decodeUTF8([]byte(name))), maxFileName), nil
-}
-
-// TruncateUTF16 keeps the first n UTF-16 code units of s, like JS
-// s.slice(0, n). A surrogate pair cut in half leaves a lone surrogate in JS,
-// which is stored as U+FFFD, so that is what is returned in its place.
-func TruncateUTF16(s string, n int) string {
-	units := 0
-	for i, r := range s {
-		w := utf16.RuneLen(r)
-		if w < 1 {
-			w = 1
-		}
-		if units+w > n {
-			if units < n {
-				return s[:i] + "\uFFFD"
-			}
-			return s[:i]
-		}
-		units += w
-	}
-	return s
+	return jsstr.Truncate(string(decodeUTF8([]byte(name))), maxFileName), nil
 }
 
 var headerNames = [3][]string{
@@ -163,7 +142,7 @@ func isHeader(row []string) bool {
 		// ASCII lowercasing gives the same matches as JS toLowerCase: no other
 		// character lowercases to the ASCII letters of these names
 		// (strings.ToLower would turn U+0130 into "i", JS into "i\u0307").
-		cell := asciiLower(strings.ReplaceAll(jsTrim(row[i]), " ", ""))
+		cell := asciiLower(strings.ReplaceAll(jsstr.Trim(row[i]), " ", ""))
 		found := false
 		for _, n := range names {
 			if cell == n {
@@ -187,38 +166,14 @@ func asciiLower(s string) string {
 	return string(b)
 }
 
-func utf16Len(s string) int {
-	n := 0
-	for _, r := range s {
-		if r >= 0x10000 {
-			n += 2
-		} else {
-			n++
-		}
-	}
-	return n
-}
-
 func anyLongerThan(row []string, max int) bool {
 	for _, c := range row {
-		if utf16Len(c) > max {
+		if jsstr.Len(c) > max {
 			return true
 		}
 	}
 	return false
 }
-
-// isJSSpace reports whether r is ECMAScript WhiteSpace or LineTerminator, the
-// set String.prototype.trim() removes and csv-parse's trim option skips.
-func isJSSpace(r rune) bool {
-	switch r {
-	case '\t', '\n', '\v', '\f', '\r', ' ', 0x00A0, 0x1680, 0x2028, 0x2029, 0x202F, 0x205F, 0x3000, 0xFEFF:
-		return true
-	}
-	return r >= 0x2000 && r <= 0x200A
-}
-
-func jsTrim(s string) string { return strings.TrimFunc(s, isJSSpace) }
 
 // trimLen returns the byte length of the trimmable character at buf[pos], or 0.
 func trimLen(buf []byte, pos int) int {
@@ -229,7 +184,7 @@ func trimLen(buf []byte, pos int) int {
 	if r == utf8.RuneError && size <= 1 {
 		return 0
 	}
-	if isJSSpace(r) {
+	if jsstr.IsSpace(r) {
 		return size
 	}
 	return 0
@@ -410,10 +365,10 @@ func (p *csvReader) isRecordDelimiter(pos int) int {
 func (p *csvReader) endField() {
 	f := string(p.field)
 	if !p.wasQuoting {
-		f = strings.TrimRightFunc(f, isJSSpace)
+		f = strings.TrimRightFunc(f, jsstr.IsSpace)
 	}
 	p.record = append(p.record, f)
-	p.recordLen += utf16Len(f)
+	p.recordLen += jsstr.Len(f)
 	p.field = p.field[:0]
 	p.wasQuoting = false
 }

@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,13 +15,8 @@ const otherOwner = "password:abcdefghij0123456789"
 
 func roleEntriesRouter(t *testing.T, e Entries, role string) http.Handler {
 	t.Helper()
-	a := &fakeAuth{authenticate: func(_ context.Context, tok string) (auth.Principal, error) {
-		if tok != "tok" {
-			return auth.Principal{}, auth.ErrUnauthorized
-		}
-		return auth.Principal{OwnerID: testOwner, Role: role}, nil
-	}}
-	return NewRouter(Deps{Auth: a, Entries: e, Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now})
+	h, _, _ := routerWith(t, role, Deps{Entries: e})
+	return h
 }
 
 func TestReadOwner(t *testing.T) {
@@ -92,10 +86,7 @@ func TestUserParamRequiresAdmin(t *testing.T) {
 	})
 	t.Run("non-read routes reject user", func(t *testing.T) {
 		// An empty fakeEntries/fakeFollows fails with 500 if the store is called.
-		a := &fakeAuth{authenticate: func(context.Context, string) (auth.Principal, error) {
-			return auth.Principal{OwnerID: testOwner, Role: auth.RoleAdmin}, nil
-		}}
-		h := NewRouter(Deps{Auth: a, Entries: &fakeEntries{}, Follows: &fakeFollows{}, Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now})
+		h, _, _ := routerWith(t, auth.RoleAdmin, Deps{Entries: &fakeEntries{}, Follows: &fakeFollows{}})
 		body := `{"originalText":"a","correctedText":"b","pinyin":"c","hints":[]}`
 		cases := []struct{ method, path, body string }{
 			{"PATCH", "/v1/entries/abc?user=" + otherOwner, body},

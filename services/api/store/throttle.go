@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -26,7 +27,7 @@ DELETE FROM "SignInThrottle" WHERE "key" IN (
   WHERE "expiresAt" <= CAST($1 AS TIMESTAMP(3))
   LIMIT $2 FOR UPDATE SKIP LOCKED
 )`, now, pruneThrottleBatch); err != nil {
-		return false, err
+		return false, fmt.Errorf("store: consume throttle: %w", err)
 	}
 
 	// One statement, so concurrent attempts cannot read the same count.
@@ -39,13 +40,15 @@ ON CONFLICT ("key") DO UPDATE SET
   "expiresAt" = CASE WHEN "SignInThrottle"."expiresAt" <= CAST($2 AS TIMESTAMP(3)) THEN CAST($3 AS TIMESTAMP(3)) ELSE "SignInThrottle"."expiresAt" END
 RETURNING "count"`, key, now, expires).Scan(&count)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("store: consume throttle: %w", err)
 	}
 	return count <= limit, nil
 }
 
 // ResetThrottle forgets key's attempts (after a successful sign-in).
 func (s *Store) ResetThrottle(ctx context.Context, key string) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM "SignInThrottle" WHERE "key" = $1`, key)
-	return err
+	if _, err := s.pool.Exec(ctx, `DELETE FROM "SignInThrottle" WHERE "key" = $1`, key); err != nil {
+		return fmt.Errorf("store: reset throttle: %w", err)
+	}
+	return nil
 }
