@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"os"
 	"strings"
@@ -294,5 +295,15 @@ func TestHashScryptFailure(t *testing.T) {
 	}}
 	if got, err := v.Hash(context.Background(), "pw"); got != "" || err == nil {
 		t.Fatalf("Hash = %q, %v; want an error", got, err)
+	}
+}
+
+func TestGeneratePassword(t *testing.T) {
+	a, b := GeneratePassword(), GeneratePassword()
+	if len(a) != 20 || a == b {
+		t.Fatalf("got %q and %q, want distinct 20-char values", a, b)
+	}
+	if _, err := base64.RawURLEncoding.DecodeString(a); err != nil {
+		t.Fatalf("not base64url: %v", err)
 	}
 }

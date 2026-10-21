@@ -216,3 +216,74 @@ func TestSetPassword(t *testing.T) {
 		t.Fatalf("missing id: err=%v, want ErrNotFound", err)
 	}
 }
+
+func TestCreateAndListPasswordAccounts(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	now := fixedNow()
+
+	mk := func(login string, at time.Time) AccountSummary {
+		a, err := s.CreatePasswordAccount(ctx, login, "名前 "+login, "scrypt:h", at)
+		if err != nil {
+			t.Fatalf("create %s: %v", login, err)
+		}
+		t.Cleanup(func() {
+			_, _ = s.pool.Exec(context.Background(), `DELETE FROM "PasswordAccount" WHERE id = $1`, a.ID)
+		})
+		return a
+	}
+	suffix := newID()
+	late := mk("late-"+suffix, now.Add(-time.Hour))
+	early := mk("early-"+suffix, now.Add(-48*time.Hour))
+	if early.ID == "" || early.ID == late.ID || early.Locked || early.LoginID != "early-"+suffix || early.DisplayName != "名前 early-"+suffix {
+		t.Fatalf("created = %+v", early)
+	}
+	var sv int
+	var hash string
+	if err := s.pool.QueryRow(ctx, `SELECT "sessionVersion", "passwordHash" FROM "PasswordAccount" WHERE id = $1`, early.ID).Scan(&sv, &hash); err != nil || sv != 0 || hash != "scrypt:h" {
+		t.Fatalf("stored sv=%d hash=%q err=%v", sv, hash, err)
+	}
+	// Lock the late account one minute into the future, and an expired lock on early.
+	if _, err := s.pool.Exec(ctx, `UPDATE "PasswordAccount" SET "lockedUntil" = $2 WHERE id = $1`, late.ID, now.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.pool.Exec(ctx, `UPDATE "PasswordAccount" SET "lockedUntil" = $2 WHERE id = $1`, early.ID, now.Add(-time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+
+	list, err := s.ListPasswordAccounts(ctx, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []AccountSummary
+	for _, a := range list {
+		if a.ID == early.ID || a.ID == late.ID {
+			got = append(got, a)
+		}
+	}
+	if len(got) != 2 || got[0].ID != early.ID || got[1].ID != late.ID {
+		t.Fatalf("order = %+v", got)
+	}
+	if got[0].Locked || !got[1].Locked {
+		t.Fatalf("locked early=%v late=%v, want false/true", got[0].Locked, got[1].Locked)
+	}
+	if !got[0].CreatedAt.Equal(early.CreatedAt) || got[0].CreatedAt.Location() != time.UTC {
+		t.Fatalf("createdAt = %v, want %v UTC", got[0].CreatedAt, early.CreatedAt)
+	}
+}
+
+func TestCreatePasswordAccountDuplicateLoginID(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	login := "dup-" + newID()
+	a, err := s.CreatePasswordAccount(ctx, login, "a", "scrypt:h", fixedNow())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = s.pool.Exec(context.Background(), `DELETE FROM "PasswordAccount" WHERE id = $1`, a.ID)
+	})
+	if _, err := s.CreatePasswordAccount(ctx, login, "b", "scrypt:h", fixedNow()); !errors.Is(err, ErrLoginIDTaken) {
+		t.Fatalf("err = %v, want ErrLoginIDTaken", err)
+	}
+}

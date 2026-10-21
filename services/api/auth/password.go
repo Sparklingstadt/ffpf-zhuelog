@@ -199,3 +199,12 @@ func formatScryptHash(salt, key []byte) string {
 		enc.EncodeToString(salt), enc.EncodeToString(key),
 	}, ":")
 }
+
+// GeneratePassword returns a random password: 15 random bytes as unpadded
+// base64url (20 characters), like the web app's generate().
+func GeneratePassword() string {
+	b := make([]byte, generatedBytes)
+	// crypto/rand.Read never returns an error on supported platforms.
+	_, _ = rand.Read(b)
+	return base64.RawURLEncoding.EncodeToString(b)
+}

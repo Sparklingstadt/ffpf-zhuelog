@@ -15,6 +15,9 @@ var (
 	_ Entries = (*store.Store)(nil)
 	_ Follows = (*store.Store)(nil)
 	_ Pinger  = (*store.Store)(nil)
+
+	_ Accounts       = (*store.Store)(nil)
+	_ PasswordHasher = (*auth.PasswordVerifier)(nil)
 )
 
 // Auth is what the handlers need from *auth.Service.
@@ -54,6 +57,15 @@ type Follows interface {
 	ListTimeline(ctx context.Context, viewerID string, after *store.Cursor, limit int) ([]store.TimelineItem, error)
 }
 
+// Accounts is what the handlers need from *store.Store for admin member
+// management.
+type Accounts interface {
+	ListPasswordAccounts(ctx context.Context, now time.Time) ([]store.AccountSummary, error)
+	CreatePasswordAccount(ctx context.Context, loginID, displayName, hash string, now time.Time) (store.AccountSummary, error)
+	FindPasswordAccountByID(ctx context.Context, id string) (store.PasswordAccount, error)
+	SetPassword(ctx context.Context, id, hash string, now time.Time) error
+}
+
 // Pinger checks that the database is reachable.
 type Pinger interface {
 	Ping(ctx context.Context) error
@@ -65,9 +77,12 @@ type Deps struct {
 	Auth    Auth
 	Entries Entries
 	Follows Follows
-	DB      Pinger
-	Logger  *slog.Logger
-	Now     func() time.Time
+	// Accounts and Hasher serve the admin routes.
+	Accounts Accounts
+	Hasher   PasswordHasher
+	DB       Pinger
+	Logger   *slog.Logger
+	Now      func() time.Time
 }
 
 const (
@@ -128,6 +143,12 @@ func NewRouter(d Deps) http.Handler {
 	// Changing a password checks the current one, so it shares the /v1/auth/*
 	// limit. The limit runs before authentication so failed tokens count too.
 	mux.Handle("POST /v1/account/password", limited(authedNoUser(changePassword(d.Auth))))
+	// Admin-only member management. Passwords are hashed with the shared
+	// scrypt semaphore and are never logged.
+	adminOnly := func(h http.Handler) http.Handler { return authedNoUser(requireAdmin(h)) }
+	mux.Handle("GET /v1/admin/accounts", adminOnly(listAccounts(d.Accounts, d.Now)))
+	mux.Handle("POST /v1/admin/accounts", adminOnly(createAccount(d.Accounts, d.Hasher, d.Now)))
+	mux.Handle("POST /v1/admin/accounts/{id}/password", adminOnly(resetAccountPassword(d.Accounts, d.Hasher, d.Now)))
 
 	return wrap(d, jsonMuxErrors(mux))
 }

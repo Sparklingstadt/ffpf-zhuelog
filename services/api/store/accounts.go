@@ -6,7 +6,12 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
+
+// ErrLoginIDTaken is returned by CreatePasswordAccount when the loginId is
+// already used.
+var ErrLoginIDTaken = errors.New("store: login id taken")
 
 const (
 	maxFailedAttempts = 5
@@ -116,4 +121,54 @@ func (s *Store) ClearFailures(ctx context.Context, accountID string) error {
 UPDATE "PasswordAccount" SET "failedAttempts" = 0, "lockedUntil" = NULL, "updatedAt" = CAST($2 AS TIMESTAMP(3))
 WHERE "id" = $1`, accountID, dbTime(time.Now()))
 	return err
+}
+
+// AccountSummary is what an administrator sees of a member: never the hash or
+// the failure counter.
+type AccountSummary struct {
+	ID          string
+	LoginID     string
+	DisplayName string
+	CreatedAt   time.Time
+	Locked      bool
+}
+
+// ListPasswordAccounts returns every member account ordered by (createdAt,
+// id). Locked is lockedUntil > now.
+func (s *Store) ListPasswordAccounts(ctx context.Context, now time.Time) ([]AccountSummary, error) {
+	rows, err := s.pool.Query(ctx, `
+SELECT "id", "loginId", "displayName", "createdAt", COALESCE("lockedUntil" > CAST($1 AS TIMESTAMP(3)), false)
+FROM "PasswordAccount" ORDER BY "createdAt" ASC, "id" ASC`, dbTime(now))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []AccountSummary{}
+	for rows.Next() {
+		var a AccountSummary
+		if err := rows.Scan(&a.ID, &a.LoginID, &a.DisplayName, &a.CreatedAt, &a.Locked); err != nil {
+			return nil, err
+		}
+		a.CreatedAt = a.CreatedAt.UTC()
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// CreatePasswordAccount inserts a member with a new ID and sessionVersion 0.
+// It returns ErrLoginIDTaken when the loginId already exists.
+func (s *Store) CreatePasswordAccount(ctx context.Context, loginID, displayName, hash string, now time.Time) (AccountSummary, error) {
+	a := AccountSummary{ID: newID(), LoginID: loginID, DisplayName: displayName, CreatedAt: dbTime(now)}
+	_, err := s.pool.Exec(ctx, `
+INSERT INTO "PasswordAccount" ("id", "loginId", "displayName", "passwordHash", "sessionVersion", "createdAt", "updatedAt")
+VALUES ($1, $2, $3, $4, 0, CAST($5 AS TIMESTAMP(3)), CAST($5 AS TIMESTAMP(3)))`,
+		a.ID, loginID, displayName, hash, a.CreatedAt)
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "PasswordAccount_loginId_key" {
+		return AccountSummary{}, ErrLoginIDTaken
+	}
+	if err != nil {
+		return AccountSummary{}, err
+	}
+	return a, nil
 }
