@@ -23,7 +23,7 @@ features:
 
 学习録は、中国語の作文を添削・翻訳した結果（学習ノート）を記録する Web アプリです。この Go API（`services/api/`）は、iOS などのネイティブアプリから自分の学習ノートを読み書きするためのものです。
 
-- 利用できるのは、GitHub でログインする **admin**（許可リスト `AUTH_ALLOWED_GITHUB_LOGINS` に載っている人）と、パスワードでログインする **会員**（`PasswordAccount`）です。ゲストはログインできません。
+- 利用できるのは、GitHub でログインする **admin**（許可リスト `AUTH_ALLOWED_GITHUB_IDS` に GitHub の数値のユーザー ID が載っている人）と、パスワードでログインする **会員**（`PasswordAccount`）です。ゲストはログインできません。
 - 学習ノートの一覧・詳細・作成・編集、ゴミ箱、共有、フォローとタイムライン、日付ごとの記録（カレンダー）、admin による会員の管理、CSV のインポートまで、Web にある機能を一通り扱えます。
 - ブラウザから呼ぶことは想定していません（CORS は無効です）。
 - 添削・翻訳の実行（LLM の呼び出し）は API にはありません。
@@ -65,17 +65,18 @@ API は Web と別のプロセスですが、DB は本番の Neon を **その�
 - Go が作る行の ID は Prisma と同じ cuid 形式なので、Web が作った行と区別がつきません。
 - 権限と結果が Web と食い違わないよう、Web と同じ条件（`ownerId`・`deletedAt`・`sharedAt` など）で読み書きします。日付の区切り（日本時間）、会員一覧の並び（ICU の日本語照合順）、CSV の解析、入力の検証の文言も Web に合わせています。
 - 会員のパスワードのハッシュ（`scrypt:N:r:p:salt:key`）は Web と同じ形式です。Web で作った会員はそのまま API でログインでき、API で変えたパスワードは Web でも使えます。パスワードを変えると `sessionVersion` が上がり、Web と API の既存のログインがどちらも無効になります。
+- パスワードログインの試行回数（`SignInThrottle` テーブル）も Web と共有します。同じクライアントからの Web と API の試行は、合わせて数えられます。
 
 ### 環境変数
 
-| 名前                                                      | 内容                                                                                |
-| --------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `PORT`                                                    | 待ち受けポート（既定 8080）                                                         |
-| `DATABASE_URL`                                            | Neon の接続文字列（pooled）                                                         |
-| `API_JWT_SECRET`                                          | アクセストークンの HS256 鍵。32 バイト以上。Auth.js の `AUTH_SECRET` とは別の値     |
-| `GITHUB_MOBILE_CLIENT_ID` / `GITHUB_MOBILE_CLIENT_SECRET` | モバイル用の GitHub OAuth App（Web 用とは別）                                       |
-| `GITHUB_MOBILE_REDIRECT_URI`                              | アプリのカスタム URL スキーム。リクエストの `redirectUri` と完全一致を要求します    |
-| `AUTH_ALLOWED_GITHUB_LOGINS`                              | Web と同じ admin の許可リスト（カンマ区切り。前後の空白を除き、小文字にして比べる） |
+| 名前                                                      | 内容                                                                                                                     |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `PORT`                                                    | 待ち受けポート（既定 8080）                                                                                              |
+| `DATABASE_URL`                                            | Neon の接続文字列（pooled）                                                                                              |
+| `API_JWT_SECRET`                                          | アクセストークンの HS256 鍵。32 バイト以上。Auth.js の `AUTH_SECRET` とは別の値                                          |
+| `GITHUB_MOBILE_CLIENT_ID` / `GITHUB_MOBILE_CLIENT_SECRET` | モバイル用の GitHub OAuth App（Web 用とは別）                                                                            |
+| `GITHUB_MOBILE_REDIRECT_URI`                              | アプリのカスタム URL スキーム。リクエストの `redirectUri` と完全一致を要求します                                         |
+| `AUTH_ALLOWED_GITHUB_IDS`                                 | Web と同じ admin の許可リスト。GitHub の数値のユーザー ID をカンマ区切りで並べる（前後の空白は除き、数字以外の値は無視） |
 
 すべて必須で（`PORT` を除く）、無い・不正なときは起動時に終了します。
 

@@ -20,7 +20,6 @@
     {
       "ownerId": "password:cmh0w1a2b0000qwer5678tyui",
       "displayName": "友だち",
-      "loginId": "friend",
       "following": true,
       "followsMe": false
     }
@@ -30,13 +29,14 @@
 }
 ```
 
-| フィールド            | 内容                                                                |
-| --------------------- | ------------------------------------------------------------------- |
-| `members`             | `displayName` の日本語の照合順（ICU の `ja-x-icu`）。同名なら作成順 |
-| `members[].following` | 自分がその人をフォローしているか                                    |
-| `members[].followsMe` | その人が自分をフォローしているか                                    |
-| `followingCount`      | 自分がフォローしている相手のうち、今も存在する会員の数              |
-| `followerCount`       | 自分をフォローしている人の数（Web と同じく、フォローの行の数）      |
+| フィールド            | 内容                                                                                                          |
+| --------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `members`             | `displayName` の日本語の照合順（ICU の `ja-x-icu`）。同名なら作成順                                           |
+| `members[]`           | `ownerId`・`displayName`・`following`・`followsMe`。ログインに使う `loginId` は他の会員に見せないため返さない |
+| `members[].following` | 自分がその人をフォローしているか                                                                              |
+| `members[].followsMe` | その人が自分をフォローしているか                                                                              |
+| `followingCount`      | 自分がフォローしている相手のうち、今も存在する会員の数                                                        |
+| `followerCount`       | 自分をフォローしている人の数（Web と同じく、フォローの行の数）                                                |
 
 **エラー**
 

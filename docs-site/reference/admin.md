@@ -20,7 +20,7 @@ admin がパスワード会員を一覧・作成し、パスワードをリセ�
 
 ## GET /v1/admin/accounts
 
-パスワード会員を作成順（`createdAt` の昇順、同じ時刻なら `id` の昇順）に返します。ハッシュや失敗回数は返しません。
+パスワード会員を作成順（`createdAt` の昇順、同じ時刻なら `id` の昇順）に返します。ハッシュは返しません。
 
 - 権限：admin
 
@@ -34,18 +34,16 @@ admin がパスワード会員を一覧・作成し、パスワードをリセ�
       "ownerId": "password:cmh0w1a2b0000qwer5678tyui",
       "loginId": "demo",
       "displayName": "デモ",
-      "createdAt": "2026-10-01T00:00:00.000Z",
-      "locked": false
+      "createdAt": "2026-10-01T00:00:00.000Z"
     }
   ]
 }
 ```
 
-| フィールド | 内容                                                     |
-| ---------- | -------------------------------------------------------- |
-| `id`       | `PasswordAccount` の ID。リセットのパスに使う            |
-| `ownerId`  | `password:` + `id`。`?user=` やフォローに使う            |
-| `locked`   | ログインの失敗でロック中か（`lockedUntil` が現在より後） |
+| フィールド | 内容                                          |
+| ---------- | --------------------------------------------- |
+| `id`       | `PasswordAccount` の ID。リセットのパスに使う |
+| `ownerId`  | `password:` + `id`。`?user=` やフォローに使う |
 
 **エラー**
 
@@ -78,8 +76,7 @@ admin がパスワード会員を一覧・作成し、パスワードをリセ�
     "ownerId": "password:cmh0x9z8y0000mnbv4321lkjh",
     "loginId": "new.member",
     "displayName": "新しい会員",
-    "createdAt": "2026-10-21T08:00:00.000Z",
-    "locked": false
+    "createdAt": "2026-10-21T08:00:00.000Z"
   },
   "password": "Xq3v9LmZ0aB7cD1eF2gH",
   "generated": true
@@ -111,7 +108,7 @@ admin がパスワード会員を一覧・作成し、パスワードをリセ�
 
 `password` は省略するか空にすると生成し、それ以外は 12〜128 文字です。
 
-新しいハッシュを保存し、失敗回数とロックを消し、`sessionVersion` を 1 上げます。**その会員の Web と API の既存のログインはすべて無効になります**。
+新しいハッシュを保存し、`sessionVersion` を 1 上げます。**その会員の Web と API の既存のログインはすべて無効になります**。
 
 **レスポンス** `200`
 
