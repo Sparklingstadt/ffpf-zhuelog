@@ -283,3 +283,51 @@ func TestTimelineSkipsDeletedMembers(t *testing.T) {
 		}
 	}
 }
+
+func TestListMembersOrderMatchesWeb(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	viewer := newMember(t, s)
+	insert := func(name string, createdAt time.Time) string {
+		t.Helper()
+		id := newID()
+		if _, err := s.pool.Exec(ctx,
+			`INSERT INTO "PasswordAccount" ("id", "loginId", "displayName", "passwordHash", "sessionVersion", "createdAt", "updatedAt")
+			 VALUES ($1, $2, $3, 'scrypt:x', 1, $4, now())`,
+			id, "user-"+id, name, createdAt); err != nil {
+			t.Fatalf("insert account: %v", err)
+		}
+		t.Cleanup(func() {
+			_, _ = s.pool.Exec(context.Background(), `DELETE FROM "PasswordAccount" WHERE id = $1`, id)
+		})
+		return "password:" + id
+	}
+	base := time.Now().UTC().Truncate(time.Second)
+	names := map[string]string{} // ownerId -> label
+	for i, n := range []string{"カズ", "サーシャ", "アキラ", "コーヘイ", "イチロー", "ケーキ", "コウヘイ"} {
+		names[insert(n, base.Add(time.Duration(i)*time.Second))] = n
+	}
+	later := insert("ダブル", base.Add(20*time.Second))
+	earlier := insert("ダブル", base.Add(10*time.Second))
+	names[later], names[earlier] = "ダブル(later)", "ダブル(earlier)"
+
+	dir, err := s.ListMembers(ctx, viewer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, m := range dir.Members {
+		if l, ok := names[m.OwnerID]; ok {
+			got = append(got, l)
+		}
+	}
+	want := []string{"アキラ", "イチロー", "カズ", "ケーキ", "コウヘイ", "コーヘイ", "サーシャ", "ダブル(earlier)", "ダブル(later)"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+	}
+}

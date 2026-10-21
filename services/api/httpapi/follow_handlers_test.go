@@ -10,9 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/text/collate"
-	"golang.org/x/text/language"
-
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
@@ -120,17 +117,7 @@ func TestMembersHandler(t *testing.T) {
 			if resp.FollowingCount != 1 || resp.FollowerCount != 7 {
 				t.Fatalf("counts = %d/%d", resp.FollowingCount, resp.FollowerCount)
 			}
-			sorted := append([]store.Member(nil), members...)
-			cl := collate.New(language.Japanese)
-			// expected: by collation of displayName, ties by ownerId
-			for i := 1; i < len(sorted); i++ {
-				for j := i; j > 0; j-- {
-					c := cl.CompareString(sorted[j-1].DisplayName, sorted[j].DisplayName)
-					if c > 0 || (c == 0 && sorted[j-1].OwnerID > sorted[j].OwnerID) {
-						sorted[j-1], sorted[j] = sorted[j], sorted[j-1]
-					}
-				}
-			}
+			sorted := members // the handler must keep the store's order
 			if len(resp.Members) != len(sorted) {
 				t.Fatalf("members = %d", len(resp.Members))
 			}

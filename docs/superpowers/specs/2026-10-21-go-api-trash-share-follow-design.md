@@ -68,7 +68,7 @@
 
 - `store` にゴミ箱・共有・フォロー・会員一覧の SQL を足す。Web の Prisma の条件（`ownerId`、`deletedAt`、`sharedAt`、`Follow` の主キー）をそのまま SQL にする。
 - 役割の判定（共有は会員だけ）は `httpapi` のハンドラで、トークンの `role` を見て行う。
-- 会員一覧の並びは、Web の `localeCompare(..., "ja")` に合わせて DB の照合順ではなく Go 側で並べる（`golang.org/x/text/collate` の日本語）。
+- 会員一覧の並びは、Web の `localeCompare(..., "ja")` に合わせて DB の ICU 照合順 `ja-x-icu` で並べる（`ORDER BY "displayName" COLLATE "ja-x-icu", "createdAt", "id"`。同名は Web の `accounts.list()` と同じく作成順）。Go 側では並べ替えない（`golang.org/x/text` は使わない）。本番の Neon にも `ja-x-icu` が必要: `SELECT 1 FROM pg_collation WHERE collname = 'ja-x-icu'` で確認する。
 - テストは既存と同じく、`store` は実際の Postgres、`httpapi` はフェイクで行う。
 
 ## 範囲外

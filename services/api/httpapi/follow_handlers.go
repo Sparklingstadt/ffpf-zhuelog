@@ -4,11 +4,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
-	"slices"
 	"time"
-
-	"golang.org/x/text/collate"
-	"golang.org/x/text/language"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
@@ -35,26 +31,12 @@ func listMembers(f Follows) http.Handler {
 			writeServiceError(w, r, err)
 			return
 		}
-		members := slices.Clone(dir.Members)
-		cl := collate.New(language.Japanese)
-		slices.SortStableFunc(members, func(a, b store.Member) int {
-			if c := cl.CompareString(a.DisplayName, b.DisplayName); c != 0 {
-				return c
-			}
-			switch {
-			case a.OwnerID < b.OwnerID:
-				return -1
-			case a.OwnerID > b.OwnerID:
-				return 1
-			}
-			return 0
-		})
 		resp := response{
-			Members:        make([]memberJSON, len(members)),
+			Members:        make([]memberJSON, len(dir.Members)),
 			FollowingCount: dir.FollowingCount,
 			FollowerCount:  dir.FollowerCount,
 		}
-		for i, m := range members {
+		for i, m := range dir.Members {
 			resp.Members[i] = memberJSON{OwnerID: m.OwnerID, DisplayName: m.DisplayName, LoginID: m.LoginID, Following: m.Following, FollowsMe: m.FollowsMe}
 		}
 		writeJSON(w, http.StatusOK, resp)

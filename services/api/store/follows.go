@@ -18,7 +18,7 @@ type Member struct {
 	FollowsMe   bool // this member follows the viewer
 }
 
-// MemberDirectory lists every member except the viewer. Members are unsorted.
+// MemberDirectory lists every member except the viewer. Members are in display order: the DB's Japanese ICU collation of displayName, then createdAt, then id.
 type MemberDirectory struct {
 	Members        []Member
 	FollowingCount int // listed members the viewer follows
@@ -40,7 +40,8 @@ func (s *Store) ListMembers(ctx context.Context, viewerID string) (MemberDirecto
 		        EXISTS (SELECT 1 FROM "Follow" f WHERE f."followerId" = $1 AND f."followeeId" = $2 || a."id"),
 		        EXISTS (SELECT 1 FROM "Follow" f WHERE f."followerId" = $2 || a."id" AND f."followeeId" = $1)
 		 FROM "PasswordAccount" a
-		 WHERE $2 || a."id" <> $1`, viewerID, memberPrefix)
+		 WHERE $2 || a."id" <> $1
+		 ORDER BY a."displayName" COLLATE "ja-x-icu", a."createdAt", a."id"`, viewerID, memberPrefix)
 	if err != nil {
 		return MemberDirectory{}, fmt.Errorf("store: list members: %w", err)
 	}
