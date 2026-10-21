@@ -21,6 +21,7 @@ import { GoApiCurrentUserProvider } from "@/infrastructure/go-api/go-api-current
 import {
   readAccessToken,
   signInAsGuestViaGo,
+  signInWithGitHubViaGo,
   signInWithPasswordViaGo,
   signOutViaGo,
 } from "@/infrastructure/go-api/go-api-session";
@@ -85,9 +86,8 @@ export async function getRecordOwner(requested: string | undefined): Promise<{
   return { user, owner: resolveRecordOwner(user, requested) };
 }
 
-// Stays on Auth.js even with GO_API_URL until the Go GitHub sign-in (PKCE
-// and /api/auth/callback/github/go) replaces it here.
 export async function signInWithGitHub(redirectTo: string) {
+  if (isGoAuthEnabled()) return signInWithGitHubViaGo(redirectTo);
   await signIn("github", { redirectTo });
 }
 

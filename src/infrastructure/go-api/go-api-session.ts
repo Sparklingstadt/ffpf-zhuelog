@@ -10,9 +10,19 @@ import {
   type GoTokens,
 } from "./client";
 import {
+  createOAuthStart,
+  githubAuthorizeUrl,
+  githubRedirectUri,
+  OAUTH_COOKIE_MAX_AGE,
+  publicOrigin,
+  requestOrigin,
+} from "./github-oauth";
+import {
   ACCESS_COOKIE,
   clearedSessionCookies,
+  OAUTH_COOKIE,
   REFRESH_COOKIE,
+  sessionCookie,
   sessionCookieOptions,
   type SessionCookie,
 } from "./session-cookies";
@@ -80,6 +90,34 @@ export async function signInAsGuestViaGo(redirectTo: string) {
   const tokens = await loginGuest(clientAddress(await headers()));
   await startSession(tokens);
   redirect(redirectTo);
+}
+
+// Starts GitHub sign-in: PKCE and state go into zl_oauth (SameSite=Lax, so
+// it comes back with GitHub's top-level redirect), and the browser goes to
+// GitHub. /api/auth/callback/github/go finishes it.
+export async function signInWithGitHubViaGo(redirectTo: string) {
+  const clientId = process.env.AUTH_GITHUB_ID;
+  if (!clientId) redirect("/signin?error=Configuration");
+  const requestHeaders = await headers();
+  const start = createOAuthStart(redirectTo);
+  await writeCookies([
+    sessionCookie(
+      OAUTH_COOKIE,
+      start.cookieValue,
+      OAUTH_COOKIE_MAX_AGE,
+      isSecureRequest(requestHeaders),
+    ),
+  ]);
+  redirect(
+    githubAuthorizeUrl({
+      clientId,
+      redirectUri: githubRedirectUri(
+        publicOrigin(requestOrigin(requestHeaders)),
+      ),
+      state: start.state,
+      challenge: start.challenge,
+    }),
+  );
 }
 
 // Signs out locally even when the Go API cannot be reached: the cookies are
