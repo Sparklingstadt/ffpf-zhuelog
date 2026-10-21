@@ -176,6 +176,32 @@ func TestRunEndToEnd(t *testing.T) {
 		_, _ = conn.Exec(ctx, `DELETE FROM "PasswordAccount" WHERE id = $1`, accountID)
 	})
 
+	// Two more members for the follow round trip: B shares an entry, C is a
+	// bystander whose shared entry must not reach A's timeline.
+	type member struct{ accountID, loginID, owner string }
+	newMember := func(suffix string) member {
+		m := member{accountID: accountID + suffix}
+		m.loginID, m.owner = "e2e-"+m.accountID, "password:"+m.accountID
+		if _, err := conn.Exec(setup,
+			`INSERT INTO "PasswordAccount" ("id", "loginId", "displayName", "passwordHash", "updatedAt")
+			 VALUES ($1, $2, $3, $4, now())`, m.accountID, m.loginID, "E2E-"+suffix, hash); err != nil {
+			t.Fatalf("insert account %s: %v", suffix, err)
+		}
+		t.Cleanup(func() {
+			ctx := context.Background()
+			_, _ = conn.Exec(ctx,
+				`DELETE FROM "ImportBatch" WHERE id IN (SELECT "batchId" FROM "LearningEntry" WHERE "ownerId" = $1)`, m.owner)
+			_, _ = conn.Exec(ctx, `DELETE FROM "Follow" WHERE "followerId" = $1 OR "followeeId" = $1`, m.owner)
+			_, _ = conn.Exec(ctx, `DELETE FROM "ApiRefreshToken" WHERE "ownerId" = $1`, m.owner)
+			_, _ = conn.Exec(ctx, `DELETE FROM "PasswordAccount" WHERE id = $1`, m.accountID)
+		})
+		return m
+	}
+	memberB, memberC := newMember("b"), newMember("c")
+	t.Cleanup(func() {
+		_, _ = conn.Exec(context.Background(), `DELETE FROM "Follow" WHERE "followerId" = $1 OR "followeeId" = $1`, owner)
+	})
+
 	cfg := Config{
 		Port:                "0",
 		DatabaseURL:         dbURL,
@@ -265,6 +291,69 @@ func TestRunEndToEnd(t *testing.T) {
 	}
 	if second.AccessToken == "" || second.RefreshToken == "" || second.RefreshToken == first.RefreshToken {
 		t.Errorf("refresh did not return a new pair: %+v", second)
+	}
+
+	// Follow round trip: B and C each share an entry, A follows B only.
+	shareEntry := func(m member, text string) {
+		t.Helper()
+		var tk tokens
+		if code := c.do("POST", "/v1/auth/password", "",
+			map[string]string{"loginId": m.loginID, "password": "correct horse battery"}, &tk); code != http.StatusOK {
+			t.Fatalf("login %s = %d", m.loginID, code)
+		}
+		var made struct {
+			Entries []entryResp `json:"entries"`
+		}
+		if code := c.do("POST", "/v1/batches", tk.AccessToken, map[string]any{
+			"entries": []map[string]any{{"originalText": text, "correctedText": text + "!", "pinyin": "p"}},
+		}, &made); code != http.StatusCreated || len(made.Entries) != 1 {
+			t.Fatalf("create batch for %s = %d", m.loginID, code)
+		}
+		if code := c.do("PUT", "/v1/entries/"+made.Entries[0].ID+"/share", tk.AccessToken, nil, nil); code != http.StatusOK {
+			t.Fatalf("share = %d", code)
+		}
+	}
+	shareEntry(memberB, "from b")
+	shareEntry(memberC, "from c")
+
+	var members struct {
+		Members []struct {
+			OwnerID     string `json:"ownerId"`
+			DisplayName string `json:"displayName"`
+			Following   bool   `json:"following"`
+		} `json:"members"`
+		FollowingCount int `json:"followingCount"`
+	}
+	if code := c.do("GET", "/v1/members", second.AccessToken, nil, &members); code != http.StatusOK {
+		t.Fatalf("members = %d", code)
+	}
+	listed := map[string]bool{}
+	for _, m := range members.Members {
+		listed[m.OwnerID] = m.Following
+	}
+	if _, ok := listed[memberB.owner]; !ok || listed[memberB.owner] || members.FollowingCount != 0 {
+		t.Fatalf("members before follow = %+v", members)
+	}
+	if code := c.do("PUT", "/v1/follows/"+owner, second.AccessToken, nil, nil); code != http.StatusBadRequest {
+		t.Fatalf("self follow = %d, want 400", code)
+	}
+	if code := c.do("PUT", "/v1/follows/"+memberB.owner, second.AccessToken, nil, nil); code != http.StatusNoContent {
+		t.Fatalf("follow = %d", code)
+	}
+	var timeline struct {
+		Items []struct {
+			Entry     entryResp `json:"entry"`
+			OwnerID   string    `json:"ownerId"`
+			OwnerName string    `json:"ownerName"`
+		} `json:"items"`
+		NextCursor *string `json:"nextCursor"`
+	}
+	if code := c.do("GET", "/v1/timeline", second.AccessToken, nil, &timeline); code != http.StatusOK {
+		t.Fatalf("timeline = %d", code)
+	}
+	if len(timeline.Items) != 1 || timeline.Items[0].OwnerID != memberB.owner ||
+		timeline.Items[0].OwnerName != "E2E-b" || timeline.Items[0].Entry.OriginalText != "from b" || timeline.NextCursor != nil {
+		t.Fatalf("timeline = %+v", timeline)
 	}
 
 	cancel()

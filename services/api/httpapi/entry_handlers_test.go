@@ -28,6 +28,47 @@ type fakeEntries struct {
 	create func(ctx context.Context, ownerID string, drafts []store.EntryDraft, now time.Time) (store.Batch, []store.Entry, error)
 	update func(ctx context.Context, ownerID, id string, p store.EntryPatch) (store.Entry, error)
 	trash  func(ctx context.Context, ownerID, id string, now time.Time) error
+
+	listTrashed func(ctx context.Context, ownerID string, after *store.Cursor, limit int) ([]store.TrashedEntry, error)
+	restore     func(ctx context.Context, ownerID, id string) (store.Entry, error)
+	purge       func(ctx context.Context, ownerID, id string) error
+	emptyTrash  func(ctx context.Context, ownerID string) (int, error)
+	setShared   func(ctx context.Context, ownerID, id string, shared bool, now time.Time) (store.Entry, error)
+}
+
+func (f *fakeEntries) ListTrashed(ctx context.Context, ownerID string, after *store.Cursor, limit int) ([]store.TrashedEntry, error) {
+	if f.listTrashed == nil {
+		return nil, errUnexpectedCall{"ListTrashed"}
+	}
+	return f.listTrashed(ctx, ownerID, after, limit)
+}
+
+func (f *fakeEntries) RestoreEntry(ctx context.Context, ownerID, id string) (store.Entry, error) {
+	if f.restore == nil {
+		return store.Entry{}, errUnexpectedCall{"RestoreEntry"}
+	}
+	return f.restore(ctx, ownerID, id)
+}
+
+func (f *fakeEntries) PurgeEntry(ctx context.Context, ownerID, id string) error {
+	if f.purge == nil {
+		return errUnexpectedCall{"PurgeEntry"}
+	}
+	return f.purge(ctx, ownerID, id)
+}
+
+func (f *fakeEntries) EmptyTrash(ctx context.Context, ownerID string) (int, error) {
+	if f.emptyTrash == nil {
+		return 0, errUnexpectedCall{"EmptyTrash"}
+	}
+	return f.emptyTrash(ctx, ownerID)
+}
+
+func (f *fakeEntries) SetShared(ctx context.Context, ownerID, id string, shared bool, now time.Time) (store.Entry, error) {
+	if f.setShared == nil {
+		return store.Entry{}, errUnexpectedCall{"SetShared"}
+	}
+	return f.setShared(ctx, ownerID, id, shared, now)
 }
 
 func (f *fakeEntries) ListEntries(ctx context.Context, ownerID string, after *store.Cursor, limit int) ([]store.Entry, error) {
