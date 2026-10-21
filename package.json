@@ -24,6 +24,10 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
+    "api:db": "bash scripts/api-local.sh db",
+    "api:db:stop": "bash scripts/api-local.sh stop",
+    "api:dev": "bash scripts/api-local.sh dev",
+    "api:smoke": "bash scripts/api-smoke.sh",
     "postinstall": "prisma generate",
     "test:regression": "pnpm run typecheck && pnpm run lint && pnpm run test:unit && pnpm run build && pnpm run test:e2e"
   },
