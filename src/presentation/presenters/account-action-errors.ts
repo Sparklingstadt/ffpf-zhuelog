@@ -4,9 +4,9 @@ import {
   LoginIdTakenError,
   PasswordAccountNotFoundError,
 } from "@/domain/identity/password-account-error";
+import { genericErrorMessage } from "@/presentation/presenters/generic-error-message";
 
-export const accountActionFallbackMessage =
-  "処理できませんでした。時間をおいてもう一度お試しください。";
+export const accountActionFallbackMessage = genericErrorMessage;
 
 const fieldMessages: Record<string, string> = {
   loginId: "ログインIDは英小文字・数字・. _ - の3〜32文字にしてください。",

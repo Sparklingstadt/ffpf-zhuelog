@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { genericErrorMessage } from "@/presentation/presenters/generic-error-message";
+
 // What a one-button Server Action reports back to its form.
 export type ActionState = {
   status: "idle" | "success" | "error";
@@ -13,7 +15,7 @@ export const actionUnauthorized: ActionState = {
 };
 const actionFailed: ActionState = {
   status: "error",
-  message: "処理できませんでした。時間をおいてもう一度お試しください。",
+  message: genericErrorMessage,
 };
 
 // Learning note ids are Prisma cuids (seeded test notes use other lowercase

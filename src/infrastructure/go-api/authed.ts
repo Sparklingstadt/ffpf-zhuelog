@@ -3,6 +3,12 @@ import { redirect } from "next/navigation";
 import { GoApiError, goApi, goUpload, type GoApiInit } from "./client";
 import { readAccessToken } from "./go-api-session";
 
+// How a gateway reaches Go: goApiAuthed in the app, a fake in tests.
+export type GoApiCall = <T>(
+  path: string,
+  init: Omit<GoApiInit, "accessToken">,
+) => Promise<T>;
+
 // Go API calls as the signed-in user, for Server Components and Server
 // Actions only (they read the zl_access cookie). Without a token, or when Go
 // answers 401, the user is sent to /signin. Every other failure is thrown as

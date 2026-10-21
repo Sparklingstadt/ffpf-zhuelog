@@ -1,15 +1,9 @@
 import type { LogDate } from "@/domain/calendar/value-objects/log-date";
 import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
 
-import { goApiAuthed, withUserParam } from "./authed";
-import { GoApiError, type GoApiInit } from "./client";
+import { goApiAuthed, withUserParam, type GoApiCall } from "./authed";
+import { GoApiError } from "./client";
 import { toLearningEntry, type GoEntryJson } from "./learning-json";
-
-// How the gateway reaches Go. Pages use goApiAuthed; tests pass a fake.
-export type GoApiCall = <T>(
-  path: string,
-  init: Omit<GoApiInit, "accessToken">,
-) => Promise<T>;
 
 // Whose notes are read. Only another member's notes (an admin's view) add
 // ?user=; the user's own notes are the token's owner in Go.

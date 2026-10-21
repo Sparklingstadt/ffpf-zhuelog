@@ -2,10 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { GoApiError } from "../src/infrastructure/go-api/client";
-import {
-  createLearningGateway,
-  type GoApiCall,
-} from "../src/infrastructure/go-api/learning-gateway";
+import type { GoApiCall } from "../src/infrastructure/go-api/authed";
+import { createLearningGateway } from "../src/infrastructure/go-api/learning-gateway";
 
 const entryJson = {
   id: "e1",
@@ -98,6 +96,12 @@ test("getDailyEntry returns the entry with the day's total", async () => {
   assert.deepEqual(paths, ["/v1/log-dates/2026-04-07/entries/3"]);
   assert.equal(result?.entry.id, "e1");
   assert.equal(result?.total, 5);
+});
+
+test("getDailyEntry for another member's note adds ?user=", async () => {
+  const { call, paths } = fakeCall({ entry: entryJson, number: 2, total: 2 });
+  await createLearningGateway(call).getDailyEntry(other, date, 2);
+  assert.deepEqual(paths, ["/v1/log-dates/2026-04-07/entries/2?user=o%202"]);
 });
 
 test("getDailyEntry turns a 404 into null", async () => {

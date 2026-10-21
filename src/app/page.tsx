@@ -13,6 +13,9 @@ import {
   type RecordOwner,
 } from "@/application/identity/use-cases/resolve-record-owner";
 import { learningReads } from "@/composition/learning-container";
+import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
+import { GoApiError } from "@/infrastructure/go-api/client";
+import type { ViewedOwner } from "@/infrastructure/go-api/learning-gateway";
 import { loadRecordOwnerView } from "@/composition/record-owner-options";
 import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { PageShell } from "@/presentation/components/layout/page-shell";
@@ -20,6 +23,7 @@ import { CsvFormatGuide } from "@/presentation/components/learning/csv-format-gu
 import { CsvImportForm } from "@/presentation/components/learning/csv-import-form";
 import { LearningEntryCard } from "@/presentation/components/learning/learning-entry-card";
 import { RecordOwnerControls } from "@/presentation/components/records/record-owner-controls";
+import { Alert, AlertDescription } from "@/presentation/components/ui/alert";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
 import {
@@ -30,6 +34,7 @@ import {
   CardTitle,
 } from "@/presentation/components/ui/card";
 import { requireSignedInOwner } from "@/presentation/guards/record-owner-guard";
+import { genericErrorMessage } from "@/presentation/presenters/generic-error-message";
 import { getLogDateHref } from "@/presentation/presenters/log-date-presenter";
 import {
   requestedRecordOwner,
@@ -37,6 +42,23 @@ import {
 } from "@/presentation/presenters/record-owner-href";
 
 export const dynamic = "force-dynamic";
+
+// Go being unavailable (or failing) still shows the home with a notice. Any
+// other error, including the redirect to /signin, is rethrown.
+async function loadEntries(owner: ViewedOwner): Promise<{
+  entries: LearningEntry[];
+  total: number;
+  loadFailed: boolean;
+}> {
+  try {
+    const result = await learningReads.listRecent(owner, 100);
+    return { ...result, loadFailed: false };
+  } catch (error) {
+    if (!(error instanceof GoApiError)) throw error;
+    console.error("LEARNING_ENTRIES_UNAVAILABLE", error.status, error.code);
+    return { entries: [], total: 0, loadFailed: true };
+  }
+}
 
 type HomeProps = {
   searchParams: Promise<{ user?: string | string[] }>;
@@ -122,8 +144,8 @@ export default async function Home({ searchParams }: HomeProps) {
     );
   }
 
-  const [{ entries, total }, view] = await Promise.all([
-    learningReads.listRecent(owner, 100),
+  const [{ entries, total, loadFailed }, view] = await Promise.all([
+    loadEntries(owner),
     loadRecordOwnerView(user, owner),
   ]);
   const ownNotes = owner.kind === "self";
@@ -133,6 +155,13 @@ export default async function Home({ searchParams }: HomeProps) {
       <HomeHeader owner={owner} total={total} />
 
       <RecordOwnerControls owner={owner} view={view} path="/" />
+
+      {loadFailed ? (
+        <Alert variant="destructive">
+          <Database />
+          <AlertDescription>{genericErrorMessage}</AlertDescription>
+        </Alert>
+      ) : null}
 
       <section
         className={
@@ -195,7 +224,7 @@ export default async function Home({ searchParams }: HomeProps) {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <CsvImportForm />
+                <CsvImportForm disabled={loadFailed} />
                 <CsvFormatGuide />
               </CardContent>
             </Card>
