@@ -1,6 +1,8 @@
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { GoApiError, goApi, goUpload, type GoApiInit } from "./client";
+import { CURRENT_PATH_HEADER, signInPathFor } from "./current-path";
 import { readAccessToken } from "./go-api-session";
 
 // How a gateway reaches Go: goApiAuthed in the app, a fake in tests.
@@ -14,7 +16,8 @@ export type GoUploadCall = <T>(path: string, form: FormData) => Promise<T>;
 
 // Go API calls as the signed-in user, for Server Components and Server
 // Actions only (they read the zl_access cookie). Without a token, or when Go
-// answers 401, the user is sent to /signin. Every other failure is thrown as
+// answers 401, the user is sent to /signin with a callbackUrl back to the
+// current page (the path the proxy recorded). Every other failure is thrown as
 // a GoApiError. A call that needs the client IP passes
 // clientIp: clientAddress(await headers()).
 export function goApiAuthed<T>(
@@ -48,12 +51,16 @@ async function asSignedInUser<T>(
   call: (accessToken: string) => Promise<T>,
 ): Promise<T> {
   const accessToken = await readAccessToken();
-  if (!accessToken) redirect("/signin");
+  if (!accessToken) redirect(await currentSignInPath());
   try {
     return await call(accessToken);
   } catch (error) {
     if (error instanceof GoApiError && error.status === 401)
-      redirect("/signin");
+      redirect(await currentSignInPath());
     throw error;
   }
+}
+
+async function currentSignInPath() {
+  return signInPathFor((await headers()).get(CURRENT_PATH_HEADER));
 }

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { clientAddress } from "../auth/client-address";
 import { GoApiError, type GoTokens } from "./client";
+import { CURRENT_PATH_HEADER } from "./current-path";
 import {
   ACCESS_COOKIE,
   clearedSessionCookies,
@@ -24,6 +25,11 @@ export async function goProxy(
   deps: GoProxyDeps,
 ): Promise<NextResponse> {
   const requestHeaders = new Headers(request.headers);
+  // Overwrites whatever the browser sent; see current-path.ts.
+  requestHeaders.set(
+    CURRENT_PATH_HEADER,
+    `${request.nextUrl.pathname}${request.nextUrl.search}`,
+  );
   // Public routes pass the gate anyway, so they never spend a refresh.
   const responseCookies = isPublicRoute(request.nextUrl.pathname)
     ? []
