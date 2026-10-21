@@ -80,3 +80,45 @@ func TestLoadConfigShortSecret(t *testing.T) {
 		t.Error("error leaks the secret value")
 	}
 }
+
+func TestLoadConfigGitHubWebAllOrNone(t *testing.T) {
+	web := map[string]string{
+		"GITHUB_WEB_CLIENT_ID":     "web-id",
+		"GITHUB_WEB_CLIENT_SECRET": "web-secret-value",
+		"GITHUB_WEB_REDIRECT_URI":  "https://zhuelog.example/api/auth/callback",
+	}
+	cfg, err := LoadConfig(getenvFrom(validEnv()))
+	if err != nil {
+		t.Fatalf("none set: %v", err)
+	}
+	if cfg.GitHubWebClientID != "" || cfg.GitHubWebClientSecret != "" || cfg.GitHubWebRedirectURI != "" {
+		t.Errorf("web fields should be empty: %+v", cfg)
+	}
+
+	env := validEnv()
+	for k, v := range web {
+		env[k] = v
+	}
+	cfg, err = LoadConfig(getenvFrom(env))
+	if err != nil {
+		t.Fatalf("all set: %v", err)
+	}
+	if cfg.GitHubWebClientID != "web-id" || cfg.GitHubWebClientSecret != "web-secret-value" ||
+		cfg.GitHubWebRedirectURI != web["GITHUB_WEB_REDIRECT_URI"] {
+		t.Errorf("unexpected web config: %+v", cfg)
+	}
+
+	for missing := range web {
+		env := validEnv()
+		for k, v := range web {
+			if k != missing {
+				env[k] = v
+			}
+		}
+		_, err := LoadConfig(getenvFrom(env))
+		want := "GITHUB_WEB_CLIENT_ID, GITHUB_WEB_CLIENT_SECRET and GITHUB_WEB_REDIRECT_URI must be set together"
+		if err == nil || err.Error() != want {
+			t.Errorf("missing %s: err = %v, want %q", missing, err, want)
+		}
+	}
+}

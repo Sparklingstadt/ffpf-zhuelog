@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -15,7 +16,11 @@ type Config struct {
 	GitHubClientID     string
 	GitHubClientSecret string
 	GitHubRedirectURI  string
-	AllowedGitHubIDs   string // comma-separated numeric GitHub user IDs of admins
+	// The web OAuth App is optional: all three values are set, or none.
+	GitHubWebClientID     string
+	GitHubWebClientSecret string
+	GitHubWebRedirectURI  string
+	AllowedGitHubIDs      string // comma-separated numeric GitHub user IDs of admins
 }
 
 // LoadConfig reads and validates the configuration. Secret values are never
@@ -57,6 +62,18 @@ func LoadConfig(getenv func(string) string) (Config, error) {
 	}
 	if cfg.GitHubRedirectURI, err = required("GITHUB_MOBILE_REDIRECT_URI"); err != nil {
 		return Config{}, err
+	}
+	cfg.GitHubWebClientID = get("GITHUB_WEB_CLIENT_ID")
+	cfg.GitHubWebClientSecret = get("GITHUB_WEB_CLIENT_SECRET")
+	cfg.GitHubWebRedirectURI = get("GITHUB_WEB_REDIRECT_URI")
+	webSet := 0
+	for _, v := range []string{cfg.GitHubWebClientID, cfg.GitHubWebClientSecret, cfg.GitHubWebRedirectURI} {
+		if v != "" {
+			webSet++
+		}
+	}
+	if webSet != 0 && webSet != 3 {
+		return Config{}, errors.New("GITHUB_WEB_CLIENT_ID, GITHUB_WEB_CLIENT_SECRET and GITHUB_WEB_REDIRECT_URI must be set together")
 	}
 	if cfg.AllowedGitHubIDs, err = required("AUTH_ALLOWED_GITHUB_IDS"); err != nil {
 		return Config{}, err
