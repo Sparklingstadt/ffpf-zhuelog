@@ -6,18 +6,15 @@ export type PasswordAccount = {
   displayName: string;
   passwordHash: string;
   sessionVersion: number;
-  failedAttempts: number;
-  lockedUntil: Date | null;
   createdAt: Date;
 };
 
-// What an administrator sees: never the hash or the failure counter.
+// What an administrator sees: never the hash.
 export type PasswordAccountSummary = {
   id: string;
   loginId: string;
   displayName: string;
   createdAt: Date;
-  locked: boolean;
 };
 
 export const loginIdSchema = z
@@ -40,29 +37,26 @@ export const optionalPasswordSchema = z.union([
   passwordSchema,
 ]);
 
-export const MAX_FAILED_ATTEMPTS = 5;
-export const LOCK_DURATION_MS = 15 * 60 * 1000;
-
-export function isLocked(
-  account: Pick<PasswordAccount, "lockedUntil">,
-  now: Date,
-) {
-  return account.lockedUntil !== null && account.lockedUntil > now;
-}
+// Sign-in attempts are counted per client address, never per account alone,
+// so nobody can lock a member out from somewhere else. The Go API
+// (services/api/auth) uses the same keys and limits on the same table.
+export const THROTTLE_WINDOW_MS = 15 * 60 * 1000;
+// Every password sign-in attempt from one client. Caps the hashing cost an
+// attacker can make us spend.
+export const MAX_ATTEMPTS_PER_CLIENT = 20;
+// Attempts at one login ID (or one password change) before it pauses; a
+// success resets the count.
+export const MAX_FAILURES_PER_LOGIN = 5;
 
 export function ownerIdForAccount(id: string) {
   return `password:${id}`;
 }
 
-export function toSummary(
-  account: PasswordAccount,
-  now: Date,
-): PasswordAccountSummary {
+export function toSummary(account: PasswordAccount): PasswordAccountSummary {
   return {
     id: account.id,
     loginId: account.loginId,
     displayName: account.displayName,
     createdAt: account.createdAt,
-    locked: isLocked(account, now),
   };
 }

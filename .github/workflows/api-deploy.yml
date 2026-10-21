@@ -26,7 +26,7 @@ jobs:
       ECR_REPOSITORY: ${{ vars.AWS_ECR_REPOSITORY }}
       OAUTH_CLIENT_ID: ${{ vars.API_GITHUB_CLIENT_ID }}
       OAUTH_REDIRECT_URI: ${{ vars.API_GITHUB_REDIRECT_URI }}
-      ALLOWED_LOGINS: ${{ vars.API_ALLOWED_GITHUB_LOGINS }}
+      ALLOWED_IDS: ${{ vars.API_ALLOWED_GITHUB_IDS }}
       SECRET_DATABASE_URL_ARN: ${{ vars.API_SECRET_DATABASE_URL_ARN }}
       SECRET_JWT_ARN: ${{ vars.API_SECRET_JWT_ARN }}
       SECRET_GITHUB_CLIENT_SECRET_ARN: ${{ vars.API_SECRET_GITHUB_CLIENT_SECRET_ARN }}
@@ -39,7 +39,7 @@ jobs:
         run: |
           missing=0
           for v in SERVICE ECR_REPOSITORY EXECUTION_ROLE_ARN INFRASTRUCTURE_ROLE_ARN \
-            OAUTH_CLIENT_ID OAUTH_REDIRECT_URI ALLOWED_LOGINS \
+            OAUTH_CLIENT_ID OAUTH_REDIRECT_URI ALLOWED_IDS \
             SECRET_DATABASE_URL_ARN SECRET_JWT_ARN SECRET_GITHUB_CLIENT_SECRET_ARN; do
             if [ -z "${!v}" ]; then
               echo "::error::Actions Variable for ${v} is empty (docs/api-deployment.md section 3)"
@@ -72,10 +72,10 @@ jobs:
           environment=$(jq -cn \
             --arg id "$OAUTH_CLIENT_ID" \
             --arg uri "$OAUTH_REDIRECT_URI" \
-            --arg logins "$ALLOWED_LOGINS" \
+            --arg ids "$ALLOWED_IDS" \
             '[{name: "GITHUB_MOBILE_CLIENT_ID", value: $id},
               {name: "GITHUB_MOBILE_REDIRECT_URI", value: $uri},
-              {name: "AUTH_ALLOWED_GITHUB_LOGINS", value: $logins}]')
+              {name: "AUTH_ALLOWED_GITHUB_IDS", value: $ids}]')
           secrets=$(jq -cn \
             --arg db "$SECRET_DATABASE_URL_ARN" \
             --arg jwt "$SECRET_JWT_ARN" \

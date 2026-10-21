@@ -3,7 +3,8 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import GitHub from "next-auth/providers/github";
 
-import { isAllowedGitHubLogin } from "@/infrastructure/auth/github-login-policy";
+import { isAllowedGitHubId } from "@/infrastructure/auth/github-admin-policy";
+import { clientAddress } from "./client-address";
 import {
   githubIdFromAccount,
   githubIdFromToken,
@@ -12,12 +13,14 @@ import {
 import {
   passwordAccountRepository,
   passwordHasher,
+  signInThrottle,
 } from "./password-account-services";
 import { resolveSessionRole } from "./session-role-policy";
 
 const authenticatePasswordAccount = new AuthenticatePasswordAccount(
   passwordAccountRepository,
   passwordHasher,
+  signInThrottle,
 );
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -30,7 +33,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           email: profile.email,
           image: profile.avatar_url,
           githubLogin: profile.login,
-          role: isAllowedGitHubLogin(profile.login) ? "admin" : "revoked",
+          role: isAllowedGitHubId(String(profile.id)) ? "admin" : "revoked",
         };
       },
     }),
@@ -56,10 +59,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // Wrong credentials return null (Auth.js reports CredentialsSignin).
       // Infrastructure errors propagate so they are not mistaken for a wrong
       // password. Never log the credentials.
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         const account = await authenticatePasswordAccount.execute({
           loginId: credentials.loginId,
           password: credentials.password,
+          client: clientAddress(request.headers),
         });
         if (!account) return null;
         return {
@@ -77,13 +81,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   pages: { signIn: "/signin" },
   callbacks: {
-    signIn({ account, profile, user }) {
+    signIn({ account, user }) {
       if (account?.provider === "guest") return user.role === "guest";
       if (account?.provider === "password") return user.role === "member";
       return (
         account?.provider === "github" &&
-        typeof profile?.login === "string" &&
-        isAllowedGitHubLogin(profile.login)
+        isAllowedGitHubId(githubIdFromAccount(account))
       );
     },
     jwt({ token, user, account }) {
@@ -101,7 +104,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       session.user.githubLogin =
         typeof token.githubLogin === "string" ? token.githubLogin : "";
       session.user.githubId = githubIdFromToken(token.githubId);
-      session.user.role = resolveSessionRole(token.role, token.githubLogin);
+      session.user.role = resolveSessionRole(token.role, token.githubId);
       session.user.accountId =
         typeof token.accountId === "string" ? token.accountId : undefined;
       session.user.sessionVersion =

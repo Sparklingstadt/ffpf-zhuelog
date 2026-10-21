@@ -40,6 +40,6 @@ export class CreatePasswordAccount {
       displayName: parsed.displayName,
       passwordHash: await this.hasher.hash(password),
     });
-    return { account: toSummary(account, new Date()), password, generated };
+    return { account: toSummary(account), password, generated };
   }
 }

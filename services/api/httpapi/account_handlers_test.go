@@ -131,7 +131,7 @@ func TestChangePasswordSharesAuthRateLimit(t *testing.T) {
 
 	t.Run("after /v1/auth/*", func(t *testing.T) {
 		a := accountAuth(invalid)
-		a.password = func(context.Context, string, string) (auth.TokenPair, error) {
+		a.password = func(context.Context, string, string, string) (auth.TokenPair, error) {
 			return auth.TokenPair{}, auth.ErrUnauthorized
 		}
 		h, _ := testRouter(t, a, fakePinger{}, nil)

@@ -7,7 +7,6 @@ import {
 } from "@/composition/identity-container";
 import { CreateAccountForm } from "@/presentation/components/auth/create-account-form";
 import { ResetPasswordForm } from "@/presentation/components/auth/reset-password-form";
-import { Badge } from "@/presentation/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -85,9 +84,6 @@ export default async function AdminAccountsPage() {
                           {account.loginId}
                         </span>
                         <span className="text-sm">{account.displayName}</span>
-                        {account.locked ? (
-                          <Badge variant="destructive">ロック中</Badge>
-                        ) : null}
                         <span className="text-xs text-muted-foreground sm:ml-auto">
                           作成日 {dateFormat.format(account.createdAt)}
                         </span>

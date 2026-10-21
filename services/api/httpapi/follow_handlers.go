@@ -14,7 +14,6 @@ var memberOwnerIDPattern = regexp.MustCompile(`^password:[a-z0-9]{1,64}$`)
 type memberJSON struct {
 	OwnerID     string `json:"ownerId"`
 	DisplayName string `json:"displayName"`
-	LoginID     string `json:"loginId"`
 	Following   bool   `json:"following"`
 	FollowsMe   bool   `json:"followsMe"`
 }
@@ -37,7 +36,7 @@ func listMembers(f Follows) http.Handler {
 			FollowerCount:  dir.FollowerCount,
 		}
 		for i, m := range dir.Members {
-			resp.Members[i] = memberJSON{OwnerID: m.OwnerID, DisplayName: m.DisplayName, LoginID: m.LoginID, Following: m.Following, FollowsMe: m.FollowsMe}
+			resp.Members[i] = memberJSON{OwnerID: m.OwnerID, DisplayName: m.DisplayName, Following: m.Following, FollowsMe: m.FollowsMe}
 		}
 		writeJSON(w, http.StatusOK, resp)
 	})

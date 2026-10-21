@@ -9,13 +9,13 @@ const minJWTSecretBytes = 32
 
 // Config holds the API server settings read from the environment.
 type Config struct {
-	Port                string
-	DatabaseURL         string
-	JWTSecret           []byte
-	GitHubClientID      string
-	GitHubClientSecret  string
-	GitHubRedirectURI   string
-	AllowedGitHubLogins string
+	Port               string
+	DatabaseURL        string
+	JWTSecret          []byte
+	GitHubClientID     string
+	GitHubClientSecret string
+	GitHubRedirectURI  string
+	AllowedGitHubIDs   string // comma-separated numeric GitHub user IDs of admins
 }
 
 // LoadConfig reads and validates the configuration. Secret values are never
@@ -58,7 +58,7 @@ func LoadConfig(getenv func(string) string) (Config, error) {
 	if cfg.GitHubRedirectURI, err = required("GITHUB_MOBILE_REDIRECT_URI"); err != nil {
 		return Config{}, err
 	}
-	if cfg.AllowedGitHubLogins, err = required("AUTH_ALLOWED_GITHUB_LOGINS"); err != nil {
+	if cfg.AllowedGitHubIDs, err = required("AUTH_ALLOWED_GITHUB_IDS"); err != nil {
 		return Config{}, err
 	}
 	return cfg, nil

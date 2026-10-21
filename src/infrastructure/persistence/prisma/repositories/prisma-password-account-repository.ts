@@ -1,8 +1,4 @@
-import {
-  LOCK_DURATION_MS,
-  MAX_FAILED_ATTEMPTS,
-  type PasswordAccount,
-} from "@/domain/identity/entities/password-account";
+import type { PasswordAccount } from "@/domain/identity/entities/password-account";
 import {
   LoginIdTakenError,
   PasswordAccountNotFoundError,
@@ -18,8 +14,6 @@ function map(row: PasswordAccountRow): PasswordAccount {
     displayName: row.displayName,
     passwordHash: row.passwordHash,
     sessionVersion: row.sessionVersion,
-    failedAttempts: row.failedAttempts,
-    lockedUntil: row.lockedUntil,
     createdAt: row.createdAt,
   };
 }
@@ -71,28 +65,6 @@ export class PrismaPasswordAccountRepository implements PasswordAccountRepositor
     }
   }
 
-  // One statement, so concurrent guesses cannot read the same counter. Both
-  // CASE expressions see the row as it was before this UPDATE. The casts are
-  // needed because the driver sends Date parameters as text.
-  async reserveAttempt(id: string, now: Date) {
-    const lockEnd = new Date(now.getTime() + LOCK_DURATION_MS);
-    const updated = await getPrismaClient().$executeRaw`
-      UPDATE "PasswordAccount" SET
-        "failedAttempts" = CASE WHEN "lockedUntil" IS NOT NULL THEN 1 ELSE "failedAttempts" + 1 END,
-        "lockedUntil" = CASE WHEN (CASE WHEN "lockedUntil" IS NOT NULL THEN 1 ELSE "failedAttempts" + 1 END) >= ${MAX_FAILED_ATTEMPTS} THEN CAST(${lockEnd} AS TIMESTAMP(3)) ELSE NULL END,
-        "updatedAt" = CAST(${now} AS TIMESTAMP(3))
-      WHERE "id" = ${id} AND ("lockedUntil" IS NULL OR "lockedUntil" <= CAST(${now} AS TIMESTAMP(3)))
-    `;
-    return updated > 0;
-  }
-
-  async clearFailures(id: string) {
-    await getPrismaClient().passwordAccount.updateMany({
-      where: { id },
-      data: { failedAttempts: 0, lockedUntil: null },
-    });
-  }
-
   async setPassword(id: string, passwordHash: string) {
     try {
       await getPrismaClient().passwordAccount.update({
@@ -100,8 +72,6 @@ export class PrismaPasswordAccountRepository implements PasswordAccountRepositor
         data: {
           passwordHash,
           sessionVersion: { increment: 1 },
-          failedAttempts: 0,
-          lockedUntil: null,
         },
       });
     } catch (error) {

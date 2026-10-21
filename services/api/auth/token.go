@@ -26,8 +26,10 @@ var (
 	ErrForbidden    = errors.New("auth: forbidden")
 )
 
-// Principal is the authenticated caller. Login is set for admins and
-// SessionVersion for members.
+// Principal is the authenticated caller. For admins, OwnerID is the numeric
+// GitHub user ID (what the allowlist checks) and Login the GitHub login at
+// sign-in, kept for information only and never used for authorization. For
+// members, SessionVersion is set.
 type Principal struct {
 	OwnerID        string
 	Role           string
