@@ -365,6 +365,39 @@ func TestListEntriesTotalIgnoresPaging(t *testing.T) {
 	}
 }
 
+func TestListEntriesCountsBeforeListing(t *testing.T) {
+	var calls []string
+	h, _ := entriesRouter(t, &fakeEntries{
+		list: func(context.Context, string, *store.Cursor, int) ([]store.Entry, error) {
+			calls = append(calls, "list")
+			return nil, nil
+		},
+		count: func(context.Context, string) (int, error) {
+			calls = append(calls, "count")
+			return 0, nil
+		},
+	})
+	if w := do(h, http.MethodGet, "/v1/entries", "", authHeader); w.Code != http.StatusOK {
+		t.Fatalf("status = %d", w.Code)
+	}
+	if strings.Join(calls, ",") != "count,list" {
+		t.Fatalf("calls = %v", calls)
+	}
+
+	calls = nil
+	h, _ = entriesRouter(t, &fakeEntries{
+		list: func(context.Context, string, *store.Cursor, int) ([]store.Entry, error) {
+			calls = append(calls, "list")
+			return nil, nil
+		},
+		count: func(context.Context, string) (int, error) { return 0, errors.New("boom") },
+	})
+	wantError(t, do(h, http.MethodGet, "/v1/entries", "", authHeader), http.StatusInternalServerError, "internal")
+	if len(calls) != 0 {
+		t.Fatalf("list ran after a failed count: %v", calls)
+	}
+}
+
 func TestListEntriesBadQuery(t *testing.T) {
 	for _, q := range []string{
 		"limit=0", "limit=101", "limit=abc", "limit=", "limit=-1", "limit=+5", "limit=1.5", "limit=1&limit=2",

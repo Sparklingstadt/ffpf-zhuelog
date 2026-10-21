@@ -25,6 +25,12 @@ func listTrash(e Entries) http.Handler {
 			return
 		}
 		ownerID := principalFrom(r.Context()).OwnerID
+		// Count first, as in listEntries.
+		total, err := e.CountTrashed(r.Context(), ownerID)
+		if err != nil {
+			writeServiceError(w, r, err)
+			return
+		}
 		entries, err := e.ListTrashed(r.Context(), ownerID, after, limit+1)
 		if err != nil {
 			writeServiceError(w, r, err)
@@ -33,11 +39,6 @@ func listTrash(e Entries) http.Handler {
 		entries, next := paginate(entries, limit, func(t store.TrashedEntry) store.Cursor {
 			return store.Cursor{CreatedAt: t.DeletedAt, ID: t.ID}
 		})
-		total, err := e.CountTrashed(r.Context(), ownerID)
-		if err != nil {
-			writeServiceError(w, r, err)
-			return
-		}
 		resp := response{NextCursor: next, Total: total}
 		resp.Entries = make([]trashedEntryJSON, len(entries))
 		for i, t := range entries {

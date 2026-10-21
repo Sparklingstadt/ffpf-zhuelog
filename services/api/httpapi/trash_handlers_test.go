@@ -291,3 +291,36 @@ func TestShareRequiresMember(t *testing.T) {
 		})
 	}
 }
+
+func TestListTrashCountsBeforeListing(t *testing.T) {
+	var calls []string
+	h, _ := roleRouter(t, &fakeEntries{
+		listTrashed: func(context.Context, string, *store.Cursor, int) ([]store.TrashedEntry, error) {
+			calls = append(calls, "list")
+			return nil, nil
+		},
+		countTrashed: func(context.Context, string) (int, error) {
+			calls = append(calls, "count")
+			return 0, nil
+		},
+	}, auth.RoleMember)
+	if w := do(h, http.MethodGet, "/v1/trash", "", authHeader); w.Code != http.StatusOK {
+		t.Fatalf("status = %d", w.Code)
+	}
+	if strings.Join(calls, ",") != "count,list" {
+		t.Fatalf("calls = %v", calls)
+	}
+
+	calls = nil
+	h, _ = roleRouter(t, &fakeEntries{
+		listTrashed: func(context.Context, string, *store.Cursor, int) ([]store.TrashedEntry, error) {
+			calls = append(calls, "list")
+			return nil, nil
+		},
+		countTrashed: func(context.Context, string) (int, error) { return 0, errors.New("boom") },
+	}, auth.RoleMember)
+	wantError(t, do(h, http.MethodGet, "/v1/trash", "", authHeader), http.StatusInternalServerError, "internal")
+	if len(calls) != 0 {
+		t.Fatalf("list ran after a failed count: %v", calls)
+	}
+}

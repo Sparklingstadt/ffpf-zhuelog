@@ -37,6 +37,10 @@ import { requireSignedInOwner } from "@/presentation/guards/record-owner-guard";
 import { genericErrorMessage } from "@/presentation/presenters/generic-error-message";
 import { getLogDateHref } from "@/presentation/presenters/log-date-presenter";
 import {
+  recentEntriesTotal,
+  recentEntryNumberLabel,
+} from "@/presentation/presenters/recent-entry-number";
+import {
   requestedRecordOwner,
   withRecordOwner,
 } from "@/presentation/presenters/record-owner-href";
@@ -152,7 +156,10 @@ export default async function Home({ searchParams }: HomeProps) {
 
   return (
     <PageShell user={user} width="6xl" spacious>
-      <HomeHeader owner={owner} total={total} />
+      <HomeHeader
+        owner={owner}
+        total={recentEntriesTotal(total, entries.length)}
+      />
 
       <RecordOwnerControls owner={owner} view={view} path="/" />
 
@@ -200,7 +207,11 @@ export default async function Home({ searchParams }: HomeProps) {
                 <LearningEntryCard
                   key={entry.id}
                   entry={entry}
-                  numberLabel={`#${total - index}`}
+                  numberLabel={recentEntryNumberLabel(
+                    total,
+                    entries.length,
+                    index,
+                  )}
                   href={withRecordOwner(getLogDateHref(entry.createdAt), owner)}
                   linkLabel="この日の一覧"
                 />

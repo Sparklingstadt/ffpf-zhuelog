@@ -152,6 +152,13 @@ func listEntries(e Entries) http.Handler {
 		if !ok {
 			return
 		}
+		// Count first: a note added between the two queries then makes the
+		// list longer, never total smaller than what the list returns.
+		total, err := e.CountEntries(r.Context(), owner)
+		if err != nil {
+			writeServiceError(w, r, err)
+			return
+		}
 		entries, err := e.ListEntries(r.Context(), owner, after, limit+1)
 		if err != nil {
 			writeServiceError(w, r, err)
@@ -160,11 +167,6 @@ func listEntries(e Entries) http.Handler {
 		entries, next := paginate(entries, limit, func(e store.Entry) store.Cursor {
 			return store.Cursor{CreatedAt: e.CreatedAt, ID: e.ID}
 		})
-		total, err := e.CountEntries(r.Context(), owner)
-		if err != nil {
-			writeServiceError(w, r, err)
-			return
-		}
 		resp := response{Entries: toEntriesJSON(entries), NextCursor: next, Total: total}
 		writeJSON(w, http.StatusOK, resp)
 	})
