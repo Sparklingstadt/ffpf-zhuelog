@@ -10,10 +10,11 @@ import { ScryptPasswordHasher } from "../scripts/lib/scrypt-password-hasher";
 import { baseURL, cookieName, databaseUrl, goJwtSecret } from "./environment";
 
 export const test = base.extend<{ db: Client }>({
-  // The Go API limits /v1/auth/* to 10 calls a minute per client address, in
-  // memory, so it cannot be reset between tests like SignInThrottle. Give
-  // each test its own address instead; locally the web takes it from
-  // X-Forwarded-For and hands it to the Go API.
+  // The Go API also limits /v1/auth/* to 10 calls a minute per client
+  // address. That limit lives in its memory, so unlike the SignInThrottle
+  // table (truncated below) it cannot be reset between tests. Give each test
+  // its own address instead; locally the web takes it from X-Forwarded-For
+  // and hands it to the Go API.
   extraHTTPHeaders: async ({ extraHTTPHeaders }, provide) => {
     const [a, b, c] = randomBytes(3);
     await provide({
