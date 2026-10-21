@@ -2,6 +2,9 @@ overrides:
   "deepmerge-ts": "8.0.2"
   "mysql2": "3.24.4"
 allowBuilds:
+  # sass が使うファイル監視。OS ごとのビルド済みバイナリが optionalDependencies で
+  # 入るので、ソースからビルドする install スクリプトは動かさない。
+  "@parcel/watcher": false
   "@prisma/engines": true
   "esbuild": true
   "fsevents": true
