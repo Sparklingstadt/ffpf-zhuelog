@@ -51,6 +51,7 @@ type Store interface {
 	RotateRefreshToken(ctx context.Context, oldID string, next store.RefreshToken, nextHash string, now time.Time) (bool, error)
 	RevokeFamily(ctx context.Context, familyID string, now time.Time) error
 	PruneRefreshTokens(ctx context.Context, ownerID string, now time.Time) error
+	DeleteExpiredRefreshTokens(ctx context.Context, ownerID string, now time.Time) error
 }
 
 // GitHub exchanges an OAuth code for the GitHub user; *GitHubClient satisfies it.

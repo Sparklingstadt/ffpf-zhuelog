@@ -42,6 +42,7 @@ type fakeStore struct {
 	consumed       []string // keys passed to ConsumeThrottle
 	resets         []string // keys passed to ResetThrottle
 	pruned         []string // ownerIDs passed to PruneRefreshTokens
+	deletedExpired []string // ownerIDs passed to DeleteExpiredRefreshTokens
 	revoked        []string // familyIDs passed to RevokeFamily
 	rotateLoses    bool     // RotateRefreshToken returns false
 	findAccountErr error
@@ -232,6 +233,19 @@ func (f *fakeStore) PruneRefreshTokens(_ context.Context, ownerID string, now ti
 			continue
 		}
 		if !t.ExpiresAt.After(now) || (t.RevokedAt != nil && !liveFamilies[t.FamilyID]) {
+			delete(f.tokens, hash)
+		}
+	}
+	return nil
+}
+
+// DeleteExpiredRefreshTokens mirrors the store: it deletes only ownerID's
+// expired rows.
+func (f *fakeStore) DeleteExpiredRefreshTokens(_ context.Context, ownerID string, now time.Time) error {
+	f.log.add("DeleteExpiredRefreshTokens")
+	f.deletedExpired = append(f.deletedExpired, ownerID)
+	for hash, t := range f.tokens {
+		if t.OwnerID == ownerID && !t.ExpiresAt.After(now) {
 			delete(f.tokens, hash)
 		}
 	}
@@ -1500,5 +1514,42 @@ func TestMeAdminAndGuest(t *testing.T) {
 	got, err = f.svc.Me(ctx, Principal{OwnerID: GuestOwnerID, Role: RoleGuest})
 	if want := (Me{OwnerID: "guest", Role: "guest", Login: "guest"}); err != nil || got != want {
 		t.Fatalf("guest Me = %+v, %v; want %+v", got, err, want)
+	}
+}
+
+func TestLoginGuestRefreshTokenLifetimeAndCleanup(t *testing.T) {
+	f := newFixture()
+	ctx := context.Background()
+	first, err := f.svc.LoginGuest(ctx)
+	if err != nil {
+		t.Fatalf("LoginGuest: %v", err)
+	}
+	row := f.store.row(t, first.RefreshToken)
+	if want := serviceEpoch.Add(24 * time.Hour); !row.ExpiresAt.Equal(want) {
+		t.Fatalf("guest refresh expires at %v, want %v", row.ExpiresAt, want)
+	}
+	if len(f.store.pruned) != 0 {
+		t.Fatalf("guest login ran the family prune for %v", f.store.pruned)
+	}
+	if !slices.Equal(f.store.deletedExpired, []string{GuestOwnerID}) {
+		t.Fatalf("deletedExpired = %v, want [guest]", f.store.deletedExpired)
+	}
+
+	// A later guest login removes the expired row, and rotation keeps the
+	// short lifetime.
+	f.clock.t = f.clock.t.Add(25 * time.Hour)
+	second, err := f.svc.LoginGuest(ctx)
+	if err != nil {
+		t.Fatalf("LoginGuest: %v", err)
+	}
+	if _, ok := f.store.tokens[hashRefreshToken(first.RefreshToken)]; ok {
+		t.Fatal("expired guest row was not deleted")
+	}
+	next, err := f.svc.Refresh(ctx, second.RefreshToken)
+	if err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	if want := f.clock.t.Add(24 * time.Hour); !f.store.row(t, next.RefreshToken).ExpiresAt.Equal(want) {
+		t.Fatalf("rotated guest row expires at %v, want %v", f.store.row(t, next.RefreshToken).ExpiresAt, want)
 	}
 }

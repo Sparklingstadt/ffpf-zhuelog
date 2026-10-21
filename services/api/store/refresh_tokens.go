@@ -127,3 +127,16 @@ DELETE FROM "ApiRefreshToken" WHERE "ownerId" = $1 AND (
 	}
 	return nil
 }
+
+// DeleteExpiredRefreshTokens deletes only ownerID's expired tokens. Guest
+// sessions use it instead of PruneRefreshTokens, whose revoked-family subquery
+// grows with the number of live rows.
+func (s *Store) DeleteExpiredRefreshTokens(ctx context.Context, ownerID string, now time.Time) error {
+	_, err := s.pool.Exec(ctx,
+		`DELETE FROM "ApiRefreshToken" WHERE "ownerId" = $1 AND "expiresAt" <= $2`,
+		ownerID, dbTime(now))
+	if err != nil {
+		return fmt.Errorf("store: delete expired refresh tokens: %w", err)
+	}
+	return nil
+}

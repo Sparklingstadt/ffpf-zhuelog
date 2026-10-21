@@ -226,3 +226,42 @@ func TestRevokeFamilyAndPrune(t *testing.T) {
 		}
 	}
 }
+
+func TestDeleteExpiredRefreshTokens(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	owner := newOwner(t, s)
+	other := newOwner(t, s)
+	now := fixedNow()
+
+	insert := func(owner string, expires time.Time, revoked bool) RefreshToken {
+		tok := RefreshToken{ID: newID(), OwnerID: owner, Role: "member", FamilyID: newID(), ExpiresAt: expires}
+		if revoked {
+			at := now.Add(-time.Minute)
+			tok.RevokedAt = &at
+		}
+		if err := s.InsertRefreshToken(ctx, tok, "hash-"+tok.ID); err != nil {
+			t.Fatalf("Insert: %v", err)
+		}
+		return tok
+	}
+	expired := insert(owner, now.Add(-time.Hour), false)
+	atNow := insert(owner, now, false)
+	live := insert(owner, now.Add(time.Hour), false)
+	revokedLive := insert(owner, now.Add(time.Hour), true) // not this method's job
+	foreign := insert(other, now.Add(-time.Hour), false)
+
+	if err := s.DeleteExpiredRefreshTokens(ctx, owner, now); err != nil {
+		t.Fatalf("DeleteExpiredRefreshTokens: %v", err)
+	}
+	for name, tok := range map[string]RefreshToken{"expired": expired, "expiring now": atNow} {
+		if _, err := s.FindRefreshToken(ctx, "hash-"+tok.ID); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("%s: err = %v, want ErrNotFound", name, err)
+		}
+	}
+	for name, tok := range map[string]RefreshToken{"live": live, "revoked but unexpired": revokedLive, "other owner": foreign} {
+		if _, err := s.FindRefreshToken(ctx, "hash-"+tok.ID); err != nil {
+			t.Fatalf("%s: %v, want it kept", name, err)
+		}
+	}
+}

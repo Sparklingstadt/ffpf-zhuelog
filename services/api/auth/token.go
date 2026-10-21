@@ -12,8 +12,11 @@ import (
 const (
 	AccessTTL  = 15 * time.Minute
 	RefreshTTL = 30 * 24 * time.Hour
-	Issuer     = "ffpf-zhuelog-api"
-	Audience   = "ffpf-zhuelog-mobile"
+	// GuestRefreshTTL is short because anyone can start a guest session
+	// without credentials, so dead guest rows must be cheap to clear.
+	GuestRefreshTTL = 24 * time.Hour
+	Issuer          = "ffpf-zhuelog-api"
+	Audience        = "ffpf-zhuelog-mobile"
 )
 
 const (

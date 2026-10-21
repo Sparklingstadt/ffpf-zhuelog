@@ -79,9 +79,9 @@ func (s *Service) Logout(ctx context.Context, refreshToken string) error {
 }
 
 // Authenticate verifies an access token and checks that its holder is still
-// allowed: guests always are; admins' GitHub user ID must still be allowlisted (else
-// ErrForbidden) and members' session version must still match (else
-// ErrUnauthorized).
+// allowed: guests always are; admins' GitHub user ID must still be
+// allowlisted (else ErrForbidden) and members' session version must still
+// match (else ErrUnauthorized).
 func (s *Service) Authenticate(ctx context.Context, accessToken string) (Principal, error) {
 	p, err := s.Signer.Verify(accessToken)
 	if err != nil {
@@ -139,7 +139,16 @@ func (s *Service) revokeFamily(ctx context.Context, familyID string, now time.Ti
 // new family.
 func (s *Service) startSession(ctx context.Context, p Principal) (TokenPair, error) {
 	now := s.now()
-	if err := s.Store.PruneRefreshTokens(ctx, p.OwnerID, now); err != nil {
+	if p.Role == RoleGuest {
+		// All guests share one owner ID and anyone can log in as a guest, so
+		// the family-aware prune (a subquery over every live guest row) would
+		// scan more with every login. Guests hold nothing worth keeping:
+		// delete only the expired rows. With GuestRefreshTTL the table holds
+		// at most a day of guest logins.
+		if err := s.Store.DeleteExpiredRefreshTokens(ctx, p.OwnerID, now); err != nil {
+			return TokenPair{}, fmt.Errorf("auth: delete expired refresh tokens: %w", err)
+		}
+	} else if err := s.Store.PruneRefreshTokens(ctx, p.OwnerID, now); err != nil {
 		return TokenPair{}, fmt.Errorf("auth: prune refresh tokens: %w", err)
 	}
 	pair, row, hash, err := s.newPair(p, randomHex(familyIDBytes), now)
@@ -160,11 +169,15 @@ func (s *Service) newPair(p Principal, familyID string, now time.Time) (TokenPai
 		return TokenPair{}, store.RefreshToken{}, "", err
 	}
 	refresh := base64.RawURLEncoding.EncodeToString(randomBytes(refreshTokenBytes))
+	ttl := RefreshTTL
+	if p.Role == RoleGuest {
+		ttl = GuestRefreshTTL
+	}
 	row := store.RefreshToken{
 		OwnerID:   p.OwnerID,
 		Role:      p.Role,
 		FamilyID:  familyID,
-		ExpiresAt: now.Add(RefreshTTL),
+		ExpiresAt: now.Add(ttl),
 	}
 	switch p.Role {
 	case RoleAdmin:

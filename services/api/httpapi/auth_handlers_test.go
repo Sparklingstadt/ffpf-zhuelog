@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -480,8 +481,10 @@ func TestMeEndpoint(t *testing.T) {
 			if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
 				t.Fatalf("body %q: %v", w.Body.String(), err)
 			}
-			_ = json.Unmarshal([]byte(tc.want), &want)
-			if fmt.Sprint(got) != fmt.Sprint(want) {
+			if err := json.Unmarshal([]byte(tc.want), &want); err != nil {
+				t.Fatalf("bad want %q: %v", tc.want, err)
+			}
+			if !reflect.DeepEqual(got, want) {
 				t.Fatalf("body = %v, want %v", got, want)
 			}
 		})
