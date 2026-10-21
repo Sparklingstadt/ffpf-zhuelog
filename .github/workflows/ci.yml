@@ -10,11 +10,11 @@ permissions:
 
 jobs:
   verify:
-    # The engines range: 24 is the Vercel runtime, 26 is the next one (and local dev).
+    # engines is 24.x, the Vercel runtime (Vercel does not offer Node 26 yet).
     strategy:
       fail-fast: false
       matrix:
-        node: [24, 26]
+        node: [24]
     name: verify (${{ matrix.node }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
