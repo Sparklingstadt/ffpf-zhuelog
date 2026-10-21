@@ -25,6 +25,29 @@ test("session cookies carry the tokens with the agreed lifetimes", () => {
   }
 });
 
+test("the refresh cookie lives as long as the Go API says", () => {
+  const [, guest] = sessionCookieOptions(
+    { ...tokens, refreshExpiresIn: 24 * 60 * 60 },
+    true,
+  );
+  assert.equal(guest!.options.maxAge, 24 * 60 * 60);
+  const [, member] = sessionCookieOptions(
+    { ...tokens, refreshExpiresIn: 30 * 24 * 60 * 60 },
+    true,
+  );
+  assert.equal(member!.options.maxAge, 30 * 24 * 60 * 60);
+});
+
+test("a missing or invalid refreshExpiresIn falls back to 30 days", () => {
+  for (const refreshExpiresIn of [undefined, 0, -1, Number.NaN]) {
+    const [, refresh] = sessionCookieOptions(
+      { ...tokens, refreshExpiresIn },
+      true,
+    );
+    assert.equal(refresh!.options.maxAge, 30 * 24 * 60 * 60);
+  }
+});
+
 test("secure follows the caller", () => {
   for (const c of sessionCookieOptions(tokens, false))
     assert.equal(c.options.secure, false);

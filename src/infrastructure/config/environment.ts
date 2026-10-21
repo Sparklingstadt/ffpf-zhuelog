@@ -8,11 +8,33 @@ export function isGoAuthEnabled(): boolean {
   return goApiUrl() !== undefined;
 }
 
+// Matches the Go API's own minimum for API_WEB_PROXY_SECRET.
+const MIN_PROXY_SECRET_BYTES = 32;
+
 export function isGoAuthConfigured(): boolean {
+  const url = goApiUrl();
+  const secret = process.env.API_WEB_PROXY_SECRET ?? "";
   return Boolean(
-    goApiUrl() &&
-    process.env.API_WEB_PROXY_SECRET &&
+    url &&
+    isSafeGoApiUrl(url) &&
+    new TextEncoder().encode(secret).length >= MIN_PROXY_SECRET_BYTES &&
     process.env.AUTH_GITHUB_ID,
+  );
+}
+
+// The proxy secret and tokens travel to GO_API_URL, so it must be HTTPS
+// unless it is this machine (local development and e2e).
+function isSafeGoApiUrl(raw: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (url.protocol === "https:") return true;
+  return (
+    url.protocol === "http:" &&
+    (url.hostname === "localhost" || url.hostname === "127.0.0.1")
   );
 }
 

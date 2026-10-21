@@ -4,6 +4,7 @@ export const ACCESS_COOKIE = "zl_access";
 export const REFRESH_COOKIE = "zl_refresh";
 export const OAUTH_COOKIE = "zl_oauth";
 
+// Used when the Go API does not say how long the refresh token lives.
 const REFRESH_MAX_AGE = 30 * 24 * 60 * 60;
 // Expire the access cookie a minute before the token itself does.
 const ACCESS_MARGIN = 60;
@@ -46,8 +47,21 @@ export function sessionCookieOptions(
       Math.max(0, tokens.expiresIn - ACCESS_MARGIN),
       secure,
     ),
-    sessionCookie(REFRESH_COOKIE, tokens.refreshToken, REFRESH_MAX_AGE, secure),
+    sessionCookie(
+      REFRESH_COOKIE,
+      tokens.refreshToken,
+      refreshMaxAge(tokens.refreshExpiresIn),
+      secure,
+    ),
   ];
+}
+
+function refreshMaxAge(refreshExpiresIn: number | undefined): number {
+  return typeof refreshExpiresIn === "number" &&
+    Number.isFinite(refreshExpiresIn) &&
+    refreshExpiresIn > 0
+    ? Math.floor(refreshExpiresIn)
+    : REFRESH_MAX_AGE;
 }
 
 export function clearedSessionCookies(secure = false): SessionCookie[] {

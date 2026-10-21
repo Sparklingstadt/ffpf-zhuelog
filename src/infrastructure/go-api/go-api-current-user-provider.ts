@@ -26,6 +26,8 @@ export class GoApiCurrentUserProvider implements CurrentUserProvider {
       throw error;
     }
 
+    // Guests carry no githubId, as with Auth.js.
+    if (me.role === "guest") return { githubLogin: me.login, role: "guest" };
     const user: AuthenticatedUser = {
       githubLogin: me.login,
       githubId: me.ownerId,

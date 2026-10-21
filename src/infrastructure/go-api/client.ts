@@ -4,6 +4,8 @@ export type GoTokens = {
   accessToken: string;
   refreshToken: string;
   expiresIn: number;
+  // The refresh token's lifetime in seconds (30 days, or 24 hours for guests).
+  refreshExpiresIn?: number;
 };
 
 export type GoMe = {
@@ -137,10 +139,11 @@ export function refreshTokens(refreshToken: string, clientIp: string) {
   });
 }
 
-export function logout(refreshToken: string) {
+export function logout(refreshToken: string, clientIp: string) {
   return goApi<void>("/v1/auth/logout", {
     method: "POST",
     body: { refreshToken },
+    clientIp,
   });
 }
 

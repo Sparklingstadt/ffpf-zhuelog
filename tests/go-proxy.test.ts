@@ -132,17 +132,31 @@ test("a rejected refresh token clears both cookies and signs out", async () => {
     );
 });
 
-test("a rejected refresh on a public route drops the cookies from the page request", async () => {
-  const h = harness(async () => {
-    throw new GoApiError(401, "unauthorized");
-  });
-  const response = await goProxy(
-    request("/signin", { cookie: "zl_refresh=old-refresh; theme=dark" }),
+test("public routes never refresh, and pass the cookies through untouched", async () => {
+  for (const path of ["/signin", "/api/auth/callback/github/go?code=x"]) {
+    const h = harness(async () => tokens);
+    const response = await goProxy(
+      request(path, { cookie: "zl_refresh=old-refresh; theme=dark" }),
+      h.deps,
+    );
+    assert.deepEqual(h.calls, [], path);
+    assert.equal(response.headers.get("x-test-next"), "1", path);
+    assert.deepEqual(setCookies(response), [], path);
+    assert.equal(
+      h.forwarded()?.get("cookie"),
+      "zl_refresh=old-refresh; theme=dark",
+      path,
+    );
+  }
+});
+
+test("a route that only looks public still refreshes", async () => {
+  const h = harness(async () => tokens);
+  await goProxy(
+    request("/signin/other", { cookie: "zl_refresh=old-refresh" }),
     h.deps,
   );
-  assert.equal(response.headers.get("x-test-next"), "1");
-  assert.equal(h.forwarded()?.get("cookie"), "theme=dark");
-  assert.equal(setCookies(response).length, 2);
+  assert.equal(h.calls.length, 1);
 });
 
 test("an unreachable Go API leaves the cookies alone and treats the request as signed out", async () => {

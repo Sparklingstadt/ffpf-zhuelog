@@ -9,6 +9,7 @@ import {
   GoApiError,
   goApi,
   loginPassword,
+  logout,
 } from "../src/infrastructure/go-api/client";
 
 const realFetch = globalThis.fetch;
@@ -53,10 +54,43 @@ test("isAuthConfigured keeps the Auth.js rule when GO_API_URL is unset", () => {
 });
 
 test("isAuthConfigured follows the Go rule when GO_API_URL is set", () => {
+  process.env.GO_API_URL = "https://api.test/";
   delete process.env.AUTH_GITHUB_ID;
   assert.equal(isAuthConfigured(), false);
   process.env.AUTH_GITHUB_ID = "b";
   assert.equal(isAuthConfigured(), true);
+});
+
+test("the Go rule needs a proxy secret of at least 32 bytes", () => {
+  process.env.GO_API_URL = "https://api.test";
+  process.env.AUTH_GITHUB_ID = "b";
+  process.env.API_WEB_PROXY_SECRET = "x".repeat(31);
+  assert.equal(isAuthConfigured(), false);
+  process.env.API_WEB_PROXY_SECRET = "x".repeat(32);
+  assert.equal(isAuthConfigured(), true);
+  // Bytes, not characters: 11 three-byte characters are 33 bytes.
+  process.env.API_WEB_PROXY_SECRET = "秘".repeat(11);
+  assert.equal(isAuthConfigured(), true);
+  delete process.env.API_WEB_PROXY_SECRET;
+  assert.equal(isAuthConfigured(), false);
+});
+
+test("the Go rule needs HTTPS unless GO_API_URL is localhost or 127.0.0.1", () => {
+  process.env.AUTH_GITHUB_ID = "b";
+  const cases: [string, boolean][] = [
+    ["https://api.test", true],
+    ["http://api.test", false],
+    ["http://localhost:3108", true],
+    ["http://127.0.0.1:3108/", true],
+    ["http://localhost.evil.test", false],
+    ["http://10.0.0.1:3108", false],
+    ["ftp://localhost", false],
+    ["not a url", false],
+  ];
+  for (const [url, want] of cases) {
+    process.env.GO_API_URL = url;
+    assert.equal(isAuthConfigured(), want, url);
+  }
 });
 
 test("sends IP and secret headers only with clientIp", async () => {
@@ -76,6 +110,16 @@ test("sends IP and secret headers only with clientIp", async () => {
   assert.equal(h2["X-Zhuelog-Client-IP"], undefined);
   assert.equal(h2["X-Zhuelog-Proxy-Secret"], undefined);
   assert.equal(h2.authorization, undefined);
+});
+
+test("logout forwards the client IP with the proxy secret", async () => {
+  stub(() => new Response(null, { status: 204 }));
+  await logout("refresh-tok", "203.0.113.9");
+  const h = calls[0]!.init.headers as Record<string, string>;
+  assert.equal(calls[0]!.url, "http://api.test/v1/auth/logout");
+  assert.equal(h["X-Zhuelog-Client-IP"], "203.0.113.9");
+  assert.equal(h["X-Zhuelog-Proxy-Secret"], process.env.API_WEB_PROXY_SECRET);
+  assert.equal(calls[0]!.init.body, '{"refreshToken":"refresh-tok"}');
 });
 
 test("fetchMe sends a Bearer token", async () => {

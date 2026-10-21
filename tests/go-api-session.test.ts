@@ -3,6 +3,7 @@ import { afterEach, test } from "node:test";
 import { CredentialsSignin } from "next-auth";
 import { GoApiError } from "../src/infrastructure/go-api/client";
 import {
+  goGuestFailureUrl,
   goPasswordFailureUrl,
   isSecureRequest,
 } from "../src/infrastructure/go-api/go-api-session";
@@ -42,6 +43,24 @@ test("other failures are not reported as wrong credentials", () => {
     undefined,
   ])
     assert.equal(goPasswordFailureUrl(error, path), null);
+});
+
+test("any Go API failure of the guest login shows the generic message", () => {
+  for (const error of [
+    new GoApiError(429, "rate_limited"),
+    new GoApiError(503, "unavailable"),
+    new GoApiError(0, "unavailable"),
+    new GoApiError(403, "forbidden"),
+  ])
+    assert.equal(
+      goGuestFailureUrl(error, path),
+      "/signin?error=Unknown&callbackUrl=%2Flogs%3Fa%3D1%26b%3D2",
+    );
+});
+
+test("a guest failure that is not a GoApiError is rethrown, not redirected", () => {
+  for (const error of [new Error("boom"), undefined])
+    assert.equal(goGuestFailureUrl(error, path), null);
 });
 
 const originalAuthUrl = process.env.AUTH_URL;

@@ -24,7 +24,10 @@ export async function goProxy(
   deps: GoProxyDeps,
 ): Promise<NextResponse> {
   const requestHeaders = new Headers(request.headers);
-  const responseCookies = await refreshSession(request, requestHeaders, deps);
+  // Public routes pass the gate anyway, so they never spend a refresh.
+  const responseCookies = isPublicRoute(request.nextUrl.pathname)
+    ? []
+    : await refreshSession(request, requestHeaders, deps);
   const signedIn = Boolean(cookieValue(requestHeaders, ACCESS_COOKIE));
   const response =
     gate(request, signedIn) ?? deps.next(request, requestHeaders);
@@ -83,13 +86,15 @@ function cookieValue(headers: Headers, name: string): string | undefined {
   return undefined;
 }
 
+function isPublicRoute(pathname: string): boolean {
+  return pathname === "/signin" || pathname.startsWith("/api/auth/");
+}
+
 // Same rules as the Auth.js authorized callback. Only checks that a session
 // cookie exists; pages confirm it with GET /v1/me. Returns null to pass.
 function gate(request: NextRequest, signedIn: boolean): NextResponse | null {
   const pathname = request.nextUrl.pathname;
-  const isPublicRoute =
-    pathname === "/signin" || pathname.startsWith("/api/auth/");
-  if (isPublicRoute || signedIn) return null;
+  if (isPublicRoute(pathname) || signedIn) return null;
   if (pathname.startsWith("/api/")) {
     return NextResponse.json(
       { error: "認証が必要です。" },

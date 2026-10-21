@@ -53,6 +53,16 @@ export function goPasswordFailureUrl(
   return `/signin?error=CredentialsSignin&callbackUrl=${encodeURIComponent(redirectTo)}`;
 }
 
+// Any failure of the guest login (429, 503, unreachable) shows the sign-in
+// page's generic message: "Unknown" is not an errorMessages key on purpose.
+export function goGuestFailureUrl(
+  error: unknown,
+  redirectTo: string,
+): string | null {
+  if (!(error instanceof GoApiError)) return null;
+  return `/signin?error=Unknown&callbackUrl=${encodeURIComponent(redirectTo)}`;
+}
+
 export async function readAccessToken(): Promise<string | undefined> {
   return (await cookies()).get(ACCESS_COOKIE)?.value || undefined;
 }
@@ -87,7 +97,15 @@ export async function signInWithPasswordViaGo(input: {
 }
 
 export async function signInAsGuestViaGo(redirectTo: string) {
-  const tokens = await loginGuest(clientAddress(await headers()));
+  const clientIp = clientAddress(await headers());
+  let tokens: GoTokens;
+  try {
+    tokens = await loginGuest(clientIp);
+  } catch (error) {
+    const failureUrl = goGuestFailureUrl(error, redirectTo);
+    if (!failureUrl) throw error;
+    redirect(failureUrl);
+  }
   await startSession(tokens);
   redirect(redirectTo);
 }
@@ -123,14 +141,15 @@ export async function signInWithGitHubViaGo(redirectTo: string) {
 // Signs out locally even when the Go API cannot be reached: the cookies are
 // cleared either way, and an unrevoked refresh token simply expires.
 export async function signOutViaGo(redirectTo: string) {
+  const requestHeaders = await headers();
   const refreshToken = (await cookies()).get(REFRESH_COOKIE)?.value;
   if (refreshToken) {
     try {
-      await logout(refreshToken);
+      await logout(refreshToken, clientAddress(requestHeaders));
     } catch {
       // Ignored on purpose; see above.
     }
   }
-  await writeCookies(clearedSessionCookies(isSecureRequest(await headers())));
+  await writeCookies(clearedSessionCookies(isSecureRequest(requestHeaders)));
   redirect(redirectTo);
 }

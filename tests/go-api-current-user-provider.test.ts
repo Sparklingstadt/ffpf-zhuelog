@@ -49,9 +49,9 @@ test("a guest has no member fields even if the API sends them", async () => {
     displayName: "x",
     accountId: "y",
   })).getCurrentUser();
+  // No githubId, as with Auth.js guests.
   assert.deepEqual(user, {
     githubLogin: "guest",
-    githubId: "guest",
     role: "guest",
   });
 });
