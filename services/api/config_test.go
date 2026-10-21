@@ -123,6 +123,18 @@ func TestLoadConfigGitHubWebAllOrNone(t *testing.T) {
 	}
 }
 
+func TestLoadConfigGitHubWebRedirectMustDiffer(t *testing.T) {
+	env := validEnv()
+	env["GITHUB_WEB_CLIENT_ID"] = "web-id"
+	env["GITHUB_WEB_CLIENT_SECRET"] = "web-secret-value"
+	env["GITHUB_WEB_REDIRECT_URI"] = env["GITHUB_MOBILE_REDIRECT_URI"]
+	_, err := LoadConfig(getenvFrom(env))
+	want := "GITHUB_WEB_REDIRECT_URI must differ from GITHUB_MOBILE_REDIRECT_URI"
+	if err == nil || err.Error() != want {
+		t.Fatalf("err = %v, want %q", err, want)
+	}
+}
+
 func TestLoadConfigWebProxySecret(t *testing.T) {
 	cfg, err := LoadConfig(getenvFrom(validEnv()))
 	if err != nil || len(cfg.WebProxySecret) != 0 {

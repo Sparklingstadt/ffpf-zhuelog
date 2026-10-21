@@ -78,6 +78,10 @@ func LoadConfig(getenv func(string) string) (Config, error) {
 	if webSet != 0 && webSet != 3 {
 		return Config{}, errors.New("GITHUB_WEB_CLIENT_ID, GITHUB_WEB_CLIENT_SECRET and GITHUB_WEB_REDIRECT_URI must be set together")
 	}
+	// The OAuth App is picked by redirect URI, so the two must not collide.
+	if cfg.GitHubWebRedirectURI != "" && cfg.GitHubWebRedirectURI == cfg.GitHubRedirectURI {
+		return Config{}, errors.New("GITHUB_WEB_REDIRECT_URI must differ from GITHUB_MOBILE_REDIRECT_URI")
+	}
 	if proxySecret := get("API_WEB_PROXY_SECRET"); proxySecret != "" {
 		if len(proxySecret) < minJWTSecretBytes {
 			return Config{}, fmt.Errorf("API_WEB_PROXY_SECRET must be at least %d bytes", minJWTSecretBytes)

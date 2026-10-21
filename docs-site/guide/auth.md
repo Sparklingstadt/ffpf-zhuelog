@@ -38,6 +38,7 @@ Web 用の OAuth App は任意です（`GITHUB_WEB_CLIENT_ID`・`GITHUB_WEB_CLIE
 - ゲストのリフレッシュトークンの寿命は **24 時間** です（admin・会員は 30 日）。誰でも作れるので、DB の行を増やされにくいよう短くしています。ゲストがログインするたびに、期限切れの行を削除します。
 - 失効の確認は常に通ります（許可リストも `sessionVersion` もありません）。リフレッシュ・ログアウトは他の役割と同じです。
 - `POST /v1/auth/guest` には、他のログインと同じレート制限があります。
+- API に `API_WEB_PROXY_SECRET` を設定したときは、`X-Zhuelog-Proxy-Secret` が一致する呼び出し（Web のサーバー）だけがゲストになれます（定数時間で比べ、一致しなければ `403 forbidden`）。未設定のとき（ローカルの開発）は誰でも呼べます。
 
 ## パスワードログイン（会員）
 
@@ -56,9 +57,12 @@ Web 用の OAuth App は任意です（`GITHUB_WEB_CLIENT_ID`・`GITHUB_WEB_CLIE
 {
   "accessToken": "eyJhbGciOiJIUzI1NiIs…",
   "refreshToken": "q3b8…",
-  "expiresIn": 900
+  "expiresIn": 900,
+  "refreshExpiresIn": 2592000
 }
 ```
+
+`refreshExpiresIn` はリフレッシュトークンの寿命（秒）で、admin・会員は 30 日（`2592000`）、ゲストは 24 時間（`86400`）です。
 
 ### アクセストークン（15 分）
 
@@ -131,14 +135,15 @@ admin を許可リストから外すと、その admin のトークンは期限�
 
 ## レート制限
 
-次のエンドポイントには、IP ごとに **1 分あたり 10 回** の制限があります。6 つは同じ枠を共有します。
+次のエンドポイントには、IP ごとに **1 分あたり 10 回** の制限があります。5 つは同じ枠を共有します。
 
 - `POST /v1/auth/github`
 - `POST /v1/auth/guest`
 - `POST /v1/auth/password`
-- `POST /v1/auth/refresh`
 - `POST /v1/auth/logout`
 - `POST /v1/account/password`（認証より前に数えるので、無効なトークンでの呼び出しも数に入ります）
+
+`POST /v1/auth/refresh` は別の枠で、IP ごとに **1 分あたり 60 回** です。Web は開いているタブごとにリフレッシュするので、ログインと同じ枠だとリフレッシュがログインを締め出してしまいます。リフレッシュには有効なリフレッシュトークンが要るので、ゆるくしても総当たりにはなりません。
 
 超えると `429 rate_limited` です。固定の 1 分の窓で、窓が変われば回数は戻ります。
 

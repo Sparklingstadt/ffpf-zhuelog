@@ -1,6 +1,6 @@
 # 認証とアカウント
 
-仕組みの説明は [認証](../guide/auth.md) にあります。このページの `/v1/auth/*` と `POST /v1/account/password` には、IP ごとに 1 分 10 回の [レート制限](../guide/auth.md#レート制限) があり（同じ枠を共有）、超えると `429 rate_limited` です。`GET /v1/me` に制限はありません。
+仕組みの説明は [認証](../guide/auth.md) にあります。このページの `/v1/auth/*`（`POST /v1/auth/refresh` を除く）と `POST /v1/account/password` には、IP ごとに 1 分 10 回の [レート制限](../guide/auth.md#レート制限) があり（同じ枠を共有）、超えると `429 rate_limited` です。`POST /v1/auth/refresh` だけは別の枠で、IP ごとに 1 分 60 回です。`GET /v1/me` に制限はありません。
 
 ## POST /v1/auth/github
 
@@ -30,9 +30,12 @@ GitHub の認可コード（PKCE）でログインします。admin 用です。
 {
   "accessToken": "eyJhbGciOiJIUzI1NiIs…",
   "refreshToken": "q3b8…",
-  "expiresIn": 900
+  "expiresIn": 900,
+  "refreshExpiresIn": 2592000
 }
 ```
+
+`expiresIn` はアクセストークンの、`refreshExpiresIn` はリフレッシュトークンの寿命（秒）です。`refreshExpiresIn` は admin・会員が 30 日（`2592000`）、ゲストが 24 時間（`86400`）です。
 
 **エラー**
 
@@ -54,16 +57,19 @@ GitHub の認可コード（PKCE）でログインします。admin 用です。
 
 **リクエスト**：本文は空か `{}` です。項目を付けると `400` です。
 
-**レスポンス** `200`：`/v1/auth/github` と同じ形。`ownerId` は `guest`、`role` は `guest` です。リフレッシュトークンの寿命は **24 時間** です（会員・admin は 30 日）。
+API に `API_WEB_PROXY_SECRET` を設定したときは、`X-Zhuelog-Proxy-Secret` がその値と一致する呼び出し（Web のサーバー）だけを受け付けます（定数時間で比べます）。一致しない・無いときは `403 forbidden` です。未設定のとき（ローカルの開発）は誰でも呼べます。
+
+**レスポンス** `200`：`/v1/auth/github` と同じ形。`ownerId` は `guest`、`role` は `guest` です。リフレッシュトークンの寿命は **24 時間** で、`refreshExpiresIn` は `86400` です（会員・admin は 30 日）。
 
 ゲストのトークンで呼べるのは `GET /v1/me` だけで、ほかの認証つきルートはすべて `403 forbidden` です。ゲストはリフレッシュできます。
 
 **エラー**
 
-| HTTP | code              | 状況                       |
-| ---- | ----------------- | -------------------------- |
-| 400  | `invalid_request` | 本文が空でも `{}` でもない |
-| 429  | `rate_limited`    | レート制限                 |
+| HTTP | code              | 状況                                                                                   |
+| ---- | ----------------- | -------------------------------------------------------------------------------------- |
+| 400  | `invalid_request` | 本文が空でも `{}` でもない                                                             |
+| 403  | `forbidden`       | `API_WEB_PROXY_SECRET` を設定しているのに、`X-Zhuelog-Proxy-Secret` が一致しない・無い |
+| 429  | `rate_limited`    | レート制限                                                                             |
 
 ## POST /v1/auth/password
 
@@ -115,7 +121,7 @@ GitHub の認可コード（PKCE）でログインします。admin 用です。
 | 400  | `invalid_request` | JSON が不正                                                                                                             |
 | 401  | `unauthorized`    | 未知・空・期限切れのトークン。30 秒より前に使用済みのトークン（ファミリー全体を失効）。会員のパスワードが変わった（同） |
 | 403  | `forbidden`       | admin が許可リストから外された（ファミリー全体を失効）                                                                  |
-| 429  | `rate_limited`    | レート制限                                                                                                              |
+| 429  | `rate_limited`    | レート制限（リフレッシュだけの枠。IP ごとに 1 分 60 回）                                                                |
 
 ## POST /v1/auth/logout
 

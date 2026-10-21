@@ -75,6 +75,13 @@ FROM "ApiRefreshToken" WHERE "tokenHash" = $1`, tokenHash).
 // family-level write (rotation, sibling insert, family revocation) takes it,
 // so a revocation cannot interleave with an insert into the same family and
 // be undone by it.
+//
+// The checks that run after the lock (the conditional UPDATE, the EXISTS in
+// InsertSiblingIfFamilyActive) rely on READ COMMITTED, the pgx/Postgres
+// default: each statement takes a fresh snapshot, so it sees what the
+// previous lock holder committed. Under REPEATABLE READ or SERIALIZABLE the
+// snapshot is taken at the first statement (this lock), so a waiter would
+// check stale data and the guarantees above would break.
 func lockFamily(ctx context.Context, tx pgx.Tx, familyID string) error {
 	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1))`, familyID)
 	return err

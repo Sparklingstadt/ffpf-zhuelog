@@ -436,6 +436,9 @@ func TestLoginGitHubAllowed(t *testing.T) {
 	if pair.ExpiresIn != 900 {
 		t.Fatalf("ExpiresIn = %d, want 900", pair.ExpiresIn)
 	}
+	if pair.RefreshExpiresIn != 30*24*60*60 {
+		t.Fatalf("RefreshExpiresIn = %d, want 30 days", pair.RefreshExpiresIn)
+	}
 	want := Principal{OwnerID: "42", Role: RoleAdmin, Login: "Alice"}
 	if got := verifyAccess(t, f, pair.AccessToken); got != want {
 		t.Fatalf("principal = %+v, want %+v", got, want)
@@ -562,6 +565,9 @@ func TestLoginPasswordSuccess(t *testing.T) {
 	}
 	if pair.ExpiresIn != 900 {
 		t.Fatalf("ExpiresIn = %d, want 900", pair.ExpiresIn)
+	}
+	if pair.RefreshExpiresIn != 30*24*60*60 {
+		t.Fatalf("RefreshExpiresIn = %d, want 30 days", pair.RefreshExpiresIn)
 	}
 	want := Principal{OwnerID: "password:cacc1", Role: RoleMember, SessionVersion: 3}
 	if got := verifyAccess(t, f, pair.AccessToken); got != want {
@@ -912,6 +918,9 @@ func TestRefreshRotates(t *testing.T) {
 			}
 			if second.ExpiresIn != 900 {
 				t.Fatalf("ExpiresIn = %d", second.ExpiresIn)
+			}
+			if second.RefreshExpiresIn != 30*24*60*60 {
+				t.Fatalf("RefreshExpiresIn = %d", second.RefreshExpiresIn)
 			}
 			if got := verifyAccess(t, f, second.AccessToken); got != oldPrincipal {
 				t.Fatalf("principal = %+v, want %+v", got, oldPrincipal)
@@ -1713,6 +1722,9 @@ func TestLoginGuest(t *testing.T) {
 		t.Fatalf("access token principal = %+v, want %+v", got, want)
 	}
 	checkRefreshTokenShape(t, pair.RefreshToken)
+	if pair.RefreshExpiresIn != 24*60*60 {
+		t.Fatalf("RefreshExpiresIn = %d, want 24 hours", pair.RefreshExpiresIn)
+	}
 
 	// The guest is always current and can rotate its refresh token.
 	if p, err := f.svc.Authenticate(ctx, pair.AccessToken); err != nil || p != want {
@@ -1727,6 +1739,9 @@ func TestLoginGuest(t *testing.T) {
 	}
 	if next.RefreshToken == pair.RefreshToken {
 		t.Fatal("refresh token was not rotated")
+	}
+	if next.RefreshExpiresIn != 24*60*60 {
+		t.Fatalf("refreshed RefreshExpiresIn = %d, want 24 hours", next.RefreshExpiresIn)
 	}
 }
 

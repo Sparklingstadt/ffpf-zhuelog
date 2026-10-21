@@ -284,14 +284,70 @@ func TestAuthRoutesRateLimited(t *testing.T) {
 	w := do(h, http.MethodPost, "/v1/auth/password", body, nil)
 	wantError(t, w, http.StatusTooManyRequests, "rate_limited")
 
-	// The limit is shared by every /v1/auth/* route for the same client...
+	// The limit is shared by every other /v1/auth/* route for the same client...
 	w = do(h, http.MethodPost, "/v1/auth/logout", `{"refreshToken":"x"}`, nil)
+	wantError(t, w, http.StatusTooManyRequests, "rate_limited")
+	w = do(h, http.MethodPost, "/v1/auth/guest", "", nil)
 	wantError(t, w, http.StatusTooManyRequests, "rate_limited")
 
 	// ...but another client is unaffected.
 	w = do(h, http.MethodPost, "/v1/auth/password", body, map[string]string{"X-Forwarded-For": "203.0.113.50"})
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("other client: status = %d, want 401", w.Code)
+	}
+}
+
+func TestRefreshHasItsOwnRateLimit(t *testing.T) {
+	a := &fakeAuth{
+		password: func(context.Context, string, string, string) (auth.TokenPair, error) {
+			return auth.TokenPair{}, auth.ErrUnauthorized
+		},
+		refresh: func(context.Context, string) (auth.TokenPair, error) {
+			return auth.TokenPair{}, auth.ErrUnauthorized
+		},
+	}
+	h, _ := testRouter(t, a, fakePinger{}, nil)
+	login := `{"loginId":"someone","password":"pw"}`
+	refresh := `{"refreshToken":"x"}`
+
+	// 11 refreshes from one client all reach the handler...
+	for i := range 11 {
+		if w := do(h, http.MethodPost, "/v1/auth/refresh", refresh, nil); w.Code != http.StatusUnauthorized {
+			t.Fatalf("refresh %d: status = %d, want 401", i+1, w.Code)
+		}
+	}
+	// ...and do not use up the login limit: the 11th login is the one limited.
+	for i := range 10 {
+		if w := do(h, http.MethodPost, "/v1/auth/password", login, nil); w.Code != http.StatusUnauthorized {
+			t.Fatalf("login %d: status = %d, want 401", i+1, w.Code)
+		}
+	}
+	wantError(t, do(h, http.MethodPost, "/v1/auth/password", login, nil), http.StatusTooManyRequests, "rate_limited")
+
+	// Refresh keeps its own budget of 60 per minute.
+	for i := 11; i < 60; i++ {
+		if w := do(h, http.MethodPost, "/v1/auth/refresh", refresh, nil); w.Code != http.StatusUnauthorized {
+			t.Fatalf("refresh %d: status = %d, want 401", i+1, w.Code)
+		}
+	}
+	wantError(t, do(h, http.MethodPost, "/v1/auth/refresh", refresh, nil), http.StatusTooManyRequests, "rate_limited")
+}
+
+func TestGuestLoginRequiresProxySecret(t *testing.T) {
+	a := &fakeAuth{guest: func(context.Context) (auth.TokenPair, error) { return testPair, nil }}
+	withSecret := NewRouter(Deps{Auth: a, DB: fakePinger{}, WebProxySecret: []byte(testProxySecret), Now: newClock().Now})
+
+	if w := do(withSecret, http.MethodPost, "/v1/auth/guest", "", map[string]string{"X-Zhuelog-Proxy-Secret": testProxySecret}); w.Code != http.StatusOK {
+		t.Fatalf("matching secret: status = %d, body %q", w.Code, w.Body.String())
+	}
+	wantError(t, do(withSecret, http.MethodPost, "/v1/auth/guest", "", map[string]string{"X-Zhuelog-Proxy-Secret": testProxySecret + "x"}),
+		http.StatusForbidden, "forbidden")
+	wantError(t, do(withSecret, http.MethodPost, "/v1/auth/guest", "", nil), http.StatusForbidden, "forbidden")
+
+	// Without a configured secret (local development) anyone may sign in as a guest.
+	unset := NewRouter(Deps{Auth: a, DB: fakePinger{}, Now: newClock().Now})
+	if w := do(unset, http.MethodPost, "/v1/auth/guest", "", nil); w.Code != http.StatusOK {
+		t.Fatalf("unset secret: status = %d, body %q", w.Code, w.Body.String())
 	}
 }
 

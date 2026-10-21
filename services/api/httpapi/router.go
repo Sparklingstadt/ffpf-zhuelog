@@ -94,7 +94,10 @@ type Deps struct {
 const (
 	authRateLimit  = 10
 	authRateWindow = time.Minute
-	pingTimeout    = 3 * time.Second
+	// Refresh has its own, looser limit: the web proxy refreshes for every
+	// signed-in tab, and a refresh needs a valid 256-bit token anyway.
+	refreshRateLimit = 60
+	pingTimeout      = 3 * time.Second
 )
 
 // route records how a pattern was registered, so tests can check every route.
@@ -139,6 +142,9 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	limiter := NewRateLimiter(authRateLimit, authRateWindow, d.Now)
 	clientKey := clientKeyFunc(d.WebProxySecret)
 	limited := func(h http.Handler) http.Handler { return rateLimit(limiter, clientKey, h) }
+	// refreshLimited is the separate per-client limit for POST /v1/auth/refresh.
+	refreshLimiter := NewRateLimiter(refreshRateLimit, authRateWindow, d.Now)
+	refreshLimited := func(h http.Handler) http.Handler { return rateLimit(refreshLimiter, clientKey, h) }
 	// authed requires a valid token and rejects ?user= with 400; the safe default.
 	authed := func(h http.Handler) http.Handler { return requireAuth(d.Auth, false, rejectUserParam(h)) }
 	// authedAllowUser requires a valid token and lets read handlers honour ?user=.
@@ -163,9 +169,11 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 
 	public("POST /v1/auth/github", limited(loginGitHub(d.Auth)))
 	public("POST /v1/auth/password", limited(loginPassword(d.Auth, clientKey)))
-	public("POST /v1/auth/refresh", limited(refresh(d.Auth)))
+	public("POST /v1/auth/refresh", refreshLimited(refresh(d.Auth)))
 	public("POST /v1/auth/logout", limited(logout(d.Auth)))
-	public("POST /v1/auth/guest", limited(loginGuest(d.Auth)))
+	// With a proxy secret configured, only the web server may start guest
+	// sessions; without one (local development) anyone may.
+	public("POST /v1/auth/guest", limited(requireProxySecret(d.WebProxySecret, loginGuest(d.Auth))))
 
 	// The only route guests may call: it tells the web who is signed in.
 	handle(route{pattern: "GET /v1/me", authed: true, allowGuest: true},

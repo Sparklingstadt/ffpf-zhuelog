@@ -14,7 +14,7 @@ import (
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
 )
 
-var testPair = auth.TokenPair{AccessToken: "access-tok-123", RefreshToken: "refresh-tok-456", ExpiresIn: 900}
+var testPair = auth.TokenPair{AccessToken: "access-tok-123", RefreshToken: "refresh-tok-456", ExpiresIn: 900, RefreshExpiresIn: 2592000}
 
 func wantPair(t *testing.T, body []byte) {
 	t.Helper()
@@ -22,7 +22,7 @@ func wantPair(t *testing.T, body []byte) {
 	if err := json.Unmarshal(body, &got); err != nil {
 		t.Fatalf("body is not JSON: %q", body)
 	}
-	want := map[string]any{"accessToken": "access-tok-123", "refreshToken": "refresh-tok-456", "expiresIn": float64(900)}
+	want := map[string]any{"accessToken": "access-tok-123", "refreshToken": "refresh-tok-456", "expiresIn": float64(900), "refreshExpiresIn": float64(2592000)}
 	if len(got) != len(want) {
 		t.Fatalf("body = %v, want exactly %v", got, want)
 	}

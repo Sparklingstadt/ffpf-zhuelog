@@ -226,7 +226,12 @@ func (s *Service) newPair(p Principal, familyID string, now time.Time) (TokenPai
 		sv := p.SessionVersion
 		row.SessionVersion = &sv
 	}
-	pair := TokenPair{AccessToken: access, RefreshToken: refresh, ExpiresIn: int(AccessTTL / time.Second)}
+	pair := TokenPair{
+		AccessToken:      access,
+		RefreshToken:     refresh,
+		ExpiresIn:        int(AccessTTL / time.Second),
+		RefreshExpiresIn: int(ttl / time.Second),
+	}
 	return pair, row, hashRefreshToken(refresh), nil
 }
 

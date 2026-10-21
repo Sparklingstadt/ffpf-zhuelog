@@ -236,6 +236,19 @@ func clientKeyFunc(secret []byte) func(*http.Request) string {
 	}
 }
 
+// requireProxySecret answers 403 unless X-Zhuelog-Proxy-Secret matches
+// secret. An empty secret lets every request through.
+func requireProxySecret(secret []byte, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if len(secret) > 0 &&
+			subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Zhuelog-Proxy-Secret")), secret) != 1 {
+			writeForbidden(w, msgWebOnly)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func peerKey(r *http.Request) string {
 	// A client can send several X-Forwarded-For lines; only the last value of
 	// the last line comes from the platform or our own proxy.

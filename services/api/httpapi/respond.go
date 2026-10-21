@@ -28,6 +28,7 @@ const (
 	msgGitHubUnavailable = "GitHub に接続できませんでした。"
 	msgInternal          = "サーバーでエラーが発生しました。"
 	msgUnavailable       = "サービスを利用できません。"
+	msgWebOnly           = "この操作は Web からだけ利用できます。"
 
 	msgInvalidNewPassword     = "パスワードは12〜128文字にしてください。"
 	msgPasswordMismatch       = "確認用のパスワードが一致しません。"

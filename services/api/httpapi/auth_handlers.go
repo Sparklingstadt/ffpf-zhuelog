@@ -14,6 +14,8 @@ type tokenResponse struct {
 	AccessToken  string `json:"accessToken"`
 	RefreshToken string `json:"refreshToken"`
 	ExpiresIn    int    `json:"expiresIn"`
+	// RefreshExpiresIn is the refresh token's lifetime in seconds.
+	RefreshExpiresIn int `json:"refreshExpiresIn"`
 }
 
 func writeTokens(w http.ResponseWriter, pair auth.TokenPair) {
@@ -21,6 +23,8 @@ func writeTokens(w http.ResponseWriter, pair auth.TokenPair) {
 		AccessToken:  pair.AccessToken,
 		RefreshToken: pair.RefreshToken,
 		ExpiresIn:    pair.ExpiresIn,
+
+		RefreshExpiresIn: pair.RefreshExpiresIn,
 	})
 }
 

@@ -70,10 +70,11 @@ type Hasher interface {
 }
 
 // TokenPair is what a login or refresh returns. ExpiresIn is the access
-// token's lifetime in seconds.
+// token's lifetime in seconds and RefreshExpiresIn the refresh token's.
 type TokenPair struct {
 	AccessToken, RefreshToken string
 	ExpiresIn                 int
+	RefreshExpiresIn          int
 }
 
 // Service runs sign-in, refresh-token rotation, logout, the per-request
