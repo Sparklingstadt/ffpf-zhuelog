@@ -30,7 +30,7 @@ func formatLogDate(d store.LogDate) string {
 
 // parseNumber accepts base-10 digits only, in 1..2147483647.
 func parseNumber(s string) (int, bool) {
-	if !isDecimal(s) || len(s) > 10 {
+	if !isDecimal(s) || s[0] == '0' || len(s) > 10 {
 		return 0, false
 	}
 	n, err := strconv.ParseInt(s, 10, 64)

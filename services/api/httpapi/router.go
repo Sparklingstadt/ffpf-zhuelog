@@ -103,24 +103,27 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("POST /v1/auth/logout", limited(logout(d.Auth)))
 
 	authed := func(h http.Handler) http.Handler { return requireAuth(d.Auth, h) }
+	// Only the five read routes accept ?user=; every other authed route
+	// rejects it with 400 so it can never be mistaken for being honoured.
+	authedNoUser := func(h http.Handler) http.Handler { return authed(rejectUserParam(h)) }
 	mux.Handle("GET /v1/entries", authed(listEntries(d.Entries)))
 	mux.Handle("GET /v1/entries/{id}", authed(getEntry(d.Entries)))
-	mux.Handle("POST /v1/batches", authed(createBatch(d.Entries, d.Now)))
-	mux.Handle("PATCH /v1/entries/{id}", authed(patchEntry(d.Entries)))
-	mux.Handle("DELETE /v1/entries/{id}", authed(deleteEntry(d.Entries, d.Now)))
-	mux.Handle("GET /v1/trash", authed(listTrash(d.Entries)))
-	mux.Handle("DELETE /v1/trash", authed(emptyTrash(d.Entries)))
-	mux.Handle("POST /v1/trash/{id}/restore", authed(restoreEntry(d.Entries)))
-	mux.Handle("DELETE /v1/trash/{id}", authed(purgeEntry(d.Entries)))
-	mux.Handle("PUT /v1/entries/{id}/share", authed(shareEntry(d.Entries, d.Now, true)))
-	mux.Handle("DELETE /v1/entries/{id}/share", authed(shareEntry(d.Entries, d.Now, false)))
+	mux.Handle("POST /v1/batches", authedNoUser(createBatch(d.Entries, d.Now)))
+	mux.Handle("PATCH /v1/entries/{id}", authedNoUser(patchEntry(d.Entries)))
+	mux.Handle("DELETE /v1/entries/{id}", authedNoUser(deleteEntry(d.Entries, d.Now)))
+	mux.Handle("GET /v1/trash", authedNoUser(listTrash(d.Entries)))
+	mux.Handle("DELETE /v1/trash", authedNoUser(emptyTrash(d.Entries)))
+	mux.Handle("POST /v1/trash/{id}/restore", authedNoUser(restoreEntry(d.Entries)))
+	mux.Handle("DELETE /v1/trash/{id}", authedNoUser(purgeEntry(d.Entries)))
+	mux.Handle("PUT /v1/entries/{id}/share", authedNoUser(shareEntry(d.Entries, d.Now, true)))
+	mux.Handle("DELETE /v1/entries/{id}/share", authedNoUser(shareEntry(d.Entries, d.Now, false)))
 	mux.Handle("GET /v1/log-dates", authed(listLogDates(d.Entries)))
 	mux.Handle("GET /v1/log-dates/{date}/entries", authed(listDailyEntries(d.Entries)))
 	mux.Handle("GET /v1/log-dates/{date}/entries/{number}", authed(getDailyEntry(d.Entries)))
-	mux.Handle("GET /v1/members", authed(listMembers(d.Follows)))
-	mux.Handle("PUT /v1/follows/{ownerId}", authed(followMember(d.Follows, d.Now)))
-	mux.Handle("DELETE /v1/follows/{ownerId}", authed(unfollowMember(d.Follows)))
-	mux.Handle("GET /v1/timeline", authed(listTimeline(d.Follows)))
+	mux.Handle("GET /v1/members", authedNoUser(listMembers(d.Follows)))
+	mux.Handle("PUT /v1/follows/{ownerId}", authedNoUser(followMember(d.Follows, d.Now)))
+	mux.Handle("DELETE /v1/follows/{ownerId}", authedNoUser(unfollowMember(d.Follows)))
+	mux.Handle("GET /v1/timeline", authedNoUser(listTimeline(d.Follows)))
 
 	return wrap(d, jsonMuxErrors(mux))
 }

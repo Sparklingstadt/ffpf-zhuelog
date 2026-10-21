@@ -120,7 +120,7 @@ func TestDailyBadParams(t *testing.T) {
 		wantError(t, do(h, "GET", "/v1/log-dates/"+d+"/entries", "", authHeader), 400, "invalid_request")
 		wantError(t, do(h, "GET", "/v1/log-dates/"+d+"/entries/1", "", authHeader), 400, "invalid_request")
 	}
-	for _, n := range []string{"0", "-1", "x", "2147483648", "+1", "1.0", "99999999999999999999"} {
+	for _, n := range []string{"0", "01", "-1", "x", "2147483648", "+1", "1.0", "99999999999999999999"} {
 		wantError(t, do(h, "GET", "/v1/log-dates/2026-04-10/entries/"+n, "", authHeader), 400, "invalid_request")
 	}
 	// leap day is valid
@@ -134,5 +134,21 @@ func TestDailyRoutesRequireAuth(t *testing.T) {
 	h := roleEntriesRouter(t, &fakeEntries{}, auth.RoleMember)
 	for _, p := range []string{"/v1/log-dates", "/v1/log-dates/2026-04-10/entries", "/v1/log-dates/2026-04-10/entries/1"} {
 		wantError(t, do(h, "GET", p, "", nil), 401, "unauthorized")
+	}
+}
+
+func TestDailyEntriesUserParam(t *testing.T) {
+	var owner string
+	f := &fakeEntries{dailyEntries: func(_ context.Context, o string, _ store.LogDate) ([]store.Entry, error) {
+		owner = o
+		return nil, nil
+	}}
+	if w := do(roleEntriesRouter(t, f, auth.RoleAdmin), "GET", "/v1/log-dates/2026-04-10/entries?user="+otherOwner, "", authHeader); w.Code != 200 || owner != otherOwner {
+		t.Fatalf("admin: code %d owner %q", w.Code, owner)
+	}
+	owner = ""
+	wantError(t, do(roleEntriesRouter(t, f, auth.RoleMember), "GET", "/v1/log-dates/2026-04-10/entries?user="+otherOwner, "", authHeader), 403, "forbidden")
+	if owner != "" {
+		t.Fatal("store called for forbidden member")
 	}
 }

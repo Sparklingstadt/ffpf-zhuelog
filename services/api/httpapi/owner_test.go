@@ -90,15 +90,33 @@ func TestUserParamRequiresAdmin(t *testing.T) {
 			t.Fatalf("code %d owner %q", w.Code, got)
 		}
 	})
-	t.Run("writes ignore user", func(t *testing.T) {
-		var got string
-		h := roleEntriesRouter(t, &fakeEntries{update: func(_ context.Context, o, id string, _ store.EntryPatch) (store.Entry, error) {
-			got = o
-			return sampleEntry(id, newClock().Now()), nil
-		}}, auth.RoleAdmin)
-		w := do(h, "PATCH", "/v1/entries/abc?user="+otherOwner, `{"originalText":"a","correctedText":"b","pinyin":"c","hints":[]}`, authHeader)
-		if got != testOwner {
-			t.Fatalf("code %d, store owner %q, want %q (body %s)", w.Code, got, testOwner, w.Body.String())
+	t.Run("non-read routes reject user", func(t *testing.T) {
+		// An empty fakeEntries/fakeFollows fails with 500 if the store is called.
+		a := &fakeAuth{authenticate: func(context.Context, string) (auth.Principal, error) {
+			return auth.Principal{OwnerID: testOwner, Role: auth.RoleAdmin}, nil
+		}}
+		h := NewRouter(Deps{Auth: a, Entries: &fakeEntries{}, Follows: &fakeFollows{}, Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now})
+		body := `{"originalText":"a","correctedText":"b","pinyin":"c","hints":[]}`
+		cases := []struct{ method, path, body string }{
+			{"PATCH", "/v1/entries/abc?user=" + otherOwner, body},
+			{"DELETE", "/v1/entries/abc?user=" + otherOwner, ""},
+			{"POST", "/v1/batches?user=" + otherOwner, `{"entries":[]}`},
+			{"PUT", "/v1/entries/abc/share?user=" + otherOwner, ""},
+			{"DELETE", "/v1/entries/abc/share?user=" + otherOwner, ""},
+			{"GET", "/v1/trash?user=" + otherOwner, ""},
+			{"DELETE", "/v1/trash?user=" + otherOwner, ""},
+			{"POST", "/v1/trash/abc/restore?user=" + otherOwner, ""},
+			{"DELETE", "/v1/trash/abc?user=" + otherOwner, ""},
+			{"GET", "/v1/members?user=" + otherOwner, ""},
+			{"PUT", "/v1/follows/12345?user=" + otherOwner, ""},
+			{"DELETE", "/v1/follows/12345?user=" + otherOwner, ""},
+			{"GET", "/v1/timeline?user=" + otherOwner, ""},
+			{"GET", "/v1/timeline?user=", ""},
 		}
+		for _, c := range cases {
+			wantError(t, do(h, c.method, c.path, c.body, authHeader), 400, "invalid_request")
+		}
+		// Unauthenticated callers still get 401 first.
+		wantError(t, do(h, "GET", "/v1/timeline?user=x", "", nil), 401, "unauthorized")
 	})
 }
