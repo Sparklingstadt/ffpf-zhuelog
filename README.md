@@ -7,10 +7,10 @@
 ## 技術構成
 
 - Next.js 16（App Router / Server Actions）
-- PostgreSQL 17
-- Prisma ORM 7
+- Go API（`services/api/`）: ログイン（GitHub OAuth / ID・パスワード / ゲスト）と、学習ノートの読み書き
+- PostgreSQL 17（読み書きするのは Go API だけ）
+- Prisma ORM 7（スキーマとマイグレーション、seed）
 - shadcn/ui + Tailwind CSS 4
-- Auth.js v5（GitHub OAuth / ID・パスワード）
 
 ## アーキテクチャ
 
@@ -20,7 +20,7 @@
 src/
 ├── domain/          # エンティティ、値オブジェクト、リポジトリの契約
 ├── application/     # ユースケースと外部サービスのポート
-├── infrastructure/  # Prisma、Auth.js、CSV解析の実装
+├── infrastructure/  # Go API の呼び出し、Cookie、設定の実装
 ├── presentation/    # 画面部品、Server Action、コントローラー
 ├── composition/     # 実装を組み立ててユースケースを公開
 └── app/             # Next.js App Routerのエントリーポイント
@@ -35,35 +35,34 @@ src/
 
 ## 起動方法
 
-前提: Node.js 24 または 26、Docker Desktop
+前提: Node.js 24 または 26、Docker Desktop、Go（`services/api/go.mod` の版）
+
+Web は DB に直接つながらず、ログインも学習ノートの読み書きも Go API で行います。手元では、ローカル専用の Go API（[docs/api-local.md](docs/api-local.md)）を使います。
 
 ```bash
 cp .env.example .env
-docker compose up -d
 pnpm install
-pnpm run db:migrate --name init
+pnpm run api:db    # Go API 用の DB を起動し、マイグレーションとサンプルデータを入れる
+pnpm run api:dev   # Go API を 127.0.0.1:8081 で起動（起動したまま、別のターミナルで次へ）
 pnpm run dev
 ```
 
-ブラウザで <http://localhost:3000> を開きます。
+ブラウザで <http://localhost:3000> を開き、ゲストか、サンプルの会員（`docs/api-local.md` の表）でログインします。GitHub ログインは本物の OAuth App が要るので、手元では使えません。
+
+`.env` の `GO_API_URL`・`API_WEB_PROXY_SECRET`・`AUTH_URL`・`AUTH_GITHUB_ID` が Web の設定です。`DATABASE_URL` は Prisma のマイグレーションと seed だけが使います（`docker compose up -d` の開発用 DB）。
 
 ## 認証・認可の設定
 
-GitHubの **Settings → Developer settings → OAuth Apps** でOAuth Appを作成します。
+ログインは Go API が行います。Web の Vercel プロジェクトに入れる値は `GO_API_URL`・`API_WEB_PROXY_SECRET`・`AUTH_URL`・`AUTH_GITHUB_ID` の 4 つです。Go API に入れる値も含めて、手順は [docs/api-deployment.md](docs/api-deployment.md) の「6. Web の設定」にあります。
 
-- Homepage URL: `http://localhost:3000`
-- Authorization callback URL: `http://localhost:3000/api/auth/callback/github`
+GitHubの **Settings → Developer settings → OAuth Apps** で、Web 用のOAuth Appを作成します。
 
-`.env` に以下を設定してください。
+- Homepage URL: `https://本番ドメイン`
+- Authorization callback URL: `https://本番ドメイン/api/auth/callback/github`（実際の callback は、この下の `/api/auth/callback/github/go` です）
 
-```env
-AUTH_SECRET="openssl rand -base64 32 で生成した値"
-AUTH_GITHUB_ID="OAuth AppのClient ID"
-AUTH_GITHUB_SECRET="OAuth AppのClient Secret"
-AUTH_ALLOWED_GITHUB_IDS="583231,1234567"
-```
+Client ID は Web の `AUTH_GITHUB_ID` と Go API の `GITHUB_WEB_CLIENT_ID` に、Client Secret は Go API の `GITHUB_WEB_CLIENT_SECRET` だけに入れます。
 
-許可リストは、GitHubユーザーの **数字のID** をカンマ区切りで並べます。IDは `https://api.github.com/users/<ログイン名>` の `id` で確認できます。ログイン名は使いません。ログイン名は変更でき、空いた名前を別人が取得できるためです。空の場合は安全側に倒し、すべてのGitHubユーザーを拒否します。本番環境では本番URL専用のGitHub OAuth Appを作成し、コールバックURLを `https://本番ドメイン/api/auth/callback/github` にしてください。
+管理者の許可リストは、Go API の `AUTH_ALLOWED_GITHUB_IDS` です。GitHubユーザーの **数字のID** をカンマ区切りで並べます。IDは `https://api.github.com/users/<ログイン名>` の `id` で確認できます。ログイン名は使いません。ログイン名は変更でき、空いた名前を別人が取得できるためです。空の場合は安全側に倒し、すべてのGitHubユーザーを拒否します。
 
 ### ロールとID・パスワードのアカウント
 
@@ -78,8 +77,8 @@ memberのアカウントは、GitHub管理者が `/admin/accounts` で作りま�
 
 - **作成・再設定**: ログインID（英小文字・数字・`.` `_` `-` の3〜32文字）と表示名を入力します。パスワードは12〜128文字で、空欄にすると自動生成します。パスワードは作成・再設定の直後に一度だけ画面に表示され、あとから確認できません。管理者から本人に別の経路で伝えてください。
 - **パスワード変更**: memberは、ヘッダーの「パスワード変更」（`/account/password`）から自分で変更できます。変更するとログアウトされ、新しいパスワードでログインし直します。
-- **試行回数の制限**: 接続元（IPアドレス。IPv6は /64 単位）ごとに数えます。同じ接続元から同じログインIDへ15分間に5回まで、ログインID全体で15分間に20回までです。超えると、その接続元からは15分間、正しいパスワードでもログインできません。アカウント単位ではロックしないので、ほかの場所からの失敗で本人が締め出されることはありません。接続元は Vercel が設定する `x-real-ip` / `x-forwarded-for` で判定します。Go API も同じDBのテーブル（`SignInThrottle`）と同じ上限を使います。ログイン画面には、IDの有無や制限の状態を区別せず「IDまたはパスワードが違うか、一時的にロックされています。」とだけ表示します。パスワード変更画面の現在のパスワードも、アカウントごとに15分間5回までです。
-- **セッションの失効**: パスワードを再設定・変更すると、そのアカウントの既存のセッションは、すべて使えなくなります。セッションの有効性（`sessionVersion`）は、サーバー側でユーザーを読むたびにDBで確認します。
+- **試行回数の制限**: 接続元（IPアドレス。IPv6は /64 単位）ごとに数えます。同じ接続元から同じログインIDへ15分間に5回まで、ログインID全体で15分間に20回までです。超えると、その接続元からは15分間、正しいパスワードでもログインできません。アカウント単位ではロックしないので、ほかの場所からの失敗で本人が締め出されることはありません。接続元は Vercel が設定する `x-real-ip` / `x-forwarded-for` で判定し、Web が Go API に渡します。回数は Go API が DB のテーブル（`SignInThrottle`）で数えます。ログイン画面には、IDの有無や制限の状態を区別せず「IDまたはパスワードが違うか、一時的にロックされています。」とだけ表示します。パスワード変更画面の現在のパスワードも、アカウントごとに15分間5回までです。
+- **セッションの失効**: パスワードを再設定・変更すると、そのアカウントの既存のセッションは、すべて使えなくなります。セッションの有効性（`sessionVersion`）は、Go API がリクエストのたびにDBで確認します。
 - **パスワードの保存**: scrypt（N=2^15, r=8, p=1）でハッシュ化したものだけを保存します。平文はDBにもログにも残しません。
 - **記録の持ち主**: memberの学習ノートは、所有者 `password:<アカウントID>` に紐づきます。本人と管理者が見られます（詳細は「学習ノートの公開範囲」）。
 
@@ -94,7 +93,7 @@ rm .env.production.local
 
 適用前にデプロイすると、ID・パスワードでのログインと `/admin/accounts` だけがエラーになります。GitHubログインとゲストログインは影響を受けません。
 
-認可はProxyによるページ保護に加え、画面のServer ComponentとCSVインポートのServer Actionでも検証します。
+認可はProxyによるページ保護に加え、画面のServer ComponentとServer Actionでも検証します。データの権限は、最後に Go API が確かめます。
 
 ログイン画面からは、GitHub認証を使わずゲストとしてログインすることもできます。学習ノート・日付別ログ・CSVインポート・フォローは管理者・メンバー専用です。書き込み権限と記録の持ち主はServer Actionでも検証します。
 
@@ -102,7 +101,7 @@ rm .env.production.local
 
 ## ネイティブアプリ向け API
 
-`services/api/` に、ネイティブアプリ（iOS など）から自分の学習ノートを読み書きするための Go 製 API があります。Web とは別の Vercel プロジェクトとして動かし、DB は本番と同じ Neon を共有します。ローカルでのテストは `pnpm run test:unit` に含まれます（DB を使うテストは `API_TEST_DATABASE_URL` が無いと skip されます）。Vercel の準備、モバイル用 GitHub OAuth App の登録、本番へのマイグレーション適用、デプロイの手順は [docs/api-deployment.md](docs/api-deployment.md) を参照してください。手元で API を起動して試す手順（`pnpm run api:db` → `pnpm run api:dev` → `pnpm run api:smoke`）は [docs/api-local.md](docs/api-local.md) にあります。
+`services/api/` に、ネイティブアプリ（iOS など）と Web が使う Go 製 API があります。Web とは別の Vercel プロジェクトとして動かし、本番の Neon を読み書きします。ローカルでのテストは `pnpm run test:unit` に含まれます（DB を使うテストは `API_TEST_DATABASE_URL` が無いと skip されます）。Vercel の準備、モバイル用 GitHub OAuth App の登録、本番へのマイグレーション適用、デプロイの手順は [docs/api-deployment.md](docs/api-deployment.md) を参照してください。手元で API を起動して試す手順（`pnpm run api:db` → `pnpm run api:dev` → `pnpm run api:smoke`）は [docs/api-local.md](docs/api-local.md) にあります。
 
 ## 表示テーマ
 
@@ -229,13 +228,13 @@ UTF-8のCSVを利用します。ヘッダー行は省略可能です。
 - `LearningEntry`: 最初の文・添削後の文・ピン音・所有者（GitHubの数字のID、または `password:<アカウントID>`）
 - `Hint`: 学習文に属する可変個数のヒントと表示順
 - `PasswordAccount`: ID・パスワードのアカウント（ログインID・表示名・パスワードのハッシュ・`sessionVersion`）。`failedAttempts`・`lockedUntil` は旧ロック用で、今は使っていません
-- `SignInThrottle`: ログイン試行回数の制限用のカウンター（キー・回数・期限）。Web と Go API で共有します
+- `SignInThrottle`: ログイン試行回数の制限用のカウンター（キー・回数・期限）。Go API が使います
 
 インポートはファイル単位のトランザクションです。途中の行でエラーになった場合、そのファイルのデータは1件も保存されません。
 
 ## セキュリティ
 
-ページの保護は `src/proxy.ts` と各Server Componentで、書き込みはServer Action内で再検証します。管理者の許可リストはセッションを読むたびに確認されます。リモートPostgreSQL接続は `sslmode=verify-full` に統一し、証明書とホスト名を検証します。
+ページの保護は `src/proxy.ts` と各Server Componentで、書き込みはServer Action内で再検証します。管理者の許可リストは、Go API がリクエストのたびに確認します。リモートPostgreSQL接続は `sslmode=verify-full` に統一し、証明書とホスト名を検証します。
 
 HTMLにはリクエストごとのnonce付きCSPを設定します。ログの秘匿化、監査範囲と制約は [2026-09-24 セキュリティレビュー](docs/security-review-2026-09-24.md) を参照してください（AI機能はその後削除しました）。
 
@@ -252,7 +251,7 @@ pnpm run db:seed
 
 ## Playwright E2E
 
-Node.js 24 または 26 と、起動済みのDocker（Compose v2）が必要です。
+Node.js 24 または 26、起動済みのDocker（Compose v2）、Go（`services/api/go.mod` の版）が必要です。
 
 ```bash
 pnpm install --frozen-lockfile
@@ -265,7 +264,7 @@ pnpm run test:e2e:stop
 ```
 
 Desktop Chromiumとモバイル幅（Pixel 7 / Chromium）の両方で検証します。
-テスト起動時に専用PostgreSQLを起動し、既存マイグレーションを適用してTurbopackでビルド、`127.0.0.1:3107`に本番モードのサーバーを起動します。
+テスト起動時に専用PostgreSQLを起動し、既存マイグレーションを適用してTurbopackでビルド、`127.0.0.1:3107`に本番モードのサーバーを起動します。Go API（`services/api`）もビルドして `127.0.0.1:3108` で起動し、Web はこれを通してログインとデータの読み書きを行います。
 既存サーバーは再利用しません。通常の開発サーバーは停止してから実行してください（ビルド先の`.next`を共有します）。
 
 - 認証前のリダイレクト、ゲストログイン／ログアウト、外部URLへのリダイレクト拒否
