@@ -20,7 +20,7 @@ var (
 // Auth is what the handlers need from *auth.Service.
 type Auth interface {
 	LoginGitHub(ctx context.Context, code, verifier, redirectURI string) (auth.TokenPair, error)
-	LoginPassword(ctx context.Context, loginID, password string) (auth.TokenPair, error)
+	LoginPassword(ctx context.Context, client, loginID, password string) (auth.TokenPair, error)
 	Refresh(ctx context.Context, token string) (auth.TokenPair, error)
 	Logout(ctx context.Context, token string) error
 	Authenticate(ctx context.Context, accessToken string) (auth.Principal, error)

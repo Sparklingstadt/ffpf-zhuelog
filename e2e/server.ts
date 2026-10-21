@@ -13,7 +13,7 @@ async function main() {
     AUTH_TRUST_HOST: "true",
     AUTH_GITHUB_ID: "",
     AUTH_GITHUB_SECRET: "",
-    AUTH_ALLOWED_GITHUB_LOGINS: "e2e-admin",
+    AUTH_ALLOWED_GITHUB_IDS: "10001", // adminOwnerId in fixtures.ts
     NODE_ENV: "production",
   };
 

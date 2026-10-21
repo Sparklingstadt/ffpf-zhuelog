@@ -60,7 +60,9 @@ test("a follower sees only the notes shared with them", async ({
 
     // B follows A and sees only the shared note.
     const taroRow = memberRow(b.page, "太郎");
-    await expect(taroRow).toContainText("太郎（taro）");
+    await expect(taroRow).toContainText("太郎");
+    // Members see display names only, never another member's login ID.
+    await expect(taroRow).not.toContainText("taro");
     await taroRow.getByRole("button", { name: "フォローする" }).click();
     await expect(
       taroRow.getByRole("button", { name: "フォロー解除" }),

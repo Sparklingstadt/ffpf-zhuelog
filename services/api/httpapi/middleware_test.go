@@ -248,7 +248,7 @@ func TestClientKeyMultipleXFFLines(t *testing.T) {
 }
 
 func TestAuthRateLimitIgnoresClientControlledXFFLines(t *testing.T) {
-	a := &fakeAuth{password: func(context.Context, string, string) (auth.TokenPair, error) {
+	a := &fakeAuth{password: func(context.Context, string, string, string) (auth.TokenPair, error) {
 		return auth.TokenPair{}, auth.ErrUnauthorized
 	}}
 	h, _ := testRouter(t, a, fakePinger{}, nil)
@@ -269,7 +269,7 @@ func TestAuthRateLimitIgnoresClientControlledXFFLines(t *testing.T) {
 }
 
 func TestAuthRoutesRateLimited(t *testing.T) {
-	a := &fakeAuth{password: func(_ context.Context, _, _ string) (auth.TokenPair, error) {
+	a := &fakeAuth{password: func(_ context.Context, _, _, _ string) (auth.TokenPair, error) {
 		return auth.TokenPair{}, auth.ErrUnauthorized
 	}}
 	h, _ := testRouter(t, a, fakePinger{}, nil)

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  LOCK_DURATION_MS,
-  MAX_FAILED_ATTEMPTS,
+  MAX_ATTEMPTS_PER_CLIENT,
+  MAX_FAILURES_PER_LOGIN,
+  THROTTLE_WINDOW_MS,
   displayNameSchema,
-  isLocked,
   loginIdSchema,
   optionalPasswordSchema,
   ownerIdForAccount,
@@ -48,30 +48,18 @@ test("optional password treats blank as not provided", () => {
   assert.equal(optionalPasswordSchema.safeParse("short").success, false);
 });
 
-test("lock rule: 5 failures lock for 15 minutes", () => {
-  assert.equal(MAX_FAILED_ATTEMPTS, 5);
-  assert.equal(LOCK_DURATION_MS, 15 * 60 * 1000);
-});
-
-test("an account is locked only while lockedUntil is in the future", () => {
-  const now = new Date("2026-01-01T00:00:00Z");
-  assert.equal(
-    isLocked({ lockedUntil: new Date(now.getTime() + 1) }, now),
-    true,
-  );
-  assert.equal(isLocked({ lockedUntil: now }, now), false);
-  assert.equal(
-    isLocked({ lockedUntil: new Date(now.getTime() - 1) }, now),
-    false,
-  );
-  assert.equal(isLocked({ lockedUntil: null }, now), false);
+test("throttle rule: per client, 20 attempts and 5 per login ID in 15 minutes", () => {
+  // services/api/auth uses the same values on the same table.
+  assert.equal(MAX_ATTEMPTS_PER_CLIENT, 20);
+  assert.equal(MAX_FAILURES_PER_LOGIN, 5);
+  assert.equal(THROTTLE_WINDOW_MS, 15 * 60 * 1000);
 });
 
 test("conversation owner ID for an account is prefixed", () => {
   assert.equal(ownerIdForAccount("ck1"), "password:ck1");
 });
 
-test("summary hides secrets and reports the lock state", () => {
+test("summary hides secrets", () => {
   const now = new Date("2026-01-01T00:00:00Z");
   const account: PasswordAccount = {
     id: "ck1",
@@ -79,16 +67,12 @@ test("summary hides secrets and reports the lock state", () => {
     displayName: "太郎",
     passwordHash: "secret",
     sessionVersion: 3,
-    failedAttempts: 2,
-    lockedUntil: new Date(now.getTime() + 1000),
     createdAt: now,
   };
-  assert.deepEqual(toSummary(account, now), {
+  assert.deepEqual(toSummary(account), {
     id: "ck1",
     loginId: "taro",
     displayName: "太郎",
     createdAt: now,
-    locked: true,
   });
-  assert.equal(toSummary({ ...account, lockedUntil: null }, now).locked, false);
 });

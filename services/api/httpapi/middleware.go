@@ -202,9 +202,9 @@ func (r *RateLimiter) Allow(key string) bool {
 	return true
 }
 
-// clientKey identifies the caller for rate limiting: the last value of
-// X-Forwarded-For (the one our own proxy appended) if present, otherwise the
-// host part of RemoteAddr.
+// clientKey identifies the caller for rate limiting and sign-in throttling: the
+// last value of X-Forwarded-For (the one our own proxy appended) if present,
+// otherwise the host part of RemoteAddr.
 func clientKey(r *http.Request) string {
 	// A client can send several X-Forwarded-For lines; only the last value of
 	// the last line was appended by our own proxy.

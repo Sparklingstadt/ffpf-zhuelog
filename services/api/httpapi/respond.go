@@ -65,6 +65,8 @@ func writeServiceError(w http.ResponseWriter, r *http.Request, err error) {
 		writeError(w, http.StatusUnauthorized, "unauthorized", msgUnauthorized)
 	case errors.Is(err, auth.ErrForbidden):
 		writeError(w, http.StatusForbidden, "forbidden", msgForbidden)
+	case errors.Is(err, auth.ErrThrottled):
+		writeError(w, http.StatusTooManyRequests, "rate_limited", msgRateLimited)
 	case errors.Is(err, store.ErrNotFound):
 		writeError(w, http.StatusNotFound, "not_found", msgNotFound)
 	case errors.Is(err, auth.ErrGitHubUnavailable):

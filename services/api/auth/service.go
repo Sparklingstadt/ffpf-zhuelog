@@ -24,6 +24,20 @@ const (
 	familyIDBytes     = 16
 )
 
+// Sign-in throttling, shared with the web app through the SignInThrottle
+// table: the values and key formats must match the web's
+// (src/domain/identity/entities/password-account.ts and
+// authenticate-password-account.ts). Keys always include the client address,
+// so nobody can lock a member out from elsewhere.
+const (
+	throttleWindow       = 15 * time.Minute
+	maxAttemptsPerClient = 20 // every password sign-in attempt from one client
+	maxFailuresPerLogin  = 5  // attempts per client and loginId, reset on success
+)
+
+// ErrThrottled means the client made too many sign-in attempts recently.
+var ErrThrottled = errors.New("auth: too many sign-in attempts")
+
 var loginIDPattern = regexp.MustCompile(`^[a-z0-9._-]{3,32}$`)
 
 var (
@@ -36,8 +50,8 @@ var (
 type Store interface {
 	FindPasswordAccountByLoginID(ctx context.Context, loginID string) (store.PasswordAccount, error)
 	SessionVersion(ctx context.Context, accountID string) (int, error)
-	ReserveAttempt(ctx context.Context, accountID string, now time.Time) (bool, error)
-	ClearFailures(ctx context.Context, accountID string) error
+	ConsumeThrottle(ctx context.Context, key string, limit int, window time.Duration, now time.Time) (bool, error)
+	ResetThrottle(ctx context.Context, key string) error
 	InsertRefreshToken(ctx context.Context, t store.RefreshToken, tokenHash string) error
 	FindRefreshToken(ctx context.Context, tokenHash string) (store.RefreshToken, error)
 	RotateRefreshToken(ctx context.Context, oldID string, next store.RefreshToken, nextHash string, now time.Time) (bool, error)
@@ -66,8 +80,8 @@ type TokenPair struct {
 }
 
 // Service runs sign-in, refresh-token rotation, logout and the per-request
-// revocation check. Errors are ErrUnauthorized, ErrForbidden, the GitHub
-// client's sentinels, or (for store failures) other errors; none of them
+// revocation check. Errors are ErrUnauthorized, ErrForbidden, ErrThrottled,
+// the GitHub client's sentinels, or (for store failures) other errors; none of them
 // contain tokens, hashes, codes or passwords.
 type Service struct {
 	Store     Store
@@ -85,31 +99,53 @@ func (s *Service) now() time.Time {
 	return s.Now()
 }
 
-// LoginGitHub signs in an allowlisted GitHub user as an admin.
+// LoginGitHub signs in a GitHub user whose numeric ID is allowlisted as an
+// admin. The login is recorded in the tokens for information only; it is never
+// used for authorization, because it can be renamed and re-registered.
 func (s *Service) LoginGitHub(ctx context.Context, code, verifier, redirectURI string) (TokenPair, error) {
 	user, err := s.GitHub.Exchange(ctx, code, verifier, redirectURI)
 	if err != nil {
 		return TokenPair{}, err
 	}
-	if !s.Allowlist.Allows(user.Login) {
+	ownerID := strconv.FormatInt(user.ID, 10)
+	if !s.Allowlist.Allows(ownerID) {
 		return TokenPair{}, ErrForbidden
 	}
 	return s.startSession(ctx, Principal{
-		OwnerID: strconv.FormatInt(user.ID, 10),
+		OwnerID: ownerID,
 		Role:    RoleAdmin,
 		Login:   user.Login,
 	})
 }
 
-// LoginPassword signs in a member. Every credential failure (malformed input,
-// unknown loginId, lockout, wrong password) returns ErrUnauthorized after
-// exactly one password-hash computation, so they are indistinguishable. If the
-// hash cannot be computed (ctx done while waiting), the hasher's error is
-// returned wrapped instead.
-func (s *Service) LoginPassword(ctx context.Context, loginID, password string) (TokenPair, error) {
+// LoginPassword signs in a member. client is the caller's address as
+// normalised by ClientAddress.
+//
+// Attempts are throttled per client (maxAttemptsPerClient) and per client and
+// loginId (maxFailuresPerLogin), both checked before any password hashing so
+// throttled attempts cost no scrypt work; they return ErrThrottled. Throttling
+// never depends on whether the account exists, so it reveals nothing, and
+// because every key includes the client address, failures from one client
+// never block a member signing in from another.
+//
+// Every other credential failure (malformed input, unknown loginId, wrong
+// password) returns ErrUnauthorized after exactly one password-hash
+// computation, so they are indistinguishable. If the hash cannot be computed
+// (ctx done while waiting), the hasher's error is returned wrapped instead.
+func (s *Service) LoginPassword(ctx context.Context, client, loginID, password string) (TokenPair, error) {
+	now := s.now()
+	if err := s.consumeThrottle(ctx, "client:"+client, maxAttemptsPerClient, now); err != nil {
+		return TokenPair{}, err
+	}
+
 	loginID = strings.ToLower(strings.TrimSpace(loginID))
 	if !loginIDPattern.MatchString(loginID) || password == "" || utf8.RuneCountInString(password) > maxPasswordRunes {
 		return TokenPair{}, s.rejectPassword(ctx, truncateRunes(password, maxPasswordRunes))
+	}
+
+	loginKey := "login:" + client + ":" + loginID
+	if err := s.consumeThrottle(ctx, loginKey, maxFailuresPerLogin, now); err != nil {
+		return TokenPair{}, err
 	}
 
 	account, err := s.Store.FindPasswordAccountByLoginID(ctx, loginID)
@@ -119,14 +155,6 @@ func (s *Service) LoginPassword(ctx context.Context, loginID, password string) (
 	if err != nil {
 		return TokenPair{}, fmt.Errorf("auth: find password account: %w", err)
 	}
-
-	reserved, err := s.Store.ReserveAttempt(ctx, account.ID, s.now())
-	if err != nil {
-		return TokenPair{}, fmt.Errorf("auth: reserve attempt: %w", err)
-	}
-	if !reserved {
-		return TokenPair{}, s.rejectPassword(ctx, password)
-	}
 	ok, err := s.Passwords.Verify(ctx, password, account.PasswordHash)
 	if err != nil {
 		return TokenPair{}, fmt.Errorf("auth: verify password: %w", err)
@@ -134,8 +162,8 @@ func (s *Service) LoginPassword(ctx context.Context, loginID, password string) (
 	if !ok {
 		return TokenPair{}, ErrUnauthorized
 	}
-	if err := s.Store.ClearFailures(ctx, account.ID); err != nil {
-		return TokenPair{}, fmt.Errorf("auth: clear failures: %w", err)
+	if err := s.Store.ResetThrottle(ctx, loginKey); err != nil {
+		return TokenPair{}, fmt.Errorf("auth: reset throttle: %w", err)
 	}
 
 	return s.startSession(ctx, Principal{
@@ -143,6 +171,19 @@ func (s *Service) LoginPassword(ctx context.Context, loginID, password string) (
 		Role:           RoleMember,
 		SessionVersion: account.SessionVersion,
 	})
+}
+
+// consumeThrottle counts one attempt against key and returns ErrThrottled
+// when it is over limit.
+func (s *Service) consumeThrottle(ctx context.Context, key string, limit int, now time.Time) error {
+	allowed, err := s.Store.ConsumeThrottle(ctx, key, limit, throttleWindow, now)
+	if err != nil {
+		return fmt.Errorf("auth: consume throttle: %w", err)
+	}
+	if !allowed {
+		return ErrThrottled
+	}
+	return nil
 }
 
 // rejectPassword spends one simulated hash computation and returns
@@ -221,7 +262,7 @@ func (s *Service) Logout(ctx context.Context, refreshToken string) error {
 }
 
 // Authenticate verifies an access token and checks that its holder is still
-// allowed: admins must still be allowlisted (else ErrForbidden) and members'
+// allowed: admins' GitHub user ID must still be allowlisted (else ErrForbidden) and members'
 // session version must still match (else ErrUnauthorized).
 func (s *Service) Authenticate(ctx context.Context, accessToken string) (Principal, error) {
 	p, err := s.Signer.Verify(accessToken)
@@ -238,7 +279,8 @@ func (s *Service) Authenticate(ctx context.Context, accessToken string) (Princip
 func (s *Service) checkCurrent(ctx context.Context, p Principal) error {
 	switch p.Role {
 	case RoleAdmin:
-		if !s.Allowlist.Allows(p.Login) {
+		// OwnerID is the numeric GitHub user ID; Login is informational only.
+		if !s.Allowlist.Allows(p.OwnerID) {
 			return ErrForbidden
 		}
 		return nil

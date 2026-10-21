@@ -18,7 +18,7 @@ import (
 // by returning a sentinel error that maps to 500.
 type fakeAuth struct {
 	github       func(ctx context.Context, code, verifier, redirectURI string) (auth.TokenPair, error)
-	password     func(ctx context.Context, loginID, password string) (auth.TokenPair, error)
+	password     func(ctx context.Context, client, loginID, password string) (auth.TokenPair, error)
 	refresh      func(ctx context.Context, token string) (auth.TokenPair, error)
 	logout       func(ctx context.Context, token string) error
 	authenticate func(ctx context.Context, accessToken string) (auth.Principal, error)
@@ -35,11 +35,11 @@ func (f *fakeAuth) LoginGitHub(ctx context.Context, code, verifier, redirectURI 
 	return f.github(ctx, code, verifier, redirectURI)
 }
 
-func (f *fakeAuth) LoginPassword(ctx context.Context, loginID, password string) (auth.TokenPair, error) {
+func (f *fakeAuth) LoginPassword(ctx context.Context, client, loginID, password string) (auth.TokenPair, error) {
 	if f.password == nil {
 		return auth.TokenPair{}, errUnexpectedCall{"LoginPassword"}
 	}
-	return f.password(ctx, loginID, password)
+	return f.password(ctx, client, loginID, password)
 }
 
 func (f *fakeAuth) Refresh(ctx context.Context, token string) (auth.TokenPair, error) {

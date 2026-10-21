@@ -74,7 +74,7 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 			RedirectURI:  cfg.GitHubRedirectURI,
 			Logger:       logger,
 		},
-		Allowlist: auth.ParseAllowlist(cfg.AllowedGitHubLogins),
+		Allowlist: auth.ParseAllowlist(cfg.AllowedGitHubIDs),
 		Passwords: passwords,
 	}
 	handler := httpapi.NewRouter(httpapi.Deps{

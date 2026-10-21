@@ -44,8 +44,6 @@ function account(id: string, displayName: string, tick: number) {
     displayName,
     passwordHash: "hash",
     sessionVersion: 1,
-    failedAttempts: 0,
-    lockedUntil: null,
     createdAt: new Date(Date.UTC(2026, 0, 1) + tick * 1000),
   } satisfies PasswordAccount;
 }
@@ -170,10 +168,10 @@ test("directory lists other members by name with both flags and counts", async (
   );
   const a2 = result.members.find((m) => m.ownerId === "password:a2");
   const a3 = result.members.find((m) => m.ownerId === "password:a3");
+  // No login ID: other members must not learn half of a credential pair.
   assert.deepEqual(a2, {
     ownerId: "password:a2",
     displayName: "花子",
-    loginId: "login-a2",
     following: true,
     followsMe: false,
   });

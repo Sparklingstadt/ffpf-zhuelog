@@ -11,7 +11,8 @@ import (
 
 // RefreshToken is the stored metadata of a refresh token. The token itself is
 // never stored, only its hash. SessionVersion is nil for admin tokens; Login is
-// the admin's GitHub login and empty (NULL) for member tokens.
+// the admin's GitHub login (informational only, never used for authorization)
+// and empty (NULL) for member tokens.
 type RefreshToken struct {
 	ID, OwnerID, Role string
 	Login             string
