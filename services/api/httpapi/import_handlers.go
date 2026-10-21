@@ -42,18 +42,16 @@ func extendCSVDeadlines(w http.ResponseWriter) {
 // importCSV stores the uploaded CSV in the caller's own notes, validating it
 // exactly like the web. The CSV contents are never logged.
 func importCSV(e Entries, now func() time.Time) http.Handler {
-	type batchJSON struct {
-		ID         string `json:"id"`
-		ImportedAt string `json:"importedAt"`
-	}
 	type response struct {
 		Batch batchJSON `json:"batch"`
 		Count int       `json:"count"`
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := principalFrom(r.Context())
+		// Authenticate only returns admin or member, so this cannot fire today;
+		// it is kept as defence in depth in case a role is ever added.
 		if p.Role != auth.RoleAdmin && p.Role != auth.RoleMember {
-			writeError(w, http.StatusForbidden, "forbidden", msgForbidden)
+			writeForbidden(w, msgForbidden)
 			return
 		}
 		extendCSVDeadlines(w)
@@ -65,17 +63,17 @@ func importCSV(e Entries, now func() time.Time) http.Handler {
 		name, content, err := readCSVFile(mr)
 		switch {
 		case errors.Is(err, errNoCSVFile):
-			writeError(w, http.StatusBadRequest, "invalid_request", msgSelectCSVFile)
+			writeError(w, http.StatusBadRequest, codeInvalidRequest, msgSelectCSVFile)
 			return
 		case errors.Is(err, errCSVFileTooLarge):
-			writeError(w, http.StatusRequestEntityTooLarge, "too_large", msgCSVFileTooLarge)
+			writeError(w, http.StatusRequestEntityTooLarge, codeTooLarge, msgCSVFileTooLarge)
 			return
 		case err != nil:
 			writeBodyError(w, r, err)
 			return
 		}
 		if !strings.HasSuffix(strings.ToLower(name), ".csv") {
-			writeError(w, http.StatusBadRequest, "invalid_request", msgCSVExtension)
+			writeError(w, http.StatusBadRequest, codeInvalidRequest, msgCSVExtension)
 			return
 		}
 		drafts, err := csvimport.Parse(bytes.NewReader(content))
@@ -85,7 +83,7 @@ func importCSV(e Entries, now func() time.Time) http.Handler {
 		}
 		var invalid *csvimport.ValidationError
 		if errors.As(err, &invalid) {
-			writeError(w, http.StatusBadRequest, "invalid_csv", invalid.Message)
+			writeError(w, http.StatusBadRequest, codeInvalidCSV, invalid.Message)
 			return
 		}
 		if err != nil {
@@ -98,7 +96,7 @@ func importCSV(e Entries, now func() time.Time) http.Handler {
 			return
 		}
 		writeJSON(w, http.StatusCreated, response{
-			Batch: batchJSON{ID: batch.ID, ImportedAt: formatTime(batch.ImportedAt)},
+			Batch: toBatchJSON(batch),
 			Count: len(drafts),
 		})
 	})

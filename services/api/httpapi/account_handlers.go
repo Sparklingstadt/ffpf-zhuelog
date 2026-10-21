@@ -27,7 +27,7 @@ func changePassword(a Auth) http.Handler {
 		err := a.ChangePassword(r.Context(), principalFrom(r.Context()),
 			string(req.CurrentPassword), string(req.NewPassword), string(req.ConfirmPassword))
 		if errors.Is(err, auth.ErrForbidden) {
-			writeError(w, http.StatusForbidden, "forbidden", msgMembersOnly)
+			writeForbidden(w, msgMembersOnly)
 			return
 		}
 		if err != nil {

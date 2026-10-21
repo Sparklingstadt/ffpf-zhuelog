@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"net/http"
-	"net/url"
 	"time"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
@@ -20,14 +19,8 @@ func listTrash(e Entries) http.Handler {
 		NextCursor *string            `json:"nextCursor"`
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		q, err := url.ParseQuery(r.URL.RawQuery)
-		if err != nil {
-			writeBadRequest(w)
-			return
-		}
-		limit, after, ok := parseListQuery(q)
+		limit, after, ok := readListQuery(w, r)
 		if !ok {
-			writeBadRequest(w)
 			return
 		}
 		entries, err := e.ListTrashed(r.Context(), principalFrom(r.Context()).OwnerID, after, limit+1)
@@ -35,13 +28,10 @@ func listTrash(e Entries) http.Handler {
 			writeServiceError(w, r, err)
 			return
 		}
-		resp := response{}
-		if len(entries) > limit {
-			entries = entries[:limit]
-			last := entries[limit-1]
-			c := encodeCursor(store.Cursor{CreatedAt: last.DeletedAt, ID: last.ID})
-			resp.NextCursor = &c
-		}
+		entries, next := paginate(entries, limit, func(t store.TrashedEntry) store.Cursor {
+			return store.Cursor{CreatedAt: t.DeletedAt, ID: t.ID}
+		})
+		resp := response{NextCursor: next}
 		resp.Entries = make([]trashedEntryJSON, len(entries))
 		for i, t := range entries {
 			resp.Entries[i] = trashedEntryJSON{entryJSON: toEntryJSON(t.Entry), DeletedAt: formatTime(t.DeletedAt)}
@@ -52,7 +42,7 @@ func listTrash(e Entries) http.Handler {
 
 func restoreEntry(e Entries) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := entryID(w, r)
+		id, ok := pathValue(w, r, "id", validID)
 		if !ok {
 			return
 		}
@@ -67,7 +57,7 @@ func restoreEntry(e Entries) http.Handler {
 
 func purgeEntry(e Entries) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := entryID(w, r)
+		id, ok := pathValue(w, r, "id", validID)
 		if !ok {
 			return
 		}
@@ -94,10 +84,10 @@ func shareEntry(e Entries, now func() time.Time, shared bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := principalFrom(r.Context())
 		if p.Role != auth.RoleMember {
-			writeError(w, http.StatusForbidden, "forbidden", msgShareMembersOnly)
+			writeForbidden(w, msgShareMembersOnly)
 			return
 		}
-		id, ok := entryID(w, r)
+		id, ok := pathValue(w, r, "id", validID)
 		if !ok {
 			return
 		}

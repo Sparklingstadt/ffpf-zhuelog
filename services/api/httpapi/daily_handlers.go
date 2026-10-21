@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
@@ -30,14 +29,10 @@ func formatLogDate(d store.LogDate) string {
 
 // parseNumber accepts base-10 digits only, in 1..2147483647.
 func parseNumber(s string) (int, bool) {
-	if !isDecimal(s) || s[0] == '0' || len(s) > 10 {
+	if s == "" || s[0] == '0' {
 		return 0, false
 	}
-	n, err := strconv.ParseInt(s, 10, 64)
-	if err != nil || n < 1 || n > maxNumber {
-		return 0, false
-	}
-	return int(n), true
+	return decimalUpTo(s, maxNumber)
 }
 
 func listLogDates(e Entries) http.Handler {

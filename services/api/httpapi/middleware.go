@@ -61,7 +61,7 @@ func recoverer(logger *slog.Logger, next http.Handler) http.Handler {
 			if w.wrote {
 				return // the response is already on the wire; a second status would be wrong
 			}
-			writeError(w, http.StatusInternalServerError, "internal", msgInternal)
+			writeError(w, http.StatusInternalServerError, codeInternal, msgInternal)
 		}()
 		next.ServeHTTP(w, r)
 	})
@@ -142,7 +142,7 @@ func requireAuth(a Auth, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		scheme, token, ok := strings.Cut(r.Header.Get("Authorization"), " ")
 		if !ok || !strings.EqualFold(scheme, "Bearer") || token == "" || strings.Contains(token, " ") {
-			writeError(w, http.StatusUnauthorized, "unauthorized", msgUnauthorized)
+			writeError(w, http.StatusUnauthorized, codeUnauthorized, msgUnauthorized)
 			return
 		}
 		p, err := a.Authenticate(r.Context(), token)
@@ -232,7 +232,7 @@ func clientKey(r *http.Request) string {
 func rateLimit(rl *RateLimiter, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !rl.Allow(clientKey(r)) {
-			writeError(w, http.StatusTooManyRequests, "rate_limited", msgRateLimited)
+			writeError(w, http.StatusTooManyRequests, codeRateLimited, msgRateLimited)
 			return
 		}
 		next.ServeHTTP(w, r)

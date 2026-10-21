@@ -11,13 +11,6 @@ import (
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
 
-const (
-	msgInvalidLoginID  = "ログインIDは英小文字・数字・. _ - の3〜32文字にしてください。"
-	msgInvalidName     = "表示名は1〜50文字にしてください。"
-	msgLoginIDTaken    = "このログインIDはすでに使われています。"
-	msgAccountNotFound = "アカウントが見つかりません。"
-)
-
 // accountInput is the validated form of an admin request. Password is what
 // will be stored: the one given, or a generated one.
 type accountInput struct {
@@ -60,7 +53,7 @@ func validateAccountInput(loginID, displayName, password string) (accountInput, 
 func requireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if principalFrom(r.Context()).Role != auth.RoleAdmin {
-			writeError(w, http.StatusForbidden, "forbidden", msgAdminOnly)
+			writeForbidden(w, msgAdminOnly)
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -120,7 +113,7 @@ func createAccount(acc Accounts, h PasswordHasher, now func() time.Time) http.Ha
 		}
 		in, msg := validateAccountInput(string(req.LoginID), string(req.DisplayName), string(req.Password))
 		if msg != "" {
-			writeError(w, http.StatusBadRequest, "invalid_request", msg)
+			writeError(w, http.StatusBadRequest, codeInvalidRequest, msg)
 			return
 		}
 		hash, err := h.Hash(r.Context(), in.Password)
@@ -130,7 +123,7 @@ func createAccount(acc Accounts, h PasswordHasher, now func() time.Time) http.Ha
 		}
 		a, err := acc.CreatePasswordAccount(r.Context(), in.LoginID, in.DisplayName, hash, now())
 		if errors.Is(err, store.ErrLoginIDTaken) {
-			writeError(w, http.StatusConflict, "login_id_taken", msgLoginIDTaken)
+			writeError(w, http.StatusConflict, codeLoginIDTaken, msgLoginIDTaken)
 			return
 		}
 		if err != nil {
@@ -151,7 +144,7 @@ func resetAccountPassword(acc Accounts, h PasswordHasher, now func() time.Time) 
 		Generated bool   `json:"generated"`
 	}
 	notFound := func(w http.ResponseWriter) {
-		writeError(w, http.StatusNotFound, "not_found", msgAccountNotFound)
+		writeError(w, http.StatusNotFound, codeNotFound, msgAccountNotFound)
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req request
@@ -161,12 +154,11 @@ func resetAccountPassword(acc Accounts, h PasswordHasher, now func() time.Time) 
 		}
 		pw, generated, ok := resolvePassword(string(req.Password))
 		if !ok {
-			writeError(w, http.StatusBadRequest, "invalid_request", msgInvalidNewPassword)
+			writeError(w, http.StatusBadRequest, codeInvalidRequest, msgInvalidNewPassword)
 			return
 		}
-		id := r.PathValue("id")
-		if !validID(id) {
-			notFound(w)
+		id, ok := pathValueMsg(w, r, "id", validID, msgAccountNotFound)
+		if !ok {
 			return
 		}
 		a, err := acc.FindPasswordAccountByID(r.Context(), id)
