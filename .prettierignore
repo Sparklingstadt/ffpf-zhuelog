@@ -2,6 +2,9 @@ node_modules/
 .next/
 out/
 build/
+docs-site/.vuepress/.temp/
+docs-site/.vuepress/.cache/
+docs-site/.vuepress/dist/
 coverage/
 playwright-report/
 test-results/

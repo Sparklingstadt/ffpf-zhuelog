@@ -21,6 +21,11 @@ node_modules/
 
 # production
 /build
+
+# vuepress (docs-site)
+/docs-site/.vuepress/.temp/
+/docs-site/.vuepress/.cache/
+/docs-site/.vuepress/dist/
 /src/generated/prisma
 
 # misc
