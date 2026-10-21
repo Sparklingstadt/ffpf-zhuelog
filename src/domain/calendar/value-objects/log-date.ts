@@ -6,11 +6,6 @@ export type LogDate = {
   day: number;
 };
 
-export type DateRange = {
-  start: Date;
-  end: Date;
-};
-
 export function parseLogDate(
   year: string,
   month: string,
@@ -49,11 +44,6 @@ export function parseLogNumber(value: string): number | null {
     : null;
 }
 
-export function getTokyoDateRange({ year, month, day }: LogDate): DateRange {
-  const start = new Date(Date.UTC(year, month - 1, day) - TOKYO_OFFSET_MS);
-  return { start, end: new Date(start.getTime() + 24 * 60 * 60 * 1_000) };
-}
-
 export function getTokyoDateParts(date: Date): LogDate {
   const tokyo = new Date(date.getTime() + TOKYO_OFFSET_MS);
   return {
@@ -61,9 +51,4 @@ export function getTokyoDateParts(date: Date): LogDate {
     month: tokyo.getUTCMonth() + 1,
     day: tokyo.getUTCDate(),
   };
-}
-
-export function getLogDateKey(date: Date) {
-  const { year, month, day } = getTokyoDateParts(date);
-  return `${year}/${month}/${day}`;
 }

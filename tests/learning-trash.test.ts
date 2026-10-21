@@ -20,10 +20,6 @@ function fakeRepository(result: boolean) {
   };
   const repository: LearningEntryRepository = {
     importBatch: unused,
-    listRecent: unused,
-    listCreatedAt: unused,
-    listByDate: unused,
-    getByDateAndNumber: unused,
     async trash(ownerId, id) {
       calls.push(["trash", ownerId, id]);
       return result;

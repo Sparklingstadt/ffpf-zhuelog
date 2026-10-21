@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { showsRecords } from "@/application/identity/use-cases/resolve-record-owner";
-import { learningUseCases } from "@/composition/learning-container";
+import { learningReads } from "@/composition/learning-container";
 import { loadRecordOwnerView } from "@/composition/record-owner-options";
 import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { EmptyState } from "@/presentation/components/layout/empty-state";
@@ -39,7 +39,7 @@ export default async function LogsPage({ searchParams }: LogsPageProps) {
   const hasNotes = showsRecords(owner);
   const [dates, view] = hasNotes
     ? await Promise.all([
-        learningUseCases.listLogDates.execute(owner.ownerId),
+        learningReads.listLogDates(owner),
         loadRecordOwnerView(user, owner),
       ])
     : [[], null];

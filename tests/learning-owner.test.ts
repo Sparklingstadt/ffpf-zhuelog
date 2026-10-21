@@ -1,11 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { ListLogDates } from "../src/application/calendar/use-cases/list-log-dates";
-import { GetDailyEntry } from "../src/application/learning/use-cases/get-daily-entry";
 import { ImportLearningCsv } from "../src/application/learning/use-cases/import-learning-csv";
-import { ListDailyEntries } from "../src/application/learning/use-cases/list-daily-entries";
-import { ListRecentEntries } from "../src/application/learning/use-cases/list-recent-entries";
 import type { LearningEntryRepository } from "../src/domain/learning/repositories/learning-entry-repository";
 
 function fakeRepository() {
@@ -14,22 +10,6 @@ function fakeRepository() {
     async importBatch(ownerId) {
       owners.push(ownerId);
       return 0;
-    },
-    async listRecent(ownerId) {
-      owners.push(ownerId);
-      return { entries: [], total: 0 };
-    },
-    async listCreatedAt(ownerId) {
-      owners.push(ownerId);
-      return [];
-    },
-    async listByDate(ownerId) {
-      owners.push(ownerId);
-      return [];
-    },
-    async getByDateAndNumber(ownerId) {
-      owners.push(ownerId);
-      return null;
     },
     async trash(ownerId) {
       owners.push(ownerId);
@@ -62,20 +42,14 @@ function fakeRepository() {
   return { repository, owners };
 }
 
-const date = { year: 2026, month: 10, day: 8 };
-
-test("every learning use case passes the owner id to the repository", async () => {
+test("the CSV import passes the owner id to the repository", async () => {
   const { repository, owners } = fakeRepository();
 
-  await new ListRecentEntries(repository).execute("o1", 10);
   await new ImportLearningCsv({ parse: () => [] }, repository).execute(
     "o1",
     "a.csv",
     "csv",
   );
-  await new ListDailyEntries(repository).execute("o1", date);
-  await new GetDailyEntry(repository).execute("o1", date, 1);
-  await new ListLogDates(repository).execute("o1");
 
-  assert.deepEqual(owners, Array(5).fill("o1"));
+  assert.deepEqual(owners, ["o1"]);
 });

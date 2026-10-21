@@ -8,7 +8,7 @@ import {
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { learningUseCases } from "@/composition/learning-container";
+import { learningReads } from "@/composition/learning-container";
 import { loadRecordOwnerView } from "@/composition/record-owner-options";
 import {
   parseLogDate,
@@ -80,7 +80,7 @@ export default async function LogDetailPage({
   }
 
   const [result, view] = await Promise.all([
-    learningUseCases.getDailyEntry.execute(owner.ownerId, date, entryNumber),
+    learningReads.getDailyEntry(owner, date, entryNumber),
     loadRecordOwnerView(user, owner),
   ]);
   if (!result) notFound();

@@ -1,17 +1,13 @@
 import type { LearningEntryDraft } from "@/domain/learning/entities/learning-entry";
 import type {
-  DailyLearningEntry,
   LearningEntryRepository,
-  RecentLearningEntries,
   SharedLearningEntry,
   TrashedLearningEntries,
 } from "@/domain/learning/repositories/learning-entry-repository";
-import type { DateRange } from "@/domain/calendar/value-objects/log-date";
 import { getPrismaClient } from "@/infrastructure/persistence/prisma/prisma-client";
 import { toLearningEntry } from "@/infrastructure/persistence/prisma/mappers/learning-entry-mapper";
 
 const hintsByPosition = { orderBy: { position: "asc" as const } };
-const oldestFirst = [{ createdAt: "asc" as const }, { id: "asc" as const }];
 const inTrash = { deletedAt: { not: null } };
 
 export class PrismaLearningEntryRepository implements LearningEntryRepository {
@@ -51,75 +47,6 @@ export class PrismaLearningEntryRepository implements LearningEntryRepository {
     );
 
     return entries.length;
-  }
-
-  async listRecent(
-    ownerId: string,
-    limit: number,
-  ): Promise<RecentLearningEntries> {
-    const prisma = getPrismaClient();
-    const [records, total] = await Promise.all([
-      prisma.learningEntry.findMany({
-        where: { ownerId, deletedAt: null },
-        include: { hints: hintsByPosition },
-        orderBy: { createdAt: "desc" },
-        take: limit,
-      }),
-      prisma.learningEntry.count({ where: { ownerId, deletedAt: null } }),
-    ]);
-
-    return { entries: records.map(toLearningEntry), total };
-  }
-
-  async listCreatedAt(ownerId: string): Promise<Date[]> {
-    const records = await getPrismaClient().learningEntry.findMany({
-      where: { ownerId, deletedAt: null },
-      select: { createdAt: true },
-      orderBy: { createdAt: "desc" },
-    });
-    return records.map((record) => record.createdAt);
-  }
-
-  async listByDate(ownerId: string, range: DateRange) {
-    const records = await getPrismaClient().learningEntry.findMany({
-      where: {
-        ownerId,
-        deletedAt: null,
-        createdAt: { gte: range.start, lt: range.end },
-      },
-      include: { hints: hintsByPosition },
-      orderBy: oldestFirst,
-    });
-    return records.map(toLearningEntry);
-  }
-
-  async getByDateAndNumber(
-    ownerId: string,
-    range: DateRange,
-    entryNumber: number,
-  ): Promise<DailyLearningEntry | null> {
-    const prisma = getPrismaClient();
-    const where = {
-      ownerId,
-      deletedAt: null,
-      createdAt: { gte: range.start, lt: range.end },
-    };
-    const total = await prisma.learningEntry.count({ where });
-    if (
-      !Number.isSafeInteger(entryNumber) ||
-      entryNumber < 1 ||
-      entryNumber > total
-    )
-      return null;
-    const record = await prisma.learningEntry.findFirst({
-      where,
-      include: { hints: hintsByPosition },
-      orderBy: oldestFirst,
-      skip: entryNumber - 1,
-    });
-
-    if (!record || entryNumber > total) return null;
-    return { entry: toLearningEntry(record), total };
   }
 
   async trash(ownerId: string, id: string) {

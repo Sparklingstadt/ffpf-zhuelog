@@ -13,10 +13,6 @@ function fakeRepository(result: boolean) {
   };
   const repository: LearningEntryRepository = {
     importBatch: unused,
-    listRecent: unused,
-    listCreatedAt: unused,
-    listByDate: unused,
-    getByDateAndNumber: unused,
     trash: unused,
     restore: unused,
     purge: unused,
