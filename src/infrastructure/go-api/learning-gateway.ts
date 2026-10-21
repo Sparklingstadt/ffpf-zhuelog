@@ -3,7 +3,7 @@ import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
 
 import { goApiAuthed, withUserParam, type GoApiCall } from "./authed";
 import { GoApiError } from "./client";
-import { toLearningEntry, type GoEntryJson } from "./learning-json";
+import { toDate, toLearningEntry, type GoEntryJson } from "./learning-json";
 
 // Whose notes are read. Only another member's notes (an admin's view) add
 // ?user=; the user's own notes are the token's owner in Go.
@@ -15,10 +15,24 @@ export type LogDateSummary = { date: LogDate; count: number };
 
 export type DailyLearningEntry = { entry: LearningEntry; total: number };
 
+export type TrashedLearningEntry = LearningEntry & { deletedAt: Date };
+
+export type TrashedLearningEntries = {
+  entries: TrashedLearningEntry[];
+  total: number;
+};
+
 type EntriesJson = { entries: GoEntryJson[]; total: number };
 type LogDatesJson = { dates: { date: string; count: number }[] };
 type DailyEntriesJson = { entries: GoEntryJson[] };
 type DailyEntryJson = { entry: GoEntryJson; total: number };
+type TrashJson = {
+  entries: (GoEntryJson & { deletedAt: string })[];
+  total: number;
+};
+
+// The trash page lists one page of notes.
+const TRASH_LIST_LIMIT = 100;
 
 export function createLearningGateway(call: GoApiCall = goApiAuthed) {
   const read = <T>(path: string, owner: ViewedOwner) =>
@@ -73,7 +87,71 @@ export function createLearningGateway(call: GoApiCall = goApiAuthed) {
         throw error;
       }
     },
+
+    // The writes below act on the signed-in user's own notes (the token's
+    // owner in Go) and never add ?user=. Each returns false when Go answers
+    // 404: the user has no such note in the expected state.
+    trash(id: string): Promise<boolean> {
+      return found(write(`/v1/entries/${encodeURIComponent(id)}`, "DELETE"));
+    },
+
+    restore(id: string): Promise<boolean> {
+      return found(
+        write(`/v1/trash/${encodeURIComponent(id)}/restore`, "POST"),
+      );
+    },
+
+    purge(id: string): Promise<boolean> {
+      return found(write(`/v1/trash/${encodeURIComponent(id)}`, "DELETE"));
+    },
+
+    // How many notes were deleted for good.
+    async emptyTrash(): Promise<number> {
+      const json = await call<{ deleted: number }>("/v1/trash", {
+        method: "DELETE",
+      });
+      return json.deleted;
+    },
+
+    // Newest in the trash first, as Go orders it (deletedAt, then id, desc).
+    async listTrashed(): Promise<TrashedLearningEntries> {
+      const json = await call<TrashJson>(
+        `/v1/trash?limit=${TRASH_LIST_LIMIT}`,
+        { method: "GET" },
+      );
+      return {
+        entries: json.entries.map((entry) => ({
+          ...toLearningEntry(entry),
+          deletedAt: toDate(entry.deletedAt),
+        })),
+        total: json.total,
+      };
+    },
+
+    // Go keeps the first sharedAt when a shared note is shared again.
+    setShared(id: string, shared: boolean): Promise<boolean> {
+      return found(
+        write(
+          `/v1/entries/${encodeURIComponent(id)}/share`,
+          shared ? "PUT" : "DELETE",
+        ),
+      );
+    },
   };
+
+  function write(path: string, method: string) {
+    return call<unknown>(path, { method });
+  }
+}
+
+async function found(request: Promise<unknown>): Promise<boolean> {
+  try {
+    await request;
+    return true;
+  } catch (error) {
+    if (error instanceof GoApiError && error.status === 404) return false;
+    throw error;
+  }
 }
 
 export type LearningGateway = ReturnType<typeof createLearningGateway>;

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { getCurrentMemberUser } from "@/composition/identity-container";
-import { learningUseCases } from "@/composition/learning-container";
+import { learningNotes } from "@/composition/learning-container";
 import { socialUseCases } from "@/composition/social-container";
 import { revalidateNotes } from "@/presentation/actions/revalidate-notes";
 import type { ActionState } from "@/presentation/controllers/action-state";
@@ -45,8 +45,8 @@ export async function shareLearningEntryAction(
 ): Promise<ActionState> {
   const state = await handleShare(formData, {
     getMember: getCurrentMemberUser,
-    run: (ownerId, id, shared) =>
-      learningUseCases.shareLearningEntry.execute(ownerId, id, shared),
+    // Go shares the token owner's note; the owner checked here is not sent.
+    run: (_ownerId, id, shared) => learningNotes.setShared(id, shared),
   });
   if (state.status === "success") {
     revalidateNotes();

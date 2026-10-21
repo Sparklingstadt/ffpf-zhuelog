@@ -11,30 +11,6 @@ function fakeRepository() {
       owners.push(ownerId);
       return 0;
     },
-    async trash(ownerId) {
-      owners.push(ownerId);
-      return false;
-    },
-    async restore(ownerId) {
-      owners.push(ownerId);
-      return false;
-    },
-    async purge(ownerId) {
-      owners.push(ownerId);
-      return false;
-    },
-    async emptyTrash(ownerId) {
-      owners.push(ownerId);
-      return 0;
-    },
-    async listTrashed(ownerId) {
-      owners.push(ownerId);
-      return { entries: [], total: 0 };
-    },
-    async setShared(ownerId) {
-      owners.push(ownerId);
-      return false;
-    },
     async listSharedByOwners() {
       throw new Error("not used");
     },

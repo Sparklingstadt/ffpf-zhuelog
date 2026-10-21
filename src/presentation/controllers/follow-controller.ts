@@ -6,6 +6,7 @@ import {
   actionSuccess,
   actionUnauthorized,
   attemptAction,
+  attemptGoAction,
   noteIdSchema,
   type ActionState,
 } from "@/presentation/controllers/action-state";
@@ -78,7 +79,7 @@ export async function handleShare(
   const id = noteIdSchema.safeParse(formData.get("id"));
   const shared = sharedSchema.safeParse(formData.get("shared"));
   if (!id.success || !shared.success) return notFound;
-  return attemptAction("SHARE_FAILED", async () =>
+  return attemptGoAction("SHARE_FAILED", async () =>
     (await dependencies.run(ownerId, id.data, shared.data === "true"))
       ? actionSuccess
       : notFound,

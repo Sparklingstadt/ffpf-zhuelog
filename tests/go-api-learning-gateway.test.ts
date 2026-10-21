@@ -119,3 +119,84 @@ test("getDailyEntry lets other Go errors through", async () => {
     (error) => error instanceof GoApiError && error.status === 500,
   );
 });
+
+function recordingCall(response: unknown) {
+  const calls: [string, string][] = [];
+  const call = (async (path: string, init: { method: string }) => {
+    calls.push([init.method, path]);
+    if (response instanceof Error) throw response;
+    return response;
+  }) as GoApiCall;
+  return { call, calls };
+}
+
+test("trash, restore, purge and share call Go without ?user=", async () => {
+  const { call, calls } = recordingCall(undefined);
+  const gateway = createLearningGateway(call);
+  assert.equal(await gateway.trash("e1"), true);
+  assert.equal(await gateway.restore("e2"), true);
+  assert.equal(await gateway.purge("e3"), true);
+  assert.equal(await gateway.setShared("e4", true), true);
+  assert.equal(await gateway.setShared("e4", false), true);
+  assert.deepEqual(calls, [
+    ["DELETE", "/v1/entries/e1"],
+    ["POST", "/v1/trash/e2/restore"],
+    ["DELETE", "/v1/trash/e3"],
+    ["PUT", "/v1/entries/e4/share"],
+    ["DELETE", "/v1/entries/e4/share"],
+  ]);
+});
+
+test("a write on a note Go does not find returns false", async () => {
+  const { call } = recordingCall(new GoApiError(404, "not_found"));
+  const gateway = createLearningGateway(call);
+  assert.equal(await gateway.trash("e1"), false);
+  assert.equal(await gateway.restore("e1"), false);
+  assert.equal(await gateway.purge("e1"), false);
+  assert.equal(await gateway.setShared("e1", true), false);
+});
+
+test("a write lets other Go errors through", async () => {
+  for (const status of [0, 403, 429, 500]) {
+    const { call } = recordingCall(new GoApiError(status, "x"));
+    const gateway = createLearningGateway(call);
+    for (const write of [
+      () => gateway.trash("e1"),
+      () => gateway.restore("e1"),
+      () => gateway.purge("e1"),
+      () => gateway.setShared("e1", false),
+      () => gateway.emptyTrash(),
+    ])
+      await assert.rejects(
+        write(),
+        (error) => error instanceof GoApiError && error.status === status,
+      );
+  }
+});
+
+test("emptyTrash returns how many notes Go deleted", async () => {
+  const { call, calls } = recordingCall({ deleted: 4 });
+  assert.equal(await createLearningGateway(call).emptyTrash(), 4);
+  assert.deepEqual(calls, [["DELETE", "/v1/trash"]]);
+});
+
+test("listTrashed reads one page of 100 in Go's order with the total", async () => {
+  const { call, calls } = recordingCall({
+    entries: [
+      { ...entryJson, id: "e2", deletedAt: "2026-10-22T05:00:00.000Z" },
+      { ...entryJson, id: "e1", deletedAt: "2026-10-21T05:00:00.000Z" },
+    ],
+    nextCursor: "c",
+    total: 130,
+  });
+  const trash = await createLearningGateway(call).listTrashed();
+  assert.deepEqual(calls, [["GET", "/v1/trash?limit=100"]]);
+  assert.equal(trash.total, 130);
+  assert.deepEqual(
+    trash.entries.map((entry) => [entry.id, entry.deletedAt.toISOString()]),
+    [
+      ["e2", "2026-10-22T05:00:00.000Z"],
+      ["e1", "2026-10-21T05:00:00.000Z"],
+    ],
+  );
+});

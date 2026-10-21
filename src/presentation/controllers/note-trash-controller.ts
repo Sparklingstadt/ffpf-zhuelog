@@ -1,7 +1,7 @@
 import {
   actionSuccess,
   actionUnauthorized,
-  attemptAction,
+  attemptGoAction,
   noteIdSchema,
   type ActionState,
 } from "@/presentation/controllers/action-state";
@@ -32,7 +32,7 @@ export async function handleNoteAction(
   if (!ownerId) return actionUnauthorized;
   const id = noteIdSchema.safeParse(formData.get("id"));
   if (!id.success) return notFound;
-  return attemptAction("NOTE_TRASH_FAILED", async () =>
+  return attemptGoAction("NOTE_TRASH_FAILED", async () =>
     (await dependencies.run(ownerId, id.data)) ? actionSuccess : notFound,
   );
 }
@@ -43,7 +43,7 @@ export async function handleEmptyTrash(dependencies: {
 }): Promise<ActionState> {
   const ownerId = await ownerOf(dependencies.getMember);
   if (!ownerId) return actionUnauthorized;
-  return attemptAction("NOTE_TRASH_FAILED", async () => {
+  return attemptGoAction("NOTE_TRASH_FAILED", async () => {
     await dependencies.run(ownerId);
     return actionSuccess;
   });

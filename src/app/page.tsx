@@ -12,7 +12,7 @@ import {
   showsRecords,
   type RecordOwner,
 } from "@/application/identity/use-cases/resolve-record-owner";
-import { learningReads } from "@/composition/learning-container";
+import { learningNotes } from "@/composition/learning-container";
 import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
 import { GoApiError } from "@/infrastructure/go-api/client";
 import type { ViewedOwner } from "@/infrastructure/go-api/learning-gateway";
@@ -51,7 +51,7 @@ async function loadEntries(owner: ViewedOwner): Promise<{
   loadFailed: boolean;
 }> {
   try {
-    const result = await learningReads.listRecent(owner, 100);
+    const result = await learningNotes.listRecent(owner, 100);
     return { ...result, loadFailed: false };
   } catch (error) {
     if (!(error instanceof GoApiError)) throw error;

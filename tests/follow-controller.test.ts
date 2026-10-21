@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
 
+import { GoApiError } from "../src/infrastructure/go-api/client";
 import type { FollowResult } from "../src/application/social/use-cases/follow-member";
 import {
   handleFollow,
@@ -245,7 +246,7 @@ test("share of a missing note is not found; a failure logs only SHARE_FAILED", a
   );
 
   const logged = silenceConsoleError(t);
-  const { run } = recorder<boolean>(new Error("down"));
+  const { run } = recorder<boolean>(new GoApiError(500, "internal"));
   assert.deepEqual(
     await handleShare(form({ id: "cmabc123", shared: "true" }), {
       getMember: member,
@@ -254,5 +255,32 @@ test("share of a missing note is not found; a failure logs only SHARE_FAILED", a
     failed,
   );
   assert.equal(logged.mock.callCount(), 1);
-  assert.deepEqual(logged.mock.calls[0].arguments, ["SHARE_FAILED"]);
+  assert.deepEqual(logged.mock.calls[0].arguments, [
+    "SHARE_FAILED",
+    500,
+    "internal",
+  ]);
+});
+
+test("share treats Go's 403 as not allowed and lets other errors through", async () => {
+  const forbidden = recorder<boolean>(
+    new GoApiError(403, "forbidden", "メンバーだけが共有できます。"),
+  );
+  assert.deepEqual(
+    await handleShare(form({ id: "cmabc123", shared: "true" }), {
+      getMember: member,
+      run: forbidden.run,
+    }),
+    unauthorized,
+  );
+
+  const redirect = new Error("NEXT_REDIRECT");
+  const thrown = recorder<boolean>(redirect);
+  await assert.rejects(
+    handleShare(form({ id: "cmabc123", shared: "true" }), {
+      getMember: member,
+      run: thrown.run,
+    }),
+    (error) => error === redirect,
+  );
 });
