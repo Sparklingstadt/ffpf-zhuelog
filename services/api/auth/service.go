@@ -46,7 +46,7 @@ type Store interface {
 	SetPassword(ctx context.Context, id, hash string, now time.Time) error
 	SessionVersion(ctx context.Context, accountID string) (int, error)
 	ReserveAttempt(ctx context.Context, accountID string, now time.Time) (bool, error)
-	ClearFailures(ctx context.Context, accountID string) error
+	ClearFailures(ctx context.Context, accountID string, now time.Time) error
 	InsertRefreshToken(ctx context.Context, t store.RefreshToken, tokenHash string) error
 	FindRefreshToken(ctx context.Context, tokenHash string) (store.RefreshToken, error)
 	RotateRefreshToken(ctx context.Context, oldID string, next store.RefreshToken, nextHash string, now time.Time) (bool, error)
@@ -145,7 +145,7 @@ func (s *Service) LoginPassword(ctx context.Context, loginID, password string) (
 	if !ok {
 		return TokenPair{}, ErrUnauthorized
 	}
-	if err := s.Store.ClearFailures(ctx, account.ID); err != nil {
+	if err := s.Store.ClearFailures(ctx, account.ID, s.now()); err != nil {
 		return TokenPair{}, fmt.Errorf("auth: clear failures: %w", err)
 	}
 

@@ -113,12 +113,20 @@ func TestClearFailures(t *testing.T) {
 			t.Fatalf("reserve %d: ok=%v err=%v", i, ok, err)
 		}
 	}
-	if err := s.ClearFailures(ctx, acc.ID); err != nil {
+	clearedAt := now.Add(time.Minute)
+	if err := s.ClearFailures(ctx, acc.ID, clearedAt); err != nil {
 		t.Fatalf("ClearFailures: %v", err)
 	}
 	failed, locked := attemptState(t, s, acc.ID)
 	if failed != 0 || locked != nil {
 		t.Fatalf("failed=%d locked=%v, want 0 and no lock", failed, locked)
+	}
+	var updatedAt time.Time
+	if err := s.pool.QueryRow(ctx, `SELECT "updatedAt" FROM "PasswordAccount" WHERE id = $1`, acc.ID).Scan(&updatedAt); err != nil {
+		t.Fatalf("read updatedAt: %v", err)
+	}
+	if !updatedAt.Equal(clearedAt) {
+		t.Fatalf("updatedAt = %v, want %v", updatedAt, clearedAt)
 	}
 }
 

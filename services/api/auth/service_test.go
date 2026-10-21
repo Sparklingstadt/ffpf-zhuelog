@@ -47,6 +47,7 @@ type fakeStore struct {
 	pruneErr       error
 	setPasswordErr error
 	setPasswordAt  []time.Time // now passed to each SetPassword
+	clearedAt      []time.Time // now passed to each ClearFailures
 }
 
 func newFakeStore(log *callLog) *fakeStore {
@@ -121,8 +122,9 @@ func (f *fakeStore) ReserveAttempt(_ context.Context, _ string, _ time.Time) (bo
 	return !f.locked, nil
 }
 
-func (f *fakeStore) ClearFailures(_ context.Context, _ string) error {
+func (f *fakeStore) ClearFailures(_ context.Context, _ string, now time.Time) error {
 	f.log.add("ClearFailures")
+	f.clearedAt = append(f.clearedAt, now)
 	return nil
 }
 
@@ -464,6 +466,9 @@ func TestLoginPasswordSuccess(t *testing.T) {
 	}
 	if f.hasher.count != 1 {
 		t.Fatalf("hash computations = %d, want 1", f.hasher.count)
+	}
+	if len(f.store.clearedAt) != 1 || !f.store.clearedAt[0].Equal(serviceEpoch) {
+		t.Fatalf("ClearFailures now = %v, want the service clock %v", f.store.clearedAt, serviceEpoch)
 	}
 }
 

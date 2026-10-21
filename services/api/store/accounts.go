@@ -121,11 +121,12 @@ WHERE "id" = $1 AND ("lockedUntil" IS NULL OR "lockedUntil" <= CAST($4 AS TIMEST
 	return tag.RowsAffected() == 1, nil
 }
 
-// ClearFailures resets the failure counter and lock after a successful sign-in.
-func (s *Store) ClearFailures(ctx context.Context, accountID string) error {
+// ClearFailures resets the failure counter and lock after a successful sign-in
+// at now.
+func (s *Store) ClearFailures(ctx context.Context, accountID string, now time.Time) error {
 	_, err := s.pool.Exec(ctx, `
 UPDATE "PasswordAccount" SET "failedAttempts" = 0, "lockedUntil" = NULL, "updatedAt" = CAST($2 AS TIMESTAMP(3))
-WHERE "id" = $1`, accountID, dbTime(time.Now()))
+WHERE "id" = $1`, accountID, dbTime(now))
 	return err
 }
 
