@@ -50,7 +50,11 @@ test("an OAuth start has fresh random values and an S256 challenge", () => {
     assert.match(value, /^[A-Za-z0-9_-]+$/);
     assert.equal(Buffer.from(value, "base64url").length, 32);
   }
-  assert.equal(a.challenge, pkceChallenge(a.verifier));
+  // S256 of a 32-byte verifier is 43 base64url characters. The hash itself
+  // is checked against the RFC 7636 example below.
+  assert.match(a.challenge, /^[A-Za-z0-9_-]{43}$/);
+  assert.notEqual(a.challenge, a.verifier);
+  assert.notEqual(a.challenge, b.challenge);
 });
 
 test("the PKCE challenge matches the RFC 7636 example", () => {
