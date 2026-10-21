@@ -26,8 +26,10 @@ type fakeEntries struct {
 	list   func(ctx context.Context, ownerID string, after *store.Cursor, limit int) ([]store.Entry, error)
 	get    func(ctx context.Context, ownerID, id string) (store.Entry, error)
 	create func(ctx context.Context, ownerID string, drafts []store.EntryDraft, now time.Time) (store.Batch, []store.Entry, error)
-	update func(ctx context.Context, ownerID, id string, p store.EntryPatch) (store.Entry, error)
-	trash  func(ctx context.Context, ownerID, id string, now time.Time) error
+	// createImport serves CreateImportBatch.
+	createImport func(ctx context.Context, ownerID, fileName string, drafts []store.EntryDraft, now time.Time) (store.Batch, []store.Entry, error)
+	update       func(ctx context.Context, ownerID, id string, p store.EntryPatch) (store.Entry, error)
+	trash        func(ctx context.Context, ownerID, id string, now time.Time) error
 
 	listTrashed func(ctx context.Context, ownerID string, after *store.Cursor, limit int) ([]store.TrashedEntry, error)
 	restore     func(ctx context.Context, ownerID, id string) (store.Entry, error)
@@ -115,6 +117,13 @@ func (f *fakeEntries) CreateBatch(ctx context.Context, ownerID string, drafts []
 		return store.Batch{}, nil, errUnexpectedCall{"CreateBatch"}
 	}
 	return f.create(ctx, ownerID, drafts, now)
+}
+
+func (f *fakeEntries) CreateImportBatch(ctx context.Context, ownerID, fileName string, drafts []store.EntryDraft, now time.Time) (store.Batch, []store.Entry, error) {
+	if f.createImport == nil {
+		return store.Batch{}, nil, errUnexpectedCall{"CreateImportBatch"}
+	}
+	return f.createImport(ctx, ownerID, fileName, drafts, now)
 }
 
 func (f *fakeEntries) UpdateEntry(ctx context.Context, ownerID, id string, p store.EntryPatch) (store.Entry, error) {

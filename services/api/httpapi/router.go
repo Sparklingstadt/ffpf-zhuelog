@@ -35,6 +35,7 @@ type Entries interface {
 	ListEntries(ctx context.Context, ownerID string, after *store.Cursor, limit int) ([]store.Entry, error)
 	GetEntry(ctx context.Context, ownerID, id string) (store.Entry, error)
 	CreateBatch(ctx context.Context, ownerID string, drafts []store.EntryDraft, now time.Time) (store.Batch, []store.Entry, error)
+	CreateImportBatch(ctx context.Context, ownerID, fileName string, drafts []store.EntryDraft, now time.Time) (store.Batch, []store.Entry, error)
 	UpdateEntry(ctx context.Context, ownerID, id string, p store.EntryPatch) (store.Entry, error)
 	TrashEntry(ctx context.Context, ownerID, id string, now time.Time) error
 	ListTrashed(ctx context.Context, ownerID string, after *store.Cursor, limit int) ([]store.TrashedEntry, error)
@@ -125,6 +126,9 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("GET /v1/entries", authed(listEntries(d.Entries)))
 	mux.Handle("GET /v1/entries/{id}", authed(getEntry(d.Entries)))
 	mux.Handle("POST /v1/batches", authedNoUser(createBatch(d.Entries, d.Now)))
+	// CSV import into the caller's own notes (admin and member). Its body
+	// limit is 6 MiB instead of 1 MiB; see limitBody.
+	mux.Handle("POST "+csvImportPath, authedNoUser(importCSV(d.Entries, d.Now)))
 	mux.Handle("PATCH /v1/entries/{id}", authedNoUser(patchEntry(d.Entries)))
 	mux.Handle("DELETE /v1/entries/{id}", authedNoUser(deleteEntry(d.Entries, d.Now)))
 	mux.Handle("GET /v1/trash", authedNoUser(listTrash(d.Entries)))

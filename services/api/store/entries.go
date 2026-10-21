@@ -192,9 +192,14 @@ func execBatch(ctx context.Context, tx pgx.Tx, b *pgx.Batch) error {
 	return res.Close()
 }
 
-// CreateBatch stores drafts as one import batch in a single transaction. Every
-// entry gets createdAt = now.
+// CreateBatch stores drafts as one import batch named "mobile:<now>" in a
+// single transaction. Every entry gets createdAt = now.
 func (s *Store) CreateBatch(ctx context.Context, ownerID string, drafts []EntryDraft, now time.Time) (Batch, []Entry, error) {
+	return s.CreateImportBatch(ctx, ownerID, "mobile:"+dbTime(now).Format("2006-01-02T15:04:05.000Z07:00"), drafts, now)
+}
+
+// CreateImportBatch is CreateBatch with the batch's fileName given.
+func (s *Store) CreateImportBatch(ctx context.Context, ownerID, fileName string, drafts []EntryDraft, now time.Time) (Batch, []Entry, error) {
 	now = dbTime(now)
 	batch := Batch{ID: newID(), ImportedAt: now}
 	entries := make([]Entry, len(drafts))
@@ -202,7 +207,7 @@ func (s *Store) CreateBatch(ctx context.Context, ownerID string, drafts []EntryD
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		b := &pgx.Batch{}
 		b.Queue(`INSERT INTO "ImportBatch" ("id", "fileName", "rowCount", "importedAt") VALUES ($1, $2, $3, $4)`,
-			batch.ID, "mobile:"+now.Format("2006-01-02T15:04:05.000Z07:00"), len(drafts), now)
+			batch.ID, fileName, len(drafts), now)
 		for i, d := range drafts {
 			e := Entry{
 				ID:            newID(),

@@ -123,9 +123,14 @@ func noStore(next http.Handler) http.Handler {
 	})
 }
 
+// limitBody caps request bodies at 1 MiB, except the CSV import's at 6 MiB.
 func limitBody(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+		limit := int64(maxBodyBytes)
+		if r.Method == http.MethodPost && r.URL.Path == csvImportPath {
+			limit = maxCSVBodyBytes
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, limit)
 		next.ServeHTTP(w, r)
 	})
 }

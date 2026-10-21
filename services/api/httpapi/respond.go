@@ -30,6 +30,10 @@ const (
 	msgInvalidNewPassword     = "パスワードは12〜128文字にしてください。"
 	msgPasswordMismatch       = "確認用のパスワードが一致しません。"
 	msgInvalidCurrentPassword = "現在のパスワードが違うか、一時的にロックされています。"
+
+	msgSelectCSVFile   = "CSVファイルを選択してください。"
+	msgCSVFileTooLarge = "ファイルは5MB以下にしてください。"
+	msgCSVExtension    = "拡張子が.csvのファイルを選択してください。"
 )
 
 type errorEnvelope struct {

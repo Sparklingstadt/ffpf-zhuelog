@@ -101,6 +101,33 @@ func TestCreateBatchAndGet(t *testing.T) {
 	}
 }
 
+func TestCreateImportBatchStoresFileName(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	owner := newOwner(t, s)
+
+	batch, entries, err := s.CreateImportBatch(ctx, owner, "学習ノート.csv", []EntryDraft{draft("1", "h"), draft("2"), draft("3")}, fixedNow())
+	if err != nil {
+		t.Fatalf("CreateImportBatch: %v", err)
+	}
+	if len(entries) != 3 || !batch.ImportedAt.Equal(fixedNow()) {
+		t.Fatalf("batch = %+v, entries = %d", batch, len(entries))
+	}
+	var fileName string
+	var rowCount int
+	if err := s.pool.QueryRow(ctx,
+		`SELECT "fileName", "rowCount" FROM "ImportBatch" WHERE id = $1`, batch.ID).Scan(&fileName, &rowCount); err != nil {
+		t.Fatalf("query batch: %v", err)
+	}
+	if fileName != "学習ノート.csv" || rowCount != 3 {
+		t.Errorf("fileName = %q, rowCount = %d", fileName, rowCount)
+	}
+	got, err := s.GetEntry(ctx, owner, entries[0].ID)
+	if err != nil || !reflect.DeepEqual(got, entries[0]) {
+		t.Errorf("GetEntry = %+v, %v; want %+v", got, err, entries[0])
+	}
+}
+
 func TestCreateBatchRollsBack(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
