@@ -23,20 +23,6 @@ const actionFailed: ActionState = {
 // alphanumerics).
 export const noteIdSchema = z.string().regex(/^[a-z0-9]{1,64}$/);
 
-// Runs the action, turning any thrown error into the generic failure. Logs
-// a fixed code only: never a member's name or a note's text.
-export async function attemptAction(
-  code: string,
-  run: () => Promise<ActionState>,
-): Promise<ActionState> {
-  try {
-    return await run();
-  } catch {
-    console.error(code);
-    return actionFailed;
-  }
-}
-
 // Go error codes (400, 409 and 413) whose message is meant for the user to
 // act on.
 const userFacingCodes = new Set([

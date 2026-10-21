@@ -1,7 +1,7 @@
 import { ArrowLeft, UsersRound } from "lucide-react";
 import Link from "next/link";
 
-import { socialUseCases } from "@/composition/social-container";
+import { socialNetwork } from "@/composition/social-container";
 import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { FollowMemberList } from "@/presentation/components/follow/follow-member-list";
 import { FollowTimeline } from "@/presentation/components/follow/follow-timeline";
@@ -19,13 +19,14 @@ export default async function FollowPage() {
     "/signin?callbackUrl=/follow",
   );
 
-  const viewerId = owner.kind === "self" ? owner.ownerId : null;
-  const [directory, timeline] = viewerId
-    ? await Promise.all([
-        socialUseCases.listFollowDirectory.execute(viewerId),
-        socialUseCases.listFollowTimeline.execute(viewerId),
-      ])
-    : [null, null];
+  // Go reads the follows of the token's owner.
+  const [directory, timeline] =
+    owner.kind === "self"
+      ? await Promise.all([
+          socialNetwork.listMembers(),
+          socialNetwork.listTimeline(),
+        ])
+      : [null, null];
 
   return (
     <PageShell user={user} width="5xl">

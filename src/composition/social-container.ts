@@ -1,24 +1,5 @@
-import { FollowMember } from "@/application/social/use-cases/follow-member";
-import { ListFollowDirectory } from "@/application/social/use-cases/list-follow-directory";
-import { ListFollowTimeline } from "@/application/social/use-cases/list-follow-timeline";
-import { UnfollowMember } from "@/application/social/use-cases/unfollow-member";
-import { passwordAccountRepository } from "@/infrastructure/auth/password-account-services";
-import { PrismaFollowRepository } from "@/infrastructure/persistence/prisma/repositories/prisma-follow-repository";
-import { PrismaLearningEntryRepository } from "@/infrastructure/persistence/prisma/repositories/prisma-learning-entry-repository";
+import { createSocialGateway } from "@/infrastructure/go-api/social-gateway";
 
-const follows = new PrismaFollowRepository();
-const entries = new PrismaLearningEntryRepository();
-
-export const socialUseCases = {
-  followMember: new FollowMember(follows, passwordAccountRepository),
-  unfollowMember: new UnfollowMember(follows),
-  listFollowDirectory: new ListFollowDirectory(
-    follows,
-    passwordAccountRepository,
-  ),
-  listFollowTimeline: new ListFollowTimeline(
-    follows,
-    passwordAccountRepository,
-    entries,
-  ),
-};
+// Follows, the member list and the shared-notes timeline go through the Go
+// API as the signed-in user.
+export const socialNetwork = createSocialGateway();
