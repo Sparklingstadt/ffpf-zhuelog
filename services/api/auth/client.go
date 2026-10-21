@@ -11,11 +11,10 @@ import (
 // and IPv6 by its /64 prefix, because one host usually controls a whole /64.
 // Anything unparsable is "unknown".
 //
-// The format must match the web's normaliseClientAddress exactly, since both
-// write the same SignInThrottle keys: four lowercase hex groups without
-// leading zeros, then "::/64" (for example "2001:db8:0:1::/64"). That is why
-// it is built by hand rather than with netip.Prefix.String, which compresses
-// zero groups.
+// IPv6 keys are four lowercase hex groups without leading zeros, then
+// "::/64" (for example "2001:db8:0:1::/64"), so keys already in the
+// SignInThrottle table stay valid. That is why it is built by hand rather
+// than with netip.Prefix.String, which compresses zero groups.
 func ClientAddress(raw string) string {
 	raw = strings.TrimSpace(raw)
 	if i := strings.IndexByte(raw, '%'); i >= 0 {
