@@ -3,10 +3,10 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // RefreshToken is the stored metadata of a refresh token. The token itself is
@@ -23,14 +23,14 @@ type RefreshToken struct {
 
 // InsertRefreshToken stores t under tokenHash. An empty t.ID gets a new ID.
 func (s *Store) InsertRefreshToken(ctx context.Context, t RefreshToken, tokenHash string) error {
-	return insertRefreshToken(ctx, s.pool, t, tokenHash)
+	if err := insertRefreshToken(ctx, s.pool, t, tokenHash); err != nil {
+		return fmt.Errorf("store: insert refresh token: %w", err)
+	}
+	return nil
 }
 
-type execer interface {
-	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
-}
-
-func insertRefreshToken(ctx context.Context, e execer, t RefreshToken, tokenHash string) error {
+// insertRefreshToken returns an unwrapped database error.
+func insertRefreshToken(ctx context.Context, e dbtx, t RefreshToken, tokenHash string) error {
 	if t.ID == "" {
 		t.ID = newID()
 	}
@@ -62,7 +62,7 @@ FROM "ApiRefreshToken" WHERE "tokenHash" = $1`, tokenHash).
 		return RefreshToken{}, ErrNotFound
 	}
 	if err != nil {
-		return RefreshToken{}, err
+		return RefreshToken{}, fmt.Errorf("store: find refresh token: %w", err)
 	}
 	if login != nil {
 		t.Login = *login
@@ -75,28 +75,27 @@ FROM "ApiRefreshToken" WHERE "tokenHash" = $1`, tokenHash).
 // revoked (or missing). The conditional UPDATE locks the row, so of several
 // concurrent callers exactly one wins.
 func (s *Store) RotateRefreshToken(ctx context.Context, oldID string, next RefreshToken, nextHash string, now time.Time) (bool, error) {
-	tx, err := s.pool.Begin(ctx)
+	rotated := false
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx,
+			`UPDATE "ApiRefreshToken" SET "revokedAt" = $2 WHERE "id" = $1 AND "revokedAt" IS NULL`,
+			oldID, dbTime(now))
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return nil
+		}
+		if err := insertRefreshToken(ctx, tx, next, nextHash); err != nil {
+			return err
+		}
+		rotated = true
+		return nil
+	})
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("store: rotate refresh token: %w", err)
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	tag, err := tx.Exec(ctx,
-		`UPDATE "ApiRefreshToken" SET "revokedAt" = $2 WHERE "id" = $1 AND "revokedAt" IS NULL`,
-		oldID, dbTime(now))
-	if err != nil {
-		return false, err
-	}
-	if tag.RowsAffected() == 0 {
-		return false, tx.Commit(ctx)
-	}
-	if err := insertRefreshToken(ctx, tx, next, nextHash); err != nil {
-		return false, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return false, err
-	}
-	return true, nil
+	return rotated, nil
 }
 
 // RevokeFamily revokes every still-active token of the family.
@@ -104,7 +103,10 @@ func (s *Store) RevokeFamily(ctx context.Context, familyID string, now time.Time
 	_, err := s.pool.Exec(ctx,
 		`UPDATE "ApiRefreshToken" SET "revokedAt" = $2 WHERE "familyId" = $1 AND "revokedAt" IS NULL`,
 		familyID, dbTime(now))
-	return err
+	if err != nil {
+		return fmt.Errorf("store: revoke family: %w", err)
+	}
+	return nil
 }
 
 // PruneRefreshTokens deletes ownerID's expired tokens, and its revoked tokens
@@ -119,5 +121,8 @@ DELETE FROM "ApiRefreshToken" WHERE "ownerId" = $1 AND (
       SELECT "familyId" FROM "ApiRefreshToken"
       WHERE "ownerId" = $1 AND "revokedAt" IS NULL AND "expiresAt" > $2)))`,
 		ownerID, dbTime(now))
-	return err
+	if err != nil {
+		return fmt.Errorf("store: prune refresh tokens: %w", err)
+	}
+	return nil
 }
