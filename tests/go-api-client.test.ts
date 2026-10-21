@@ -117,3 +117,47 @@ test("network errors and timeouts become status 0 unavailable", async () => {
       e instanceof GoApiError && e.status === 0 && e.code === "unavailable",
   );
 });
+
+test("a 2xx with invalid JSON becomes GoApiError unknown", async () => {
+  stub(() => new Response("not json", { status: 200 }));
+  await assert.rejects(
+    goApi("/v1/x", { method: "GET" }),
+    (e: unknown) =>
+      e instanceof GoApiError && e.status === 200 && e.code === "unknown",
+  );
+});
+
+test("an empty 2xx body returns undefined", async () => {
+  stub(() => new Response(null, { status: 204 }));
+  assert.equal(await goApi("/v1/x", { method: "POST" }), undefined);
+});
+
+test("a failing body read becomes GoApiError", async () => {
+  stub(() => {
+    const body = new ReadableStream({
+      start(c) {
+        c.error(new Error("boom"));
+      },
+    });
+    return new Response(body, { status: 200 });
+  });
+  await assert.rejects(
+    goApi("/v1/x", { method: "GET" }),
+    (e: unknown) => e instanceof GoApiError && e.code === "unknown",
+  );
+});
+
+test("fetch is called with redirect error", async () => {
+  stub(() => json({}));
+  await goApi("/v1/x", { method: "GET" });
+  assert.equal(calls[0]!.init.redirect, "error");
+});
+
+test("without a proxy secret neither IP nor secret header is sent", async () => {
+  delete process.env.API_WEB_PROXY_SECRET;
+  stub(() => json({}));
+  await goApi("/v1/x", { method: "POST", clientIp: "1.2.3.4" });
+  const h = calls[0]!.init.headers as Record<string, string>;
+  assert.equal(h["X-Zhuelog-Client-IP"], undefined);
+  assert.equal(h["X-Zhuelog-Proxy-Secret"], undefined);
+});

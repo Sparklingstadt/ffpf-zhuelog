@@ -45,11 +45,14 @@ export async function goApi<T>(
     "content-type": "application/json",
   };
   if (init.accessToken) headers.authorization = `Bearer ${init.accessToken}`;
-  if (init.clientIp) {
+  // The IP is only trusted by Go together with the secret, so send both or neither.
+  const secret = process.env.API_WEB_PROXY_SECRET;
+  if (init.clientIp && secret) {
     headers["X-Zhuelog-Client-IP"] = init.clientIp;
-    headers["X-Zhuelog-Proxy-Secret"] = process.env.API_WEB_PROXY_SECRET ?? "";
+    headers["X-Zhuelog-Proxy-Secret"] = secret;
   }
 
+  const signal = AbortSignal.timeout(TIMEOUT_MS);
   let response: Response;
   try {
     response = await fetch(base + path, {
@@ -57,22 +60,35 @@ export async function goApi<T>(
       headers,
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
       cache: "no-store",
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      // A redirect must never carry the proxy secret to another URL.
+      redirect: "error",
+      signal,
     });
   } catch {
     throw new GoApiError(0, "unavailable");
   }
 
-  if (!response.ok)
-    throw new GoApiError(response.status, await errorCode(response));
-  if (response.status === 204) return undefined as T;
-  const text = await response.text();
-  return (text ? JSON.parse(text) : undefined) as T;
+  let text: string;
+  try {
+    text = await response.text();
+  } catch {
+    // Timeouts and aborts while reading the body count as unreachable.
+    if (signal.aborted) throw new GoApiError(0, "unavailable");
+    throw new GoApiError(response.status, "unknown");
+  }
+
+  if (!response.ok) throw new GoApiError(response.status, errorCode(text));
+  if (!text) return undefined as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new GoApiError(response.status, "unknown");
+  }
 }
 
-async function errorCode(response: Response): Promise<string> {
+function errorCode(text: string): string {
   try {
-    const body = (await response.json()) as { error?: { code?: unknown } };
+    const body = JSON.parse(text) as { error?: { code?: unknown } };
     const code = body?.error?.code;
     return typeof code === "string" && code ? code : "unknown";
   } catch {
