@@ -1,4 +1,4 @@
-import { goApiUrl } from "../config/environment";
+import { goApiUrl, isSafeGoApiUrl } from "../config/environment";
 
 export type GoTokens = {
   accessToken: string;
@@ -90,8 +90,10 @@ async function send<T>(
     timeoutMs: number;
   },
 ): Promise<T> {
+  // Tokens and the proxy secret only ever go to an HTTPS URL, or to this
+  // machine over HTTP; any other GO_API_URL is treated as unreachable.
   const base = goApiUrl();
-  if (!base) throw new GoApiError(0, "unavailable");
+  if (!base || !isSafeGoApiUrl(base)) throw new GoApiError(0, "unavailable");
 
   const signal = AbortSignal.timeout(request.timeoutMs);
   let response: Response;

@@ -26,7 +26,7 @@ function stub(respond: () => Response | Promise<Response>) {
 }
 
 beforeEach(() => {
-  process.env.GO_API_URL = " http://api.test/ ";
+  process.env.GO_API_URL = " https://api.test/ ";
   process.env.API_WEB_PROXY_SECRET = "s3cret-s3cret-s3cret-s3cret-s3cret";
 });
 afterEach(() => {
@@ -38,7 +38,7 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status });
 
 test("goApiUrl trims, strips trailing slashes and maps empty to undefined", () => {
-  assert.equal(goApiUrl(), "http://api.test");
+  assert.equal(goApiUrl(), "https://api.test");
   process.env.GO_API_URL = "   ";
   assert.equal(goApiUrl(), undefined);
   delete process.env.GO_API_URL;
@@ -98,7 +98,7 @@ test("sends IP and secret headers only with clientIp", async () => {
   stub(() => json({ ok: 1 }));
   await goApi("/v1/x", { method: "POST", body: { a: 1 }, clientIp: "1.2.3.4" });
   const h = calls[0]!.init.headers as Record<string, string>;
-  assert.equal(calls[0]!.url, "http://api.test/v1/x");
+  assert.equal(calls[0]!.url, "https://api.test/v1/x");
   assert.equal(h["X-Zhuelog-Client-IP"], "1.2.3.4");
   assert.equal(h["X-Zhuelog-Proxy-Secret"], process.env.API_WEB_PROXY_SECRET);
   assert.equal(h["content-type"], "application/json");
@@ -117,7 +117,7 @@ test("logout forwards the client IP with the proxy secret", async () => {
   stub(() => new Response(null, { status: 204 }));
   await logout("refresh-tok", "203.0.113.9");
   const h = calls[0]!.init.headers as Record<string, string>;
-  assert.equal(calls[0]!.url, "http://api.test/v1/auth/logout");
+  assert.equal(calls[0]!.url, "https://api.test/v1/auth/logout");
   assert.equal(h["X-Zhuelog-Client-IP"], "203.0.113.9");
   assert.equal(h["X-Zhuelog-Proxy-Secret"], process.env.API_WEB_PROXY_SECRET);
   assert.equal(calls[0]!.init.body, '{"refreshToken":"refresh-tok"}');
@@ -247,7 +247,7 @@ test("goUpload sends multipart without setting content-type", async () => {
   assert.equal(out.count, 2);
   const init = calls[0]!.init;
   const h = init.headers as Record<string, string>;
-  assert.equal(calls[0]!.url, "http://api.test/v1/imports/csv");
+  assert.equal(calls[0]!.url, "https://api.test/v1/imports/csv");
   assert.equal(init.method, "POST");
   assert.equal(init.body, form);
   assert.equal(h["content-type"], undefined);
@@ -278,4 +278,48 @@ test("goUpload maps failures to GoApiError", async () => {
     goUpload("/v1/imports/csv", new FormData(), { accessToken: "t" }),
     (e: unknown) => e instanceof GoApiError && e.status === 0,
   );
+});
+
+test("an unsafe GO_API_URL is refused before anything is sent", async () => {
+  for (const url of [
+    "http://api.test",
+    "http://localhost.evil.test",
+    "http://10.0.0.1:3108",
+    "ftp://localhost",
+    "not a url",
+  ]) {
+    process.env.GO_API_URL = url;
+    stub(() => json({ ok: 1 }));
+    for (const call of [
+      () =>
+        goApi("/v1/x", {
+          method: "POST",
+          accessToken: "tok",
+          clientIp: "1.2.3.4",
+        }),
+      () =>
+        goUpload("/v1/imports/csv", new FormData(), {
+          accessToken: "tok",
+          clientIp: "1.2.3.4",
+        }),
+    ])
+      await assert.rejects(
+        call,
+        (error: unknown) =>
+          error instanceof GoApiError &&
+          error.status === 0 &&
+          error.code === "unavailable",
+        url,
+      );
+    assert.equal(calls.length, 0, url);
+  }
+});
+
+test("plain HTTP is allowed for this machine (local development and e2e)", async () => {
+  for (const url of ["http://127.0.0.1:3108", "http://localhost:3108/"]) {
+    process.env.GO_API_URL = url;
+    stub(() => json({ ok: 1 }));
+    await goApi("/v1/x", { method: "GET", accessToken: "tok" });
+    assert.equal(calls[0]!.url, `${url.replace(/\/$/, "")}/v1/x`);
+  }
 });

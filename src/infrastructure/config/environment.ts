@@ -22,7 +22,7 @@ export function isAuthConfigured(): boolean {
 
 // The proxy secret and tokens travel to GO_API_URL, so it must be HTTPS
 // unless it is this machine (local development and e2e).
-function isSafeGoApiUrl(raw: string): boolean {
+export function isSafeGoApiUrl(raw: string): boolean {
   let url: URL;
   try {
     url = new URL(raw);
