@@ -106,7 +106,11 @@ func TestAdminRoutesRequireAdmin(t *testing.T) {
 	for _, rt := range routes {
 		t.Run(rt.method+" "+rt.target, func(t *testing.T) {
 			h, _ := adminRouter(t, newFakeAccounts(), auth.RoleMember)
-			wantError(t, do(h, rt.method, rt.target, rt.body, authHeader), http.StatusForbidden, "forbidden")
+			w := do(h, rt.method, rt.target, rt.body, authHeader)
+			wantError(t, w, http.StatusForbidden, "forbidden")
+			if got := decodeError(t, w).Error.Message; got != "管理者だけが利用できます。" {
+				t.Fatalf("message = %q", got)
+			}
 			h, _ = adminRouter(t, newFakeAccounts(), auth.RoleAdmin)
 			wantError(t, do(h, rt.method, rt.target, rt.body, nil), http.StatusUnauthorized, "unauthorized")
 			if w := do(h, rt.method, rt.target+"?user=1", rt.body, authHeader); w.Code != http.StatusBadRequest {

@@ -60,7 +60,7 @@ func validateAccountInput(loginID, displayName, password string) (accountInput, 
 func requireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if principalFrom(r.Context()).Role != auth.RoleAdmin {
-			writeError(w, http.StatusForbidden, "forbidden", msgForbidden)
+			writeError(w, http.StatusForbidden, "forbidden", msgAdminOnly)
 			return
 		}
 		next.ServeHTTP(w, r)

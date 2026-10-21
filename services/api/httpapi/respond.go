@@ -14,7 +14,9 @@ import (
 // Fixed client-facing messages. They never include error details.
 const (
 	msgUnauthorized      = "認証が必要です。"
-	msgForbidden         = "このアカウントは利用できません。"
+	msgForbidden         = "このアカウントは利用できません。" // allowlist removal, revoked session
+	msgAdminOnly         = "管理者だけが利用できます。"
+	msgMembersOnly       = "この操作は会員だけが利用できます。"
 	msgShareMembersOnly  = "共有できるのは会員だけです。"
 	msgSelfFollow        = "自分はフォローできません。"
 	msgAdminOnlyView     = "他の人の記録は管理者だけが見られます。"
