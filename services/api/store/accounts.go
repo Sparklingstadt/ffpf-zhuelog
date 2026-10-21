@@ -18,6 +18,12 @@ const (
 	lockDuration      = 15 * time.Minute
 )
 
+// MemberOwnerPrefix starts every member's ownerId: "password:" + account id.
+const MemberOwnerPrefix = "password:"
+
+// MemberOwnerID is the ownerId of the member with the given account id.
+func MemberOwnerID(accountID string) string { return MemberOwnerPrefix + accountID }
+
 // PasswordAccount is a member account that signs in with loginId and password.
 type PasswordAccount struct {
 	ID             string

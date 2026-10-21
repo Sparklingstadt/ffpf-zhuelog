@@ -4,10 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"regexp"
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/jsstr"
@@ -19,13 +16,7 @@ const (
 	msgInvalidName     = "表示名は1〜50文字にしてください。"
 	msgLoginIDTaken    = "このログインIDはすでに使われています。"
 	msgAccountNotFound = "アカウントが見つかりません。"
-
-	maxDisplayNameRunes = 50
-	minPasswordRunes    = 12
-	maxPasswordRunes    = 128
 )
-
-var loginIDPattern = regexp.MustCompile(`^[a-z0-9._-]{3,32}$`)
 
 // accountInput is the validated form of an admin request. Password is what
 // will be stored: the one given, or a generated one.
@@ -35,12 +26,12 @@ type accountInput struct {
 }
 
 // resolvePassword applies the web app's optionalPasswordSchema: blank means
-// generate, anything else must be 12-128 characters (not trimmed).
+// generate, anything else must be 12-128 UTF-16 units (not trimmed).
 func resolvePassword(given string) (password string, generated bool, ok bool) {
 	if jsstr.Trim(given) == "" {
 		return auth.GeneratePassword(), true, true
 	}
-	if n := utf8.RuneCountInString(given); n < minPasswordRunes || n > maxPasswordRunes {
+	if !auth.ValidNewPassword(given) {
 		return "", false, false
 	}
 	return given, false, true
@@ -50,12 +41,11 @@ func resolvePassword(given string) (password string, generated bool, ok bool) {
 // order and returns the message of the first failing field.
 func validateAccountInput(loginID, displayName, password string) (accountInput, string) {
 	var in accountInput
-	in.LoginID = strings.ToLower(jsstr.Trim(loginID))
-	if !loginIDPattern.MatchString(in.LoginID) {
+	var ok bool
+	if in.LoginID, ok = auth.NormalizeLoginID(loginID); !ok {
 		return in, msgInvalidLoginID
 	}
-	in.DisplayName = jsstr.Trim(displayName)
-	if n := utf8.RuneCountInString(in.DisplayName); n < 1 || n > maxDisplayNameRunes || strings.ContainsRune(in.DisplayName, 0) {
+	if in.DisplayName, ok = auth.ValidDisplayName(displayName); !ok {
 		return in, msgInvalidName
 	}
 	pw, generated, ok := resolvePassword(password)
@@ -88,7 +78,7 @@ type accountJSON struct {
 
 func toAccountJSON(a store.AccountSummary) accountJSON {
 	return accountJSON{
-		ID: a.ID, OwnerID: "password:" + a.ID, LoginID: a.LoginID,
+		ID: a.ID, OwnerID: store.MemberOwnerID(a.ID), LoginID: a.LoginID,
 		DisplayName: a.DisplayName, CreatedAt: formatTime(a.CreatedAt), Locked: a.Locked,
 	}
 }

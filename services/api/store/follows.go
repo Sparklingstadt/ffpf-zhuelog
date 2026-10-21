@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-const memberPrefix = "password:"
-
 // Member is a registered member as seen by one viewer.
 type Member struct {
 	OwnerID     string // "password:<id>"
@@ -41,7 +39,7 @@ func (s *Store) ListMembers(ctx context.Context, viewerID string) (MemberDirecto
 		        EXISTS (SELECT 1 FROM "Follow" f WHERE f."followerId" = $2 || a."id" AND f."followeeId" = $1)
 		 FROM "PasswordAccount" a
 		 WHERE $2 || a."id" <> $1
-		 ORDER BY a."displayName" COLLATE "ja-x-icu", a."createdAt", a."id"`, viewerID, memberPrefix)
+		 ORDER BY a."displayName" COLLATE "ja-x-icu", a."createdAt", a."id"`, viewerID, MemberOwnerPrefix)
 	if err != nil {
 		return MemberDirectory{}, fmt.Errorf("store: list members: %w", err)
 	}
@@ -70,7 +68,7 @@ func (s *Store) ListMembers(ctx context.Context, viewerID string) (MemberDirecto
 
 // MemberExists reports whether ownerID ("password:<id>") is an existing member.
 func (s *Store) MemberExists(ctx context.Context, ownerID string) (bool, error) {
-	id, ok := strings.CutPrefix(ownerID, memberPrefix)
+	id, ok := strings.CutPrefix(ownerID, MemberOwnerPrefix)
 	if !ok {
 		return false, nil
 	}
@@ -116,11 +114,11 @@ func (s *Store) ListTimeline(ctx context.Context, viewerID string, after *Cursor
 		        e."ownerId", a."displayName"
 		 FROM "LearningEntry" e
 		 JOIN "Follow" f ON f."followeeId" = e."ownerId" AND f."followerId" = $1
-		 JOIN "PasswordAccount" a ON e."ownerId" = 'password:' || a."id"
+		 JOIN "PasswordAccount" a ON e."ownerId" = $5 || a."id"
 		 WHERE e."sharedAt" IS NOT NULL AND e."deletedAt" IS NULL
 		   AND ($2::timestamp IS NULL OR (e."createdAt", e."id") < ($2::timestamp, $3::text))
 		 ORDER BY e."createdAt" DESC, e."id" DESC
-		 LIMIT $4`, viewerID, afterAt, afterID, limit)
+		 LIMIT $4`, viewerID, afterAt, afterID, limit, MemberOwnerPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("store: list timeline: %w", err)
 	}

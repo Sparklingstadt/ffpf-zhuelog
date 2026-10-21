@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -19,17 +18,13 @@ import (
 
 const (
 	maxPasswordRunes  = 128
-	minNewPassword    = 12
-	memberOwnerPrefix = "password:"
 	refreshTokenBytes = 32
 	familyIDBytes     = 16
 )
 
-var loginIDPattern = regexp.MustCompile(`^[a-z0-9._-]{3,32}$`)
-
 // ChangePassword's outcomes besides ErrForbidden and infrastructure errors.
 var (
-	// ErrInvalidNewPassword: the new password is not 12 to 128 runes.
+	// ErrInvalidNewPassword: the new password is not 12 to 128 UTF-16 units.
 	ErrInvalidNewPassword = errors.New("auth: new password must be 12 to 128 characters")
 	// ErrPasswordMismatch: the new password and its confirmation differ.
 	ErrPasswordMismatch = errors.New("auth: password confirmation does not match")
@@ -123,8 +118,8 @@ func (s *Service) LoginGitHub(ctx context.Context, code, verifier, redirectURI s
 // hash cannot be computed (ctx done while waiting), the hasher's error is
 // returned wrapped instead.
 func (s *Service) LoginPassword(ctx context.Context, loginID, password string) (TokenPair, error) {
-	loginID = strings.ToLower(strings.TrimSpace(loginID))
-	if !loginIDPattern.MatchString(loginID) || password == "" || utf8.RuneCountInString(password) > maxPasswordRunes {
+	loginID, validID := NormalizeLoginID(loginID)
+	if !validID || password == "" || utf8.RuneCountInString(password) > maxPasswordRunes {
 		return TokenPair{}, s.rejectPassword(ctx, truncateRunes(password, maxPasswordRunes))
 	}
 
@@ -155,7 +150,7 @@ func (s *Service) LoginPassword(ctx context.Context, loginID, password string) (
 	}
 
 	return s.startSession(ctx, Principal{
-		OwnerID:        memberOwnerPrefix + account.ID,
+		OwnerID:        store.MemberOwnerID(account.ID),
 		Role:           RoleMember,
 		SessionVersion: account.SessionVersion,
 	})
@@ -174,7 +169,8 @@ func (s *Service) rejectPassword(ctx context.Context, password string) error {
 // ChangeOwnPassword order:
 //
 //  1. only members may (ErrForbidden), checked before anything else;
-//  2. next must be 12 to 128 runes, spaces included (ErrInvalidNewPassword);
+//  2. next must be 12 to 128 UTF-16 units, spaces included
+//     (ErrInvalidNewPassword);
 //  3. confirm must equal next (ErrPasswordMismatch);
 //  4. a missing account, a current password that is not 1 to 128 runes, a
 //     lockout or a wrong password all return ErrInvalidCurrentPassword after
@@ -188,7 +184,7 @@ func (s *Service) ChangePassword(ctx context.Context, p Principal, current, next
 	if p.Role != RoleMember {
 		return ErrForbidden
 	}
-	if n := utf8.RuneCountInString(next); n < minNewPassword || n > maxPasswordRunes {
+	if !ValidNewPassword(next) {
 		return ErrInvalidNewPassword
 	}
 	if next != confirm {
@@ -197,7 +193,7 @@ func (s *Service) ChangePassword(ctx context.Context, p Principal, current, next
 
 	// Simulate never sees more than maxPasswordRunes runes.
 	simulated := truncateRunes(current, maxPasswordRunes)
-	accountID, ok := strings.CutPrefix(p.OwnerID, memberOwnerPrefix)
+	accountID, ok := strings.CutPrefix(p.OwnerID, store.MemberOwnerPrefix)
 	if !ok || accountID == "" {
 		return s.rejectCurrent(ctx, simulated)
 	}
@@ -337,7 +333,7 @@ func (s *Service) checkCurrent(ctx context.Context, p Principal) error {
 		}
 		return nil
 	case RoleMember:
-		accountID, ok := strings.CutPrefix(p.OwnerID, memberOwnerPrefix)
+		accountID, ok := strings.CutPrefix(p.OwnerID, store.MemberOwnerPrefix)
 		if !ok || accountID == "" {
 			return ErrUnauthorized
 		}

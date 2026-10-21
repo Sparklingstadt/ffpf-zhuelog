@@ -156,7 +156,8 @@ func TestAdminListAccounts(t *testing.T) {
 }
 
 func TestAdminCreateAccount(t *testing.T) {
-	long := strings.Repeat("あ", 12) // 12 runes, 36 bytes
+	long := strings.Repeat("あ", 12)  // 12 runes, 36 bytes
+	emoji6 := strings.Repeat("😀", 6) // 6 runes, 12 UTF-16 units
 	cases := []struct {
 		name, body    string
 		wantPassword  string // "" = generated
@@ -167,6 +168,7 @@ func TestAdminCreateAccount(t *testing.T) {
 		{"whitespace only", `{"loginId":"alice.w","displayName":"Alice","password":"   \t "}`, "", true},
 		{"given", `{"loginId":"alice.w","displayName":"Alice","password":"  keep spaces 1 "}`, "  keep spaces 1 ", false},
 		{"multibyte", `{"loginId":"alice.w","displayName":"Alice","password":"` + long + `"}`, long, false},
+		{"emoji, 12 UTF-16 units", `{"loginId":"alice.w","displayName":"Alice","password":"` + emoji6 + `"}`, emoji6, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -222,6 +224,9 @@ func TestAdminCreateAccountValidation(t *testing.T) {
 		{"password short", `{"loginId":"abc","displayName":"x","password":"12345678901"}`, passMsg},
 		{"password short multibyte", `{"loginId":"abc","displayName":"x","password":` + q(strings.Repeat("あ", 11)) + `}`, passMsg},
 		{"password long", `{"loginId":"abc","displayName":"x","password":` + q(strings.Repeat("a", 129)) + `}`, passMsg},
+		{"password long emoji", `{"loginId":"abc","displayName":"x","password":` + q(strings.Repeat("😀", 65)) + `}`, passMsg},
+		{"name too long emoji", `{"loginId":"abc","displayName":` + q(strings.Repeat("😀", 26)) + `}`, nameMsg},
+		{"login dotted capital I", `{"loginId":` + q(string(rune(0x0130))+"abc") + `,"displayName":"x"}`, loginMsg},
 		{"login before name", `{"loginId":"!","displayName":""}`, loginMsg},
 		{"name before password", `{"loginId":"abc","displayName":"","password":"x"}`, nameMsg},
 	}
@@ -245,6 +250,7 @@ func TestAdminCreateAccountValidation(t *testing.T) {
 	for _, body := range []string{
 		`{"loginId":"a.-","displayName":"x","password":"123456789012"}`,
 		`{"loginId":"` + strings.Repeat("z", 32) + `","displayName":` + q(strings.Repeat("あ", 50)) + `,"password":` + q(strings.Repeat("a", 128)) + `}`,
+		`{"loginId":"emoji","displayName":` + q(strings.Repeat("😀", 25)) + `,"password":` + q(strings.Repeat("😀", 64)) + `}`,
 	} {
 		if w := do(h, http.MethodPost, "/v1/admin/accounts", body, authHeader); w.Code != http.StatusCreated {
 			t.Fatalf("boundary %s: status %d: %s", body, w.Code, w.Body.String())
@@ -253,6 +259,24 @@ func TestAdminCreateAccountValidation(t *testing.T) {
 	// Malformed bodies are plain 400s.
 	for _, body := range []string{`{`, `[]`, `{"loginId":null,"displayName":"x"}`, `{"loginId":"abc","displayName":"x","extra":1}`} {
 		wantError(t, do(h, http.MethodPost, "/v1/admin/accounts", body, authHeader), http.StatusBadRequest, "invalid_request")
+	}
+}
+
+// loginId is lowercased like JS toLowerCase: the Kelvin sign becomes "k".
+func TestAdminCreateAccountKelvinSign(t *testing.T) {
+	acc := newFakeAccounts()
+	h, _ := adminRouter(t, acc, auth.RoleAdmin)
+	body, _ := json.Marshal(map[string]string{"loginId": string(rune(0x212A)) + "abc", "displayName": "K"})
+	w := do(h, http.MethodPost, "/v1/admin/accounts", string(body), authHeader)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
+	}
+	var resp createResp
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Account.LoginID != "kabc" {
+		t.Fatalf("loginId = %q, want kabc", resp.Account.LoginID)
 	}
 }
 
@@ -275,6 +299,7 @@ func TestAdminResetPassword(t *testing.T) {
 		{"empty object", `{}`, "", true},
 		{"blank", `{"password":"  "}`, "", true},
 		{"given", `{"password":"a brand new pw"}`, "a brand new pw", false},
+		{"emoji, 12 UTF-16 units", `{"password":"😀😀😀😀😀😀"}`, "😀😀😀😀😀😀", false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -321,10 +346,13 @@ func TestAdminResetPasswordErrors(t *testing.T) {
 		t.Fatalf("message = %q", got)
 	}
 
-	w = do(h, http.MethodPost, "/v1/admin/accounts/cx/password", `{"password":"short"}`, authHeader)
-	wantError(t, w, http.StatusBadRequest, "invalid_request")
-	if got := decodeError(t, w).Error.Message; got != "パスワードは12〜128文字にしてください。" {
-		t.Fatalf("message = %q", got)
+	for _, pw := range []string{"short", strings.Repeat("😀", 65)} {
+		body, _ := json.Marshal(map[string]string{"password": pw})
+		w = do(h, http.MethodPost, "/v1/admin/accounts/cx/password", string(body), authHeader)
+		wantError(t, w, http.StatusBadRequest, "invalid_request")
+		if got := decodeError(t, w).Error.Message; got != "パスワードは12〜128文字にしてください。" {
+			t.Fatalf("%q: message = %q", pw, got)
+		}
 	}
 	if len(acc.setCalls) != 0 {
 		t.Fatal("password changed despite invalid input")
