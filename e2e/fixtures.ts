@@ -5,17 +5,9 @@ import {
   type Page,
 } from "@playwright/test";
 import { createHmac, randomBytes } from "node:crypto";
-import { encode } from "next-auth/jwt";
 import { Client } from "pg";
-import { ScryptPasswordHasher } from "../src/infrastructure/auth/scrypt-password-hasher";
-import {
-  authMode,
-  authSecret,
-  baseURL,
-  cookieName,
-  databaseUrl,
-  goJwtSecret,
-} from "./environment";
+import { ScryptPasswordHasher } from "../scripts/lib/scrypt-password-hasher";
+import { baseURL, cookieName, databaseUrl, goJwtSecret } from "./environment";
 
 export const test = base.extend<{ db: Client }>({
   // The Go API limits /v1/auth/* to 10 calls a minute per client address, in
@@ -23,7 +15,6 @@ export const test = base.extend<{ db: Client }>({
   // each test its own address instead; locally the web takes it from
   // X-Forwarded-For and hands it to the Go API.
   extraHTTPHeaders: async ({ extraHTTPHeaders }, provide) => {
-    if (authMode !== "go") return provide(extraHTTPHeaders);
     const [a, b, c] = randomBytes(3);
     await provide({
       ...extraHTTPHeaders,
@@ -63,11 +54,7 @@ export const adminOwnerId = "10001";
 
 export async function asAdmin(context: BrowserContext) {
   await addAdminSession(context, {
-    // Same shape as a real GitHub sign-in: Auth.js puts a random UUID in
-    // sub, and the app stores the numeric GitHub id in its own claim.
-    sub: "1b4e28ba-2fa1-11d2-883f-0016d3cca427",
     githubId: adminOwnerId,
-    name: "E2E Admin",
     login: "e2e-admin",
   });
 }
@@ -76,28 +63,14 @@ export async function asAdmin(context: BrowserContext) {
 // this run's random secret. No app auth bypass.
 export async function addAdminSession(
   context: BrowserContext,
-  admin: { sub: string; githubId?: string; name: string; login: string },
+  admin: { githubId: string; login: string },
 ) {
-  const value =
-    authMode === "go"
-      ? goAccessToken({
-          // The Go API puts the numeric GitHub id in sub.
-          sub: admin.githubId ?? admin.sub,
-          role: "admin",
-          login: admin.login,
-        })
-      : await encode({
-          secret: authSecret(),
-          salt: cookieName,
-          maxAge: 3600,
-          token: {
-            sub: admin.sub,
-            githubId: admin.githubId,
-            name: admin.name,
-            role: "admin",
-            githubLogin: admin.login,
-          },
-        });
+  const value = goAccessToken({
+    // The Go API puts the numeric GitHub id in sub.
+    sub: admin.githubId,
+    role: "admin",
+    login: admin.login,
+  });
   await context.addCookies([
     { name: cookieName, value, url: baseURL, httpOnly: true, sameSite: "Lax" },
   ]);

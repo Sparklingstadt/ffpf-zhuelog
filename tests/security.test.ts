@@ -1,27 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { resolveSessionRole } from "../src/infrastructure/auth/session-role-policy";
 import { securePostgresConnectionString } from "../src/infrastructure/config/postgres-connection";
 import { contentSecurityPolicy } from "../src/infrastructure/security/content-security-policy";
 import { parseLogNumber } from "../src/domain/calendar/value-objects/log-date";
 import { getSafeCallbackPath } from "../src/presentation/http/safe-callback-path";
-
-test("admin JWTs lose privileges when their GitHub id leaves the current allowlist", () => {
-  assert.equal(resolveSessionRole("admin", "583231", " 583231 ,9"), "admin");
-  assert.equal(resolveSessionRole("admin", "583231", "9"), "revoked");
-  assert.equal(resolveSessionRole("admin", "583231", ""), "revoked");
-  assert.equal(resolveSessionRole("admin", null, "583231"), "revoked");
-  assert.equal(resolveSessionRole("guest", undefined, ""), "guest");
-  assert.equal(resolveSessionRole("member", "password:c1", ""), "member");
-  assert.equal(resolveSessionRole("revoked", "583231", "583231"), "revoked");
-});
-
-test("the admin allowlist matches numeric GitHub ids, never logins", () => {
-  // A login (renamable, re-registrable by someone else) is never an admin.
-  assert.equal(resolveSessionRole("admin", "octocat", "octocat"), "revoked");
-  assert.equal(resolveSessionRole("admin", "0583231", "583231"), "revoked");
-  assert.equal(resolveSessionRole("admin", "", ","), "revoked");
-});
 
 test("callbacks reject external, encoded slash, backslash, control and malformed paths", () => {
   for (const value of [

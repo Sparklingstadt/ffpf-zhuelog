@@ -45,16 +45,16 @@ test("goApiUrl trims, strips trailing slashes and maps empty to undefined", () =
   assert.equal(goApiUrl(), undefined);
 });
 
-test("isAuthConfigured keeps the Auth.js rule when GO_API_URL is unset", () => {
+test("isAuthConfigured is false without GO_API_URL, whatever else is set", () => {
   delete process.env.GO_API_URL;
   process.env.AUTH_SECRET = "a";
   process.env.AUTH_GITHUB_ID = "b";
   process.env.AUTH_GITHUB_SECRET = "c";
   process.env.AUTH_ALLOWED_GITHUB_IDS = "1";
-  assert.equal(isAuthConfigured(), true);
+  assert.equal(isAuthConfigured(), false);
 });
 
-test("isAuthConfigured follows the Go rule when GO_API_URL is set", () => {
+test("isAuthConfigured needs AUTH_GITHUB_ID", () => {
   process.env.GO_API_URL = "https://api.test/";
   delete process.env.AUTH_GITHUB_ID;
   assert.equal(isAuthConfigured(), false);

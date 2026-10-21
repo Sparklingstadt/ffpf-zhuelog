@@ -5,15 +5,12 @@ import {
   type ScryptOptions,
 } from "node:crypto";
 
-import type { PasswordHasher } from "@/application/identity/ports/password-hasher";
-
 const N = 2 ** 15;
 const R = 8;
 const P = 1;
 const SALT_BYTES = 16;
 const KEY_BYTES = 64;
 const MAX_MEMORY = 64 * 1024 * 1024;
-const GENERATED_PASSWORD_BYTES = 15;
 
 function deriveKey(
   password: string,
@@ -51,10 +48,9 @@ function parse(passwordHash: string) {
   return { params, salt, key };
 }
 
-export class ScryptPasswordHasher implements PasswordHasher {
-  // Created on first use so importing this module costs nothing.
-  private dummyHash: Promise<string> | undefined;
-
+// The hash format the Go API verifies (services/api/auth/password.go). Only
+// the e2e fixtures and the local seed script write hashes from Node.
+export class ScryptPasswordHasher {
   async hash(password: string) {
     const salt = randomBytes(SALT_BYTES);
     const key = await deriveKey(password, salt, KEY_BYTES, {
@@ -88,24 +84,5 @@ export class ScryptPasswordHasher implements PasswordHasher {
     } catch {
       return false;
     }
-  }
-
-  async simulateVerify(password: string) {
-    const pending = (this.dummyHash ??= this.hash(
-      randomBytes(GENERATED_PASSWORD_BYTES).toString("base64url"),
-    ));
-    let dummyHash: string;
-    try {
-      dummyHash = await pending;
-    } catch (error) {
-      // Do not keep a rejected promise: the next call builds a fresh one.
-      if (this.dummyHash === pending) this.dummyHash = undefined;
-      throw error;
-    }
-    await this.verify(password, dummyHash);
-  }
-
-  generate() {
-    return randomBytes(GENERATED_PASSWORD_BYTES).toString("base64url");
   }
 }

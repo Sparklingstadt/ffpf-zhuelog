@@ -46,11 +46,7 @@ test("revoked admin JWT cannot access pages or import actions", async ({
   await page.goto("/");
   await page.waitForLoadState("networkidle");
   // Validly signed, but for an admin who is not on the allowlist.
-  await addAdminSession(context, {
-    sub: "removed",
-    name: "Removed",
-    login: "removed",
-  });
+  await addAdminSession(context, { githubId: "removed", login: "removed" });
   await upload(page, "原文,添削,pinyin");
   await expect(
     page.getByText(

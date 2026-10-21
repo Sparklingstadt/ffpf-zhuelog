@@ -1,11 +1,5 @@
 import { type BrowserContext } from "@playwright/test";
-import { authMode } from "./environment";
 import { asMember, createMember, expect, test } from "./fixtures";
-
-test.skip(
-  authMode !== "go",
-  "Checks the Go-mode zl_access/zl_refresh cookies, which the Auth.js mode does not set.",
-);
 
 async function sessionCookies(context: BrowserContext) {
   const cookies = await context.cookies();

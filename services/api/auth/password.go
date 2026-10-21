@@ -12,8 +12,8 @@ import (
 	"golang.org/x/crypto/scrypt"
 )
 
-// These match the parameters the web app writes for new hashes
-// (src/infrastructure/auth/scrypt-password-hasher.ts).
+// These match the parameters the Node seed and e2e scripts write
+// (scripts/lib/scrypt-password-hasher.ts).
 const (
 	scryptN         = 1 << 15
 	scryptR         = 8

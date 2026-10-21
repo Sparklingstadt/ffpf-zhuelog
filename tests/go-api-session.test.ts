@@ -1,19 +1,17 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { CredentialsSignin } from "next-auth";
 import { GoApiError } from "../src/infrastructure/go-api/client";
 import {
   goGuestFailureUrl,
   goPasswordFailureUrl,
   isSecureRequest,
 } from "../src/infrastructure/go-api/go-api-session";
-import { passwordSignInFailureUrl } from "../src/presentation/http/password-sign-in-failure";
 
 const path = "/logs?a=1&b=2";
 
-test("401 and 429 lead to the same URL as an Auth.js credential rejection", () => {
-  const expected = passwordSignInFailureUrl(new CredentialsSignin(), path);
-  assert.ok(expected);
+test("400, 401 and 429 all lead to the one credential rejection URL", () => {
+  const expected =
+    "/signin?error=CredentialsSignin&callbackUrl=%2Flogs%3Fa%3D1%26b%3D2";
   assert.equal(
     goPasswordFailureUrl(new GoApiError(401, "unauthorized"), path),
     expected,

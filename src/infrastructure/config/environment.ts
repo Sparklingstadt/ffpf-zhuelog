@@ -4,14 +4,12 @@ export function goApiUrl(): string | undefined {
   return url ? url : undefined;
 }
 
-export function isGoAuthEnabled(): boolean {
-  return goApiUrl() !== undefined;
-}
-
 // Matches the Go API's own minimum for API_WEB_PROXY_SECRET.
 const MIN_PROXY_SECRET_BYTES = 32;
 
-export function isGoAuthConfigured(): boolean {
+// Sign-in goes through the Go API, so it needs the API's URL, the proxy
+// secret it shares with the web, and the GitHub OAuth App's client id.
+export function isAuthConfigured(): boolean {
   const url = goApiUrl();
   const secret = process.env.API_WEB_PROXY_SECRET ?? "";
   return Boolean(
@@ -35,15 +33,5 @@ function isSafeGoApiUrl(raw: string): boolean {
   return (
     url.protocol === "http:" &&
     (url.hostname === "localhost" || url.hostname === "127.0.0.1")
-  );
-}
-
-export function isAuthConfigured() {
-  if (isGoAuthEnabled()) return isGoAuthConfigured();
-  return Boolean(
-    process.env.AUTH_SECRET &&
-    process.env.AUTH_GITHUB_ID &&
-    process.env.AUTH_GITHUB_SECRET &&
-    process.env.AUTH_ALLOWED_GITHUB_IDS,
   );
 }

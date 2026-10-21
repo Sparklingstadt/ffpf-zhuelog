@@ -90,8 +90,8 @@ function isPublicRoute(pathname: string): boolean {
   return pathname === "/signin" || pathname.startsWith("/api/auth/");
 }
 
-// Same rules as the Auth.js authorized callback. Only checks that a session
-// cookie exists; pages confirm it with GET /v1/me. Returns null to pass.
+// Only checks that a session cookie exists; pages confirm it with
+// GET /v1/me. Returns null to pass.
 function gate(request: NextRequest, signedIn: boolean): NextResponse | null {
   const pathname = request.nextUrl.pathname;
   if (isPublicRoute(pathname) || signedIn) return null;
@@ -111,6 +111,6 @@ function gate(request: NextRequest, signedIn: boolean): NextResponse | null {
     "callbackUrl",
     `${pathname}${request.nextUrl.search}`,
   );
-  // 302, as Response.redirect gives on the Auth.js path.
+  // 302, as Response.redirect gives.
   return NextResponse.redirect(signInUrl, 302);
 }

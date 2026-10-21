@@ -122,7 +122,7 @@ test("stale admin form is rejected after switching to guest", async ({
   await page.goto("/");
   await expect(page.getByLabel("CSVファイル", { exact: true })).toBeEnabled();
   // Drain initial prefetch responses before replacing the shared session;
-  // Auth.js proxy responses refresh cookies, including in-flight requests.
+  // proxy responses refresh cookies, including in-flight requests.
   await page.waitForLoadState("networkidle");
   await context.clearCookies();
   const guestTab = await context.newPage();
