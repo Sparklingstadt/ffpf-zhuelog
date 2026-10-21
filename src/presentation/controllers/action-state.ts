@@ -14,10 +14,6 @@ export const actionUnauthorized: ActionState = {
   status: "error",
   message: "ログインし直してください。",
 };
-const actionFailed: ActionState = {
-  status: "error",
-  message: genericErrorMessage,
-};
 
 // Learning note ids are Prisma cuids (seeded test notes use other lowercase
 // alphanumerics).
@@ -34,11 +30,23 @@ const userFacingCodes = new Set([
   "too_large",
 ]);
 
+// What the form shows for a failed Go call: Go's own message for bad input,
+// the generic text for every other failure (429, 5xx, Go unreachable). The
+// generic case logs the fixed code with Go's status and error code only.
+export function goFailureMessage(code: string, error: GoApiError): string {
+  if (
+    [400, 409, 413].includes(error.status) &&
+    userFacingCodes.has(error.code) &&
+    error.userMessage
+  )
+    return error.userMessage;
+  console.error(code, error.status, error.code);
+  return genericErrorMessage;
+}
+
 // Runs an action that calls the Go API. Only a GoApiError becomes a state:
 // anything else, including Next's redirect to /signin, is rethrown. 403 is
-// treated as not being allowed; Go's own message is shown for bad input,
-// and every other failure (429, 5xx, Go unreachable) gets the generic text.
-// Logs the fixed code with Go's status and error code only.
+// treated as not being allowed; other failures go through goFailureMessage.
 export async function attemptGoAction(
   code: string,
   run: () => Promise<ActionState>,
@@ -48,13 +56,6 @@ export async function attemptGoAction(
   } catch (error) {
     if (!(error instanceof GoApiError)) throw error;
     if (error.status === 403) return actionUnauthorized;
-    if (
-      [400, 409, 413].includes(error.status) &&
-      userFacingCodes.has(error.code) &&
-      error.userMessage
-    )
-      return { status: "error", message: error.userMessage };
-    console.error(code, error.status, error.code);
-    return actionFailed;
+    return { status: "error", message: goFailureMessage(code, error) };
   }
 }

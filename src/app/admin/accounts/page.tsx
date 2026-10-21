@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 
 import {
   getCurrentAdminUser,
-  passwordAccountUseCases,
+  memberAccounts,
 } from "@/composition/identity-container";
 import { CreateAccountForm } from "@/presentation/components/auth/create-account-form";
 import { ResetPasswordForm } from "@/presentation/components/auth/reset-password-form";
@@ -29,7 +29,7 @@ export default async function AdminAccountsPage() {
   const user = await getCurrentAdminUser();
   if (!user) redirect("/");
 
-  const accounts = await passwordAccountUseCases.list.execute();
+  const accounts = await memberAccounts.listAccounts();
 
   return (
     <>
