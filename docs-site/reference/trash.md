@@ -36,9 +36,12 @@
       "deletedAt": "2026-10-21T08:00:00.000Z"
     }
   ],
-  "nextCursor": null
+  "nextCursor": null,
+  "total": 1
 }
 ```
+
+`total` は `limit`・`cursor` に関係なく、自分のゴミ箱にあるノートの総数です（整数・常に含まれます）。
 
 **エラー**
 

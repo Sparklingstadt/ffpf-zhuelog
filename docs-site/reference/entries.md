@@ -47,9 +47,12 @@
       "sharedAt": null
     }
   ],
-  "nextCursor": "MTc5MjQ2NTQ0NTY3OHxjbWgweDVrMnAwMDAwYWJjZDEyMzRlZmdo"
+  "nextCursor": "MTc5MjQ2NTQ0NTY3OHxjbWgweDVrMnAwMDAwYWJjZDEyMzRlZmdo",
+  "total": 42
 }
 ```
+
+`total` は `limit`・`cursor` に関係なく、対象の持ち主（`?user=` を指定したらその会員）のゴミ箱に無いノートの総数です（整数・常に含まれます）。
 
 **エラー**
 

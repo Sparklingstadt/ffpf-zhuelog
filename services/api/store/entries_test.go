@@ -222,6 +222,22 @@ func TestListEntriesOrderAndOwner(t *testing.T) {
 	}
 }
 
+func TestCountEntries(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	owner := newOwner(t, s)
+	other := newOwner(t, s)
+	mine := createEntries(t, s, owner, fixedNow(), 3, 0)
+	createEntries(t, s, other, fixedNow(), 2, 0)
+	if err := s.TrashEntry(ctx, owner, mine[0].ID, fixedNow()); err != nil {
+		t.Fatal(err)
+	}
+	n, err := s.CountEntries(ctx, owner)
+	if err != nil || n != 2 {
+		t.Fatalf("CountEntries = %d, %v; want 2", n, err)
+	}
+}
+
 func TestListEntriesPaginatesTies(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

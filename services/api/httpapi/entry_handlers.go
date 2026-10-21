@@ -141,6 +141,7 @@ func listEntries(e Entries) http.Handler {
 	type response struct {
 		Entries    []entryJSON `json:"entries"`
 		NextCursor *string     `json:"nextCursor"`
+		Total      int         `json:"total"`
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		limit, after, ok := readListQuery(w, r)
@@ -159,7 +160,12 @@ func listEntries(e Entries) http.Handler {
 		entries, next := paginate(entries, limit, func(e store.Entry) store.Cursor {
 			return store.Cursor{CreatedAt: e.CreatedAt, ID: e.ID}
 		})
-		resp := response{Entries: toEntriesJSON(entries), NextCursor: next}
+		total, err := e.CountEntries(r.Context(), owner)
+		if err != nil {
+			writeServiceError(w, r, err)
+			return
+		}
+		resp := response{Entries: toEntriesJSON(entries), NextCursor: next, Total: total}
 		writeJSON(w, http.StatusOK, resp)
 	})
 }

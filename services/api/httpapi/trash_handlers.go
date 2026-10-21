@@ -17,13 +17,15 @@ func listTrash(e Entries) http.Handler {
 	type response struct {
 		Entries    []trashedEntryJSON `json:"entries"`
 		NextCursor *string            `json:"nextCursor"`
+		Total      int                `json:"total"`
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		limit, after, ok := readListQuery(w, r)
 		if !ok {
 			return
 		}
-		entries, err := e.ListTrashed(r.Context(), principalFrom(r.Context()).OwnerID, after, limit+1)
+		ownerID := principalFrom(r.Context()).OwnerID
+		entries, err := e.ListTrashed(r.Context(), ownerID, after, limit+1)
 		if err != nil {
 			writeServiceError(w, r, err)
 			return
@@ -31,7 +33,12 @@ func listTrash(e Entries) http.Handler {
 		entries, next := paginate(entries, limit, func(t store.TrashedEntry) store.Cursor {
 			return store.Cursor{CreatedAt: t.DeletedAt, ID: t.ID}
 		})
-		resp := response{NextCursor: next}
+		total, err := e.CountTrashed(r.Context(), ownerID)
+		if err != nil {
+			writeServiceError(w, r, err)
+			return
+		}
+		resp := response{NextCursor: next, Total: total}
 		resp.Entries = make([]trashedEntryJSON, len(entries))
 		for i, t := range entries {
 			resp.Entries[i] = trashedEntryJSON{entryJSON: toEntryJSON(t.Entry), DeletedAt: formatTime(t.DeletedAt)}

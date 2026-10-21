@@ -44,6 +44,27 @@ func TestListTrashed(t *testing.T) {
 	}
 }
 
+func TestCountTrashed(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	owner := newOwner(t, s)
+	other := newOwner(t, s)
+	mine := createEntries(t, s, owner, fixedNow(), 3, 0)
+	theirs := createEntries(t, s, other, fixedNow(), 1, 0)
+	for _, e := range mine[:2] {
+		if err := s.TrashEntry(ctx, owner, e.ID, fixedNow()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.TrashEntry(ctx, other, theirs[0].ID, fixedNow()); err != nil {
+		t.Fatal(err)
+	}
+	n, err := s.CountTrashed(ctx, owner)
+	if err != nil || n != 2 {
+		t.Fatalf("CountTrashed = %d, %v; want 2", n, err)
+	}
+}
+
 func TestListTrashedPaginatesTies(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
