@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"maps"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -87,7 +89,7 @@ func TestMembersHandler(t *testing.T) {
 	names := []string{"さくら", "あおい", "Bob", "あおい"}
 	members := make([]store.Member, len(names))
 	for i, n := range names {
-		members[i] = store.Member{OwnerID: "password:m" + strconv.Itoa(i), DisplayName: n, LoginID: "l" + strconv.Itoa(i), Following: i == 0, FollowsMe: i == 1}
+		members[i] = store.Member{OwnerID: "password:m" + strconv.Itoa(i), DisplayName: n, Following: i == 0, FollowsMe: i == 1}
 	}
 	for _, role := range []string{auth.RoleMember, auth.RoleAdmin} {
 		t.Run(role, func(t *testing.T) {
@@ -104,7 +106,6 @@ func TestMembersHandler(t *testing.T) {
 				Members []struct {
 					OwnerID     string `json:"ownerId"`
 					DisplayName string `json:"displayName"`
-					LoginID     string `json:"loginId"`
 					Following   bool   `json:"following"`
 					FollowsMe   bool   `json:"followsMe"`
 				} `json:"members"`
@@ -123,8 +124,22 @@ func TestMembersHandler(t *testing.T) {
 			}
 			for i, m := range sorted {
 				g := resp.Members[i]
-				if g.OwnerID != m.OwnerID || g.DisplayName != m.DisplayName || g.LoginID != m.LoginID || g.Following != m.Following || g.FollowsMe != m.FollowsMe {
+				if g.OwnerID != m.OwnerID || g.DisplayName != m.DisplayName || g.Following != m.Following || g.FollowsMe != m.FollowsMe {
 					t.Fatalf("member %d = %+v, want %+v", i, g, m)
+				}
+			}
+			// The directory is visible to every member, so it must not reveal
+			// sign-in identifiers.
+			var raw struct {
+				Members []map[string]any `json:"members"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &raw); err != nil {
+				t.Fatal(err)
+			}
+			for i, m := range raw.Members {
+				keys := slices.Sorted(maps.Keys(m))
+				if want := []string{"displayName", "following", "followsMe", "ownerId"}; !slices.Equal(keys, want) {
+					t.Fatalf("member %d keys = %v, want %v", i, keys, want)
 				}
 			}
 		})

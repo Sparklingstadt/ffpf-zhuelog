@@ -11,7 +11,7 @@ var requiredEnv = []string{
 	"GITHUB_MOBILE_CLIENT_ID",
 	"GITHUB_MOBILE_CLIENT_SECRET",
 	"GITHUB_MOBILE_REDIRECT_URI",
-	"AUTH_ALLOWED_GITHUB_LOGINS",
+	"AUTH_ALLOWED_GITHUB_IDS",
 }
 
 func validEnv() map[string]string {
@@ -21,7 +21,7 @@ func validEnv() map[string]string {
 		"GITHUB_MOBILE_CLIENT_ID":     "client-id",
 		"GITHUB_MOBILE_CLIENT_SECRET": "client-secret-value",
 		"GITHUB_MOBILE_REDIRECT_URI":  "zhuelog://auth/callback",
-		"AUTH_ALLOWED_GITHUB_LOGINS":  "octocat",
+		"AUTH_ALLOWED_GITHUB_IDS":     "583231",
 	}
 }
 
@@ -44,7 +44,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 		t.Errorf("len(JWTSecret) = %d, want 32", len(cfg.JWTSecret))
 	}
 	if cfg.GitHubClientID != "client-id" || cfg.GitHubClientSecret != "client-secret-value" ||
-		cfg.GitHubRedirectURI != "zhuelog://auth/callback" || cfg.AllowedGitHubLogins != "octocat" {
+		cfg.GitHubRedirectURI != "zhuelog://auth/callback" || cfg.AllowedGitHubIDs != "583231" {
 		t.Errorf("unexpected config: %+v", cfg)
 	}
 }

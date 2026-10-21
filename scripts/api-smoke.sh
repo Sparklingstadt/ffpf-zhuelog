@@ -46,7 +46,9 @@ call PUT "/v1/entries/$id/share" 200 >/dev/null
 call DELETE "/v1/entries/$id/share" 200 >/dev/null
 
 members=$(call GET /v1/members 200)
-friend=$(jq -r --arg l "$API_LOCAL_FRIEND_LOGIN" '.members[] | select(.loginId == $l) | .ownerId' <<<"$members")
+# The directory does not expose loginId; find the friend by the display name
+# scripts/api-local-seed.ts gives it.
+friend=$(jq -r '.members[] | select(.displayName == "フレンド") | .ownerId' <<<"$members")
 call PUT "/v1/follows/$friend" 204 >/dev/null
 timeline=$(call GET "/v1/timeline?limit=10" 200)
 echo "     timeline: $(jq '.items | length' <<<"$timeline") item(s) from $API_LOCAL_FRIEND_LOGIN" >&2

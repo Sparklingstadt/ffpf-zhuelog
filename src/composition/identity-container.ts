@@ -15,6 +15,7 @@ import { signIn, signOut } from "@/infrastructure/auth/authjs-config";
 import {
   passwordAccountRepository,
   passwordHasher,
+  signInThrottle,
 } from "@/infrastructure/auth/password-account-services";
 
 const currentUserProvider = new AuthJsCurrentUserProvider((id) =>
@@ -30,7 +31,11 @@ export const passwordAccountUseCases = {
     passwordAccountRepository,
     passwordHasher,
   ),
-  changeOwn: new ChangeOwnPassword(passwordAccountRepository, passwordHasher),
+  changeOwn: new ChangeOwnPassword(
+    passwordAccountRepository,
+    passwordHasher,
+    signInThrottle,
+  ),
   list: new ListPasswordAccounts(passwordAccountRepository),
 };
 

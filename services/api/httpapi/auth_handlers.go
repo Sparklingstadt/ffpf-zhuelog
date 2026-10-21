@@ -100,7 +100,8 @@ func loginPassword(a Auth) http.Handler {
 			writeBodyError(w, r, err)
 			return
 		}
-		pair, err := a.LoginPassword(r.Context(), string(req.LoginID), string(req.Password))
+		client := auth.ClientAddress(clientKey(r))
+		pair, err := a.LoginPassword(r.Context(), client, string(req.LoginID), string(req.Password))
 		if err != nil {
 			writeServiceError(w, r, err)
 			return

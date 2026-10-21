@@ -29,9 +29,7 @@ export function FollowMemberList({
           className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
         >
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <span className="break-all font-medium">
-              {member.displayName}（{member.loginId}）
-            </span>
+            <span className="break-all font-medium">{member.displayName}</span>
             {member.followsMe ? (
               <Badge variant="secondary">フォローされています</Badge>
             ) : null}

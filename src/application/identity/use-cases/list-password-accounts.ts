@@ -7,9 +7,7 @@ import type { PasswordAccountRepository } from "../../../domain/identity/reposit
 export class ListPasswordAccounts {
   constructor(private readonly accounts: PasswordAccountRepository) {}
 
-  async execute(now = new Date()): Promise<PasswordAccountSummary[]> {
-    return (await this.accounts.list()).map((account) =>
-      toSummary(account, now),
-    );
+  async execute(): Promise<PasswordAccountSummary[]> {
+    return (await this.accounts.list()).map(toSummary);
   }
 }

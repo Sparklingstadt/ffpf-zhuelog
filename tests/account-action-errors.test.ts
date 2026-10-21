@@ -165,14 +165,15 @@ test("a ZodError thrown by the real ChangeOwnPassword maps to the password messa
   };
   const repo = {
     findById: unused,
-    reserveAttempt: unused,
     setPassword: unused,
   } as unknown as PasswordAccountRepository;
   const hasher = { hash: unused, verify: unused, simulateVerify: unused };
+  const throttle = { consume: unused, reset: unused };
 
   const error = await new ChangeOwnPassword(
     repo,
     hasher as unknown as PasswordHasher,
+    throttle,
   )
     .execute("acc", {
       currentPassword: "current",

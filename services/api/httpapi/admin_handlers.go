@@ -95,22 +95,21 @@ type accountJSON struct {
 	LoginID     string `json:"loginId"`
 	DisplayName string `json:"displayName"`
 	CreatedAt   string `json:"createdAt"`
-	Locked      bool   `json:"locked"`
 }
 
 func toAccountJSON(a store.AccountSummary) accountJSON {
 	return accountJSON{
 		ID: a.ID, OwnerID: "password:" + a.ID, LoginID: a.LoginID,
-		DisplayName: a.DisplayName, CreatedAt: formatTime(a.CreatedAt), Locked: a.Locked,
+		DisplayName: a.DisplayName, CreatedAt: formatTime(a.CreatedAt),
 	}
 }
 
-func listAccounts(acc Accounts, now func() time.Time) http.Handler {
+func listAccounts(acc Accounts) http.Handler {
 	type response struct {
 		Accounts []accountJSON `json:"accounts"`
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		list, err := acc.ListPasswordAccounts(r.Context(), now())
+		list, err := acc.ListPasswordAccounts(r.Context())
 		if err != nil {
 			writeServiceError(w, r, err)
 			return
