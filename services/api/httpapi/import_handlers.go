@@ -22,6 +22,23 @@ const (
 	maxCSVBodyBytes = 6 << 20
 )
 
+// csvUploadTimeout is how long a CSV upload may take to arrive. It is a var so
+// tests can shorten it.
+var csvUploadTimeout = 5 * time.Minute
+
+// extendCSVDeadlines gives this one request longer read and write deadlines
+// than the server's, so a slow 5 MiB upload can finish and still get a JSON
+// answer. It runs after authentication, so unauthenticated requests keep the
+// server's deadlines. It uses the real clock, as deadlines are wall-clock
+// matters. Writers that cannot set deadlines (http.ErrNotSupported, as in
+// httptest.ResponseRecorder) are left alone.
+func extendCSVDeadlines(w http.ResponseWriter) {
+	rc := http.NewResponseController(w)
+	now := time.Now()
+	_ = rc.SetReadDeadline(now.Add(csvUploadTimeout))
+	_ = rc.SetWriteDeadline(now.Add(csvUploadTimeout + 10*time.Second))
+}
+
 // importCSV stores the uploaded CSV in the caller's own notes, validating it
 // exactly like the web. The CSV contents are never logged.
 func importCSV(e Entries, now func() time.Time) http.Handler {
@@ -39,6 +56,7 @@ func importCSV(e Entries, now func() time.Time) http.Handler {
 			writeError(w, http.StatusForbidden, "forbidden", msgForbidden)
 			return
 		}
+		extendCSVDeadlines(w)
 		mr, err := r.MultipartReader()
 		if err != nil {
 			writeBadRequest(w)

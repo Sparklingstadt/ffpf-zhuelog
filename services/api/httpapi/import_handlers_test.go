@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"mime/multipart"
 	"net/http"
@@ -271,5 +272,81 @@ func TestImportCSVHandlerNeverLogsContents(t *testing.T) {
 				t.Fatalf("CSV contents leaked: logs %s body %s", logs.String(), w.Body.String())
 			}
 		})
+	}
+}
+
+// slowServer serves h with 200 ms server deadlines, like main.go's but short.
+func slowServer(t *testing.T, h http.Handler) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewUnstartedServer(h)
+	srv.Config.ReadTimeout = 200 * time.Millisecond
+	srv.Config.WriteTimeout = 200 * time.Millisecond
+	srv.Start()
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// slowBody returns a reader that delivers body in three chunks, sleeping
+// between them for about 600 ms in total.
+func slowBody(body string) io.Reader {
+	pr, pw := io.Pipe()
+	go func() {
+		n := len(body)
+		cuts := []int{0, n / 3, 2 * n / 3, n}
+		for i := 0; i < 3; i++ {
+			if i > 0 {
+				time.Sleep(300 * time.Millisecond)
+			}
+			if _, err := pw.Write([]byte(body[cuts[i]:cuts[i+1]])); err != nil {
+				return
+			}
+		}
+		pw.Close()
+	}()
+	return pr
+}
+
+func slowPost(t *testing.T, url, contentType, body string) (*http.Response, error) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, url, slowBody(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer tok")
+	req.Header.Set("Content-Type", contentType)
+	return (&http.Client{Timeout: 10 * time.Second}).Do(req)
+}
+
+func TestImportCSVExtendsDeadlines(t *testing.T) {
+	old := csvUploadTimeout
+	csvUploadTimeout = 5 * time.Second
+	t.Cleanup(func() { csvUploadTimeout = old })
+
+	h, calls, _ := importRouter(t, auth.RoleMember, nil)
+	srv := slowServer(t, h)
+	body, ct := multipartBody(t, formPart{name: "csvFile", fileName: "a.csv", content: []byte("a,b,c\n")})
+	resp, err := slowPost(t, srv.URL+csvImportPath, ct, body)
+	if err != nil {
+		t.Fatalf("slow upload failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated || len(*calls) != 1 {
+		t.Fatalf("status = %d, calls = %d", resp.StatusCode, len(*calls))
+	}
+}
+
+func TestOtherRoutesKeepServerDeadlines(t *testing.T) {
+	h, calls, _ := importRouter(t, auth.RoleMember, nil)
+	srv := slowServer(t, h)
+	body := `{"entries":[{"kind":"correction","originalText":"a","correctedText":"b"}]}`
+	resp, err := slowPost(t, srv.URL+"/v1/batches", "application/json", body)
+	if err == nil {
+		defer resp.Body.Close()
+		if resp.StatusCode == http.StatusCreated {
+			t.Fatal("slow /v1/batches upload succeeded; server deadlines were extended")
+		}
+	}
+	if len(*calls) != 0 {
+		t.Fatalf("calls = %d", len(*calls))
 	}
 }
