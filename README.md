@@ -102,7 +102,7 @@ rm .env.production.local
 
 ## ネイティブアプリ向け API
 
-`services/api/` に、ネイティブアプリ（iOS など）から自分の学習ノートを読み書きするための Go 製 API があります。Web とは別のプロセスとして AWS ECS Express Mode（東京リージョン）で動かし、DB は本番と同じ Neon を共有します。ローカルでのテストは `pnpm run test:unit` に含まれます（DB を使うテストは `API_TEST_DATABASE_URL` が無いと skip されます）。AWS の準備、モバイル用 GitHub OAuth App の登録、本番へのマイグレーション適用、デプロイの手順は [docs/api-deployment.md](docs/api-deployment.md) を参照してください。手元で API を起動して試す手順（`pnpm run api:db` → `pnpm run api:dev` → `pnpm run api:smoke`）は [docs/api-local.md](docs/api-local.md) にあります。
+`services/api/` に、ネイティブアプリ（iOS など）から自分の学習ノートを読み書きするための Go 製 API があります。Web とは別の Vercel プロジェクトとして動かし、DB は本番と同じ Neon を共有します。ローカルでのテストは `pnpm run test:unit` に含まれます（DB を使うテストは `API_TEST_DATABASE_URL` が無いと skip されます）。Vercel の準備、モバイル用 GitHub OAuth App の登録、本番へのマイグレーション適用、デプロイの手順は [docs/api-deployment.md](docs/api-deployment.md) を参照してください。手元で API を起動して試す手順（`pnpm run api:db` → `pnpm run api:dev` → `pnpm run api:smoke`）は [docs/api-local.md](docs/api-local.md) にあります。
 
 ## 表示テーマ
 
@@ -219,7 +219,7 @@ UTF-8のCSVを利用します。ヘッダー行は省略可能です。
 - 1〜3列目は必須です。
 - 4列目以降の空でないセルは、すべて順番付きのヒントとして保存します。
 - 「最初の文 / 添削後の文 / ピン音」のほか、「原文 / 添削文 / 拼音」または英語ヘッダーにも対応します。
-- 1ファイル5MB、1回1,000行までです。
+- 1ファイル4MB、1回1,000行までです。
 - 1項目1万文字・1行10万文字・ヒント100個までです（行ごとに個数を変えられます）。
 - サンプルは [`examples/sample.csv`](examples/sample.csv) にあります。
 

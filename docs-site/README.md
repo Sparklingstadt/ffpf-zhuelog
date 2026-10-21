@@ -16,7 +16,7 @@ features:
   - title: アプリ向けのトークン
     details: GitHub（PKCE）とパスワードでログインし、15 分のアクセストークンと 30 日のリフレッシュトークンで呼び出します。
   - title: 依存の少ない Go
-    details: 標準の net/http と pgx・golang-jwt・x/crypto だけで書かれ、AWS ECS Express Mode で動きます。
+    details: 標準の net/http と pgx・golang-jwt・x/crypto だけで書かれ、Vercel（Go の Framework Preset）で動きます。
 ---
 
 ## 何のための API か
@@ -84,4 +84,4 @@ API は Web と別のプロセスですが、DB は本番の Neon を **その�
 - `docs/superpowers/specs/2026-10-20-go-mobile-api-design.md`（v1：認証とノートの読み書き）
 - `docs/superpowers/specs/2026-10-21-go-api-trash-share-follow-design.md`（ゴミ箱・共有・フォロー）
 - `docs/superpowers/specs/2026-10-21-go-api-web-parity-design.md`（カレンダー・会員の管理・CSV など）
-- `docs/api-local.md`（ローカルで動かす）、`docs/api-deployment.md`（AWS へのデプロイ）
+- `docs/api-local.md`（ローカルで動かす）、`docs/api-deployment.md`（Vercel へのデプロイ）

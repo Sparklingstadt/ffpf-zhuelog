@@ -37,7 +37,7 @@
 | POST     | [`/v1/admin/accounts/{id}/password`](./admin.md#post-v1-admin-accounts-id-password)            | admin | ×        | 200  | 会員のパスワードのリセット           |
 | GET      | [`/health`](./health.md)                                                                       | 公開  | —        | 200  | DB まで含めたヘルスチェック          |
 | GET      | [`/healthz`](./health.md)                                                                      | 公開  | —        | 200  | `/health` と同じ（ローカル用）       |
-| GET      | [`/ping`](./health.md)                                                                         | 公開  | —        | 200  | DB を見ないヘルスチェック（ALB 用）  |
+| GET      | [`/ping`](./health.md)                                                                         | 公開  | —        | 200  | DB を見ない死活監視用                |
 
 ## 共通の決まり
 
@@ -45,7 +45,7 @@
 
 - 認証が必要なルートには `Authorization: Bearer <accessToken>` を付けます。無い・形が違う（`Bearer` 以外、空、空白を含む）・無効なトークンは `401 unauthorized` です。詳しくは [認証](../guide/auth.md)。
 - 本文は JSON（CSV のインポートだけ `multipart/form-data`）です。本文は **ちょうど 1 つの JSON オブジェクト** でなければなりません。`null` や配列、オブジェクトの後ろの余計なデータ、**未知のフィールド**、文字列の項目への `null` は `400 invalid_request` です。
-- 本文の上限は 1 MiB（CSV のインポートだけ 6 MiB）で、超えると `413 too_large` です。
+- 本文の上限は 1 MiB（CSV のインポートだけ 4 MiB + 256 KiB）で、超えると `413 too_large` です。
 - 文字数は、特に断りがなければ Unicode のコードポイント（Go の rune）で数えます。会員のアカウントの項目（新しいパスワード・表示名）は、Web（zod）と同じく UTF-16 の単位（JavaScript の `length`）で数えます。絵文字など U+10000 以上の文字は 2 と数えます。前後の空白を除くと書いてある項目は、除いた後の値で判定し、除いた後の値を保存します。
 
 ### レスポンス
