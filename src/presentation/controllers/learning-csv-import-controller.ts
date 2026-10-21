@@ -1,7 +1,7 @@
 import type { ImportLearningCsv } from "@/application/learning/use-cases/import-learning-csv";
 import { csvImportErrorMessage } from "@/domain/learning/csv-validation-error";
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const MAX_FILE_SIZE = 4 * 1024 * 1024;
 
 export type ImportState = {
   status: "idle" | "success" | "error";
@@ -37,7 +37,7 @@ export async function handleLearningCsvImport(
     return { status: "error", message: "CSVファイルを選択してください。" };
   }
   if (file.size > MAX_FILE_SIZE) {
-    return { status: "error", message: "ファイルは5MB以下にしてください。" };
+    return { status: "error", message: "ファイルは4MB以下にしてください。" };
   }
   if (!file.name.toLowerCase().endsWith(".csv")) {
     return {

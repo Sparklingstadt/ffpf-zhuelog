@@ -208,11 +208,13 @@ func (r *RateLimiter) Allow(key string) bool {
 }
 
 // clientKey identifies the caller for rate limiting and sign-in throttling: the
-// last value of X-Forwarded-For (the one our own proxy appended) if present,
-// otherwise the host part of RemoteAddr.
+// last value of X-Forwarded-For if present, otherwise the host part of
+// RemoteAddr. On Vercel the platform overwrites X-Forwarded-For with the
+// client's IP and drops any value the client sent, so the last value is
+// trustworthy there; behind another proxy, only its appended value is.
 func clientKey(r *http.Request) string {
 	// A client can send several X-Forwarded-For lines; only the last value of
-	// the last line was appended by our own proxy.
+	// the last line comes from the platform or our own proxy.
 	if vals := r.Header.Values("X-Forwarded-For"); len(vals) > 0 {
 		last := vals[len(vals)-1]
 		if i := strings.LastIndexByte(last, ','); i >= 0 {

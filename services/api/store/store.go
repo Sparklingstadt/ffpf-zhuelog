@@ -63,7 +63,9 @@ func parseConfig(rawURL string) (*pgxpool.Config, error) {
 	if schema != "" {
 		cfg.ConnConfig.RuntimeParams["search_path"] = schema
 	}
-	cfg.MaxConns = 5
+	// Vercel scales instances out on its own, so keep each one's share of
+	// Neon's pooled connections small.
+	cfg.MaxConns = 3
 	return cfg, nil
 }
 

@@ -46,8 +46,8 @@ func TestParseConfigPrismaSchemaParam(t *testing.T) {
 	if _, ok := cfg.ConnConfig.RuntimeParams["schema"]; ok {
 		t.Error("schema must not be sent to the server")
 	}
-	if cfg.MaxConns != 5 {
-		t.Errorf("MaxConns = %d, want 5", cfg.MaxConns)
+	if cfg.MaxConns != 3 {
+		t.Errorf("MaxConns = %d, want 3", cfg.MaxConns)
 	}
 
 	for _, raw := range []string{
