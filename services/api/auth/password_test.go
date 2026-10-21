@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"os"
 	"strings"
@@ -230,5 +231,79 @@ func TestWarmBuildsDummyHashOnce(t *testing.T) {
 		if got, want := ck.total.Load(), int32(2+i); got != want {
 			t.Fatalf("derivations after %d Simulate = %d, want %d", i+1, got, want)
 		}
+	}
+}
+
+func TestHashVerifiesAndMatchesFormat(t *testing.T) {
+	var v PasswordVerifier
+	ctx := context.Background()
+	const pw = "新しい correct horse"
+	hash, err := v.Hash(ctx, pw)
+	if err != nil {
+		t.Fatalf("Hash: %v", err)
+	}
+	if !strings.HasPrefix(hash, "scrypt:32768:8:1:") {
+		t.Fatalf("hash %q does not start with scrypt:32768:8:1:", hash)
+	}
+	h, ok := parseScryptHash(hash)
+	if !ok {
+		t.Fatalf("hash %q is rejected by the web's parse rules", hash)
+	}
+	if len(h.salt) != 16 || len(h.key) != 64 {
+		t.Fatalf("salt %d bytes, key %d bytes; want 16 and 64", len(h.salt), len(h.key))
+	}
+	if ok, err := v.Verify(ctx, pw, hash); !ok || err != nil {
+		t.Fatalf("Verify(correct) = %v, %v; want true, nil", ok, err)
+	}
+	if ok, err := v.Verify(ctx, pw+"x", hash); ok || err != nil {
+		t.Fatalf("Verify(wrong) = %v, %v; want false, nil", ok, err)
+	}
+	again, err := v.Hash(ctx, pw)
+	if err != nil {
+		t.Fatalf("second Hash: %v", err)
+	}
+	if again == hash {
+		t.Fatal("two hashes of the same password are equal; the salt is not random")
+	}
+}
+
+func TestHashSharesTheBoundAndRespectsContext(t *testing.T) {
+	ck := newCountingKey()
+	v := &PasswordVerifier{deriveKey: ck.derive}
+	hash := nodeHash(t)
+
+	var wg sync.WaitGroup
+	for range maxConcurrentHashes {
+		wg.Go(func() { _, _ = v.Verify(context.Background(), "pw", hash) })
+	}
+	waitFor(t, "all slots taken", func() bool { return ck.running.Load() == maxConcurrentHashes })
+	defer func() { close(ck.release); wg.Wait() }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if got, err := v.Hash(ctx, "pw"); got != "" || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Hash = %q, %v; want \"\", DeadlineExceeded", got, err)
+	}
+	if got := ck.total.Load(); got != maxConcurrentHashes {
+		t.Fatalf("derivations = %d, want %d (Hash must wait for a slot)", got, maxConcurrentHashes)
+	}
+}
+
+func TestHashScryptFailure(t *testing.T) {
+	v := &PasswordVerifier{deriveKey: func(_, _ []byte, _, _, _, _ int) ([]byte, error) {
+		return nil, errors.New("boom")
+	}}
+	if got, err := v.Hash(context.Background(), "pw"); got != "" || err == nil {
+		t.Fatalf("Hash = %q, %v; want an error", got, err)
+	}
+}
+
+func TestGeneratePassword(t *testing.T) {
+	a, b := GeneratePassword(), GeneratePassword()
+	if len(a) != 20 || a == b {
+		t.Fatalf("got %q and %q, want distinct 20-char values", a, b)
+	}
+	if _, err := base64.RawURLEncoding.DecodeString(a); err != nil {
+		t.Fatalf("not base64url: %v", err)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"reflect"
 	"sort"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -29,6 +30,27 @@ func draft(n string, hints ...string) EntryDraft {
 		Pinyin:        "pin " + n,
 		Hints:         hints,
 	}
+}
+
+// createTied stores drafts as one batch and then gives every entry the same
+// createdAt (CreateBatch spaces them 1 ms apart), for (createdAt, id) tie tests.
+func createTied(t *testing.T, s *Store, owner string, drafts []EntryDraft, at time.Time) []Entry {
+	t.Helper()
+	ctx := context.Background()
+	_, created, err := s.CreateBatch(ctx, owner, drafts, at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at = dbTime(at)
+	ids := make([]string, len(created))
+	for i := range created {
+		ids[i] = created[i].ID
+		created[i].CreatedAt = at
+	}
+	if _, err := s.pool.Exec(ctx, `UPDATE "LearningEntry" SET "createdAt" = $1 WHERE "id" = ANY($2)`, at, ids); err != nil {
+		t.Fatal(err)
+	}
+	return created
 }
 
 func fixedNow() time.Time {
@@ -98,6 +120,77 @@ func TestCreateBatchAndGet(t *testing.T) {
 	}
 	if len(got2.Hints) != 0 {
 		t.Errorf("hints = %d, want 0", len(got2.Hints))
+	}
+}
+
+func TestCreateImportBatchStoresFileName(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	owner := newOwner(t, s)
+
+	batch, entries, err := s.CreateImportBatch(ctx, owner, "学習ノート.csv", []EntryDraft{draft("1", "h"), draft("2"), draft("3")}, fixedNow())
+	if err != nil {
+		t.Fatalf("CreateImportBatch: %v", err)
+	}
+	if len(entries) != 3 || !batch.ImportedAt.Equal(fixedNow()) {
+		t.Fatalf("batch = %+v, entries = %d", batch, len(entries))
+	}
+	var fileName string
+	var rowCount int
+	if err := s.pool.QueryRow(ctx,
+		`SELECT "fileName", "rowCount" FROM "ImportBatch" WHERE id = $1`, batch.ID).Scan(&fileName, &rowCount); err != nil {
+		t.Fatalf("query batch: %v", err)
+	}
+	if fileName != "学習ノート.csv" || rowCount != 3 {
+		t.Errorf("fileName = %q, rowCount = %d", fileName, rowCount)
+	}
+	got, err := s.GetEntry(ctx, owner, entries[0].ID)
+	if err != nil || !reflect.DeepEqual(got, entries[0]) {
+		t.Errorf("GetEntry = %+v, %v; want %+v", got, err, entries[0])
+	}
+}
+
+func TestCreateImportBatchKeepsRowOrder(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	owner := newOwner(t, s)
+	now := time.Date(2026, 10, 21, 3, 0, 0, 0, time.UTC) // 12:00 JST
+
+	drafts := make([]EntryDraft, 30)
+	for i := range drafts {
+		drafts[i] = draft(strconv.Itoa(i))
+	}
+	batch, created, err := s.CreateImportBatch(ctx, owner, "rows.csv", drafts, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !batch.ImportedAt.Equal(now) {
+		t.Errorf("importedAt = %v, want %v", batch.ImportedAt, now)
+	}
+	for i, e := range created {
+		if want := now.Add(time.Duration(i) * time.Millisecond); !e.CreatedAt.Equal(want) {
+			t.Errorf("entry %d createdAt = %v, want %v", i, e.CreatedAt, want)
+		}
+	}
+
+	daily, err := s.ListDailyEntries(ctx, owner, LogDate{2026, 10, 21})
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed, err := s.ListEntries(ctx, owner, nil, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(daily) != len(drafts) || len(listed) != len(drafts) {
+		t.Fatalf("daily %d, listed %d, want %d", len(daily), len(listed), len(drafts))
+	}
+	for i := range drafts {
+		if daily[i].OriginalText != drafts[i].OriginalText || daily[i].ID != created[i].ID {
+			t.Errorf("daily[%d] = %q, want %q", i, daily[i].OriginalText, drafts[i].OriginalText)
+		}
+		if j := len(drafts) - 1 - i; listed[j].OriginalText != drafts[i].OriginalText {
+			t.Errorf("listed[%d] = %q, want %q", j, listed[j].OriginalText, drafts[i].OriginalText)
+		}
 	}
 }
 
@@ -184,10 +277,7 @@ func TestListEntriesPaginatesTies(t *testing.T) {
 	for i := range drafts {
 		drafts[i] = draft(string(rune('a'+i)), "h")
 	}
-	_, created, err := s.CreateBatch(ctx, owner, drafts, fixedNow())
-	if err != nil {
-		t.Fatal(err)
-	}
+	created := createTied(t, s, owner, drafts, fixedNow())
 
 	var seen []string
 	var cur *Cursor

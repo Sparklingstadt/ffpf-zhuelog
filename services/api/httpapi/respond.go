@@ -17,6 +17,7 @@ const (
 	msgForbidden         = "このアカウントは利用できません。"
 	msgShareMembersOnly  = "共有できるのは会員だけです。"
 	msgSelfFollow        = "自分はフォローできません。"
+	msgAdminOnlyView     = "他の人の記録は管理者だけが見られます。"
 	msgBadRequest        = "リクエストが不正です。"
 	msgNotFound          = "見つかりません。"
 	msgMethodNotAllowed  = "このメソッドは使用できません。"
@@ -25,6 +26,14 @@ const (
 	msgGitHubUnavailable = "GitHub に接続できませんでした。"
 	msgInternal          = "サーバーでエラーが発生しました。"
 	msgUnavailable       = "サービスを利用できません。"
+
+	msgInvalidNewPassword     = "パスワードは12〜128文字にしてください。"
+	msgPasswordMismatch       = "確認用のパスワードが一致しません。"
+	msgInvalidCurrentPassword = "現在のパスワードが違うか、一時的にロックされています。"
+
+	msgSelectCSVFile   = "CSVファイルを選択してください。"
+	msgCSVFileTooLarge = "ファイルは5MB以下にしてください。"
+	msgCSVExtension    = "拡張子が.csvのファイルを選択してください。"
 )
 
 type errorEnvelope struct {
@@ -67,6 +76,12 @@ func writeServiceError(w http.ResponseWriter, r *http.Request, err error) {
 		writeError(w, http.StatusForbidden, "forbidden", msgForbidden)
 	case errors.Is(err, auth.ErrThrottled):
 		writeError(w, http.StatusTooManyRequests, "rate_limited", msgRateLimited)
+	case errors.Is(err, auth.ErrInvalidNewPassword):
+		writeError(w, http.StatusBadRequest, "invalid_request", msgInvalidNewPassword)
+	case errors.Is(err, auth.ErrPasswordMismatch):
+		writeError(w, http.StatusBadRequest, "password_mismatch", msgPasswordMismatch)
+	case errors.Is(err, auth.ErrInvalidCurrentPassword):
+		writeError(w, http.StatusBadRequest, "invalid_current_password", msgInvalidCurrentPassword)
 	case errors.Is(err, store.ErrNotFound):
 		writeError(w, http.StatusNotFound, "not_found", msgNotFound)
 	case errors.Is(err, auth.ErrGitHubUnavailable):

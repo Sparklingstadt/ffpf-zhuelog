@@ -78,11 +78,13 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 		Passwords: passwords,
 	}
 	handler := httpapi.NewRouter(httpapi.Deps{
-		Auth:    service,
-		Entries: db,
-		Follows: db,
-		DB:      db,
-		Logger:  logger,
+		Auth:     service,
+		Entries:  db,
+		Follows:  db,
+		Accounts: db,
+		Hasher:   passwords,
+		DB:       db,
+		Logger:   logger,
 	})
 
 	ln, err := net.Listen("tcp", ":"+cfg.Port)

@@ -26,14 +26,41 @@ type fakeEntries struct {
 	list   func(ctx context.Context, ownerID string, after *store.Cursor, limit int) ([]store.Entry, error)
 	get    func(ctx context.Context, ownerID, id string) (store.Entry, error)
 	create func(ctx context.Context, ownerID string, drafts []store.EntryDraft, now time.Time) (store.Batch, []store.Entry, error)
-	update func(ctx context.Context, ownerID, id string, p store.EntryPatch) (store.Entry, error)
-	trash  func(ctx context.Context, ownerID, id string, now time.Time) error
+	// createImport serves CreateImportBatch.
+	createImport func(ctx context.Context, ownerID, fileName string, drafts []store.EntryDraft, now time.Time) (store.Batch, []store.Entry, error)
+	update       func(ctx context.Context, ownerID, id string, p store.EntryPatch) (store.Entry, error)
+	trash        func(ctx context.Context, ownerID, id string, now time.Time) error
 
 	listTrashed func(ctx context.Context, ownerID string, after *store.Cursor, limit int) ([]store.TrashedEntry, error)
 	restore     func(ctx context.Context, ownerID, id string) (store.Entry, error)
 	purge       func(ctx context.Context, ownerID, id string) error
 	emptyTrash  func(ctx context.Context, ownerID string) (int, error)
 	setShared   func(ctx context.Context, ownerID, id string, shared bool, now time.Time) (store.Entry, error)
+
+	logDates     func(ctx context.Context, ownerID string) ([]store.LogDateCount, error)
+	dailyEntries func(ctx context.Context, ownerID string, d store.LogDate) ([]store.Entry, error)
+	dailyEntry   func(ctx context.Context, ownerID string, d store.LogDate, number int) (store.Entry, int, error)
+}
+
+func (f *fakeEntries) ListLogDates(ctx context.Context, ownerID string) ([]store.LogDateCount, error) {
+	if f.logDates == nil {
+		return nil, errUnexpectedCall{"ListLogDates"}
+	}
+	return f.logDates(ctx, ownerID)
+}
+
+func (f *fakeEntries) ListDailyEntries(ctx context.Context, ownerID string, d store.LogDate) ([]store.Entry, error) {
+	if f.dailyEntries == nil {
+		return nil, errUnexpectedCall{"ListDailyEntries"}
+	}
+	return f.dailyEntries(ctx, ownerID, d)
+}
+
+func (f *fakeEntries) GetDailyEntry(ctx context.Context, ownerID string, d store.LogDate, number int) (store.Entry, int, error) {
+	if f.dailyEntry == nil {
+		return store.Entry{}, 0, errUnexpectedCall{"GetDailyEntry"}
+	}
+	return f.dailyEntry(ctx, ownerID, d, number)
 }
 
 func (f *fakeEntries) ListTrashed(ctx context.Context, ownerID string, after *store.Cursor, limit int) ([]store.TrashedEntry, error) {
@@ -90,6 +117,13 @@ func (f *fakeEntries) CreateBatch(ctx context.Context, ownerID string, drafts []
 		return store.Batch{}, nil, errUnexpectedCall{"CreateBatch"}
 	}
 	return f.create(ctx, ownerID, drafts, now)
+}
+
+func (f *fakeEntries) CreateImportBatch(ctx context.Context, ownerID, fileName string, drafts []store.EntryDraft, now time.Time) (store.Batch, []store.Entry, error) {
+	if f.createImport == nil {
+		return store.Batch{}, nil, errUnexpectedCall{"CreateImportBatch"}
+	}
+	return f.createImport(ctx, ownerID, fileName, drafts, now)
 }
 
 func (f *fakeEntries) UpdateEntry(ctx context.Context, ownerID, id string, p store.EntryPatch) (store.Entry, error) {

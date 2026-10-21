@@ -19,6 +19,7 @@ import (
 
 const (
 	maxPasswordRunes  = 128
+	minNewPassword    = 12
 	memberOwnerPrefix = "password:"
 	refreshTokenBytes = 32
 	familyIDBytes     = 16
@@ -40,6 +41,17 @@ var ErrThrottled = errors.New("auth: too many sign-in attempts")
 
 var loginIDPattern = regexp.MustCompile(`^[a-z0-9._-]{3,32}$`)
 
+// ChangePassword's outcomes besides ErrForbidden and infrastructure errors.
+var (
+	// ErrInvalidNewPassword: the new password is not 12 to 128 runes.
+	ErrInvalidNewPassword = errors.New("auth: new password must be 12 to 128 characters")
+	// ErrPasswordMismatch: the new password and its confirmation differ.
+	ErrPasswordMismatch = errors.New("auth: password confirmation does not match")
+	// ErrInvalidCurrentPassword covers a missing account, a malformed or wrong
+	// current password and a lockout alike, so they cannot be told apart.
+	ErrInvalidCurrentPassword = errors.New("auth: current password is wrong or the account is locked")
+)
+
 var (
 	_ Store  = (*store.Store)(nil)
 	_ GitHub = (*GitHubClient)(nil)
@@ -49,6 +61,8 @@ var (
 // Store is the persistence the Service needs; *store.Store satisfies it.
 type Store interface {
 	FindPasswordAccountByLoginID(ctx context.Context, loginID string) (store.PasswordAccount, error)
+	FindPasswordAccountByID(ctx context.Context, id string) (store.PasswordAccount, error)
+	SetPassword(ctx context.Context, id, hash string, now time.Time) error
 	SessionVersion(ctx context.Context, accountID string) (int, error)
 	ConsumeThrottle(ctx context.Context, key string, limit int, window time.Duration, now time.Time) (bool, error)
 	ResetThrottle(ctx context.Context, key string) error
@@ -64,12 +78,13 @@ type GitHub interface {
 	Exchange(ctx context.Context, code, verifier, redirectURI string) (GitHubUser, error)
 }
 
-// Hasher checks passwords; *PasswordVerifier satisfies it. Errors mean the
-// computation did not run (for example ctx was done while waiting for a slot);
-// a wrong password or malformed hash is (false, nil).
+// Hasher checks and hashes passwords; *PasswordVerifier satisfies it. Errors
+// mean the computation did not run (for example ctx was done while waiting for
+// a slot); a wrong password or malformed hash is (false, nil).
 type Hasher interface {
 	Verify(ctx context.Context, password, hash string) (bool, error)
 	Simulate(ctx context.Context, password string) error
+	Hash(ctx context.Context, password string) (string, error)
 }
 
 // TokenPair is what a login or refresh returns. ExpiresIn is the access
@@ -79,10 +94,11 @@ type TokenPair struct {
 	ExpiresIn                 int
 }
 
-// Service runs sign-in, refresh-token rotation, logout and the per-request
-// revocation check. Errors are ErrUnauthorized, ErrForbidden, ErrThrottled,
-// the GitHub client's sentinels, or (for store failures) other errors; none of them
-// contain tokens, hashes, codes or passwords.
+// Service runs sign-in, refresh-token rotation, logout, the per-request
+// revocation check, and members' own password changes. Errors are
+// ErrUnauthorized, ErrForbidden, ErrThrottled, the GitHub client's sentinels,
+// ChangePassword's sentinels, or (for store failures) other errors; none of
+// them contain tokens, hashes, codes or passwords.
 type Service struct {
 	Store     Store
 	Signer    *Signer
@@ -193,6 +209,91 @@ func (s *Service) rejectPassword(ctx context.Context, password string) error {
 		return fmt.Errorf("auth: simulate password: %w", err)
 	}
 	return ErrUnauthorized
+}
+
+// ChangePassword lets a member replace their own password, in the web app's
+// ChangeOwnPassword order:
+//
+//  1. only members may (ErrForbidden), checked before anything else;
+//  2. next must be 12 to 128 runes, spaces included (ErrInvalidNewPassword);
+//  3. confirm must equal next (ErrPasswordMismatch);
+//  4. a missing account, a current password that is not 1 to 128 runes, too
+//     many recent tries or a wrong password all return
+//     ErrInvalidCurrentPassword after exactly one password-hash computation.
+//     For an existing account an attempt is counted against the
+//     "password-change:<accountId>" throttle key (maxFailuresPerLogin per
+//     throttleWindow, like the web) before current is checked. Only the
+//     signed-in member reaches that key, and it never blocks sign-in.
+//
+// Steps 1 to 3 count no attempt and compute no hash. On success the new hash
+// is stored with SetPassword, which bumps the session version (revoking every
+// existing session, this one included), and the throttle key is reset.
+func (s *Service) ChangePassword(ctx context.Context, p Principal, current, next, confirm string) error {
+	if p.Role != RoleMember {
+		return ErrForbidden
+	}
+	if n := utf8.RuneCountInString(next); n < minNewPassword || n > maxPasswordRunes {
+		return ErrInvalidNewPassword
+	}
+	if next != confirm {
+		return ErrPasswordMismatch
+	}
+
+	// Simulate never sees more than maxPasswordRunes runes.
+	simulated := truncateRunes(current, maxPasswordRunes)
+	accountID, ok := strings.CutPrefix(p.OwnerID, memberOwnerPrefix)
+	if !ok || accountID == "" {
+		return s.rejectCurrent(ctx, simulated)
+	}
+	account, err := s.Store.FindPasswordAccountByID(ctx, accountID)
+	if errors.Is(err, store.ErrNotFound) {
+		return s.rejectCurrent(ctx, simulated)
+	}
+	if err != nil {
+		return fmt.Errorf("auth: find password account: %w", err)
+	}
+
+	key := "password-change:" + account.ID
+	allowed, err := s.Store.ConsumeThrottle(ctx, key, maxFailuresPerLogin, throttleWindow, s.now())
+	if err != nil {
+		return fmt.Errorf("auth: consume throttle: %w", err)
+	}
+	if !allowed || current == "" || utf8.RuneCountInString(current) > maxPasswordRunes {
+		return s.rejectCurrent(ctx, simulated)
+	}
+	match, err := s.Passwords.Verify(ctx, current, account.PasswordHash)
+	if err != nil {
+		return fmt.Errorf("auth: verify password: %w", err)
+	}
+	if !match {
+		return ErrInvalidCurrentPassword
+	}
+
+	hash, err := s.Passwords.Hash(ctx, next)
+	if err != nil {
+		return fmt.Errorf("auth: hash password: %w", err)
+	}
+	err = s.Store.SetPassword(ctx, account.ID, hash, s.now())
+	if errors.Is(err, store.ErrNotFound) {
+		// The account was deleted after the current password was checked.
+		return ErrInvalidCurrentPassword
+	}
+	if err != nil {
+		return fmt.Errorf("auth: set password: %w", err)
+	}
+	if err := s.Store.ResetThrottle(ctx, key); err != nil {
+		return fmt.Errorf("auth: reset throttle: %w", err)
+	}
+	return nil
+}
+
+// rejectCurrent spends one simulated hash computation and returns
+// ErrInvalidCurrentPassword, or the hasher's error if it could not compute.
+func (s *Service) rejectCurrent(ctx context.Context, password string) error {
+	if err := s.Passwords.Simulate(ctx, password); err != nil {
+		return fmt.Errorf("auth: simulate password: %w", err)
+	}
+	return ErrInvalidCurrentPassword
 }
 
 // Refresh rotates a refresh token. Presenting an already-rotated token revokes

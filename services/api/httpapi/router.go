@@ -15,6 +15,9 @@ var (
 	_ Entries = (*store.Store)(nil)
 	_ Follows = (*store.Store)(nil)
 	_ Pinger  = (*store.Store)(nil)
+
+	_ Accounts       = (*store.Store)(nil)
+	_ PasswordHasher = (*auth.PasswordVerifier)(nil)
 )
 
 // Auth is what the handlers need from *auth.Service.
@@ -24,6 +27,7 @@ type Auth interface {
 	Refresh(ctx context.Context, token string) (auth.TokenPair, error)
 	Logout(ctx context.Context, token string) error
 	Authenticate(ctx context.Context, accessToken string) (auth.Principal, error)
+	ChangePassword(ctx context.Context, p auth.Principal, current, next, confirm string) error
 }
 
 // Entries is what the handlers need from *store.Store.
@@ -31,6 +35,7 @@ type Entries interface {
 	ListEntries(ctx context.Context, ownerID string, after *store.Cursor, limit int) ([]store.Entry, error)
 	GetEntry(ctx context.Context, ownerID, id string) (store.Entry, error)
 	CreateBatch(ctx context.Context, ownerID string, drafts []store.EntryDraft, now time.Time) (store.Batch, []store.Entry, error)
+	CreateImportBatch(ctx context.Context, ownerID, fileName string, drafts []store.EntryDraft, now time.Time) (store.Batch, []store.Entry, error)
 	UpdateEntry(ctx context.Context, ownerID, id string, p store.EntryPatch) (store.Entry, error)
 	TrashEntry(ctx context.Context, ownerID, id string, now time.Time) error
 	ListTrashed(ctx context.Context, ownerID string, after *store.Cursor, limit int) ([]store.TrashedEntry, error)
@@ -38,6 +43,9 @@ type Entries interface {
 	PurgeEntry(ctx context.Context, ownerID, id string) error
 	EmptyTrash(ctx context.Context, ownerID string) (int, error)
 	SetShared(ctx context.Context, ownerID, id string, shared bool, now time.Time) (store.Entry, error)
+	ListLogDates(ctx context.Context, ownerID string) ([]store.LogDateCount, error)
+	ListDailyEntries(ctx context.Context, ownerID string, d store.LogDate) ([]store.Entry, error)
+	GetDailyEntry(ctx context.Context, ownerID string, d store.LogDate, number int) (store.Entry, int, error)
 }
 
 // Follows is what the handlers need from *store.Store for the member
@@ -48,6 +56,15 @@ type Follows interface {
 	Follow(ctx context.Context, followerID, followeeID string, now time.Time) error
 	Unfollow(ctx context.Context, followerID, followeeID string) error
 	ListTimeline(ctx context.Context, viewerID string, after *store.Cursor, limit int) ([]store.TimelineItem, error)
+}
+
+// Accounts is what the handlers need from *store.Store for admin member
+// management.
+type Accounts interface {
+	ListPasswordAccounts(ctx context.Context) ([]store.AccountSummary, error)
+	CreatePasswordAccount(ctx context.Context, loginID, displayName, hash string, now time.Time) (store.AccountSummary, error)
+	FindPasswordAccountByID(ctx context.Context, id string) (store.PasswordAccount, error)
+	SetPassword(ctx context.Context, id, hash string, now time.Time) error
 }
 
 // Pinger checks that the database is reachable.
@@ -61,9 +78,12 @@ type Deps struct {
 	Auth    Auth
 	Entries Entries
 	Follows Follows
-	DB      Pinger
-	Logger  *slog.Logger
-	Now     func() time.Time
+	// Accounts and Hasher serve the admin routes.
+	Accounts Accounts
+	Hasher   PasswordHasher
+	DB       Pinger
+	Logger   *slog.Logger
+	Now      func() time.Time
 }
 
 const (
@@ -100,21 +120,39 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("POST /v1/auth/logout", limited(logout(d.Auth)))
 
 	authed := func(h http.Handler) http.Handler { return requireAuth(d.Auth, h) }
+	// Only the five read routes accept ?user=; every other authed route
+	// rejects it with 400 so it can never be mistaken for being honoured.
+	authedNoUser := func(h http.Handler) http.Handler { return authed(rejectUserParam(h)) }
 	mux.Handle("GET /v1/entries", authed(listEntries(d.Entries)))
 	mux.Handle("GET /v1/entries/{id}", authed(getEntry(d.Entries)))
-	mux.Handle("POST /v1/batches", authed(createBatch(d.Entries, d.Now)))
-	mux.Handle("PATCH /v1/entries/{id}", authed(patchEntry(d.Entries)))
-	mux.Handle("DELETE /v1/entries/{id}", authed(deleteEntry(d.Entries, d.Now)))
-	mux.Handle("GET /v1/trash", authed(listTrash(d.Entries)))
-	mux.Handle("DELETE /v1/trash", authed(emptyTrash(d.Entries)))
-	mux.Handle("POST /v1/trash/{id}/restore", authed(restoreEntry(d.Entries)))
-	mux.Handle("DELETE /v1/trash/{id}", authed(purgeEntry(d.Entries)))
-	mux.Handle("PUT /v1/entries/{id}/share", authed(shareEntry(d.Entries, d.Now, true)))
-	mux.Handle("DELETE /v1/entries/{id}/share", authed(shareEntry(d.Entries, d.Now, false)))
-	mux.Handle("GET /v1/members", authed(listMembers(d.Follows)))
-	mux.Handle("PUT /v1/follows/{ownerId}", authed(followMember(d.Follows, d.Now)))
-	mux.Handle("DELETE /v1/follows/{ownerId}", authed(unfollowMember(d.Follows)))
-	mux.Handle("GET /v1/timeline", authed(listTimeline(d.Follows)))
+	mux.Handle("POST /v1/batches", authedNoUser(createBatch(d.Entries, d.Now)))
+	// CSV import into the caller's own notes (admin and member). Its body
+	// limit is 6 MiB instead of 1 MiB; see limitBody.
+	mux.Handle("POST "+csvImportPath, authedNoUser(importCSV(d.Entries, d.Now)))
+	mux.Handle("PATCH /v1/entries/{id}", authedNoUser(patchEntry(d.Entries)))
+	mux.Handle("DELETE /v1/entries/{id}", authedNoUser(deleteEntry(d.Entries, d.Now)))
+	mux.Handle("GET /v1/trash", authedNoUser(listTrash(d.Entries)))
+	mux.Handle("DELETE /v1/trash", authedNoUser(emptyTrash(d.Entries)))
+	mux.Handle("POST /v1/trash/{id}/restore", authedNoUser(restoreEntry(d.Entries)))
+	mux.Handle("DELETE /v1/trash/{id}", authedNoUser(purgeEntry(d.Entries)))
+	mux.Handle("PUT /v1/entries/{id}/share", authedNoUser(shareEntry(d.Entries, d.Now, true)))
+	mux.Handle("DELETE /v1/entries/{id}/share", authedNoUser(shareEntry(d.Entries, d.Now, false)))
+	mux.Handle("GET /v1/log-dates", authed(listLogDates(d.Entries)))
+	mux.Handle("GET /v1/log-dates/{date}/entries", authed(listDailyEntries(d.Entries)))
+	mux.Handle("GET /v1/log-dates/{date}/entries/{number}", authed(getDailyEntry(d.Entries)))
+	mux.Handle("GET /v1/members", authedNoUser(listMembers(d.Follows)))
+	mux.Handle("PUT /v1/follows/{ownerId}", authedNoUser(followMember(d.Follows, d.Now)))
+	mux.Handle("DELETE /v1/follows/{ownerId}", authedNoUser(unfollowMember(d.Follows)))
+	mux.Handle("GET /v1/timeline", authedNoUser(listTimeline(d.Follows)))
+	// Changing a password checks the current one, so it shares the /v1/auth/*
+	// limit. The limit runs before authentication so failed tokens count too.
+	mux.Handle("POST /v1/account/password", limited(authedNoUser(changePassword(d.Auth))))
+	// Admin-only member management. Passwords are hashed with the shared
+	// scrypt semaphore and are never logged.
+	adminOnly := func(h http.Handler) http.Handler { return authedNoUser(requireAdmin(h)) }
+	mux.Handle("GET /v1/admin/accounts", adminOnly(listAccounts(d.Accounts)))
+	mux.Handle("POST /v1/admin/accounts", adminOnly(createAccount(d.Accounts, d.Hasher, d.Now)))
+	mux.Handle("POST /v1/admin/accounts/{id}/password", adminOnly(resetAccountPassword(d.Accounts, d.Hasher, d.Now)))
 
 	return wrap(d, jsonMuxErrors(mux))
 }
