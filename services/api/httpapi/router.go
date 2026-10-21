@@ -13,6 +13,7 @@ import (
 var (
 	_ Auth    = (*auth.Service)(nil)
 	_ Entries = (*store.Store)(nil)
+	_ Follows = (*store.Store)(nil)
 	_ Pinger  = (*store.Store)(nil)
 )
 
@@ -39,6 +40,16 @@ type Entries interface {
 	SetShared(ctx context.Context, ownerID, id string, shared bool, now time.Time) (store.Entry, error)
 }
 
+// Follows is what the handlers need from *store.Store for the member
+// directory, follows and the timeline.
+type Follows interface {
+	ListMembers(ctx context.Context, viewerID string) (store.MemberDirectory, error)
+	MemberExists(ctx context.Context, ownerID string) (bool, error)
+	Follow(ctx context.Context, followerID, followeeID string, now time.Time) error
+	Unfollow(ctx context.Context, followerID, followeeID string) error
+	ListTimeline(ctx context.Context, viewerID string, after *store.Cursor, limit int) ([]store.TimelineItem, error)
+}
+
 // Pinger checks that the database is reachable.
 type Pinger interface {
 	Ping(ctx context.Context) error
@@ -49,6 +60,7 @@ type Pinger interface {
 type Deps struct {
 	Auth    Auth
 	Entries Entries
+	Follows Follows
 	DB      Pinger
 	Logger  *slog.Logger
 	Now     func() time.Time
@@ -99,6 +111,10 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("DELETE /v1/trash/{id}", authed(purgeEntry(d.Entries)))
 	mux.Handle("PUT /v1/entries/{id}/share", authed(shareEntry(d.Entries, d.Now, true)))
 	mux.Handle("DELETE /v1/entries/{id}/share", authed(shareEntry(d.Entries, d.Now, false)))
+	mux.Handle("GET /v1/members", authed(listMembers(d.Follows)))
+	mux.Handle("PUT /v1/follows/{ownerId}", authed(followMember(d.Follows, d.Now)))
+	mux.Handle("DELETE /v1/follows/{ownerId}", authed(unfollowMember(d.Follows)))
+	mux.Handle("GET /v1/timeline", authed(listTimeline(d.Follows)))
 
 	return wrap(d, jsonMuxErrors(mux))
 }

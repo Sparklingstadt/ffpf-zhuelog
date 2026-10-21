@@ -80,6 +80,7 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 	handler := httpapi.NewRouter(httpapi.Deps{
 		Auth:    service,
 		Entries: db,
+		Follows: db,
 		DB:      db,
 		Logger:  logger,
 	})
