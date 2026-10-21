@@ -40,6 +40,7 @@ services/api/
 ├── auth/          # GitHub のコード交換、パスワードの検証、JWT、リフレッシュのローテーション、失効の確認
 ├── store/         # pgx による SQL（ノート・バッチ・ヒント・ゴミ箱・フォロー・アカウント・リフレッシュトークン）
 ├── csvimport/     # CSV の解析（Web の CsvParseLearningParser と同じ結果になるように移植したもの）
+├── jsstr/         # JavaScript の文字列操作（trim・length・toLowerCase など）の再現
 └── Dockerfile
 ```
 
@@ -49,11 +50,7 @@ services/api/
 | `auth`      | ログイン、アクセストークン（HS256 の JWT）の発行と検証、リフレッシュトークンのローテーションと再利用の検知、毎リクエストの失効の確認、scrypt によるパスワードの検証とハッシュ化 |
 | `store`     | Prisma が作ったテーブルを SQL で読み書きします。所有者（`ownerId`）での絞り込みはすべてここで行います                                                                           |
 | `csvimport` | `csv-parse` の動作を移植した CSV の読み取りと、Web と同じ文言の検証エラー                                                                                                       |
-| `jsstr`     | JavaScript の文字列操作（`trim`・`length` など）を再現し、入力を Web と同じように判定するためのパッケージ                                                                       |
-
-::: tip jsstr について
-`jsstr` は、別ブランチ（`refactor/go-api`）で進んでいるリファクタリングで追加されるパッケージです。main の時点では、同じ処理が `httpapi` と `csvimport` の中にあります。
-:::
+| `jsstr`     | JavaScript の文字列操作（`trim`・`length`（UTF-16 の単位）・`slice`・`toLowerCase`）を再現し、入力を Web（zod）と同じように判定するためのパッケージ                             |
 
 依存は `github.com/jackc/pgx/v5`、`github.com/golang-jwt/jwt/v5`、`golang.org/x/crypto`（scrypt）だけで、ルーターやフレームワークは使いません。ログは `log/slog` の JSON 形式で、トークン・認可コード・パスワード・ノートの本文・CSV の中身はログに出しません。
 
