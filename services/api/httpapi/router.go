@@ -38,6 +38,9 @@ type Entries interface {
 	PurgeEntry(ctx context.Context, ownerID, id string) error
 	EmptyTrash(ctx context.Context, ownerID string) (int, error)
 	SetShared(ctx context.Context, ownerID, id string, shared bool, now time.Time) (store.Entry, error)
+	ListLogDates(ctx context.Context, ownerID string) ([]store.LogDateCount, error)
+	ListDailyEntries(ctx context.Context, ownerID string, d store.LogDate) ([]store.Entry, error)
+	GetDailyEntry(ctx context.Context, ownerID string, d store.LogDate, number int) (store.Entry, int, error)
 }
 
 // Follows is what the handlers need from *store.Store for the member
@@ -111,6 +114,9 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("DELETE /v1/trash/{id}", authed(purgeEntry(d.Entries)))
 	mux.Handle("PUT /v1/entries/{id}/share", authed(shareEntry(d.Entries, d.Now, true)))
 	mux.Handle("DELETE /v1/entries/{id}/share", authed(shareEntry(d.Entries, d.Now, false)))
+	mux.Handle("GET /v1/log-dates", authed(listLogDates(d.Entries)))
+	mux.Handle("GET /v1/log-dates/{date}/entries", authed(listDailyEntries(d.Entries)))
+	mux.Handle("GET /v1/log-dates/{date}/entries/{number}", authed(getDailyEntry(d.Entries)))
 	mux.Handle("GET /v1/members", authed(listMembers(d.Follows)))
 	mux.Handle("PUT /v1/follows/{ownerId}", authed(followMember(d.Follows, d.Now)))
 	mux.Handle("DELETE /v1/follows/{ownerId}", authed(unfollowMember(d.Follows)))

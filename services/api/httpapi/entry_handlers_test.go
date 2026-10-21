@@ -34,6 +34,31 @@ type fakeEntries struct {
 	purge       func(ctx context.Context, ownerID, id string) error
 	emptyTrash  func(ctx context.Context, ownerID string) (int, error)
 	setShared   func(ctx context.Context, ownerID, id string, shared bool, now time.Time) (store.Entry, error)
+
+	logDates     func(ctx context.Context, ownerID string) ([]store.LogDateCount, error)
+	dailyEntries func(ctx context.Context, ownerID string, d store.LogDate) ([]store.Entry, error)
+	dailyEntry   func(ctx context.Context, ownerID string, d store.LogDate, number int) (store.Entry, int, error)
+}
+
+func (f *fakeEntries) ListLogDates(ctx context.Context, ownerID string) ([]store.LogDateCount, error) {
+	if f.logDates == nil {
+		return nil, errUnexpectedCall{"ListLogDates"}
+	}
+	return f.logDates(ctx, ownerID)
+}
+
+func (f *fakeEntries) ListDailyEntries(ctx context.Context, ownerID string, d store.LogDate) ([]store.Entry, error) {
+	if f.dailyEntries == nil {
+		return nil, errUnexpectedCall{"ListDailyEntries"}
+	}
+	return f.dailyEntries(ctx, ownerID, d)
+}
+
+func (f *fakeEntries) GetDailyEntry(ctx context.Context, ownerID string, d store.LogDate, number int) (store.Entry, int, error) {
+	if f.dailyEntry == nil {
+		return store.Entry{}, 0, errUnexpectedCall{"GetDailyEntry"}
+	}
+	return f.dailyEntry(ctx, ownerID, d, number)
 }
 
 func (f *fakeEntries) ListTrashed(ctx context.Context, ownerID string, after *store.Cursor, limit int) ([]store.TrashedEntry, error) {

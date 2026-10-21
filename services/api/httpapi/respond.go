@@ -17,6 +17,7 @@ const (
 	msgForbidden         = "このアカウントは利用できません。"
 	msgShareMembersOnly  = "共有できるのは会員だけです。"
 	msgSelfFollow        = "自分はフォローできません。"
+	msgAdminOnlyView     = "他の人の記録は管理者だけが見られます。"
 	msgBadRequest        = "リクエストが不正です。"
 	msgNotFound          = "見つかりません。"
 	msgMethodNotAllowed  = "このメソッドは使用できません。"
