@@ -1,5 +1,7 @@
 # ネイティブアプリ向け Go API（認証つき学習データの読み書き）
 
+> **デプロイ先の変更**: 当初は Cloud Run、のちに AWS ECS で動かす設計だったが、段階 1（`docs/superpowers/specs/2026-10-21-go-api-on-vercel-design.md`）で Vercel に置き換えた。以下のデプロイ・ALB・ECS に関する記述は当時のもの。
+
 ## 目的と承認済みの要件
 
 ネイティブアプリ（iOS など）から、自分の学習データ（`LearningEntry`・`Hint`）を読み書きできる API を Go で新設する。Web（Next.js）とは別プロセスとして AWS ECS Express Mode（`ap-northeast-1`）で常駐させ、DB は本番と同じ Neon を共有する。

@@ -167,7 +167,7 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 
 	private("POST /v1/batches", authed(createBatch(d.Entries, d.Now)))
 	// CSV import into the caller's own notes (admin and member). Its body
-	// limit is 6 MiB instead of 1 MiB; see limitBody.
+	// limit is 4 MiB + 256 KiB instead of 1 MiB; see limitBody.
 	private("POST "+csvImportPath, authed(importCSV(d.Entries, d.Now)))
 	private("PATCH /v1/entries/{id}", authed(patchEntry(d.Entries)))
 	private("DELETE /v1/entries/{id}", authed(deleteEntry(d.Entries, d.Now)))

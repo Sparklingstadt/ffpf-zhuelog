@@ -41,7 +41,7 @@ services/api/
 ├── store/         # pgx による SQL（ノート・バッチ・ヒント・ゴミ箱・フォロー・アカウント・リフレッシュトークン）
 ├── csvimport/     # CSV の解析（Web の CsvParseLearningParser と同じ結果になるように移植したもの）
 ├── jsstr/         # JavaScript の文字列操作（trim・length・toLowerCase など）の再現
-└── Dockerfile
+└── Dockerfile        # 任意（コンテナで動かすとき用。Vercel では使わない）
 ```
 
 | パッケージ  | 役割                                                                                                                                                                            |

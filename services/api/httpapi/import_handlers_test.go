@@ -204,14 +204,28 @@ func TestImportCSVHandlerAllowsExactly4MiB(t *testing.T) {
 }
 
 func TestImportCSVHandlerBodyLimit(t *testing.T) {
+	// The limit is 4 MiB + 256 KiB (fixed here, not read from the constant,
+	// so a change to the constant fails this test). A padding field of that
+	// size puts the whole body just over it.
+	const limit = 4<<20 + 256<<10
 	h, calls, _ := importRouter(t, auth.RoleMember, nil)
-	big := bytes.Repeat([]byte("x"), 6<<20)
+	big := bytes.Repeat([]byte("x"), limit)
 	w := postImport(t, h, "/v1/imports/csv",
 		formPart{name: "padding", content: big},
 		formPart{name: "csvFile", fileName: "a.csv", content: []byte("a,b,c\n")})
 	wantError(t, w, http.StatusRequestEntityTooLarge, "too_large")
 	if len(*calls) != 0 {
 		t.Fatalf("store called %d times", len(*calls))
+	}
+
+	// Well under the limit, the body is read: the request is not rejected as
+	// too large (it fails later on the CSV contents).
+	under := bytes.Repeat([]byte("x"), limit-64<<10)
+	w = postImport(t, h, "/v1/imports/csv",
+		formPart{name: "padding", content: under},
+		formPart{name: "csvFile", fileName: "a.csv", content: []byte("a,b,c\n")})
+	if w.Code == http.StatusRequestEntityTooLarge {
+		t.Fatalf("body under maxCSVBodyBytes rejected as too large: %s", w.Body.String())
 	}
 }
 
@@ -370,7 +384,7 @@ func TestOtherRoutesKeepServerDeadlines(t *testing.T) {
 // Vercel functions reject request bodies over 4.5 MB, so this route's limit
 // must stay below it.
 func TestCSVBodyLimitUnderVercelMax(t *testing.T) {
-	if maxCSVBodyBytes >= 4_718_592 {
+	if maxCSVBodyBytes >= 4_500_000 {
 		t.Fatalf("maxCSVBodyBytes = %d, must be < 4.5 MB", maxCSVBodyBytes)
 	}
 	if maxCSVBodyBytes <= maxCSVFileSize {

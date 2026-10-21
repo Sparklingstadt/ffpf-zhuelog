@@ -25,10 +25,10 @@ Web 用とは別の OAuth App を新しく作ります。GitHub の **Settings �
 1. Vercel のダッシュボードで **Add New… → Project** を選び、このリポジトリ（`Sparklingstadt/ffpf-zhuelog`）を Import します。Web のプロジェクトとは別に、新しいプロジェクト（例: `zhuelog-api`）を作ります。
 2. **Root Directory** に `services/api` を指定します。
 3. **Framework Preset** が `Go` になっていることを確かめます（`services/api/vercel.json` でも指定しています）。
-4. **Settings → Git → Ignored Build Step** に次を設定し、`services/api/` に変更が無いコミットではビルドを飛ばします（Root Directory が `services/api` なので、`.` がこのディレクトリを指します）。
+4. **Settings → Git → Ignored Build Step** に次を設定し、`services/api/` に変更が無いときはビルドを飛ばします（Root Directory が `services/api` なので、`.` がこのディレクトリを指します）。前回デプロイしたコミット（`VERCEL_GIT_PREVIOUS_SHA`）から今回までをまとめて比べるので、1 回の push に複数のコミットがあっても、途中のコミットの変更を見落としません（前回のデプロイが無いときは直前のコミットと比べます）。
 
    ```bash
-   git diff --quiet HEAD^ HEAD -- .
+   git diff --quiet "${VERCEL_GIT_PREVIOUS_SHA:-HEAD^}" HEAD -- .
    ```
 
 ## 3. 環境変数
@@ -44,7 +44,11 @@ Web 用とは別の OAuth App を新しく作ります。GitHub の **Settings �
 | `GITHUB_MOBILE_REDIRECT_URI`  | アプリのカスタム URL スキーム                                                                                    |
 | `AUTH_ALLOWED_GITHUB_IDS`     | admin の許可リスト。GitHub の数値 ID をカンマ区切りで（Web と同じ値）                                            |
 
-**Production と Preview で値を分けてください。** PR ごとのプレビューのデプロイが本番の DB を書き換えないよう、Preview の `DATABASE_URL` には本番の接続文字列を入れず、Neon のブランチなど別の DB を指定します。Preview に `DATABASE_URL` を入れない場合、プレビューのデプロイは起動時に止まります（必須の値が無いため）。
+**Production と Preview で値を分けてください。**
+
+- PR ごとのプレビューのデプロイが本番の DB を書き換えないよう、Preview の `DATABASE_URL` には本番の接続文字列を入れず、Neon のブランチなど別の DB を指定します。
+- Preview の `API_JWT_SECRET` は、本番とは **別の値** にします。同じ値だと、プレビューのデプロイが発行したアクセストークンが本番でもそのまま通り、本番で他人のデータを読み書きできてしまうためです。
+- Preview で GitHub ログインを試すなら、本番とは別のモバイル用 OAuth App（と Client Secret）を使います。Preview に `DATABASE_URL` を入れない場合、プレビューのデプロイは起動時に止まります（必須の値が無いため）。
 
 DB への接続は、Web と同じく TLS で証明書まで検証します。ホストが `localhost`・`127.0.0.1`・`::1` 以外のとき（または `sslmode` が `prefer`・`require`・`verify-ca` のとき）、Go API は `sslmode` を `verify-full` に置き換えます。Neon の接続文字列の `sslmode=require` はそのままで構いません。`?schema=public` は無視しますが、それ以外のスキーマは `search_path` の起動パラメータになり、プーラーに拒否されることがあるので付けないでください。
 
