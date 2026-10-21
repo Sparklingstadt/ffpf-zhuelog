@@ -355,6 +355,13 @@ func TestBearer(t *testing.T) {
 				}
 			} else {
 				wantError(t, w, tc.wantStatus, tc.wantCode)
+				// Allowlist removal and session revocation keep the
+				// account-level message, not a role-specific one.
+				if tc.wantStatus == http.StatusForbidden {
+					if got := decodeError(t, w).Error.Message; got != "このアカウントは利用できません。" {
+						t.Fatalf("message = %q", got)
+					}
+				}
 				if reached {
 					t.Fatal("handler ran despite failed authentication")
 				}

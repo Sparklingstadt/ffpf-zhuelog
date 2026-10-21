@@ -77,7 +77,8 @@ func TestChangePasswordHandlerErrors(t *testing.T) {
 		{auth.ErrPasswordMismatch, http.StatusBadRequest, "password_mismatch", "確認用のパスワードが一致しません。", true},
 		{auth.ErrInvalidCurrentPassword, http.StatusBadRequest, "invalid_current_password", "現在のパスワードが違うか、一時的にロックされています。", true},
 		{fmt.Errorf("wrapped: %w", auth.ErrInvalidCurrentPassword), http.StatusBadRequest, "invalid_current_password", "現在のパスワードが違うか、一時的にロックされています。", true},
-		{auth.ErrForbidden, http.StatusForbidden, "forbidden", "", false},
+		{auth.ErrForbidden, http.StatusForbidden, "forbidden", "この操作は会員だけが利用できます。", true},
+		{fmt.Errorf("wrapped: %w", auth.ErrForbidden), http.StatusForbidden, "forbidden", "この操作は会員だけが利用できます。", true},
 		{errors.New("db down"), http.StatusInternalServerError, "internal", "", false},
 	}
 	for _, tc := range cases {

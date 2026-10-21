@@ -19,17 +19,6 @@ func newMember(t *testing.T, s *Store) string {
 	return owner
 }
 
-func followRows(t *testing.T, s *Store, follower, followee string) int {
-	t.Helper()
-	var n int
-	if err := s.pool.QueryRow(context.Background(),
-		`SELECT count(*) FROM "Follow" WHERE "followerId" = $1 AND "followeeId" = $2`,
-		follower, followee).Scan(&n); err != nil {
-		t.Fatal(err)
-	}
-	return n
-}
-
 func mustFollow(t *testing.T, s *Store, follower, followee string) {
 	t.Helper()
 	if err := s.Follow(context.Background(), follower, followee, fixedNow()); err != nil {
@@ -119,13 +108,13 @@ func TestFollowUnfollow(t *testing.T) {
 			t.Fatalf("Follow #%d: %v", i, err)
 		}
 	}
-	if n := followRows(t, s, a, b); n != 1 {
+	if n := countRows(t, s, `SELECT count(*) FROM "Follow" WHERE "followerId" = $1 AND "followeeId" = $2`, a, b); n != 1 {
 		t.Fatalf("rows = %d, want 1", n)
 	}
 	if err := s.Unfollow(ctx, a, b); err != nil {
 		t.Fatal(err)
 	}
-	if n := followRows(t, s, a, b); n != 0 {
+	if n := countRows(t, s, `SELECT count(*) FROM "Follow" WHERE "followerId" = $1 AND "followeeId" = $2`, a, b); n != 0 {
 		t.Fatalf("rows after unfollow = %d", n)
 	}
 	if err := s.Unfollow(ctx, a, b); err != nil {
@@ -221,7 +210,7 @@ func TestTimelinePaginatesTies(t *testing.T) {
 	viewer := newMember(t, s)
 	friend := newMember(t, s)
 	mustFollow(t, s, viewer, friend)
-	created := createEntries(t, s, friend, 5) // same createdAt
+	created := createEntries(t, s, friend, fixedNow(), 5, 2) // same createdAt
 	shareAll(t, s, friend, created)
 
 	seen := map[string]int{}
@@ -262,7 +251,7 @@ func TestTimelineSkipsDeletedMembers(t *testing.T) {
 	mustFollow(t, s, viewer, friend)
 	mustFollow(t, s, viewer, ghost)
 
-	ghosts := createEntries(t, s, ghost, 3)
+	ghosts := createEntries(t, s, ghost, fixedNow(), 3, 2)
 	shareAll(t, s, ghost, ghosts)
 	_, es, err := s.CreateBatch(ctx, friend, []EntryDraft{draft("1"), draft("2")}, time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
 	if err != nil {

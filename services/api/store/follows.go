@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-const memberPrefix = "password:"
-
 // Member is a registered member as seen by one viewer.
 type Member struct {
 	OwnerID     string // "password:<id>"
@@ -40,7 +38,7 @@ func (s *Store) ListMembers(ctx context.Context, viewerID string) (MemberDirecto
 		        EXISTS (SELECT 1 FROM "Follow" f WHERE f."followerId" = $2 || a."id" AND f."followeeId" = $1)
 		 FROM "PasswordAccount" a
 		 WHERE $2 || a."id" <> $1
-		 ORDER BY a."displayName" COLLATE "ja-x-icu", a."createdAt", a."id"`, viewerID, memberPrefix)
+		 ORDER BY a."displayName" COLLATE "ja-x-icu", a."createdAt", a."id"`, viewerID, MemberOwnerPrefix)
 	if err != nil {
 		return MemberDirectory{}, fmt.Errorf("store: list members: %w", err)
 	}
@@ -69,7 +67,7 @@ func (s *Store) ListMembers(ctx context.Context, viewerID string) (MemberDirecto
 
 // MemberExists reports whether ownerID ("password:<id>") is an existing member.
 func (s *Store) MemberExists(ctx context.Context, ownerID string) (bool, error) {
-	id, ok := strings.CutPrefix(ownerID, memberPrefix)
+	id, ok := strings.CutPrefix(ownerID, MemberOwnerPrefix)
 	if !ok {
 		return false, nil
 	}
@@ -104,49 +102,39 @@ func (s *Store) Unfollow(ctx context.Context, followerID, followeeID string) err
 // the viewer follows, ordered by (createdAt DESC, id DESC), starting after the
 // cursor. Followees without a member account are skipped.
 func (s *Store) ListTimeline(ctx context.Context, viewerID string, after *Cursor, limit int) ([]TimelineItem, error) {
-	var afterAt *time.Time
-	var afterID *string
-	if after != nil {
-		t := dbTime(after.CreatedAt)
-		afterAt, afterID = &t, &after.ID
-	}
+	afterAt, afterID := cursorArgs(after)
 	rows, err := s.pool.Query(ctx,
-		`SELECT e."id", e."kind", e."originalText", e."correctedText", e."pinyin", e."createdAt", e."sharedAt",
+		`SELECT `+entryColumnsAs("e")+`,
 		        e."ownerId", a."displayName"
 		 FROM "LearningEntry" e
 		 JOIN "Follow" f ON f."followeeId" = e."ownerId" AND f."followerId" = $1
-		 JOIN "PasswordAccount" a ON e."ownerId" = 'password:' || a."id"
+		 JOIN "PasswordAccount" a ON e."ownerId" = $5 || a."id"
 		 WHERE e."sharedAt" IS NOT NULL AND e."deletedAt" IS NULL
 		   AND ($2::timestamp IS NULL OR (e."createdAt", e."id") < ($2::timestamp, $3::text))
 		 ORDER BY e."createdAt" DESC, e."id" DESC
-		 LIMIT $4`, viewerID, afterAt, afterID, limit)
+		 LIMIT $4`, viewerID, afterAt, afterID, limit, MemberOwnerPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("store: list timeline: %w", err)
 	}
+	defer rows.Close()
 	items := []TimelineItem{}
 	for rows.Next() {
 		var it TimelineItem
-		e := &it.Entry
-		if err := rows.Scan(&e.ID, &e.Kind, &e.OriginalText, &e.CorrectedText, &e.Pinyin, &e.CreatedAt, &e.SharedAt,
-			&it.OwnerID, &it.OwnerName); err != nil {
-			rows.Close()
+		if err := rows.Scan(append(entryDest(&it.Entry), &it.OwnerID, &it.OwnerName)...); err != nil {
 			return nil, fmt.Errorf("store: list timeline: %w", err)
 		}
-		e.Hints = []Hint{}
+		it.Entry.Hints = []Hint{}
 		items = append(items, it)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("store: list timeline: %w", err)
 	}
-	entries := make([]Entry, len(items))
-	for i, it := range items {
-		entries[i] = it.Entry
-	}
-	if err := attachHints(ctx, s.pool, entries); err != nil {
-		return nil, fmt.Errorf("store: list timeline hints: %w", err)
-	}
+	targets := make([]*Entry, len(items))
 	for i := range items {
-		items[i].Entry = entries[i]
+		targets[i] = &items[i].Entry
+	}
+	if err := attachHints(ctx, s.pool, targets); err != nil {
+		return nil, fmt.Errorf("store: list timeline hints: %w", err)
 	}
 	return items, nil
 }

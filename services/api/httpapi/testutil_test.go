@@ -100,6 +100,36 @@ func testRouter(t *testing.T, a Auth, db Pinger, c *clock) (http.Handler, *bytes
 	return h, buf
 }
 
+// tokenAuth authenticates the test token "tok" as testOwner with the given
+// role (use "" for no role) and rejects every other token.
+func tokenAuth(role string) *fakeAuth {
+	return &fakeAuth{authenticate: func(_ context.Context, tok string) (auth.Principal, error) {
+		if tok != "tok" {
+			return auth.Principal{}, auth.ErrUnauthorized
+		}
+		return auth.Principal{OwnerID: testOwner, Role: role}, nil
+	}}
+}
+
+// routerWith builds the full router around d. Unset Auth defaults to
+// tokenAuth(role); Logger writes JSON to the returned buffer and Now follows
+// the returned clock, unless d sets them.
+func routerWith(t *testing.T, role string, d Deps) (http.Handler, *clock, *bytes.Buffer) {
+	t.Helper()
+	buf := &bytes.Buffer{}
+	c := newClock()
+	if d.Auth == nil {
+		d.Auth = tokenAuth(role)
+	}
+	if d.Logger == nil {
+		d.Logger = slog.New(slog.NewJSONHandler(buf, nil))
+	}
+	if d.Now == nil {
+		d.Now = c.Now
+	}
+	return NewRouter(d), c, buf
+}
+
 func do(h http.Handler, method, target, body string, headers map[string]string) *httptest.ResponseRecorder {
 	var r *http.Request
 	if body == "" {

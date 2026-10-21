@@ -77,7 +77,7 @@ func loginGitHub(a Auth) http.Handler {
 			return
 		}
 		if req.Code == "" || req.CodeVerifier == "" || req.RedirectURI == "" {
-			writeError(w, http.StatusBadRequest, "invalid_request", msgBadRequest)
+			writeBadRequest(w)
 			return
 		}
 		pair, err := a.LoginGitHub(r.Context(), string(req.Code), string(req.CodeVerifier), string(req.RedirectURI))

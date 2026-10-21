@@ -92,69 +92,105 @@ const (
 	pingTimeout    = 3 * time.Second
 )
 
+// route records how a pattern was registered, so tests can check every route.
+type route struct {
+	pattern   string
+	authed    bool // behind requireAuth
+	allowUser bool // accepts ?user= (only the five read routes)
+}
+
 // NewRouter builds the API handler with all middleware applied.
 func NewRouter(d Deps) http.Handler {
+	d = d.withDefaults()
+	mux, _ := newMux(d)
+	return wrap(d, jsonMuxErrors(mux))
+}
+
+func (d Deps) withDefaults() Deps {
 	if d.Logger == nil {
 		d.Logger = slog.Default()
 	}
 	if d.Now == nil {
 		d.Now = time.Now
 	}
+	return d
+}
 
+// newMux registers every route and returns the mux with the route table. d
+// must already have its defaults applied.
+func newMux(d Deps) (*http.ServeMux, []route) {
 	mux := http.NewServeMux()
+	var routes []route
+	handle := func(rt route, h http.Handler) {
+		routes = append(routes, rt)
+		mux.Handle(rt.pattern, h)
+	}
+	// public registers a route that needs no authentication.
+	public := func(pattern string, h http.Handler) { handle(route{pattern: pattern}, h) }
+	// limited applies the per-client rate limit.
+	limiter := NewRateLimiter(authRateLimit, authRateWindow, d.Now)
+	limited := func(h http.Handler) http.Handler { return rateLimit(limiter, h) }
+	// authed requires a valid token and rejects ?user= with 400; the safe default.
+	authed := func(h http.Handler) http.Handler { return requireAuth(d.Auth, rejectUserParam(h)) }
+	// authedAllowUser requires a valid token and lets read handlers honour ?user=.
+	authedAllowUser := func(h http.Handler) http.Handler { return requireAuth(d.Auth, h) }
+	// adminOnly is authed plus a 403 for non-admins.
+	adminOnly := func(h http.Handler) http.Handler { return authed(requireAdmin(h)) }
+	// private registers an authed route; privateReadUser one that accepts ?user=.
+	private := func(pattern string, h http.Handler) { handle(route{pattern: pattern, authed: true}, h) }
+	privateReadUser := func(pattern string, h http.Handler) {
+		handle(route{pattern: pattern, authed: true, allowUser: true}, h)
+	}
+
 	// Production and the ALB health check use /health; /healthz is kept for
 	// local use.
 	health := healthz(d.DB)
-	mux.Handle("GET /health", health)
-	mux.Handle("GET /healthz", health)
+	public("GET /health", health)
+	public("GET /healthz", health)
 	// The ALB health check uses /ping, which does not touch the database: a
 	// DB check every few seconds would keep Neon from ever suspending, and a
 	// database outage would make ECS replace healthy tasks.
-	mux.Handle("GET /ping", ping())
+	public("GET /ping", ping())
 
-	limiter := NewRateLimiter(authRateLimit, authRateWindow, d.Now)
-	limited := func(h http.Handler) http.Handler { return rateLimit(limiter, h) }
-	mux.Handle("POST /v1/auth/github", limited(loginGitHub(d.Auth)))
-	mux.Handle("POST /v1/auth/password", limited(loginPassword(d.Auth)))
-	mux.Handle("POST /v1/auth/refresh", limited(refresh(d.Auth)))
-	mux.Handle("POST /v1/auth/logout", limited(logout(d.Auth)))
+	public("POST /v1/auth/github", limited(loginGitHub(d.Auth)))
+	public("POST /v1/auth/password", limited(loginPassword(d.Auth)))
+	public("POST /v1/auth/refresh", limited(refresh(d.Auth)))
+	public("POST /v1/auth/logout", limited(logout(d.Auth)))
 
-	authed := func(h http.Handler) http.Handler { return requireAuth(d.Auth, h) }
-	// Only the five read routes accept ?user=; every other authed route
+	// Only these five read routes accept ?user=; every other authed route
 	// rejects it with 400 so it can never be mistaken for being honoured.
-	authedNoUser := func(h http.Handler) http.Handler { return authed(rejectUserParam(h)) }
-	mux.Handle("GET /v1/entries", authed(listEntries(d.Entries)))
-	mux.Handle("GET /v1/entries/{id}", authed(getEntry(d.Entries)))
-	mux.Handle("POST /v1/batches", authedNoUser(createBatch(d.Entries, d.Now)))
+	privateReadUser("GET /v1/entries", authedAllowUser(listEntries(d.Entries)))
+	privateReadUser("GET /v1/entries/{id}", authedAllowUser(getEntry(d.Entries)))
+	privateReadUser("GET /v1/log-dates", authedAllowUser(listLogDates(d.Entries)))
+	privateReadUser("GET /v1/log-dates/{date}/entries", authedAllowUser(listDailyEntries(d.Entries)))
+	privateReadUser("GET /v1/log-dates/{date}/entries/{number}", authedAllowUser(getDailyEntry(d.Entries)))
+
+	private("POST /v1/batches", authed(createBatch(d.Entries, d.Now)))
 	// CSV import into the caller's own notes (admin and member). Its body
 	// limit is 6 MiB instead of 1 MiB; see limitBody.
-	mux.Handle("POST "+csvImportPath, authedNoUser(importCSV(d.Entries, d.Now)))
-	mux.Handle("PATCH /v1/entries/{id}", authedNoUser(patchEntry(d.Entries)))
-	mux.Handle("DELETE /v1/entries/{id}", authedNoUser(deleteEntry(d.Entries, d.Now)))
-	mux.Handle("GET /v1/trash", authedNoUser(listTrash(d.Entries)))
-	mux.Handle("DELETE /v1/trash", authedNoUser(emptyTrash(d.Entries)))
-	mux.Handle("POST /v1/trash/{id}/restore", authedNoUser(restoreEntry(d.Entries)))
-	mux.Handle("DELETE /v1/trash/{id}", authedNoUser(purgeEntry(d.Entries)))
-	mux.Handle("PUT /v1/entries/{id}/share", authedNoUser(shareEntry(d.Entries, d.Now, true)))
-	mux.Handle("DELETE /v1/entries/{id}/share", authedNoUser(shareEntry(d.Entries, d.Now, false)))
-	mux.Handle("GET /v1/log-dates", authed(listLogDates(d.Entries)))
-	mux.Handle("GET /v1/log-dates/{date}/entries", authed(listDailyEntries(d.Entries)))
-	mux.Handle("GET /v1/log-dates/{date}/entries/{number}", authed(getDailyEntry(d.Entries)))
-	mux.Handle("GET /v1/members", authedNoUser(listMembers(d.Follows)))
-	mux.Handle("PUT /v1/follows/{ownerId}", authedNoUser(followMember(d.Follows, d.Now)))
-	mux.Handle("DELETE /v1/follows/{ownerId}", authedNoUser(unfollowMember(d.Follows)))
-	mux.Handle("GET /v1/timeline", authedNoUser(listTimeline(d.Follows)))
+	private("POST "+csvImportPath, authed(importCSV(d.Entries, d.Now)))
+	private("PATCH /v1/entries/{id}", authed(patchEntry(d.Entries)))
+	private("DELETE /v1/entries/{id}", authed(deleteEntry(d.Entries, d.Now)))
+	private("GET /v1/trash", authed(listTrash(d.Entries)))
+	private("DELETE /v1/trash", authed(emptyTrash(d.Entries)))
+	private("POST /v1/trash/{id}/restore", authed(restoreEntry(d.Entries)))
+	private("DELETE /v1/trash/{id}", authed(purgeEntry(d.Entries)))
+	private("PUT /v1/entries/{id}/share", authed(shareEntry(d.Entries, d.Now, true)))
+	private("DELETE /v1/entries/{id}/share", authed(shareEntry(d.Entries, d.Now, false)))
+	private("GET /v1/members", authed(listMembers(d.Follows)))
+	private("PUT /v1/follows/{ownerId}", authed(followMember(d.Follows, d.Now)))
+	private("DELETE /v1/follows/{ownerId}", authed(unfollowMember(d.Follows)))
+	private("GET /v1/timeline", authed(listTimeline(d.Follows)))
 	// Changing a password checks the current one, so it shares the /v1/auth/*
 	// limit. The limit runs before authentication so failed tokens count too.
-	mux.Handle("POST /v1/account/password", limited(authedNoUser(changePassword(d.Auth))))
+	private("POST /v1/account/password", limited(authed(changePassword(d.Auth))))
 	// Admin-only member management. Passwords are hashed with the shared
 	// scrypt semaphore and are never logged.
-	adminOnly := func(h http.Handler) http.Handler { return authedNoUser(requireAdmin(h)) }
-	mux.Handle("GET /v1/admin/accounts", adminOnly(listAccounts(d.Accounts)))
-	mux.Handle("POST /v1/admin/accounts", adminOnly(createAccount(d.Accounts, d.Hasher, d.Now)))
-	mux.Handle("POST /v1/admin/accounts/{id}/password", adminOnly(resetAccountPassword(d.Accounts, d.Hasher, d.Now)))
+	private("GET /v1/admin/accounts", adminOnly(listAccounts(d.Accounts)))
+	private("POST /v1/admin/accounts", adminOnly(createAccount(d.Accounts, d.Hasher, d.Now)))
+	private("POST /v1/admin/accounts/{id}/password", adminOnly(resetAccountPassword(d.Accounts, d.Hasher, d.Now)))
 
-	return wrap(d, jsonMuxErrors(mux))
+	return mux, routes
 }
 
 func ping() http.Handler {
@@ -170,7 +206,7 @@ func healthz(db Pinger) http.Handler {
 			defer cancel()
 			if err := db.Ping(ctx); err != nil {
 				loggerFrom(r.Context()).Warn("health check failed", "error", err.Error())
-				writeError(w, http.StatusServiceUnavailable, "unavailable", msgUnavailable)
+				writeError(w, http.StatusServiceUnavailable, codeUnavailable, msgUnavailable)
 				return
 			}
 		}
@@ -187,13 +223,13 @@ func jsonMuxErrors(mux *http.ServeMux) http.Handler {
 			h.ServeHTTP(c, r)
 			switch c.status {
 			case http.StatusNotFound:
-				writeError(w, http.StatusNotFound, "not_found", msgNotFound)
+				writeError(w, http.StatusNotFound, codeNotFound, msgNotFound)
 				return
 			case http.StatusMethodNotAllowed:
 				if allow := c.header.Get("Allow"); allow != "" {
 					w.Header().Set("Allow", allow)
 				}
-				writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", msgMethodNotAllowed)
+				writeError(w, http.StatusMethodNotAllowed, codeMethodNotAllowed, msgMethodNotAllowed)
 				return
 			}
 			// Anything else (a path-cleaning redirect) is served as is.

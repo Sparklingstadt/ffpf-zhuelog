@@ -70,7 +70,7 @@ func (s *Store) ListDailyEntries(ctx context.Context, ownerID string, d LogDate)
 	if err != nil {
 		return nil, fmt.Errorf("store: list daily entries: %w", err)
 	}
-	if err := attachHints(ctx, s.pool, entries); err != nil {
+	if err := attachHints(ctx, s.pool, entryPtrs(entries)); err != nil {
 		return nil, fmt.Errorf("store: list daily entry hints: %w", err)
 	}
 	return entries, nil
@@ -110,7 +110,7 @@ func (s *Store) GetDailyEntry(ctx context.Context, ownerID string, d LogDate, nu
 	if len(entries) == 0 { // removed between the two queries
 		return Entry{}, 0, ErrNotFound
 	}
-	if err := attachHints(ctx, s.pool, entries); err != nil {
+	if err := attachHints(ctx, s.pool, entryPtrs(entries)); err != nil {
 		return Entry{}, 0, fmt.Errorf("store: get daily entry hints: %w", err)
 	}
 	return entries[0], int(total), nil

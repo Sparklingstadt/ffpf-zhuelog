@@ -6,56 +6,10 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
-
-// newOwner returns a fresh owner ID and removes everything it created when the
-// test ends (ImportBatch deletion cascades to entries and hints).
-func newOwner(t *testing.T, s *Store) string {
-	t.Helper()
-	owner := "password:" + newID()
-	t.Cleanup(func() {
-		_, _ = s.pool.Exec(context.Background(),
-			`DELETE FROM "ImportBatch" WHERE id IN (SELECT "batchId" FROM "LearningEntry" WHERE "ownerId" = $1)`, owner)
-	})
-	return owner
-}
-
-func draft(n string, hints ...string) EntryDraft {
-	return EntryDraft{
-		Kind:          "correction",
-		OriginalText:  "orig " + n,
-		CorrectedText: "corr " + n,
-		Pinyin:        "pin " + n,
-		Hints:         hints,
-	}
-}
-
-// createTied stores drafts as one batch and then gives every entry the same
-// createdAt (CreateBatch spaces them 1 ms apart), for (createdAt, id) tie tests.
-func createTied(t *testing.T, s *Store, owner string, drafts []EntryDraft, at time.Time) []Entry {
-	t.Helper()
-	ctx := context.Background()
-	_, created, err := s.CreateBatch(ctx, owner, drafts, at)
-	if err != nil {
-		t.Fatal(err)
-	}
-	at = dbTime(at)
-	ids := make([]string, len(created))
-	for i := range created {
-		ids[i] = created[i].ID
-		created[i].CreatedAt = at
-	}
-	if _, err := s.pool.Exec(ctx, `UPDATE "LearningEntry" SET "createdAt" = $1 WHERE "id" = ANY($2)`, at, ids); err != nil {
-		t.Fatal(err)
-	}
-	return created
-}
-
-func fixedNow() time.Time {
-	return time.Date(2026, 10, 20, 12, 34, 56, 789_000_000, time.UTC)
-}
 
 func TestCreateBatchAndGet(t *testing.T) {
 	s := testStore(t)
@@ -467,5 +421,23 @@ func TestReadsWebCreatedEntry(t *testing.T) {
 	}
 	if got.CreatedAt.IsZero() {
 		t.Error("CreatedAt not set")
+	}
+}
+
+func TestUpdateEntryDBErrorIsWrappedOnce(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	owner := newOwner(t, s)
+	_, entries, err := s.CreateBatch(ctx, owner, []EntryDraft{{Kind: "correction", OriginalText: "a", CorrectedText: "b"}}, time.Now())
+	if err != nil {
+		t.Fatalf("CreateBatch: %v", err)
+	}
+	bad := "a\x00b" // PostgreSQL text cannot hold NUL, so the UPDATE fails
+	_, err = s.UpdateEntry(ctx, owner, entries[0].ID, EntryPatch{OriginalText: &bad})
+	if err == nil || errors.Is(err, ErrNotFound) {
+		t.Fatalf("want a database error, got %v", err)
+	}
+	if got := strings.Count(err.Error(), "store:"); got != 1 || !strings.HasPrefix(err.Error(), "store: update entry: ") {
+		t.Errorf("error %q should carry exactly one \"store: update entry:\" prefix", err)
 	}
 }

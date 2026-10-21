@@ -4,40 +4,12 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"regexp"
-	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/jsstr"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
-
-const (
-	msgInvalidLoginID  = "ログインIDは英小文字・数字・. _ - の3〜32文字にしてください。"
-	msgInvalidName     = "表示名は1〜50文字にしてください。"
-	msgLoginIDTaken    = "このログインIDはすでに使われています。"
-	msgAccountNotFound = "アカウントが見つかりません。"
-
-	maxDisplayNameRunes = 50
-	minPasswordRunes    = 12
-	maxPasswordRunes    = 128
-)
-
-var loginIDPattern = regexp.MustCompile(`^[a-z0-9._-]{3,32}$`)
-
-// webTrim trims what JavaScript's String.prototype.trim trims, so blank
-// input is judged exactly as the web app judges it.
-func webTrim(s string) string {
-	return strings.TrimFunc(s, func(r rune) bool {
-		switch r {
-		case '\t', '\n', '\v', '\f', '\r', ' ', 0xA0, 0xFEFF, 0x2028, 0x2029:
-			return true
-		}
-		return unicode.Is(unicode.Zs, r)
-	})
-}
 
 // accountInput is the validated form of an admin request. Password is what
 // will be stored: the one given, or a generated one.
@@ -47,12 +19,12 @@ type accountInput struct {
 }
 
 // resolvePassword applies the web app's optionalPasswordSchema: blank means
-// generate, anything else must be 12-128 characters (not trimmed).
+// generate, anything else must be 12-128 UTF-16 units (not trimmed).
 func resolvePassword(given string) (password string, generated bool, ok bool) {
-	if webTrim(given) == "" {
+	if jsstr.Trim(given) == "" {
 		return auth.GeneratePassword(), true, true
 	}
-	if n := utf8.RuneCountInString(given); n < minPasswordRunes || n > maxPasswordRunes {
+	if !auth.ValidNewPassword(given) {
 		return "", false, false
 	}
 	return given, false, true
@@ -62,12 +34,11 @@ func resolvePassword(given string) (password string, generated bool, ok bool) {
 // order and returns the message of the first failing field.
 func validateAccountInput(loginID, displayName, password string) (accountInput, string) {
 	var in accountInput
-	in.LoginID = strings.ToLower(webTrim(loginID))
-	if !loginIDPattern.MatchString(in.LoginID) {
+	var ok bool
+	if in.LoginID, ok = auth.NormalizeLoginID(loginID); !ok {
 		return in, msgInvalidLoginID
 	}
-	in.DisplayName = webTrim(displayName)
-	if n := utf8.RuneCountInString(in.DisplayName); n < 1 || n > maxDisplayNameRunes || strings.ContainsRune(in.DisplayName, 0) {
+	if in.DisplayName, ok = auth.ValidDisplayName(displayName); !ok {
 		return in, msgInvalidName
 	}
 	pw, generated, ok := resolvePassword(password)
@@ -82,7 +53,7 @@ func validateAccountInput(loginID, displayName, password string) (accountInput, 
 func requireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if principalFrom(r.Context()).Role != auth.RoleAdmin {
-			writeError(w, http.StatusForbidden, "forbidden", msgForbidden)
+			writeForbidden(w, msgAdminOnly)
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -99,7 +70,7 @@ type accountJSON struct {
 
 func toAccountJSON(a store.AccountSummary) accountJSON {
 	return accountJSON{
-		ID: a.ID, OwnerID: "password:" + a.ID, LoginID: a.LoginID,
+		ID: a.ID, OwnerID: store.MemberOwnerID(a.ID), LoginID: a.LoginID,
 		DisplayName: a.DisplayName, CreatedAt: formatTime(a.CreatedAt),
 	}
 }
@@ -141,7 +112,7 @@ func createAccount(acc Accounts, h PasswordHasher, now func() time.Time) http.Ha
 		}
 		in, msg := validateAccountInput(string(req.LoginID), string(req.DisplayName), string(req.Password))
 		if msg != "" {
-			writeError(w, http.StatusBadRequest, "invalid_request", msg)
+			writeError(w, http.StatusBadRequest, codeInvalidRequest, msg)
 			return
 		}
 		hash, err := h.Hash(r.Context(), in.Password)
@@ -151,7 +122,7 @@ func createAccount(acc Accounts, h PasswordHasher, now func() time.Time) http.Ha
 		}
 		a, err := acc.CreatePasswordAccount(r.Context(), in.LoginID, in.DisplayName, hash, now())
 		if errors.Is(err, store.ErrLoginIDTaken) {
-			writeError(w, http.StatusConflict, "login_id_taken", msgLoginIDTaken)
+			writeError(w, http.StatusConflict, codeLoginIDTaken, msgLoginIDTaken)
 			return
 		}
 		if err != nil {
@@ -172,7 +143,7 @@ func resetAccountPassword(acc Accounts, h PasswordHasher, now func() time.Time) 
 		Generated bool   `json:"generated"`
 	}
 	notFound := func(w http.ResponseWriter) {
-		writeError(w, http.StatusNotFound, "not_found", msgAccountNotFound)
+		writeError(w, http.StatusNotFound, codeNotFound, msgAccountNotFound)
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req request
@@ -182,12 +153,11 @@ func resetAccountPassword(acc Accounts, h PasswordHasher, now func() time.Time) 
 		}
 		pw, generated, ok := resolvePassword(string(req.Password))
 		if !ok {
-			writeError(w, http.StatusBadRequest, "invalid_request", msgInvalidNewPassword)
+			writeError(w, http.StatusBadRequest, codeInvalidRequest, msgInvalidNewPassword)
 			return
 		}
-		id := r.PathValue("id")
-		if !validID(id) {
-			notFound(w)
+		id, ok := pathValueMsg(w, r, "id", validID, msgAccountNotFound)
+		if !ok {
 			return
 		}
 		a, err := acc.FindPasswordAccountByID(r.Context(), id)

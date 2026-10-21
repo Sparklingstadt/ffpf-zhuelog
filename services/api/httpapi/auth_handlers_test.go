@@ -272,7 +272,11 @@ func TestRefreshHandler(t *testing.T) {
 			return auth.TokenPair{}, auth.ErrForbidden
 		}}
 		h, _ := testRouter(t, a, fakePinger{}, nil)
-		wantError(t, do(h, http.MethodPost, "/v1/auth/refresh", `{"refreshToken":"x"}`, nil), 403, "forbidden")
+		w := do(h, http.MethodPost, "/v1/auth/refresh", `{"refreshToken":"x"}`, nil)
+		wantError(t, w, 403, "forbidden")
+		if got := decodeError(t, w).Error.Message; got != "このアカウントは利用できません。" {
+			t.Fatalf("message = %q", got)
+		}
 	})
 
 	t.Run("400 wrong type", func(t *testing.T) {

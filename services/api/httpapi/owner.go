@@ -38,7 +38,7 @@ func readOwner(w http.ResponseWriter, r *http.Request) (string, bool) {
 		return "", false
 	}
 	if self.Role != auth.RoleAdmin {
-		writeError(w, http.StatusForbidden, "forbidden", msgAdminOnlyView)
+		writeForbidden(w, msgAdminOnlyView)
 		return "", false
 	}
 	return user, true
