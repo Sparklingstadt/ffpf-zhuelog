@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { securePostgresConnectionString } from "../src/infrastructure/config/postgres-connection";
+import { securePostgresConnectionString } from "../prisma/postgres-connection";
 import { contentSecurityPolicy } from "../src/infrastructure/security/content-security-policy";
 import { parseLogNumber } from "../src/domain/calendar/value-objects/log-date";
 import { getSafeCallbackPath } from "../src/presentation/http/safe-callback-path";

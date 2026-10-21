@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "next dev",
     "test:unit": "node scripts/test-unit.mjs",
-    "build": "prisma generate && next build",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint --max-warnings 0",
     "typecheck": "next typegen && tsc --noEmit",
