@@ -214,6 +214,18 @@ func (f *fakeStore) RevokeFamily(_ context.Context, familyID string, now time.Ti
 	return nil
 }
 
+// FamilyActive mirrors the store: whether familyID has an unrevoked,
+// unexpired row.
+func (f *fakeStore) FamilyActive(_ context.Context, familyID string, now time.Time) (bool, error) {
+	f.log.add("FamilyActive")
+	for _, t := range f.tokens {
+		if t.FamilyID == familyID && t.RevokedAt == nil && t.ExpiresAt.After(now) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // PruneRefreshTokens mirrors the store: it deletes ownerID's expired rows and
 // its revoked rows whose family has no unrevoked, unexpired row.
 func (f *fakeStore) PruneRefreshTokens(_ context.Context, ownerID string, now time.Time) error {
@@ -906,7 +918,9 @@ func TestRefreshRotates(t *testing.T) {
 				t.Fatalf("old row not revoked")
 			}
 
-			// Reusing the old token is theft: the whole family dies.
+			// Reusing the old token after the grace is theft: the whole
+			// family dies.
+			f.clock.Advance(RefreshReuseGrace + time.Second)
 			if _, err := f.svc.Refresh(context.Background(), first.RefreshToken); err != ErrUnauthorized {
 				t.Fatalf("reuse err = %v, want ErrUnauthorized", err)
 			}
@@ -1064,6 +1078,138 @@ func TestRefreshLostRace(t *testing.T) {
 	}
 	if !f.store.familyRevoked(f.store.row(t, pair.RefreshToken).FamilyID) {
 		t.Fatalf("family not revoked")
+	}
+}
+
+func TestRefreshConcurrentWithinGrace(t *testing.T) {
+	for _, role := range []string{RoleMember, RoleGuest} {
+		t.Run(role, func(t *testing.T) {
+			f := newFixture()
+			var rt1 TokenPair
+			if role == RoleMember {
+				rt1 = f.loginMember(t)
+			} else {
+				var err error
+				if rt1, err = f.svc.LoginGuest(context.Background()); err != nil {
+					t.Fatalf("LoginGuest: %v", err)
+				}
+			}
+			family := f.store.row(t, rt1.RefreshToken).FamilyID
+			rt2, err := f.svc.Refresh(context.Background(), rt1.RefreshToken)
+			if err != nil {
+				t.Fatalf("Refresh RT1: %v", err)
+			}
+
+			// A parallel request still carrying RT1 arrives within the grace.
+			f.clock.Advance(10 * time.Second)
+			rt3, err := f.svc.Refresh(context.Background(), rt1.RefreshToken)
+			if err != nil {
+				t.Fatalf("Refresh RT1 within grace: %v", err)
+			}
+			if rt3.RefreshToken == rt2.RefreshToken || rt3.RefreshToken == rt1.RefreshToken {
+				t.Fatalf("grace refresh returned an existing refresh token")
+			}
+			if len(f.store.revoked) != 0 {
+				t.Fatalf("grace refresh revoked families %v", f.store.revoked)
+			}
+			row3 := f.store.row(t, rt3.RefreshToken)
+			if row3.FamilyID != family || row3.RevokedAt != nil {
+				t.Fatalf("RT3 row %+v, want active row in family %s", row3, family)
+			}
+			ttl := RefreshTTL
+			if role == RoleGuest {
+				ttl = GuestRefreshTTL
+			}
+			if !row3.ExpiresAt.Equal(f.clock.Now().Add(ttl)) {
+				t.Fatalf("RT3 ExpiresAt = %v, want now + %v", row3.ExpiresAt, ttl)
+			}
+			if got := verifyAccess(t, f, rt3.AccessToken); got.Role != role {
+				t.Fatalf("RT3 access role = %q, want %q", got.Role, role)
+			}
+
+			// Both tabs keep working.
+			if _, err := f.svc.Refresh(context.Background(), rt2.RefreshToken); err != nil {
+				t.Fatalf("Refresh RT2: %v", err)
+			}
+			if _, err := f.svc.Refresh(context.Background(), rt3.RefreshToken); err != nil {
+				t.Fatalf("Refresh RT3: %v", err)
+			}
+		})
+	}
+}
+
+func TestRefreshReuseAfterGrace(t *testing.T) {
+	f := newFixture()
+	rt1 := f.loginMember(t)
+	family := f.store.row(t, rt1.RefreshToken).FamilyID
+	rt2, err := f.svc.Refresh(context.Background(), rt1.RefreshToken)
+	if err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	f.clock.Advance(31 * time.Second)
+	if _, err := f.svc.Refresh(context.Background(), rt1.RefreshToken); err != ErrUnauthorized {
+		t.Fatalf("reuse after grace err = %v, want ErrUnauthorized", err)
+	}
+	if !f.store.familyRevoked(family) {
+		t.Fatalf("family not revoked after reuse past the grace")
+	}
+	if _, err := f.svc.Refresh(context.Background(), rt2.RefreshToken); err != ErrUnauthorized {
+		t.Fatalf("RT2 after family revoked err = %v, want ErrUnauthorized", err)
+	}
+}
+
+func TestRefreshReuseAfterFamilyRevoked(t *testing.T) {
+	f := newFixture()
+	rt1 := f.loginMember(t)
+	rt2, err := f.svc.Refresh(context.Background(), rt1.RefreshToken)
+	if err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	if err := f.svc.Logout(context.Background(), rt2.RefreshToken); err != nil {
+		t.Fatalf("Logout: %v", err)
+	}
+	f.clock.Advance(5 * time.Second)
+	n := len(f.store.tokens)
+	if _, err := f.svc.Refresh(context.Background(), rt1.RefreshToken); err != ErrUnauthorized {
+		t.Fatalf("RT1 after logout err = %v, want ErrUnauthorized", err)
+	}
+	if len(f.store.tokens) != n {
+		t.Fatalf("a token was issued after logout")
+	}
+}
+
+func TestRefreshGraceStillChecksRevocation(t *testing.T) {
+	f := newFixture()
+	rt1 := f.loginMember(t)
+	family := f.store.row(t, rt1.RefreshToken).FamilyID
+	if _, err := f.svc.Refresh(context.Background(), rt1.RefreshToken); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	f.store.accounts["alice"].SessionVersion++
+	f.clock.Advance(time.Second)
+	n := len(f.store.tokens)
+	if _, err := f.svc.Refresh(context.Background(), rt1.RefreshToken); err != ErrUnauthorized {
+		t.Fatalf("err = %v, want ErrUnauthorized", err)
+	}
+	if len(f.store.tokens) != n {
+		t.Fatalf("a token was issued despite the session version change")
+	}
+	if !f.store.familyRevoked(family) {
+		t.Fatalf("family not revoked")
+	}
+}
+
+func TestRefreshGraceClockSkew(t *testing.T) {
+	// A revokedAt slightly in the future (another instance's clock ahead)
+	// still counts as within the grace.
+	f := newFixture()
+	rt1 := f.loginMember(t)
+	if _, err := f.svc.Refresh(context.Background(), rt1.RefreshToken); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	f.clock.Advance(-5 * time.Second)
+	if _, err := f.svc.Refresh(context.Background(), rt1.RefreshToken); err != nil {
+		t.Fatalf("Refresh with revokedAt in the future: %v", err)
 	}
 }
 

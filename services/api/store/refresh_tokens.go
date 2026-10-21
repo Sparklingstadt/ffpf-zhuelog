@@ -110,6 +110,20 @@ func (s *Store) RevokeFamily(ctx context.Context, familyID string, now time.Time
 	return nil
 }
 
+// FamilyActive reports whether familyID still has an unrevoked, unexpired
+// token.
+func (s *Store) FamilyActive(ctx context.Context, familyID string, now time.Time) (bool, error) {
+	var active bool
+	err := s.pool.QueryRow(ctx, `
+SELECT EXISTS (SELECT 1 FROM "ApiRefreshToken"
+  WHERE "familyId" = $1 AND "revokedAt" IS NULL AND "expiresAt" > $2)`,
+		familyID, dbTime(now)).Scan(&active)
+	if err != nil {
+		return false, fmt.Errorf("store: family active: %w", err)
+	}
+	return active, nil
+}
+
 // PruneRefreshTokens deletes ownerID's expired tokens, and its revoked tokens
 // whose family has no unrevoked, unexpired token left. Rotated tokens of a
 // still-live family are kept, so replaying one is still detected as reuse and

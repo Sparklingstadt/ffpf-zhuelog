@@ -265,3 +265,49 @@ func TestDeleteExpiredRefreshTokens(t *testing.T) {
 		}
 	}
 }
+
+func TestFamilyActive(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	owner := newOwner(t, s)
+	now := fixedNow()
+
+	insert := func(family string, expires time.Time, revoked bool) {
+		tok := RefreshToken{ID: newID(), OwnerID: owner, Role: "member", SessionVersion: intp(0), FamilyID: family, ExpiresAt: expires}
+		if revoked {
+			at := now.Add(-time.Minute)
+			tok.RevokedAt = &at
+		}
+		if err := s.InsertRefreshToken(ctx, tok, "hash-"+tok.ID); err != nil {
+			t.Fatalf("Insert: %v", err)
+		}
+	}
+	active := newID()
+	insert(active, now.Add(time.Hour), true)
+	insert(active, now.Add(time.Hour), false)
+	allRevoked := newID()
+	insert(allRevoked, now.Add(time.Hour), true)
+	insert(allRevoked, now.Add(time.Hour), true)
+	expired := newID()
+	insert(expired, now.Add(-time.Hour), false)
+	insert(expired, now, false) // expiresAt == now is expired
+	insert(expired, now.Add(time.Hour), true)
+
+	for name, tc := range map[string]struct {
+		family string
+		want   bool
+	}{
+		"active token":   {active, true},
+		"all revoked":    {allRevoked, false},
+		"all expired":    {expired, false},
+		"unknown family": {newID(), false},
+	} {
+		got, err := s.FamilyActive(ctx, tc.family, now)
+		if err != nil {
+			t.Fatalf("%s: FamilyActive: %v", name, err)
+		}
+		if got != tc.want {
+			t.Fatalf("%s: FamilyActive = %v, want %v", name, got, tc.want)
+		}
+	}
+}

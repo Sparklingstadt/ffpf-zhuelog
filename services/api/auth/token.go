@@ -15,8 +15,11 @@ const (
 	// GuestRefreshTTL is short because anyone can start a guest session
 	// without credentials, so dead guest rows must be cheap to clear.
 	GuestRefreshTTL = 24 * time.Hour
-	Issuer          = "ffpf-zhuelog-api"
-	Audience        = "ffpf-zhuelog-mobile"
+	// RefreshReuseGrace is how long a rotated refresh token may still be
+	// presented without being treated as theft (see Service.Refresh).
+	RefreshReuseGrace = 30 * time.Second
+	Issuer            = "ffpf-zhuelog-api"
+	Audience          = "ffpf-zhuelog-mobile"
 )
 
 const (

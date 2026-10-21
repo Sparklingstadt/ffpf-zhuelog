@@ -15,6 +15,14 @@ import (
 // Refresh rotates a refresh token. Presenting an already-rotated token revokes
 // its whole family (token theft); so does failing the revocation check or
 // losing a concurrent rotation.
+//
+// Browsers send parallel requests, so several of them can refresh with the
+// same token at once: one rotates it and the others then present a token that
+// was just revoked. To keep that from logging the user out, a token rotated
+// at most RefreshReuseGrace ago (or "in the future", from clock skew) whose
+// family still has an active token gets a new pair in the same family, after
+// the same revocation check, and its family is left alive. Past the grace, or
+// once the family is dead (logout, reuse detected), it is theft as before.
 func (s *Service) Refresh(ctx context.Context, refreshToken string) (TokenPair, error) {
 	if refreshToken == "" {
 		return TokenPair{}, ErrUnauthorized
@@ -27,8 +35,18 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (TokenPair, 
 	if err != nil {
 		return TokenPair{}, fmt.Errorf("auth: find refresh token: %w", err)
 	}
-	if row.RevokedAt != nil {
-		return TokenPair{}, s.revokeFamily(ctx, row.FamilyID, now, ErrUnauthorized)
+	grace := row.RevokedAt != nil
+	if grace {
+		if now.Sub(*row.RevokedAt) > RefreshReuseGrace {
+			return TokenPair{}, s.revokeFamily(ctx, row.FamilyID, now, ErrUnauthorized)
+		}
+		active, err := s.Store.FamilyActive(ctx, row.FamilyID, now)
+		if err != nil {
+			return TokenPair{}, fmt.Errorf("auth: family active: %w", err)
+		}
+		if !active {
+			return TokenPair{}, s.revokeFamily(ctx, row.FamilyID, now, ErrUnauthorized)
+		}
 	}
 	if !row.ExpiresAt.After(now) {
 		return TokenPair{}, ErrUnauthorized
@@ -48,6 +66,13 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (TokenPair, 
 	pair, next, nextHash, err := s.newPair(p, row.FamilyID, now)
 	if err != nil {
 		return TokenPair{}, err
+	}
+	if grace {
+		// The presented row is already revoked; add a sibling to its family.
+		if err := s.Store.InsertRefreshToken(ctx, next, nextHash); err != nil {
+			return TokenPair{}, fmt.Errorf("auth: insert refresh token: %w", err)
+		}
+		return pair, nil
 	}
 	rotated, err := s.Store.RotateRefreshToken(ctx, row.ID, next, nextHash, now)
 	if err != nil {

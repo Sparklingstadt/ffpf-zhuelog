@@ -50,6 +50,7 @@ type Store interface {
 	FindRefreshToken(ctx context.Context, tokenHash string) (store.RefreshToken, error)
 	RotateRefreshToken(ctx context.Context, oldID string, next store.RefreshToken, nextHash string, now time.Time) (bool, error)
 	RevokeFamily(ctx context.Context, familyID string, now time.Time) error
+	FamilyActive(ctx context.Context, familyID string, now time.Time) (bool, error)
 	PruneRefreshTokens(ctx context.Context, ownerID string, now time.Time) error
 	DeleteExpiredRefreshTokens(ctx context.Context, ownerID string, now time.Time) error
 }
