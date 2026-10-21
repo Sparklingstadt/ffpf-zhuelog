@@ -144,3 +144,44 @@ func logout(a Auth) http.Handler {
 		w.WriteHeader(http.StatusNoContent)
 	})
 }
+
+// loginGuest starts a guest session. The body is optional: it may be empty or
+// "{}"; any field is rejected like on the other login routes.
+func loginGuest(a Auth) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct{}
+		if err := decodeBody(r, &req); err != nil && !errors.Is(err, io.EOF) {
+			writeBodyError(w, r, err)
+			return
+		}
+		pair, err := a.LoginGuest(r.Context())
+		if err != nil {
+			writeServiceError(w, r, err)
+			return
+		}
+		writeTokens(w, pair)
+	})
+}
+
+type meResponse struct {
+	OwnerID     string `json:"ownerId"`
+	Role        string `json:"role"`
+	Login       string `json:"login"`
+	DisplayName string `json:"displayName,omitempty"`
+	AccountID   string `json:"accountId,omitempty"`
+}
+
+// me answers who the caller is.
+func me(a Auth) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		m, err := a.Me(r.Context(), principalFrom(r.Context()))
+		if err != nil {
+			writeServiceError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, meResponse{
+			OwnerID: m.OwnerID, Role: m.Role, Login: m.Login,
+			DisplayName: m.DisplayName, AccountID: m.AccountID,
+		})
+	})
+}

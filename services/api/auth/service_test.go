@@ -1435,3 +1435,70 @@ func TestChangePasswordInfrastructureErrors(t *testing.T) {
 		}
 	})
 }
+
+// --- LoginGuest and Me ----------------------------------------------------
+
+func TestLoginGuest(t *testing.T) {
+	f := newFixture()
+	ctx := context.Background()
+	pair, err := f.svc.LoginGuest(ctx)
+	if err != nil {
+		t.Fatalf("LoginGuest: %v", err)
+	}
+	want := Principal{OwnerID: GuestOwnerID, Role: RoleGuest}
+	if got := verifyAccess(t, f, pair.AccessToken); got != want {
+		t.Fatalf("access token principal = %+v, want %+v", got, want)
+	}
+	checkRefreshTokenShape(t, pair.RefreshToken)
+
+	// The guest is always current and can rotate its refresh token.
+	if p, err := f.svc.Authenticate(ctx, pair.AccessToken); err != nil || p != want {
+		t.Fatalf("Authenticate = %+v, %v", p, err)
+	}
+	next, err := f.svc.Refresh(ctx, pair.RefreshToken)
+	if err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	if got := verifyAccess(t, f, next.AccessToken); got != want {
+		t.Fatalf("refreshed principal = %+v, want %+v", got, want)
+	}
+	if next.RefreshToken == pair.RefreshToken {
+		t.Fatal("refresh token was not rotated")
+	}
+}
+
+func TestMeMember(t *testing.T) {
+	f := newFixture()
+	acc := f.store.addAccount("cacc1", "alice", "pw", 3)
+	acc.DisplayName = "Alice A"
+	got, err := f.svc.Me(context.Background(), Principal{OwnerID: "password:cacc1", Role: RoleMember, SessionVersion: 3})
+	want := Me{OwnerID: "password:cacc1", Role: RoleMember, Login: "alice", DisplayName: "Alice A", AccountID: "cacc1"}
+	if err != nil || got != want {
+		t.Fatalf("Me = %+v, %v; want %+v", got, err, want)
+	}
+}
+
+func TestMeMemberMissing(t *testing.T) {
+	f := newFixture()
+	_, err := f.svc.Me(context.Background(), Principal{OwnerID: "password:gone", Role: RoleMember})
+	if !errors.Is(err, ErrUnauthorized) {
+		t.Fatalf("err = %v, want ErrUnauthorized", err)
+	}
+	_, err = f.svc.Me(context.Background(), Principal{OwnerID: "nope", Role: RoleMember})
+	if !errors.Is(err, ErrUnauthorized) {
+		t.Fatalf("malformed owner err = %v, want ErrUnauthorized", err)
+	}
+}
+
+func TestMeAdminAndGuest(t *testing.T) {
+	f := newFixture()
+	ctx := context.Background()
+	got, err := f.svc.Me(ctx, Principal{OwnerID: "42", Role: RoleAdmin, Login: "Alice"})
+	if want := (Me{OwnerID: "42", Role: RoleAdmin, Login: "Alice"}); err != nil || got != want {
+		t.Fatalf("admin Me = %+v, %v; want %+v", got, err, want)
+	}
+	got, err = f.svc.Me(ctx, Principal{OwnerID: GuestOwnerID, Role: RoleGuest})
+	if want := (Me{OwnerID: "guest", Role: "guest", Login: "guest"}); err != nil || got != want {
+		t.Fatalf("guest Me = %+v, %v; want %+v", got, err, want)
+	}
+}

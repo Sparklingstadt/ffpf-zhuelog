@@ -332,7 +332,7 @@ func TestBearer(t *testing.T) {
 			var gotPrincipal auth.Principal
 			var reached bool
 			mux := http.NewServeMux()
-			mux.Handle("GET /secret", requireAuth(a, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			mux.Handle("GET /secret", requireAuth(a, false, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				reached = true
 				gotPrincipal = principalFrom(r.Context())
 				w.WriteHeader(http.StatusOK)

@@ -138,8 +138,8 @@ func limitBody(next http.Handler) http.Handler {
 
 // requireAuth answers 401/403 unless the request carries a valid
 // "Authorization: Bearer <token>" header; otherwise it stores the Principal in
-// the request context for next.
-func requireAuth(a Auth, next http.Handler) http.Handler {
+// the request context for next. Guest tokens get 403 unless allowGuest is set.
+func requireAuth(a Auth, allowGuest bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		scheme, token, ok := strings.Cut(r.Header.Get("Authorization"), " ")
 		if !ok || !strings.EqualFold(scheme, "Bearer") || token == "" || strings.Contains(token, " ") {
@@ -149,6 +149,10 @@ func requireAuth(a Auth, next http.Handler) http.Handler {
 		p, err := a.Authenticate(r.Context(), token)
 		if err != nil {
 			writeServiceError(w, r, err)
+			return
+		}
+		if p.Role == auth.RoleGuest && !allowGuest {
+			writeError(w, http.StatusForbidden, codeForbidden, msgForbidden)
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), principalKey, p)))

@@ -83,3 +83,9 @@ func (s *Service) LoginPassword(ctx context.Context, client, loginID, password s
 		SessionVersion: account.SessionVersion,
 	})
 }
+
+// LoginGuest starts a guest session. Guests need no credentials: they own no
+// data and can only call the routes that allow guests.
+func (s *Service) LoginGuest(ctx context.Context) (TokenPair, error) {
+	return s.startSession(ctx, Principal{OwnerID: GuestOwnerID, Role: RoleGuest})
+}

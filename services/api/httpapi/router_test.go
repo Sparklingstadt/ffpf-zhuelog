@@ -65,11 +65,11 @@ func TestOnlyReadRoutesAcceptUserParam(t *testing.T) {
 	}
 }
 
-// TestPublicRouteSetIsExactlyTheSevenKnownRoutes pins the routes that are not
+// TestPublicRouteSetIsExactlyTheEightKnownRoutes pins the routes that are not
 // behind requireAuth. Both the route table and real behaviour are checked: a
-// request without a token must get 401 on every route except these seven, so
+// request without a token must get 401 on every route except these eight, so
 // a private route registered with public(...) by mistake fails here.
-func TestPublicRouteSetIsExactlyTheSevenKnownRoutes(t *testing.T) {
+func TestPublicRouteSetIsExactlyTheEightKnownRoutes(t *testing.T) {
 	d := Deps{
 		Auth: &fakeAuth{}, Entries: &fakeEntries{}, Follows: &fakeFollows{},
 		Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
@@ -85,6 +85,7 @@ func TestPublicRouteSetIsExactlyTheSevenKnownRoutes(t *testing.T) {
 		"POST /v1/auth/password",
 		"POST /v1/auth/refresh",
 		"POST /v1/auth/logout",
+		"POST /v1/auth/guest",
 	}
 	isPublic := map[string]bool{}
 	for _, p := range want {
@@ -113,5 +114,38 @@ func TestPublicRouteSetIsExactlyTheSevenKnownRoutes(t *testing.T) {
 	sort.Strings(want)
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("routes not behind requireAuth\n got: %q\nwant: %q", got, want)
+	}
+}
+
+// TestRoutesRejectGuests sends a guest token to every authed route that does
+// not allow guests and expects 403, and checks that GET /v1/me is the only
+// route that does.
+func TestRoutesRejectGuests(t *testing.T) {
+	a := &fakeAuth{authenticate: func(context.Context, string) (auth.Principal, error) {
+		return auth.Principal{OwnerID: auth.GuestOwnerID, Role: auth.RoleGuest}, nil
+	}}
+	d := Deps{
+		Auth: a, Entries: &fakeEntries{}, Follows: &fakeFollows{},
+		Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
+	}.withDefaults()
+	mux, routes := newMux(d)
+	h := wrap(d, jsonMuxErrors(mux))
+
+	paths := strings.NewReplacer("{id}", "abc", "{ownerId}", "12345", "{date}", "2026-01-01", "{number}", "1")
+	var got []string
+	for _, rt := range routes {
+		if rt.allowGuest {
+			got = append(got, rt.pattern)
+		}
+		if !rt.authed || rt.allowGuest {
+			continue
+		}
+		method, path, _ := strings.Cut(rt.pattern, " ")
+		t.Run(rt.pattern, func(t *testing.T) {
+			wantError(t, do(h, method, paths.Replace(path), "", authHeader), http.StatusForbidden, "forbidden")
+		})
+	}
+	if want := []string{"GET /v1/me"}; strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("routes allowing guests\n got: %q\nwant: %q", got, want)
 	}
 }

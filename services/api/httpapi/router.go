@@ -28,6 +28,8 @@ type Auth interface {
 	Logout(ctx context.Context, token string) error
 	Authenticate(ctx context.Context, accessToken string) (auth.Principal, error)
 	ChangePassword(ctx context.Context, p auth.Principal, current, next, confirm string) error
+	LoginGuest(ctx context.Context) (auth.TokenPair, error)
+	Me(ctx context.Context, p auth.Principal) (auth.Me, error)
 }
 
 // Entries is what the handlers need from *store.Store.
@@ -97,6 +99,9 @@ type route struct {
 	pattern   string
 	authed    bool // behind requireAuth
 	allowUser bool // accepts ?user= (only the five read routes)
+	// allowGuest lets guest tokens through requireAuth. It is the only place
+	// that records it: every other authed route answers guests with 403.
+	allowGuest bool
 }
 
 // NewRouter builds the API handler with all middleware applied.
@@ -131,9 +136,9 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	limiter := NewRateLimiter(authRateLimit, authRateWindow, d.Now)
 	limited := func(h http.Handler) http.Handler { return rateLimit(limiter, h) }
 	// authed requires a valid token and rejects ?user= with 400; the safe default.
-	authed := func(h http.Handler) http.Handler { return requireAuth(d.Auth, rejectUserParam(h)) }
+	authed := func(h http.Handler) http.Handler { return requireAuth(d.Auth, false, rejectUserParam(h)) }
 	// authedAllowUser requires a valid token and lets read handlers honour ?user=.
-	authedAllowUser := func(h http.Handler) http.Handler { return requireAuth(d.Auth, h) }
+	authedAllowUser := func(h http.Handler) http.Handler { return requireAuth(d.Auth, false, h) }
 	// adminOnly is authed plus a 403 for non-admins.
 	adminOnly := func(h http.Handler) http.Handler { return authed(requireAdmin(h)) }
 	// private registers an authed route; privateReadUser one that accepts ?user=.
@@ -156,6 +161,11 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	public("POST /v1/auth/password", limited(loginPassword(d.Auth)))
 	public("POST /v1/auth/refresh", limited(refresh(d.Auth)))
 	public("POST /v1/auth/logout", limited(logout(d.Auth)))
+	public("POST /v1/auth/guest", limited(loginGuest(d.Auth)))
+
+	// The only route guests may call: it tells the web who is signed in.
+	handle(route{pattern: "GET /v1/me", authed: true, allowGuest: true},
+		requireAuth(d.Auth, true, rejectUserParam(me(d.Auth))))
 
 	// Only these five read routes accept ?user=; every other authed route
 	// rejects it with 400 so it can never be mistaken for being honoured.

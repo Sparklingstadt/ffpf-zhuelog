@@ -79,7 +79,7 @@ func (s *Service) Logout(ctx context.Context, refreshToken string) error {
 }
 
 // Authenticate verifies an access token and checks that its holder is still
-// allowed: admins' GitHub user ID must still be allowlisted (else
+// allowed: guests always are; admins' GitHub user ID must still be allowlisted (else
 // ErrForbidden) and members' session version must still match (else
 // ErrUnauthorized).
 func (s *Service) Authenticate(ctx context.Context, accessToken string) (Principal, error) {
@@ -117,6 +117,9 @@ func (s *Service) checkCurrent(ctx context.Context, p Principal) error {
 		if current != p.SessionVersion {
 			return ErrUnauthorized
 		}
+		return nil
+	case RoleGuest:
+		// Guests hold no data and no credentials, so there is nothing to revoke.
 		return nil
 	default:
 		return ErrUnauthorized
@@ -184,6 +187,8 @@ func principalFromRow(row store.RefreshToken) (Principal, error) {
 			return Principal{}, ErrUnauthorized
 		}
 		return Principal{OwnerID: row.OwnerID, Role: RoleMember, SessionVersion: *row.SessionVersion}, nil
+	case RoleGuest:
+		return Principal{OwnerID: GuestOwnerID, Role: RoleGuest}, nil
 	default:
 		return Principal{}, ErrUnauthorized
 	}

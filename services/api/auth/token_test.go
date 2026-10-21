@@ -167,3 +167,28 @@ func TestSignerRejects(t *testing.T) {
 		t.Fatal("unexpected token shape")
 	}
 }
+
+func TestSignerGuestRoundTrip(t *testing.T) {
+	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	s := NewSigner(testSecret, fixedNow(now))
+	want := Principal{OwnerID: GuestOwnerID, Role: RoleGuest}
+
+	token, err := s.Issue(want)
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+	got, err := s.Verify(token)
+	if err != nil || got != want {
+		t.Fatalf("Verify = %+v, %v; want %+v", got, err, want)
+	}
+	claims := jwt.MapClaims{}
+	if _, _, err := jwt.NewParser().ParseUnverified(token, claims); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := claims["login"]; ok {
+		t.Fatal("guest token must not carry login")
+	}
+	if _, ok := claims["sv"]; ok {
+		t.Fatal("guest token must not carry sv")
+	}
+}

@@ -420,3 +420,77 @@ func TestLogsOmitSecrets(t *testing.T) {
 		}
 	}
 }
+
+func TestGuestEndpoint(t *testing.T) {
+	for _, body := range []string{"", `{}`} {
+		a := &fakeAuth{guest: func(context.Context) (auth.TokenPair, error) { return testPair, nil }}
+		h, _ := testRouter(t, a, fakePinger{}, nil)
+		w := do(h, http.MethodPost, "/v1/auth/guest", body, nil)
+		if w.Code != http.StatusOK {
+			t.Fatalf("body %q: status = %d, body %q", body, w.Code, w.Body.String())
+		}
+		wantPair(t, w.Body.Bytes())
+	}
+
+	t.Run("service error", func(t *testing.T) {
+		a := &fakeAuth{guest: func(context.Context) (auth.TokenPair, error) {
+			return auth.TokenPair{}, errors.New("db exploded")
+		}}
+		h, _ := testRouter(t, a, fakePinger{}, nil)
+		wantError(t, do(h, http.MethodPost, "/v1/auth/guest", "", nil), 500, "internal")
+	})
+}
+
+func TestMeEndpoint(t *testing.T) {
+	cases := []struct {
+		name string
+		p    auth.Principal
+		me   auth.Me
+		want string
+	}{
+		{"admin", auth.Principal{OwnerID: "42", Role: auth.RoleAdmin, Login: "alice"},
+			auth.Me{OwnerID: "42", Role: "admin", Login: "alice"},
+			`{"ownerId":"42","role":"admin","login":"alice"}`},
+		{"member", auth.Principal{OwnerID: "password:c1", Role: auth.RoleMember},
+			auth.Me{OwnerID: "password:c1", Role: "member", Login: "bob", DisplayName: "Bob", AccountID: "c1"},
+			`{"ownerId":"password:c1","role":"member","login":"bob","displayName":"Bob","accountId":"c1"}`},
+		{"guest", auth.Principal{OwnerID: "guest", Role: auth.RoleGuest},
+			auth.Me{OwnerID: "guest", Role: "guest", Login: "guest"},
+			`{"ownerId":"guest","role":"guest","login":"guest"}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotP auth.Principal
+			a := &fakeAuth{
+				authenticate: func(context.Context, string) (auth.Principal, error) { return tc.p, nil },
+				me: func(_ context.Context, p auth.Principal) (auth.Me, error) {
+					gotP = p
+					return tc.me, nil
+				},
+			}
+			h, _ := testRouter(t, a, fakePinger{}, nil)
+			w := do(h, http.MethodGet, "/v1/me", "", authHeader)
+			if w.Code != http.StatusOK {
+				t.Fatalf("status = %d, body %q", w.Code, w.Body.String())
+			}
+			if gotP != tc.p {
+				t.Fatalf("Me got %+v, want %+v", gotP, tc.p)
+			}
+			var got, want map[string]any
+			if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+				t.Fatalf("body %q: %v", w.Body.String(), err)
+			}
+			_ = json.Unmarshal([]byte(tc.want), &want)
+			if fmt.Sprint(got) != fmt.Sprint(want) {
+				t.Fatalf("body = %v, want %v", got, want)
+			}
+		})
+	}
+
+	t.Run("me unauthorized", func(t *testing.T) {
+		a := tokenAuth(auth.RoleMember)
+		a.me = func(context.Context, auth.Principal) (auth.Me, error) { return auth.Me{}, auth.ErrUnauthorized }
+		h, _ := testRouter(t, a, fakePinger{}, nil)
+		wantError(t, do(h, http.MethodGet, "/v1/me", "", authHeader), 401, "unauthorized")
+	})
+}

@@ -15,13 +15,14 @@ func newAccount(t *testing.T, s *Store) PasswordAccount {
 	acc := PasswordAccount{
 		ID:             id,
 		LoginID:        "user-" + id,
+		DisplayName:    "Display " + id,
 		PasswordHash:   "scrypt:hash-" + id,
 		SessionVersion: 7,
 	}
 	_, err := s.pool.Exec(context.Background(),
 		`INSERT INTO "PasswordAccount" ("id", "loginId", "displayName", "passwordHash", "sessionVersion", "updatedAt")
 		 VALUES ($1, $2, $3, $4, $5, now())`,
-		acc.ID, acc.LoginID, "Display "+id, acc.PasswordHash, acc.SessionVersion)
+		acc.ID, acc.LoginID, acc.DisplayName, acc.PasswordHash, acc.SessionVersion)
 	if err != nil {
 		t.Fatalf("insert account: %v", err)
 	}
