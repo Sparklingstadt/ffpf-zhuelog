@@ -17,11 +17,14 @@ export type GoMe = {
 };
 
 // status 0 with code "unavailable" means the API was unreachable or timed out.
-// Messages never carry tokens, passwords or the proxy secret.
+// Error.message never carries tokens, passwords or the proxy secret. The Go
+// API's own text (Japanese, meant for the user) is kept apart in userMessage
+// so it does not end up in logs; it is "" when the response had none.
 export class GoApiError extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
+    readonly userMessage = "",
   ) {
     super(`Go API error ${status} ${code}`);
     this.name = "GoApiError";
@@ -29,23 +32,45 @@ export class GoApiError extends Error {
 }
 
 const TIMEOUT_MS = 10_000;
+// CSV imports may take up to 4 minutes 30 seconds.
+const UPLOAD_TIMEOUT_MS = 270_000;
+
+type CallerInit = {
+  accessToken?: string;
+  clientIp?: string;
+};
+
+export type GoApiInit = CallerInit & {
+  method: string;
+  body?: unknown;
+};
 
 // Reads the base URL, secret and fetch at call time so tests can swap them.
-export async function goApi<T>(
-  path: string,
-  init: {
-    method: string;
-    body?: unknown;
-    accessToken?: string;
-    clientIp?: string;
-  },
-): Promise<T> {
-  const base = goApiUrl();
-  if (!base) throw new GoApiError(0, "unavailable");
+export function goApi<T>(path: string, init: GoApiInit): Promise<T> {
+  return send<T>(path, {
+    method: init.method,
+    headers: { "content-type": "application/json", ...callerHeaders(init) },
+    body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    timeoutMs: TIMEOUT_MS,
+  });
+}
 
-  const headers: Record<string, string> = {
-    "content-type": "application/json",
-  };
+// multipart/form-data: fetch sets content-type itself, with the boundary.
+export function goUpload<T>(
+  path: string,
+  form: FormData,
+  init: CallerInit & { method?: string },
+): Promise<T> {
+  return send<T>(path, {
+    method: init.method ?? "POST",
+    headers: callerHeaders(init),
+    body: form,
+    timeoutMs: UPLOAD_TIMEOUT_MS,
+  });
+}
+
+function callerHeaders(init: CallerInit): Record<string, string> {
+  const headers: Record<string, string> = {};
   if (init.accessToken) headers.authorization = `Bearer ${init.accessToken}`;
   // The IP is only trusted by Go together with the secret, so send both or neither.
   const secret = process.env.API_WEB_PROXY_SECRET;
@@ -53,14 +78,28 @@ export async function goApi<T>(
     headers["X-Zhuelog-Client-IP"] = init.clientIp;
     headers["X-Zhuelog-Proxy-Secret"] = secret;
   }
+  return headers;
+}
 
-  const signal = AbortSignal.timeout(TIMEOUT_MS);
+async function send<T>(
+  path: string,
+  request: {
+    method: string;
+    headers: Record<string, string>;
+    body: BodyInit | undefined;
+    timeoutMs: number;
+  },
+): Promise<T> {
+  const base = goApiUrl();
+  if (!base) throw new GoApiError(0, "unavailable");
+
+  const signal = AbortSignal.timeout(request.timeoutMs);
   let response: Response;
   try {
     response = await fetch(base + path, {
-      method: init.method,
-      headers,
-      body: init.body === undefined ? undefined : JSON.stringify(init.body),
+      method: request.method,
+      headers: request.headers,
+      body: request.body,
       cache: "no-store",
       // A redirect must never carry the proxy secret to another URL.
       redirect: "error",
@@ -79,7 +118,10 @@ export async function goApi<T>(
     throw new GoApiError(response.status, "unknown");
   }
 
-  if (!response.ok) throw new GoApiError(response.status, errorCode(text));
+  if (!response.ok) {
+    const { code, message } = errorBody(text);
+    throw new GoApiError(response.status, code, message);
+  }
   if (!text) return undefined as T;
   try {
     return JSON.parse(text) as T;
@@ -88,13 +130,19 @@ export async function goApi<T>(
   }
 }
 
-function errorCode(text: string): string {
+function errorBody(text: string): { code: string; message: string } {
   try {
-    const body = JSON.parse(text) as { error?: { code?: unknown } };
+    const body = JSON.parse(text) as {
+      error?: { code?: unknown; message?: unknown };
+    };
     const code = body?.error?.code;
-    return typeof code === "string" && code ? code : "unknown";
+    const message = body?.error?.message;
+    return {
+      code: typeof code === "string" && code ? code : "unknown",
+      message: typeof message === "string" ? message : "",
+    };
   } catch {
-    return "unknown";
+    return { code: "unknown", message: "" };
   }
 }
 

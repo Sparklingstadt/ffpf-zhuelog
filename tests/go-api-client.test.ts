@@ -8,6 +8,7 @@ import {
   fetchMe,
   GoApiError,
   goApi,
+  goUpload,
   loginPassword,
   logout,
 } from "../src/infrastructure/go-api/client";
@@ -204,4 +205,77 @@ test("without a proxy secret neither IP nor secret header is sent", async () => 
   const h = calls[0]!.init.headers as Record<string, string>;
   assert.equal(h["X-Zhuelog-Client-IP"], undefined);
   assert.equal(h["X-Zhuelog-Proxy-Secret"], undefined);
+});
+
+test("GoApiError carries the Go message apart from Error.message", async () => {
+  stub(() =>
+    json({ error: { code: "invalid_csv", message: "3 行目が空です" } }, 400),
+  );
+  await assert.rejects(
+    goApi("/v1/x", { method: "POST" }),
+    (e: unknown) =>
+      e instanceof GoApiError &&
+      e.code === "invalid_csv" &&
+      e.userMessage === "3 行目が空です" &&
+      !e.message.includes("3 行目"),
+  );
+});
+
+test("the Go message is empty when the body has none", async () => {
+  for (const body of [
+    new Response("<html>", { status: 502 }),
+    json({ error: { code: "x" } }, 400),
+    json({ error: { code: "x", message: 5 } }, 400),
+  ]) {
+    stub(() => body);
+    await assert.rejects(
+      goApi("/v1/x", { method: "GET" }),
+      (e: unknown) => e instanceof GoApiError && e.userMessage === "",
+    );
+  }
+  assert.equal(new GoApiError(0, "unavailable").userMessage, "");
+});
+
+test("goUpload sends multipart without setting content-type", async () => {
+  stub(() => json({ count: 2 }, 201));
+  const form = new FormData();
+  form.append("csvFile", new Blob(["a,b\n"], { type: "text/csv" }), "x.csv");
+  const out = await goUpload<{ count: number }>("/v1/imports/csv", form, {
+    accessToken: "tok",
+    clientIp: "1.2.3.4",
+  });
+  assert.equal(out.count, 2);
+  const init = calls[0]!.init;
+  const h = init.headers as Record<string, string>;
+  assert.equal(calls[0]!.url, "http://api.test/v1/imports/csv");
+  assert.equal(init.method, "POST");
+  assert.equal(init.body, form);
+  assert.equal(h["content-type"], undefined);
+  assert.equal(h.authorization, "Bearer tok");
+  assert.equal(h["X-Zhuelog-Client-IP"], "1.2.3.4");
+  assert.equal(h["X-Zhuelog-Proxy-Secret"], process.env.API_WEB_PROXY_SECRET);
+  assert.equal(init.redirect, "error");
+  assert.equal(init.cache, "no-store");
+  assert.ok(init.signal);
+});
+
+test("goUpload maps failures to GoApiError", async () => {
+  stub(() =>
+    json({ error: { code: "too_large", message: "大きすぎます" } }, 413),
+  );
+  await assert.rejects(
+    goUpload("/v1/imports/csv", new FormData(), { accessToken: "t" }),
+    (e: unknown) =>
+      e instanceof GoApiError &&
+      e.status === 413 &&
+      e.code === "too_large" &&
+      e.userMessage === "大きすぎます",
+  );
+  stub(() => {
+    throw new TypeError("fetch failed");
+  });
+  await assert.rejects(
+    goUpload("/v1/imports/csv", new FormData(), { accessToken: "t" }),
+    (e: unknown) => e instanceof GoApiError && e.status === 0,
+  );
 });
