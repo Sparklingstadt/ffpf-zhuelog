@@ -146,3 +146,73 @@ func TestFindPasswordAccountAndSessionVersion(t *testing.T) {
 		t.Fatalf("missing id: err=%v, want ErrNotFound", err)
 	}
 }
+
+func TestFindPasswordAccountByID(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	acc := newAccount(t, s)
+
+	got, err := s.FindPasswordAccountByID(ctx, acc.ID)
+	if err != nil {
+		t.Fatalf("FindPasswordAccountByID: %v", err)
+	}
+	if got != acc {
+		t.Fatalf("got %+v, want %+v", got, acc)
+	}
+	if _, err := s.FindPasswordAccountByID(ctx, "missing-"+newID()); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing id: err=%v, want ErrNotFound", err)
+	}
+}
+
+func TestSetPassword(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	acc := newAccount(t, s)
+	other := newAccount(t, s)
+	now := fixedNow()
+
+	// Leave the account locked with failures counted.
+	for i := 0; i < 5; i++ {
+		if ok, err := s.ReserveAttempt(ctx, acc.ID, now); err != nil || !ok {
+			t.Fatalf("reserve %d: ok=%v err=%v", i, ok, err)
+		}
+	}
+	if _, locked := attemptState(t, s, acc.ID); locked == nil {
+		t.Fatal("seed: account is not locked")
+	}
+
+	later := now.Add(time.Hour)
+	if err := s.SetPassword(ctx, acc.ID, "scrypt:new-hash", later); err != nil {
+		t.Fatalf("SetPassword: %v", err)
+	}
+	got, err := s.FindPasswordAccountByID(ctx, acc.ID)
+	if err != nil {
+		t.Fatalf("FindPasswordAccountByID: %v", err)
+	}
+	if got.PasswordHash != "scrypt:new-hash" {
+		t.Fatalf("PasswordHash = %q, want the new hash", got.PasswordHash)
+	}
+	if got.SessionVersion != acc.SessionVersion+1 {
+		t.Fatalf("SessionVersion = %d, want %d", got.SessionVersion, acc.SessionVersion+1)
+	}
+	failed, locked := attemptState(t, s, acc.ID)
+	if failed != 0 || locked != nil {
+		t.Fatalf("failed=%d locked=%v, want 0 and no lock", failed, locked)
+	}
+	var updatedAt time.Time
+	if err := s.pool.QueryRow(ctx, `SELECT "updatedAt" FROM "PasswordAccount" WHERE id = $1`, acc.ID).Scan(&updatedAt); err != nil {
+		t.Fatalf("read updatedAt: %v", err)
+	}
+	if !updatedAt.Equal(later) {
+		t.Fatalf("updatedAt = %v, want %v", updatedAt, later)
+	}
+
+	// Other accounts are untouched.
+	if o, err := s.FindPasswordAccountByID(ctx, other.ID); err != nil || o != other {
+		t.Fatalf("other account = %+v, %v; want %+v", o, err, other)
+	}
+
+	if err := s.SetPassword(ctx, "missing-"+newID(), "scrypt:x", later); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing id: err=%v, want ErrNotFound", err)
+	}
+}

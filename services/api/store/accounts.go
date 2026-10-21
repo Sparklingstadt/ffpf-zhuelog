@@ -37,6 +37,44 @@ func (s *Store) FindPasswordAccountByLoginID(ctx context.Context, loginID string
 	return a, nil
 }
 
+// FindPasswordAccountByID returns the account with the given id, or
+// ErrNotFound.
+func (s *Store) FindPasswordAccountByID(ctx context.Context, id string) (PasswordAccount, error) {
+	var a PasswordAccount
+	err := s.pool.QueryRow(ctx,
+		`SELECT "id", "loginId", "passwordHash", "sessionVersion" FROM "PasswordAccount" WHERE "id" = $1`,
+		id).Scan(&a.ID, &a.LoginID, &a.PasswordHash, &a.SessionVersion)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return PasswordAccount{}, ErrNotFound
+	}
+	if err != nil {
+		return PasswordAccount{}, err
+	}
+	return a, nil
+}
+
+// SetPassword stores a new password hash in one statement, mirroring the web
+// app's setPassword: it bumps sessionVersion (revoking every existing API and
+// web session) and clears the failure count and the lock. It returns
+// ErrNotFound when no account has the id.
+func (s *Store) SetPassword(ctx context.Context, id, hash string, now time.Time) error {
+	tag, err := s.pool.Exec(ctx, `
+UPDATE "PasswordAccount" SET
+  "passwordHash" = $2,
+  "sessionVersion" = "sessionVersion" + 1,
+  "failedAttempts" = 0,
+  "lockedUntil" = NULL,
+  "updatedAt" = CAST($3 AS TIMESTAMP(3))
+WHERE "id" = $1`, id, hash, dbTime(now))
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // SessionVersion returns the account's current session version, or ErrNotFound.
 func (s *Store) SessionVersion(ctx context.Context, accountID string) (int, error) {
 	var v int

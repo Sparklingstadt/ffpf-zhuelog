@@ -26,6 +26,10 @@ const (
 	msgGitHubUnavailable = "GitHub に接続できませんでした。"
 	msgInternal          = "サーバーでエラーが発生しました。"
 	msgUnavailable       = "サービスを利用できません。"
+
+	msgInvalidNewPassword     = "パスワードは12〜128文字にしてください。"
+	msgPasswordMismatch       = "確認用のパスワードが一致しません。"
+	msgInvalidCurrentPassword = "現在のパスワードが違うか、一時的にロックされています。"
 )
 
 type errorEnvelope struct {
@@ -66,6 +70,12 @@ func writeServiceError(w http.ResponseWriter, r *http.Request, err error) {
 		writeError(w, http.StatusUnauthorized, "unauthorized", msgUnauthorized)
 	case errors.Is(err, auth.ErrForbidden):
 		writeError(w, http.StatusForbidden, "forbidden", msgForbidden)
+	case errors.Is(err, auth.ErrInvalidNewPassword):
+		writeError(w, http.StatusBadRequest, "invalid_request", msgInvalidNewPassword)
+	case errors.Is(err, auth.ErrPasswordMismatch):
+		writeError(w, http.StatusBadRequest, "password_mismatch", msgPasswordMismatch)
+	case errors.Is(err, auth.ErrInvalidCurrentPassword):
+		writeError(w, http.StatusBadRequest, "invalid_current_password", msgInvalidCurrentPassword)
 	case errors.Is(err, store.ErrNotFound):
 		writeError(w, http.StatusNotFound, "not_found", msgNotFound)
 	case errors.Is(err, auth.ErrGitHubUnavailable):

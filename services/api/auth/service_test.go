@@ -45,6 +45,8 @@ type fakeStore struct {
 	findAccountErr error
 	sessionErr     error
 	pruneErr       error
+	setPasswordErr error
+	setPasswordAt  []time.Time // now passed to each SetPassword
 }
 
 func newFakeStore(log *callLog) *fakeStore {
@@ -81,6 +83,37 @@ func (f *fakeStore) SessionVersion(_ context.Context, accountID string) (int, er
 		}
 	}
 	return 0, store.ErrNotFound
+}
+
+func (f *fakeStore) FindPasswordAccountByID(_ context.Context, id string) (store.PasswordAccount, error) {
+	f.log.add("FindPasswordAccountByID")
+	if f.findAccountErr != nil {
+		return store.PasswordAccount{}, f.findAccountErr
+	}
+	for _, a := range f.accounts {
+		if a.ID == id {
+			return *a, nil
+		}
+	}
+	return store.PasswordAccount{}, store.ErrNotFound
+}
+
+// SetPassword mirrors the store: it replaces the hash and bumps the session
+// version (the real one also clears the failures and the lock).
+func (f *fakeStore) SetPassword(_ context.Context, id, hash string, now time.Time) error {
+	f.log.add("SetPassword")
+	f.setPasswordAt = append(f.setPasswordAt, now)
+	if f.setPasswordErr != nil {
+		return f.setPasswordErr
+	}
+	for _, a := range f.accounts {
+		if a.ID == id {
+			a.PasswordHash = hash
+			a.SessionVersion++
+			return nil
+		}
+	}
+	return store.ErrNotFound
 }
 
 func (f *fakeStore) ReserveAttempt(_ context.Context, _ string, _ time.Time) (bool, error) {
@@ -198,6 +231,8 @@ type fakeHasher struct {
 	count     int
 	passwords []string
 	err       error
+	hashes    int
+	hashErr   error
 }
 
 func (h *fakeHasher) Verify(_ context.Context, password, hash string) (bool, error) {
@@ -208,6 +243,16 @@ func (h *fakeHasher) Verify(_ context.Context, password, hash string) (bool, err
 		return false, h.err
 	}
 	return hash == "hash:"+password, nil
+}
+
+// Hash is not a verification, so it is counted in hashes, not count.
+func (h *fakeHasher) Hash(_ context.Context, password string) (string, error) {
+	h.log.add("Hash")
+	h.hashes++
+	if h.hashErr != nil {
+		return "", h.hashErr
+	}
+	return "hash:" + password, nil
 }
 
 func (h *fakeHasher) Simulate(_ context.Context, password string) error {
@@ -844,4 +889,250 @@ func TestNilNowUsesWallClock(t *testing.T) {
 	if exp.Before(before.Add(RefreshTTL)) || exp.After(time.Now().Add(RefreshTTL)) {
 		t.Fatalf("ExpiresAt %v not based on wall clock", exp)
 	}
+}
+
+// --- ChangePassword ------------------------------------------------------
+
+const (
+	memberCurrent = "correct horse"
+	newPassword12 = "new-password"
+)
+
+func memberPrincipal() Principal {
+	return Principal{OwnerID: "password:cacc1", Role: RoleMember, SessionVersion: 3}
+}
+
+func memberFixture() *fixture {
+	f := newFixture()
+	f.store.addAccount("cacc1", "alice", memberCurrent, 3)
+	return f
+}
+
+func TestChangePasswordOrder(t *testing.T) {
+	ctx := context.Background()
+	cases := []struct {
+		name                   string
+		p                      Principal
+		current, next, confirm string
+		want                   error
+	}{
+		{"11-rune new password", memberPrincipal(), memberCurrent, "elevenchars", "elevenchars", ErrInvalidNewPassword},
+		{"empty new password", memberPrincipal(), memberCurrent, "", "", ErrInvalidNewPassword},
+		{"129-rune new password", memberPrincipal(), memberCurrent, strings.Repeat("x", 129), strings.Repeat("x", 129), ErrInvalidNewPassword},
+		{"11-rune new password checked before mismatch", memberPrincipal(), memberCurrent, "elevenchars", "other", ErrInvalidNewPassword},
+		{"invalid new password checked before current", memberPrincipal(), "wrong", "elevenchars", "elevenchars", ErrInvalidNewPassword},
+		{"mismatch", memberPrincipal(), memberCurrent, newPassword12, newPassword12 + "x", ErrPasswordMismatch},
+		{"mismatch checked before current", memberPrincipal(), "", newPassword12, "", ErrPasswordMismatch},
+		{"admin", Principal{OwnerID: "42", Role: RoleAdmin, Login: "Alice"}, memberCurrent, newPassword12, newPassword12, ErrForbidden},
+		{"admin checked before new password", Principal{OwnerID: "42", Role: RoleAdmin, Login: "Alice"}, "", "short", "other", ErrForbidden},
+		{"unknown role", Principal{OwnerID: "password:cacc1", Role: "guest"}, memberCurrent, newPassword12, newPassword12, ErrForbidden},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := memberFixture()
+			err := f.svc.ChangePassword(ctx, tc.p, tc.current, tc.next, tc.confirm)
+			if err != tc.want {
+				t.Fatalf("err = %v, want exactly %v", err, tc.want)
+			}
+			if len(f.log.calls) != 0 {
+				t.Fatalf("store or hasher called: %v (no attempt may be counted)", f.log.calls)
+			}
+			if f.store.accounts["alice"].PasswordHash != "hash:"+memberCurrent {
+				t.Fatal("password changed")
+			}
+		})
+	}
+}
+
+func TestChangePasswordNewPasswordLengthIsRunes(t *testing.T) {
+	ctx := context.Background()
+	for _, next := range []string{
+		strings.Repeat("パ", 12),  // 36 bytes, 12 runes
+		strings.Repeat("x", 128), // upper bound
+		strings.Repeat("パ", 128), // 384 bytes, 128 runes
+		"  leading sp",           // whitespace is not trimmed: 12 runes
+	} {
+		f := memberFixture()
+		if err := f.svc.ChangePassword(ctx, memberPrincipal(), memberCurrent, next, next); err != nil {
+			t.Fatalf("%d-rune new password: err = %v, want nil", utf8.RuneCountInString(next), err)
+		}
+		if got := f.store.accounts["alice"].PasswordHash; got != "hash:"+next {
+			t.Fatalf("stored hash = %q, want the new password's hash (not trimmed)", got)
+		}
+	}
+	f := memberFixture()
+	if err := f.svc.ChangePassword(ctx, memberPrincipal(), memberCurrent, " eleven run", " eleven run"); err != ErrInvalidNewPassword {
+		t.Fatalf("11 runes with a space: err = %v, want ErrInvalidNewPassword", err)
+	}
+}
+
+func TestChangePasswordUniformFailures(t *testing.T) {
+	cases := []struct {
+		name        string
+		ownerID     string
+		current     string
+		locked      bool
+		wantReserve bool
+	}{
+		{name: "account missing", ownerID: "password:cnobody", current: memberCurrent},
+		{name: "owner without prefix", ownerID: "cacc1", current: memberCurrent},
+		{name: "empty owner id", ownerID: "password:", current: memberCurrent},
+		{name: "empty current password", ownerID: "password:cacc1", current: "", wantReserve: true},
+		{name: "129-rune current password", ownerID: "password:cacc1", current: strings.Repeat("x", 129), wantReserve: true},
+		{name: "129-rune multibyte current password", ownerID: "password:cacc1", current: strings.Repeat("パ", 129), wantReserve: true},
+		{name: "locked", ownerID: "password:cacc1", current: memberCurrent, locked: true, wantReserve: true},
+		{name: "wrong password", ownerID: "password:cacc1", current: "wrong", wantReserve: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := memberFixture()
+			f.store.locked = tc.locked
+			p := Principal{OwnerID: tc.ownerID, Role: RoleMember, SessionVersion: 3}
+
+			err := f.svc.ChangePassword(context.Background(), p, tc.current, newPassword12, newPassword12)
+			if err != ErrInvalidCurrentPassword {
+				t.Fatalf("err = %v, want exactly ErrInvalidCurrentPassword", err)
+			}
+			if f.hasher.count != 1 {
+				t.Fatalf("hash computations = %d, want 1 (calls %v)", f.hasher.count, f.log.calls)
+			}
+			for _, pw := range f.hasher.passwords {
+				if utf8.RuneCountInString(pw) > 128 {
+					t.Fatalf("hasher got a %d-rune password", utf8.RuneCountInString(pw))
+				}
+			}
+			if f.log.has("SetPassword") || f.log.has("Hash") || f.log.has("ClearFailures") {
+				t.Fatalf("failure changed the account (calls %v)", f.log.calls)
+			}
+			if got := f.log.has("ReserveAttempt"); got != tc.wantReserve {
+				t.Fatalf("ReserveAttempt called = %v, want %v (calls %v)", got, tc.wantReserve, f.log.calls)
+			}
+			if f.store.accounts["alice"].PasswordHash != "hash:"+memberCurrent || f.store.accounts["alice"].SessionVersion != 3 {
+				t.Fatal("password or session version changed")
+			}
+		})
+	}
+}
+
+func TestChangePasswordSuccess(t *testing.T) {
+	f := memberFixture()
+	if err := f.svc.ChangePassword(context.Background(), memberPrincipal(), memberCurrent, newPassword12, newPassword12); err != nil {
+		t.Fatalf("ChangePassword: %v", err)
+	}
+	want := []string{"FindPasswordAccountByID", "ReserveAttempt", "Verify", "Hash", "SetPassword"}
+	if !slices.Equal(f.log.calls, want) {
+		t.Fatalf("calls = %v, want %v", f.log.calls, want)
+	}
+	if !slices.Equal(f.hasher.passwords, []string{memberCurrent}) {
+		t.Fatalf("verified passwords = %q, want only the current one", f.hasher.passwords)
+	}
+	a := f.store.accounts["alice"]
+	if a.PasswordHash != "hash:"+newPassword12 || a.SessionVersion != 4 {
+		t.Fatalf("account = %+v, want the new hash and session version 4", *a)
+	}
+	if len(f.store.setPasswordAt) != 1 || !f.store.setPasswordAt[0].Equal(serviceEpoch) {
+		t.Fatalf("SetPassword now = %v, want %v", f.store.setPasswordAt, serviceEpoch)
+	}
+}
+
+func TestChangePasswordRevokesSessions(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture()
+	pair := f.loginMember(t)
+	p, err := f.svc.Authenticate(ctx, pair.AccessToken)
+	if err != nil {
+		t.Fatalf("Authenticate before change: %v", err)
+	}
+
+	if err := f.svc.ChangePassword(ctx, p, "correct horse", newPassword12, newPassword12); err != nil {
+		t.Fatalf("ChangePassword: %v", err)
+	}
+	if _, err := f.svc.Authenticate(ctx, pair.AccessToken); err != ErrUnauthorized {
+		t.Fatalf("old access token: err = %v, want ErrUnauthorized", err)
+	}
+	if _, err := f.svc.Refresh(ctx, pair.RefreshToken); err != ErrUnauthorized {
+		t.Fatalf("old refresh token: err = %v, want ErrUnauthorized", err)
+	}
+	if _, err := f.svc.LoginPassword(ctx, "alice", "correct horse"); err != ErrUnauthorized {
+		t.Fatalf("login with the old password: err = %v, want ErrUnauthorized", err)
+	}
+	if _, err := f.svc.LoginPassword(ctx, "alice", newPassword12); err != nil {
+		t.Fatalf("login with the new password: %v", err)
+	}
+}
+
+func TestChangePasswordInfrastructureErrors(t *testing.T) {
+	ctx := context.Background()
+	const secret = "s3cret-current"
+	const secretNew = "s3cret-new-password"
+
+	check := func(t *testing.T, err error) {
+		t.Helper()
+		for _, sentinel := range []error{ErrInvalidCurrentPassword, ErrInvalidNewPassword, ErrPasswordMismatch, ErrUnauthorized, ErrForbidden} {
+			if errors.Is(err, sentinel) {
+				t.Fatalf("err = %v, want a non-sentinel error", err)
+			}
+		}
+		if err == nil || strings.Contains(err.Error(), secret) || strings.Contains(err.Error(), secretNew) {
+			t.Fatalf("err = %v, want an error without passwords", err)
+		}
+	}
+
+	t.Run("find account", func(t *testing.T) {
+		f := memberFixture()
+		f.store.findAccountErr = errors.New("connection reset")
+		err := f.svc.ChangePassword(ctx, memberPrincipal(), secret, secretNew, secretNew)
+		check(t, err)
+		if f.log.has("SetPassword") {
+			t.Fatal("SetPassword called")
+		}
+	})
+
+	for _, tc := range []struct{ name, ownerID, current string }{
+		{"simulate (account missing)", "password:cnobody", secret},
+		{"simulate (bad current)", "password:cacc1", ""},
+		{"verify", "password:cacc1", secret},
+	} {
+		t.Run("hasher "+tc.name, func(t *testing.T) {
+			f := memberFixture()
+			f.hasher.err = context.Canceled
+			p := Principal{OwnerID: tc.ownerID, Role: RoleMember, SessionVersion: 3}
+			err := f.svc.ChangePassword(ctx, p, tc.current, secretNew, secretNew)
+			check(t, err)
+			if !errors.Is(err, context.Canceled) {
+				t.Fatalf("err = %v, want a wrapped context.Canceled", err)
+			}
+			if f.log.has("SetPassword") {
+				t.Fatal("SetPassword called")
+			}
+		})
+	}
+
+	t.Run("hash", func(t *testing.T) {
+		f := memberFixture()
+		f.hasher.hashErr = context.DeadlineExceeded
+		err := f.svc.ChangePassword(ctx, memberPrincipal(), memberCurrent, secretNew, secretNew)
+		check(t, err)
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("err = %v, want a wrapped DeadlineExceeded", err)
+		}
+		if f.log.has("SetPassword") {
+			t.Fatal("SetPassword called after Hash failed")
+		}
+	})
+
+	t.Run("set password", func(t *testing.T) {
+		f := memberFixture()
+		f.store.setPasswordErr = errors.New("connection reset")
+		check(t, f.svc.ChangePassword(ctx, memberPrincipal(), memberCurrent, secretNew, secretNew))
+	})
+
+	t.Run("account deleted before set password", func(t *testing.T) {
+		f := memberFixture()
+		f.store.setPasswordErr = store.ErrNotFound
+		err := f.svc.ChangePassword(ctx, memberPrincipal(), memberCurrent, secretNew, secretNew)
+		if err != ErrInvalidCurrentPassword {
+			t.Fatalf("err = %v, want ErrInvalidCurrentPassword", err)
+		}
+	})
 }

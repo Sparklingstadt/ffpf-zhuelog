@@ -24,6 +24,7 @@ type Auth interface {
 	Refresh(ctx context.Context, token string) (auth.TokenPair, error)
 	Logout(ctx context.Context, token string) error
 	Authenticate(ctx context.Context, accessToken string) (auth.Principal, error)
+	ChangePassword(ctx context.Context, p auth.Principal, current, next, confirm string) error
 }
 
 // Entries is what the handlers need from *store.Store.
@@ -124,6 +125,9 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("PUT /v1/follows/{ownerId}", authedNoUser(followMember(d.Follows, d.Now)))
 	mux.Handle("DELETE /v1/follows/{ownerId}", authedNoUser(unfollowMember(d.Follows)))
 	mux.Handle("GET /v1/timeline", authedNoUser(listTimeline(d.Follows)))
+	// Changing a password checks the current one, so it shares the /v1/auth/*
+	// limit. The limit runs before authentication so failed tokens count too.
+	mux.Handle("POST /v1/account/password", limited(authedNoUser(changePassword(d.Auth))))
 
 	return wrap(d, jsonMuxErrors(mux))
 }
