@@ -9,23 +9,14 @@ import (
 	"time"
 )
 
-func createEntries(t *testing.T, s *Store, owner string, n int) []Entry {
-	t.Helper()
-	drafts := make([]EntryDraft, n)
-	for i := range drafts {
-		drafts[i] = draft(string(rune('a'+i)), "h0", "h1")
-	}
-	return createTied(t, s, owner, drafts, fixedNow())
-}
-
 func TestListTrashed(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	owner := newOwner(t, s)
 	other := newOwner(t, s)
 
-	mine := createEntries(t, s, owner, 3)
-	theirs := createEntries(t, s, other, 1)
+	mine := createEntries(t, s, owner, fixedNow(), 3, 2)
+	theirs := createEntries(t, s, other, fixedNow(), 1, 2)
 	t1 := time.Date(2026, 10, 21, 1, 0, 0, 0, time.UTC)
 	t2 := t1.Add(time.Hour)
 	if err := s.TrashEntry(ctx, owner, mine[0].ID, t1); err != nil {
@@ -57,7 +48,7 @@ func TestListTrashedPaginatesTies(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	owner := newOwner(t, s)
-	created := createEntries(t, s, owner, 5)
+	created := createEntries(t, s, owner, fixedNow(), 5, 2)
 	at := time.Date(2026, 10, 21, 1, 0, 0, 0, time.UTC)
 	for _, e := range created {
 		if err := s.TrashEntry(ctx, owner, e.ID, at); err != nil {
@@ -95,7 +86,7 @@ func TestRestoreEntry(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	owner := newOwner(t, s)
-	e := createEntries(t, s, owner, 1)[0]
+	e := createEntries(t, s, owner, fixedNow(), 1, 2)[0]
 	shareAt := time.Date(2026, 10, 21, 0, 0, 0, 0, time.UTC)
 
 	if _, err := s.RestoreEntry(ctx, owner, e.ID); !errors.Is(err, ErrNotFound) {
@@ -122,20 +113,11 @@ func TestRestoreEntry(t *testing.T) {
 	}
 }
 
-func countRows(t *testing.T, s *Store, query string, args ...any) int {
-	t.Helper()
-	var n int
-	if err := s.pool.QueryRow(context.Background(), query, args...).Scan(&n); err != nil {
-		t.Fatal(err)
-	}
-	return n
-}
-
 func TestPurgeEntry(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	owner := newOwner(t, s)
-	e := createEntries(t, s, owner, 1)[0]
+	e := createEntries(t, s, owner, fixedNow(), 1, 2)[0]
 
 	if err := s.PurgeEntry(ctx, owner, e.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("purge of non-trashed: err = %v, want ErrNotFound", err)
@@ -165,8 +147,8 @@ func TestEmptyTrash(t *testing.T) {
 	ctx := context.Background()
 	owner := newOwner(t, s)
 	other := newOwner(t, s)
-	mine := createEntries(t, s, owner, 3)
-	theirs := createEntries(t, s, other, 1)
+	mine := createEntries(t, s, owner, fixedNow(), 3, 2)
+	theirs := createEntries(t, s, other, fixedNow(), 1, 2)
 	for _, e := range mine[:2] {
 		if err := s.TrashEntry(ctx, owner, e.ID, fixedNow()); err != nil {
 			t.Fatal(err)
@@ -195,7 +177,7 @@ func TestSetShared(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	owner := newOwner(t, s)
-	e := createEntries(t, s, owner, 1)[0]
+	e := createEntries(t, s, owner, fixedNow(), 1, 2)[0]
 	first := time.Date(2026, 10, 21, 1, 2, 3, 456_000_000, time.UTC)
 
 	got, err := s.SetShared(ctx, owner, e.ID, true, first)
@@ -233,7 +215,7 @@ func TestTrashOpsAreOwnerScoped(t *testing.T) {
 	ctx := context.Background()
 	owner := newOwner(t, s)
 	other := newOwner(t, s)
-	mine := createEntries(t, s, owner, 2)
+	mine := createEntries(t, s, owner, fixedNow(), 2, 2)
 	trashed, live := mine[0], mine[1]
 	if err := s.TrashEntry(ctx, owner, trashed.ID, fixedNow()); err != nil {
 		t.Fatal(err)

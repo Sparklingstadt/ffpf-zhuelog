@@ -9,33 +9,12 @@ import (
 	"time"
 )
 
-// newTokenOwner returns a fresh owner and removes its refresh tokens when the
-// test ends.
-func newTokenOwner(t *testing.T, s *Store) string {
-	t.Helper()
-	owner := "password:" + newID()
-	t.Cleanup(func() {
-		_, _ = s.pool.Exec(context.Background(), `DELETE FROM "ApiRefreshToken" WHERE "ownerId" = $1`, owner)
-	})
-	return owner
-}
-
 func intp(v int) *int { return &v }
-
-func countTokens(t *testing.T, s *Store, owner string) int {
-	t.Helper()
-	var n int
-	if err := s.pool.QueryRow(context.Background(),
-		`SELECT count(*) FROM "ApiRefreshToken" WHERE "ownerId" = $1`, owner).Scan(&n); err != nil {
-		t.Fatalf("count tokens: %v", err)
-	}
-	return n
-}
 
 func TestRefreshTokenRoundTrip(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	owner := newTokenOwner(t, s)
+	owner := newOwner(t, s)
 	now := fixedNow()
 
 	cases := []RefreshToken{
@@ -82,7 +61,7 @@ func TestRefreshTokenRoundTrip(t *testing.T) {
 	if err := s.InsertRefreshToken(ctx, noID, "hash-noid-"+newID()); err != nil {
 		t.Fatalf("Insert without ID: %v", err)
 	}
-	if n := countTokens(t, s, owner); n != 4 {
+	if n := countRows(t, s, `SELECT count(*) FROM "ApiRefreshToken" WHERE "ownerId" = $1`, owner); n != 4 {
 		t.Fatalf("token count = %d, want 4", n)
 	}
 }
@@ -90,7 +69,7 @@ func TestRefreshTokenRoundTrip(t *testing.T) {
 func TestRotateRefreshToken(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	owner := newTokenOwner(t, s)
+	owner := newOwner(t, s)
 	now := fixedNow()
 	family := newID()
 
@@ -121,7 +100,7 @@ func TestRotateRefreshToken(t *testing.T) {
 	if err != nil || ok {
 		t.Fatalf("second rotate: ok=%v err=%v, want false", ok, err)
 	}
-	if n := countTokens(t, s, owner); n != 2 {
+	if n := countRows(t, s, `SELECT count(*) FROM "ApiRefreshToken" WHERE "ownerId" = $1`, owner); n != 2 {
 		t.Fatalf("token count = %d, want 2", n)
 	}
 }
@@ -129,7 +108,7 @@ func TestRotateRefreshToken(t *testing.T) {
 func TestRotateRefreshTokenConcurrent(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	owner := newTokenOwner(t, s)
+	owner := newOwner(t, s)
 	now := fixedNow()
 	family := newID()
 
@@ -168,7 +147,7 @@ func TestRotateRefreshTokenConcurrent(t *testing.T) {
 	if got := wins.Load(); got != 1 {
 		t.Fatalf("winners = %d, want exactly 1", got)
 	}
-	if got := countTokens(t, s, owner); got != 2 {
+	if got := countRows(t, s, `SELECT count(*) FROM "ApiRefreshToken" WHERE "ownerId" = $1`, owner); got != 2 {
 		t.Fatalf("token count = %d, want 2 (old + one next)", got)
 	}
 }
@@ -176,8 +155,8 @@ func TestRotateRefreshTokenConcurrent(t *testing.T) {
 func TestRevokeFamilyAndPrune(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	owner := newTokenOwner(t, s)
-	other := newTokenOwner(t, s)
+	owner := newOwner(t, s)
+	other := newOwner(t, s)
 	now := fixedNow()
 	family := newID()
 

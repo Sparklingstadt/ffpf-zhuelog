@@ -8,26 +8,17 @@ import (
 	"time"
 )
 
-func createAt(t *testing.T, s *Store, owner string, at time.Time, n int) []Entry {
-	t.Helper()
-	drafts := make([]EntryDraft, n)
-	for i := range drafts {
-		drafts[i] = draft(string(rune('a'+i)), "h0")
-	}
-	return createTied(t, s, owner, drafts, at)
-}
-
 func TestListLogDates(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	owner := newOwner(t, s)
 	other := newOwner(t, s)
 
-	createAt(t, s, owner, time.Date(2026, 10, 19, 3, 0, 0, 0, time.UTC), 1)
-	createAt(t, s, owner, time.Date(2026, 10, 21, 1, 0, 0, 0, time.UTC), 2)
-	createAt(t, s, owner, time.Date(2026, 10, 21, 5, 0, 0, 0, time.UTC), 1)
-	trashed := createAt(t, s, owner, time.Date(2026, 10, 20, 3, 0, 0, 0, time.UTC), 1)
-	createAt(t, s, other, time.Date(2026, 10, 18, 3, 0, 0, 0, time.UTC), 1)
+	createEntries(t, s, owner, time.Date(2026, 10, 19, 3, 0, 0, 0, time.UTC), 1, 1)
+	createEntries(t, s, owner, time.Date(2026, 10, 21, 1, 0, 0, 0, time.UTC), 2, 1)
+	createEntries(t, s, owner, time.Date(2026, 10, 21, 5, 0, 0, 0, time.UTC), 1, 1)
+	trashed := createEntries(t, s, owner, time.Date(2026, 10, 20, 3, 0, 0, 0, time.UTC), 1, 1)
+	createEntries(t, s, other, time.Date(2026, 10, 18, 3, 0, 0, 0, time.UTC), 1, 1)
 	if err := s.TrashEntry(ctx, owner, trashed[0].ID, fixedNow()); err != nil {
 		t.Fatal(err)
 	}
@@ -57,8 +48,8 @@ func TestLogDatesJSTBoundary(t *testing.T) {
 
 	before := time.Date(2026, 10, 20, 14, 59, 59, 999_000_000, time.UTC) // 10/20 23:59:59.999 JST
 	after := time.Date(2026, 10, 20, 15, 0, 0, 0, time.UTC)              // 10/21 00:00:00.000 JST
-	b := createAt(t, s, owner, before, 1)
-	a := createAt(t, s, owner, after, 1)
+	b := createEntries(t, s, owner, before, 1, 1)
+	a := createEntries(t, s, owner, after, 1, 1)
 
 	dates, err := s.ListLogDates(ctx, owner)
 	if err != nil {
@@ -86,12 +77,12 @@ func TestListDailyEntries(t *testing.T) {
 	other := newOwner(t, s)
 
 	day := LogDate{2026, 10, 21}
-	early := createAt(t, s, owner, time.Date(2026, 10, 21, 0, 0, 0, 0, time.UTC), 1)
-	tied := createAt(t, s, owner, time.Date(2026, 10, 21, 2, 0, 0, 0, time.UTC), 3)
-	late := createAt(t, s, owner, time.Date(2026, 10, 21, 10, 0, 0, 0, time.UTC), 1)
-	createAt(t, s, owner, time.Date(2026, 10, 22, 10, 0, 0, 0, time.UTC), 1)
-	createAt(t, s, other, time.Date(2026, 10, 21, 3, 0, 0, 0, time.UTC), 1)
-	gone := createAt(t, s, owner, time.Date(2026, 10, 21, 4, 0, 0, 0, time.UTC), 1)
+	early := createEntries(t, s, owner, time.Date(2026, 10, 21, 0, 0, 0, 0, time.UTC), 1, 1)
+	tied := createEntries(t, s, owner, time.Date(2026, 10, 21, 2, 0, 0, 0, time.UTC), 3, 1)
+	late := createEntries(t, s, owner, time.Date(2026, 10, 21, 10, 0, 0, 0, time.UTC), 1, 1)
+	createEntries(t, s, owner, time.Date(2026, 10, 22, 10, 0, 0, 0, time.UTC), 1, 1)
+	createEntries(t, s, other, time.Date(2026, 10, 21, 3, 0, 0, 0, time.UTC), 1, 1)
+	gone := createEntries(t, s, owner, time.Date(2026, 10, 21, 4, 0, 0, 0, time.UTC), 1, 1)
 	if err := s.TrashEntry(ctx, owner, gone[0].ID, fixedNow()); err != nil {
 		t.Fatal(err)
 	}
@@ -127,9 +118,9 @@ func TestGetDailyEntry(t *testing.T) {
 	owner := newOwner(t, s)
 	day := LogDate{2026, 10, 21}
 
-	first := createAt(t, s, owner, time.Date(2026, 10, 21, 0, 0, 0, 0, time.UTC), 1)
-	mid := createAt(t, s, owner, time.Date(2026, 10, 21, 2, 0, 0, 0, time.UTC), 1)
-	last := createAt(t, s, owner, time.Date(2026, 10, 21, 10, 0, 0, 0, time.UTC), 1)
+	first := createEntries(t, s, owner, time.Date(2026, 10, 21, 0, 0, 0, 0, time.UTC), 1, 1)
+	mid := createEntries(t, s, owner, time.Date(2026, 10, 21, 2, 0, 0, 0, time.UTC), 1, 1)
+	last := createEntries(t, s, owner, time.Date(2026, 10, 21, 10, 0, 0, 0, time.UTC), 1, 1)
 
 	e, total, err := s.GetDailyEntry(ctx, owner, day, 1)
 	if err != nil || e.ID != first[0].ID || total != 3 {
