@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // Hint is one hint attached to an entry.
@@ -59,10 +61,15 @@ type Batch struct {
 	ImportedAt time.Time
 }
 
-// querier is satisfied by both *pgxpool.Pool and pgx.Tx.
-type querier interface {
+// dbtx is satisfied by both *pgxpool.Pool and pgx.Tx.
+type dbtx interface {
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
+
+// isoMillisLayout formats a time as ISO 8601 with millisecond precision, as
+// the web's Date#toISOString does for UTC times.
+const isoMillisLayout = "2006-01-02T15:04:05.000Z07:00"
 
 // dbTime converts t to what TIMESTAMP(3) columns store: UTC, millisecond precision.
 func dbTime(t time.Time) time.Time {
@@ -71,12 +78,48 @@ func dbTime(t time.Time) time.Time {
 
 const entryColumns = `"id", "kind", "originalText", "correctedText", "pinyin", "createdAt", "sharedAt"`
 
+// entryColumnsAs is entryColumns with every column qualified by alias.
+func entryColumnsAs(alias string) string {
+	cols := strings.Split(entryColumns, ", ")
+	for i, c := range cols {
+		cols[i] = alias + "." + c
+	}
+	return strings.Join(cols, ", ")
+}
+
+// entryDest returns the scan destinations for entryColumns, in order. Callers
+// append destinations for any extra columns.
+func entryDest(e *Entry) []any {
+	return []any{&e.ID, &e.Kind, &e.OriginalText, &e.CorrectedText, &e.Pinyin, &e.CreatedAt, &e.SharedAt}
+}
+
+// cursorArgs returns the SQL arguments for a keyset cursor; both are nil when
+// there is no cursor.
+func cursorArgs(after *Cursor) (*time.Time, *string) {
+	if after == nil {
+		return nil, nil
+	}
+	t := dbTime(after.CreatedAt)
+	return &t, &after.ID
+}
+
+// entryPtrs returns pointers to the elements of entries.
+func entryPtrs(entries []Entry) []*Entry {
+	ptrs := make([]*Entry, len(entries))
+	for i := range entries {
+		ptrs[i] = &entries[i]
+	}
+	return ptrs
+}
+
+// scanEntries reads all rows of entryColumns and closes rows. Errors are
+// returned unwrapped.
 func scanEntries(rows pgx.Rows) ([]Entry, error) {
 	defer rows.Close()
 	entries := []Entry{}
 	for rows.Next() {
 		var e Entry
-		if err := rows.Scan(&e.ID, &e.Kind, &e.OriginalText, &e.CorrectedText, &e.Pinyin, &e.CreatedAt, &e.SharedAt); err != nil {
+		if err := rows.Scan(entryDest(&e)...); err != nil {
 			return nil, err
 		}
 		e.Hints = []Hint{}
@@ -85,8 +128,9 @@ func scanEntries(rows pgx.Rows) ([]Entry, error) {
 	return entries, rows.Err()
 }
 
-// attachHints loads the hints of all entries with one query.
-func attachHints(ctx context.Context, q querier, entries []Entry) error {
+// attachHints loads the hints of all entries with one query. Errors are
+// returned unwrapped.
+func attachHints(ctx context.Context, q dbtx, entries []*Entry) error {
 	if len(entries) == 0 {
 		return nil
 	}
@@ -118,12 +162,7 @@ func attachHints(ctx context.Context, q querier, entries []Entry) error {
 // ListEntries returns up to limit of the owner's entries that are not in the
 // trash, ordered by (createdAt DESC, id DESC), starting after the cursor.
 func (s *Store) ListEntries(ctx context.Context, ownerID string, after *Cursor, limit int) ([]Entry, error) {
-	var afterAt *time.Time
-	var afterID *string
-	if after != nil {
-		t := dbTime(after.CreatedAt)
-		afterAt, afterID = &t, &after.ID
-	}
+	afterAt, afterID := cursorArgs(after)
 	rows, err := s.pool.Query(ctx,
 		`SELECT `+entryColumns+` FROM "LearningEntry"
 		 WHERE "ownerId" = $1 AND "deletedAt" IS NULL
@@ -137,7 +176,7 @@ func (s *Store) ListEntries(ctx context.Context, ownerID string, after *Cursor, 
 	if err != nil {
 		return nil, fmt.Errorf("store: list entries: %w", err)
 	}
-	if err := attachHints(ctx, s.pool, entries); err != nil {
+	if err := attachHints(ctx, s.pool, entryPtrs(entries)); err != nil {
 		return nil, fmt.Errorf("store: list entry hints: %w", err)
 	}
 	return entries, nil
@@ -146,25 +185,33 @@ func (s *Store) ListEntries(ctx context.Context, ownerID string, after *Cursor, 
 // GetEntry returns one of the owner's entries that is not in the trash, or
 // ErrNotFound.
 func (s *Store) GetEntry(ctx context.Context, ownerID, id string) (Entry, error) {
-	return getEntry(ctx, s.pool, ownerID, id)
+	e, err := getEntry(ctx, s.pool, ownerID, id)
+	if errors.Is(err, ErrNotFound) {
+		return Entry{}, ErrNotFound
+	}
+	if err != nil {
+		return Entry{}, fmt.Errorf("store: get entry: %w", err)
+	}
+	return e, nil
 }
 
-func getEntry(ctx context.Context, q querier, ownerID, id string) (Entry, error) {
+// getEntry returns ErrNotFound or an unwrapped database error.
+func getEntry(ctx context.Context, q dbtx, ownerID, id string) (Entry, error) {
 	rows, err := q.Query(ctx,
 		`SELECT `+entryColumns+` FROM "LearningEntry"
 		 WHERE "id" = $1 AND "ownerId" = $2 AND "deletedAt" IS NULL`, id, ownerID)
 	if err != nil {
-		return Entry{}, fmt.Errorf("store: get entry: %w", err)
+		return Entry{}, err
 	}
 	entries, err := scanEntries(rows)
 	if err != nil {
-		return Entry{}, fmt.Errorf("store: get entry: %w", err)
+		return Entry{}, err
 	}
 	if len(entries) == 0 {
 		return Entry{}, ErrNotFound
 	}
-	if err := attachHints(ctx, q, entries); err != nil {
-		return Entry{}, fmt.Errorf("store: get entry hints: %w", err)
+	if err := attachHints(ctx, q, entryPtrs(entries)); err != nil {
+		return Entry{}, err
 	}
 	return entries[0], nil
 }
@@ -181,6 +228,7 @@ func queueHints(b *pgx.Batch, entryID string, contents []string) []Hint {
 	return hints
 }
 
+// execBatch runs the batch and returns the first error unwrapped.
 func execBatch(ctx context.Context, tx pgx.Tx, b *pgx.Batch) error {
 	res := tx.SendBatch(ctx, b)
 	for i := 0; i < b.Len(); i++ {
@@ -195,7 +243,7 @@ func execBatch(ctx context.Context, tx pgx.Tx, b *pgx.Batch) error {
 // CreateBatch stores drafts as one import batch named "mobile:<now>" in a
 // single transaction; see CreateImportBatch.
 func (s *Store) CreateBatch(ctx context.Context, ownerID string, drafts []EntryDraft, now time.Time) (Batch, []Entry, error) {
-	return s.CreateImportBatch(ctx, ownerID, "mobile:"+dbTime(now).Format("2006-01-02T15:04:05.000Z07:00"), drafts, now)
+	return s.CreateImportBatch(ctx, ownerID, "mobile:"+dbTime(now).Format(isoMillisLayout), drafts, now)
 }
 
 // CreateImportBatch is CreateBatch with the batch's fileName given. The batch

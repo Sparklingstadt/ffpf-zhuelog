@@ -103,14 +103,9 @@ func (s *Store) Unfollow(ctx context.Context, followerID, followeeID string) err
 // the viewer follows, ordered by (createdAt DESC, id DESC), starting after the
 // cursor. Followees without a member account are skipped.
 func (s *Store) ListTimeline(ctx context.Context, viewerID string, after *Cursor, limit int) ([]TimelineItem, error) {
-	var afterAt *time.Time
-	var afterID *string
-	if after != nil {
-		t := dbTime(after.CreatedAt)
-		afterAt, afterID = &t, &after.ID
-	}
+	afterAt, afterID := cursorArgs(after)
 	rows, err := s.pool.Query(ctx,
-		`SELECT e."id", e."kind", e."originalText", e."correctedText", e."pinyin", e."createdAt", e."sharedAt",
+		`SELECT `+entryColumnsAs("e")+`,
 		        e."ownerId", a."displayName"
 		 FROM "LearningEntry" e
 		 JOIN "Follow" f ON f."followeeId" = e."ownerId" AND f."followerId" = $1
@@ -122,30 +117,25 @@ func (s *Store) ListTimeline(ctx context.Context, viewerID string, after *Cursor
 	if err != nil {
 		return nil, fmt.Errorf("store: list timeline: %w", err)
 	}
+	defer rows.Close()
 	items := []TimelineItem{}
 	for rows.Next() {
 		var it TimelineItem
-		e := &it.Entry
-		if err := rows.Scan(&e.ID, &e.Kind, &e.OriginalText, &e.CorrectedText, &e.Pinyin, &e.CreatedAt, &e.SharedAt,
-			&it.OwnerID, &it.OwnerName); err != nil {
-			rows.Close()
+		if err := rows.Scan(append(entryDest(&it.Entry), &it.OwnerID, &it.OwnerName)...); err != nil {
 			return nil, fmt.Errorf("store: list timeline: %w", err)
 		}
-		e.Hints = []Hint{}
+		it.Entry.Hints = []Hint{}
 		items = append(items, it)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("store: list timeline: %w", err)
 	}
-	entries := make([]Entry, len(items))
-	for i, it := range items {
-		entries[i] = it.Entry
-	}
-	if err := attachHints(ctx, s.pool, entries); err != nil {
-		return nil, fmt.Errorf("store: list timeline hints: %w", err)
-	}
+	targets := make([]*Entry, len(items))
 	for i := range items {
-		items[i].Entry = entries[i]
+		targets[i] = &items[i].Entry
+	}
+	if err := attachHints(ctx, s.pool, targets); err != nil {
+		return nil, fmt.Errorf("store: list timeline hints: %w", err)
 	}
 	return items, nil
 }

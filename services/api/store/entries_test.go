@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -467,5 +468,23 @@ func TestReadsWebCreatedEntry(t *testing.T) {
 	}
 	if got.CreatedAt.IsZero() {
 		t.Error("CreatedAt not set")
+	}
+}
+
+func TestUpdateEntryDBErrorIsWrappedOnce(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	owner := newOwner(t, s)
+	_, entries, err := s.CreateBatch(ctx, owner, []EntryDraft{{Kind: "correction", OriginalText: "a", CorrectedText: "b"}}, time.Now())
+	if err != nil {
+		t.Fatalf("CreateBatch: %v", err)
+	}
+	bad := "a\x00b" // PostgreSQL text cannot hold NUL, so the UPDATE fails
+	_, err = s.UpdateEntry(ctx, owner, entries[0].ID, EntryPatch{OriginalText: &bad})
+	if err == nil || errors.Is(err, ErrNotFound) {
+		t.Fatalf("want a database error, got %v", err)
+	}
+	if got := strings.Count(err.Error(), "store:"); got != 1 || !strings.HasPrefix(err.Error(), "store: update entry: ") {
+		t.Errorf("error %q should carry exactly one \"store: update entry:\" prefix", err)
 	}
 }
