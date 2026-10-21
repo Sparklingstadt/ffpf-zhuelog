@@ -13,21 +13,32 @@ import (
 )
 
 // Refresh rotates a refresh token. Presenting an already-rotated token revokes
-// its whole family (token theft); so does failing the revocation check or
-// losing a concurrent rotation.
+// its whole family (token theft); so does failing the revocation check.
+//
+// Browsers send parallel requests, so several of them can refresh with the
+// same token at once: one rotates it and the others then present (or lose the
+// rotation race on) a token that was just revoked. To keep that from logging
+// the user out, a token revoked within RefreshReuseGrace of now (in either
+// direction, to allow for clock skew) gets a new pair in the same family,
+// after the same revocation check, provided the family still has an active
+// token; the check and the insert are atomic with respect to family
+// revocation. Past the grace, or once the family is dead (logout, reuse
+// detected), it is theft as before. The tradeoff: a stolen token used within
+// the same RefreshReuseGrace as the victim's own refresh goes undetected.
 func (s *Service) Refresh(ctx context.Context, refreshToken string) (TokenPair, error) {
 	if refreshToken == "" {
 		return TokenPair{}, ErrUnauthorized
 	}
 	now := s.now()
-	row, err := s.Store.FindRefreshToken(ctx, hashRefreshToken(refreshToken))
+	hash := hashRefreshToken(refreshToken)
+	row, err := s.Store.FindRefreshToken(ctx, hash)
 	if errors.Is(err, store.ErrNotFound) {
 		return TokenPair{}, ErrUnauthorized
 	}
 	if err != nil {
 		return TokenPair{}, fmt.Errorf("auth: find refresh token: %w", err)
 	}
-	if row.RevokedAt != nil {
+	if row.RevokedAt != nil && !withinReuseGrace(now, *row.RevokedAt) {
 		return TokenPair{}, s.revokeFamily(ctx, row.FamilyID, now, ErrUnauthorized)
 	}
 	if !row.ExpiresAt.After(now) {
@@ -49,14 +60,43 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (TokenPair, 
 	if err != nil {
 		return TokenPair{}, err
 	}
-	rotated, err := s.Store.RotateRefreshToken(ctx, row.ID, next, nextHash, now)
-	if err != nil {
-		return TokenPair{}, fmt.Errorf("auth: rotate refresh token: %w", err)
+	if row.RevokedAt == nil {
+		rotated, err := s.Store.RotateRefreshToken(ctx, row.ID, next, nextHash, now)
+		if err != nil {
+			return TokenPair{}, fmt.Errorf("auth: rotate refresh token: %w", err)
+		}
+		if rotated {
+			return pair, nil
+		}
+		// A concurrent refresh rotated it first. Fall through to the grace
+		// path only if it really was just rotated.
+		again, err := s.Store.FindRefreshToken(ctx, hash)
+		if errors.Is(err, store.ErrNotFound) {
+			return TokenPair{}, s.revokeFamily(ctx, row.FamilyID, now, ErrUnauthorized)
+		}
+		if err != nil {
+			return TokenPair{}, fmt.Errorf("auth: find refresh token: %w", err)
+		}
+		if again.RevokedAt == nil || !withinReuseGrace(now, *again.RevokedAt) {
+			return TokenPair{}, s.revokeFamily(ctx, row.FamilyID, now, ErrUnauthorized)
+		}
 	}
-	if !rotated {
+	// The presented row is already revoked; add a sibling to its family.
+	inserted, err := s.Store.InsertSiblingIfFamilyActive(ctx, next, nextHash, now)
+	if err != nil {
+		return TokenPair{}, fmt.Errorf("auth: insert sibling refresh token: %w", err)
+	}
+	if !inserted {
 		return TokenPair{}, s.revokeFamily(ctx, row.FamilyID, now, ErrUnauthorized)
 	}
 	return pair, nil
+}
+
+// withinReuseGrace reports whether revokedAt is at most RefreshReuseGrace
+// away from now, in either direction.
+func withinReuseGrace(now, revokedAt time.Time) bool {
+	d := now.Sub(revokedAt)
+	return d >= -RefreshReuseGrace && d <= RefreshReuseGrace
 }
 
 // Logout revokes the refresh token's family. Unknown and empty tokens are not
@@ -79,9 +119,9 @@ func (s *Service) Logout(ctx context.Context, refreshToken string) error {
 }
 
 // Authenticate verifies an access token and checks that its holder is still
-// allowed: admins' GitHub user ID must still be allowlisted (else
-// ErrForbidden) and members' session version must still match (else
-// ErrUnauthorized).
+// allowed: guests always are; admins' GitHub user ID must still be
+// allowlisted (else ErrForbidden) and members' session version must still
+// match (else ErrUnauthorized).
 func (s *Service) Authenticate(ctx context.Context, accessToken string) (Principal, error) {
 	p, err := s.Signer.Verify(accessToken)
 	if err != nil {
@@ -118,6 +158,9 @@ func (s *Service) checkCurrent(ctx context.Context, p Principal) error {
 			return ErrUnauthorized
 		}
 		return nil
+	case RoleGuest:
+		// Guests hold no data and no credentials, so there is nothing to revoke.
+		return nil
 	default:
 		return ErrUnauthorized
 	}
@@ -136,7 +179,16 @@ func (s *Service) revokeFamily(ctx context.Context, familyID string, now time.Ti
 // new family.
 func (s *Service) startSession(ctx context.Context, p Principal) (TokenPair, error) {
 	now := s.now()
-	if err := s.Store.PruneRefreshTokens(ctx, p.OwnerID, now); err != nil {
+	if p.Role == RoleGuest {
+		// All guests share one owner ID and anyone can log in as a guest, so
+		// the family-aware prune (a subquery over every live guest row) would
+		// scan more with every login. Guests hold nothing worth keeping:
+		// delete only the expired rows. With GuestRefreshTTL the table holds
+		// at most a day of guest logins.
+		if err := s.Store.DeleteExpiredRefreshTokens(ctx, p.OwnerID, now); err != nil {
+			return TokenPair{}, fmt.Errorf("auth: delete expired refresh tokens: %w", err)
+		}
+	} else if err := s.Store.PruneRefreshTokens(ctx, p.OwnerID, now); err != nil {
 		return TokenPair{}, fmt.Errorf("auth: prune refresh tokens: %w", err)
 	}
 	pair, row, hash, err := s.newPair(p, randomHex(familyIDBytes), now)
@@ -157,11 +209,15 @@ func (s *Service) newPair(p Principal, familyID string, now time.Time) (TokenPai
 		return TokenPair{}, store.RefreshToken{}, "", err
 	}
 	refresh := base64.RawURLEncoding.EncodeToString(randomBytes(refreshTokenBytes))
+	ttl := RefreshTTL
+	if p.Role == RoleGuest {
+		ttl = GuestRefreshTTL
+	}
 	row := store.RefreshToken{
 		OwnerID:   p.OwnerID,
 		Role:      p.Role,
 		FamilyID:  familyID,
-		ExpiresAt: now.Add(RefreshTTL),
+		ExpiresAt: now.Add(ttl),
 	}
 	switch p.Role {
 	case RoleAdmin:
@@ -170,7 +226,12 @@ func (s *Service) newPair(p Principal, familyID string, now time.Time) (TokenPai
 		sv := p.SessionVersion
 		row.SessionVersion = &sv
 	}
-	pair := TokenPair{AccessToken: access, RefreshToken: refresh, ExpiresIn: int(AccessTTL / time.Second)}
+	pair := TokenPair{
+		AccessToken:      access,
+		RefreshToken:     refresh,
+		ExpiresIn:        int(AccessTTL / time.Second),
+		RefreshExpiresIn: int(ttl / time.Second),
+	}
 	return pair, row, hashRefreshToken(refresh), nil
 }
 
@@ -184,6 +245,8 @@ func principalFromRow(row store.RefreshToken) (Principal, error) {
 			return Principal{}, ErrUnauthorized
 		}
 		return Principal{OwnerID: row.OwnerID, Role: RoleMember, SessionVersion: *row.SessionVersion}, nil
+	case RoleGuest:
+		return Principal{OwnerID: GuestOwnerID, Role: RoleGuest}, nil
 	default:
 		return Principal{}, ErrUnauthorized
 	}

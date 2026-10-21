@@ -50,7 +50,9 @@ type Store interface {
 	FindRefreshToken(ctx context.Context, tokenHash string) (store.RefreshToken, error)
 	RotateRefreshToken(ctx context.Context, oldID string, next store.RefreshToken, nextHash string, now time.Time) (bool, error)
 	RevokeFamily(ctx context.Context, familyID string, now time.Time) error
+	InsertSiblingIfFamilyActive(ctx context.Context, next store.RefreshToken, nextHash string, now time.Time) (bool, error)
 	PruneRefreshTokens(ctx context.Context, ownerID string, now time.Time) error
+	DeleteExpiredRefreshTokens(ctx context.Context, ownerID string, now time.Time) error
 }
 
 // GitHub exchanges an OAuth code for the GitHub user; *GitHubClient satisfies it.
@@ -68,10 +70,11 @@ type Hasher interface {
 }
 
 // TokenPair is what a login or refresh returns. ExpiresIn is the access
-// token's lifetime in seconds.
+// token's lifetime in seconds and RefreshExpiresIn the refresh token's.
 type TokenPair struct {
 	AccessToken, RefreshToken string
 	ExpiresIn                 int
+	RefreshExpiresIn          int
 }
 
 // Service runs sign-in, refresh-token rotation, logout, the per-request

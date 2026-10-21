@@ -1,3 +1,5 @@
+import { cache } from "react";
+
 import { ChangeOwnPassword } from "@/application/identity/use-cases/change-own-password";
 import { CreatePasswordAccount } from "@/application/identity/use-cases/create-password-account";
 import { ListPasswordAccounts } from "@/application/identity/use-cases/list-password-accounts";
@@ -10,17 +12,39 @@ import {
 } from "@/application/identity/use-cases/resolve-record-owner";
 import type { AuthenticatedUser } from "@/domain/identity/entities/authenticated-user";
 import { ResetPasswordAccountPassword } from "@/application/identity/use-cases/reset-password-account-password";
+import type { CurrentUserProvider } from "@/application/identity/ports/current-user-provider";
 import { AuthJsCurrentUserProvider } from "@/infrastructure/auth/authjs-current-user-provider";
 import { signIn, signOut } from "@/infrastructure/auth/authjs-config";
+import { isGoAuthEnabled } from "@/infrastructure/config/environment";
+import { fetchMe } from "@/infrastructure/go-api/client";
+import { GoApiCurrentUserProvider } from "@/infrastructure/go-api/go-api-current-user-provider";
+import {
+  readAccessToken,
+  signInAsGuestViaGo,
+  signInWithGitHubViaGo,
+  signInWithPasswordViaGo,
+  signOutViaGo,
+} from "@/infrastructure/go-api/go-api-session";
 import {
   passwordAccountRepository,
   passwordHasher,
   signInThrottle,
 } from "@/infrastructure/auth/password-account-services";
 
-const currentUserProvider = new AuthJsCurrentUserProvider((id) =>
+const authJsUserProvider = new AuthJsCurrentUserProvider((id) =>
   passwordAccountRepository.findById(id),
 );
+const goApiUserProvider = new GoApiCurrentUserProvider(
+  readAccessToken,
+  fetchMe,
+);
+// One GET /v1/me per request, however many guards and pages ask.
+const getGoApiUser = cache(() => goApiUserProvider.getCurrentUser());
+// GO_API_URL switches sign-in to the Go API; without it Auth.js stays as is.
+const currentUserProvider: CurrentUserProvider = {
+  getCurrentUser: () =>
+    isGoAuthEnabled() ? getGoApiUser() : authJsUserProvider.getCurrentUser(),
+};
 const requireAdminUser = new RequireAdminUser(currentUserProvider);
 const requireMemberUser = new RequireMemberUser(currentUserProvider);
 const requireViewerUser = new RequireViewerUser(currentUserProvider);
@@ -63,10 +87,12 @@ export async function getRecordOwner(requested: string | undefined): Promise<{
 }
 
 export async function signInWithGitHub(redirectTo: string) {
+  if (isGoAuthEnabled()) return signInWithGitHubViaGo(redirectTo);
   await signIn("github", { redirectTo });
 }
 
 export async function signInAsGuest(redirectTo: string) {
+  if (isGoAuthEnabled()) return signInAsGuestViaGo(redirectTo);
   await signIn("guest", { redirectTo });
 }
 
@@ -75,6 +101,7 @@ export async function signInWithPassword(input: {
   password: string;
   redirectTo: string;
 }) {
+  if (isGoAuthEnabled()) return signInWithPasswordViaGo(input);
   await signIn("password", {
     loginId: input.loginId,
     password: input.password,
@@ -83,9 +110,10 @@ export async function signInWithPassword(input: {
 }
 
 export async function signOutCurrentUser() {
-  await signOut({ redirectTo: "/signin" });
+  await signOutTo("/signin");
 }
 
 export async function signOutTo(redirectTo: string) {
+  if (isGoAuthEnabled()) return signOutViaGo(redirectTo);
   await signOut({ redirectTo });
 }

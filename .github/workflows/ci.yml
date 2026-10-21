@@ -84,10 +84,17 @@ jobs:
           API_TEST_DATABASE_URL: ${{ env.DATABASE_URL }}
 
   e2e:
+    # authjs: the web signs in with Auth.js. go: through the Go API (GO_API_URL).
+    strategy:
+      fail-fast: false
+      matrix:
+        auth: [authjs, go]
+    name: e2e (${{ matrix.auth }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
       DATABASE_URL: postgresql://zhuelog_e2e:local-e2e-only@127.0.0.1:55439/zhuelog_e2e
+      ZHUELOG_E2E_AUTH: ${{ matrix.auth }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -97,13 +104,18 @@ jobs:
         with:
           node-version: 24 # the Vercel runtime
           cache: pnpm
+      - uses: actions/setup-go@v7
+        if: matrix.auth == 'go'
+        with:
+          go-version-file: services/api/go.mod
+          cache-dependency-path: services/api/go.sum
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm run test:e2e
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.auth }}
           path: |
             playwright-report/
             test-results/

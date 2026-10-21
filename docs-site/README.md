@@ -23,7 +23,7 @@ features:
 
 学习録は、中国語の作文を添削・翻訳した結果（学習ノート）を記録する Web アプリです。この Go API（`services/api/`）は、iOS などのネイティブアプリから自分の学習ノートを読み書きするためのものです。
 
-- 利用できるのは、GitHub でログインする **admin**（許可リスト `AUTH_ALLOWED_GITHUB_IDS` に GitHub の数値のユーザー ID が載っている人）と、パスワードでログインする **会員**（`PasswordAccount`）です。ゲストはログインできません。
+- 利用できるのは、GitHub でログインする **admin**（許可リスト `AUTH_ALLOWED_GITHUB_IDS` に GitHub の数値のユーザー ID が載っている人）と、パスワードでログインする **会員**（`PasswordAccount`）です。ゲスト（`POST /v1/auth/guest`）も入れますが、ゲストのトークンで呼べるのは `GET /v1/me` だけです。
 - 学習ノートの一覧・詳細・作成・編集、ゴミ箱、共有、フォローとタイムライン、日付ごとの記録（カレンダー）、admin による会員の管理、CSV のインポートまで、Web にある機能を一通り扱えます。
 - ブラウザから呼ぶことは想定していません（CORS は無効です）。
 - 添削・翻訳の実行（LLM の呼び出し）は API にはありません。
@@ -66,16 +66,18 @@ API は Web と別のプロセスですが、DB は本番の Neon を **その�
 
 ### 環境変数
 
-| 名前                                                      | 内容                                                                                                                     |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `PORT`                                                    | 待ち受けポート（既定 8080）                                                                                              |
-| `DATABASE_URL`                                            | Neon の接続文字列（pooled）                                                                                              |
-| `API_JWT_SECRET`                                          | アクセストークンの HS256 鍵。32 バイト以上。Auth.js の `AUTH_SECRET` とは別の値                                          |
-| `GITHUB_MOBILE_CLIENT_ID` / `GITHUB_MOBILE_CLIENT_SECRET` | モバイル用の GitHub OAuth App（Web 用とは別）                                                                            |
-| `GITHUB_MOBILE_REDIRECT_URI`                              | アプリのカスタム URL スキーム。リクエストの `redirectUri` と完全一致を要求します                                         |
-| `AUTH_ALLOWED_GITHUB_IDS`                                 | Web と同じ admin の許可リスト。GitHub の数値のユーザー ID をカンマ区切りで並べる（前後の空白は除き、数字以外の値は無視） |
+| 名前                                                                            | 内容                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                                                                          | 待ち受けポート（既定 8080）                                                                                                                                                              |
+| `DATABASE_URL`                                                                  | Neon の接続文字列（pooled）                                                                                                                                                              |
+| `API_JWT_SECRET`                                                                | アクセストークンの HS256 鍵。32 バイト以上。Auth.js の `AUTH_SECRET` とは別の値                                                                                                          |
+| `GITHUB_MOBILE_CLIENT_ID` / `GITHUB_MOBILE_CLIENT_SECRET`                       | モバイル用の GitHub OAuth App（Web 用とは別）                                                                                                                                            |
+| `GITHUB_MOBILE_REDIRECT_URI`                                                    | アプリのカスタム URL スキーム。リクエストの `redirectUri` と完全一致を要求します                                                                                                         |
+| `GITHUB_WEB_CLIENT_ID` / `GITHUB_WEB_CLIENT_SECRET` / `GITHUB_WEB_REDIRECT_URI` | 任意。Web 用の GitHub OAuth App。3 つとも設定するか、すべて空。`redirectUri` が完全一致した方の OAuth App で交換します（Web の callback は `https://<Web>/api/auth/callback/github/go`） |
+| `API_WEB_PROXY_SECRET`                                                          | 任意。32 バイト以上。Web が `X-Zhuelog-Proxy-Secret` で渡す秘密。一致したときだけ `X-Zhuelog-Client-IP` を利用者の IP として信頼します                                                   |
+| `AUTH_ALLOWED_GITHUB_IDS`                                                       | Web と同じ admin の許可リスト。GitHub の数値のユーザー ID をカンマ区切りで並べる（前後の空白は除き、数字以外の値は無視）                                                                 |
 
-すべて必須で（`PORT` を除く）、無い・不正なときは起動時に終了します。
+`PORT`・`GITHUB_WEB_*`・`API_WEB_PROXY_SECRET` 以外はすべて必須で、無い・不正なときは起動時に終了します。
 
 ## 関連する文書
 

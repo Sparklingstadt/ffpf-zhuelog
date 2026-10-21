@@ -80,3 +80,80 @@ func TestLoadConfigShortSecret(t *testing.T) {
 		t.Error("error leaks the secret value")
 	}
 }
+
+func TestLoadConfigGitHubWebAllOrNone(t *testing.T) {
+	web := map[string]string{
+		"GITHUB_WEB_CLIENT_ID":     "web-id",
+		"GITHUB_WEB_CLIENT_SECRET": "web-secret-value",
+		"GITHUB_WEB_REDIRECT_URI":  "https://zhuelog.example/api/auth/callback",
+	}
+	cfg, err := LoadConfig(getenvFrom(validEnv()))
+	if err != nil {
+		t.Fatalf("none set: %v", err)
+	}
+	if cfg.GitHubWebClientID != "" || cfg.GitHubWebClientSecret != "" || cfg.GitHubWebRedirectURI != "" {
+		t.Errorf("web fields should be empty: %+v", cfg)
+	}
+
+	env := validEnv()
+	for k, v := range web {
+		env[k] = v
+	}
+	cfg, err = LoadConfig(getenvFrom(env))
+	if err != nil {
+		t.Fatalf("all set: %v", err)
+	}
+	if cfg.GitHubWebClientID != "web-id" || cfg.GitHubWebClientSecret != "web-secret-value" ||
+		cfg.GitHubWebRedirectURI != web["GITHUB_WEB_REDIRECT_URI"] {
+		t.Errorf("unexpected web config: %+v", cfg)
+	}
+
+	for missing := range web {
+		env := validEnv()
+		for k, v := range web {
+			if k != missing {
+				env[k] = v
+			}
+		}
+		_, err := LoadConfig(getenvFrom(env))
+		want := "GITHUB_WEB_CLIENT_ID, GITHUB_WEB_CLIENT_SECRET and GITHUB_WEB_REDIRECT_URI must be set together"
+		if err == nil || err.Error() != want {
+			t.Errorf("missing %s: err = %v, want %q", missing, err, want)
+		}
+	}
+}
+
+func TestLoadConfigGitHubWebRedirectMustDiffer(t *testing.T) {
+	env := validEnv()
+	env["GITHUB_WEB_CLIENT_ID"] = "web-id"
+	env["GITHUB_WEB_CLIENT_SECRET"] = "web-secret-value"
+	env["GITHUB_WEB_REDIRECT_URI"] = env["GITHUB_MOBILE_REDIRECT_URI"]
+	_, err := LoadConfig(getenvFrom(env))
+	want := "GITHUB_WEB_REDIRECT_URI must differ from GITHUB_MOBILE_REDIRECT_URI"
+	if err == nil || err.Error() != want {
+		t.Fatalf("err = %v, want %q", err, want)
+	}
+}
+
+func TestLoadConfigWebProxySecret(t *testing.T) {
+	cfg, err := LoadConfig(getenvFrom(validEnv()))
+	if err != nil || len(cfg.WebProxySecret) != 0 {
+		t.Fatalf("unset: err = %v, secret len = %d, want none", err, len(cfg.WebProxySecret))
+	}
+
+	env := validEnv()
+	env["API_WEB_PROXY_SECRET"] = "  " + strings.Repeat("p", 32) + "  "
+	cfg, err = LoadConfig(getenvFrom(env))
+	if err != nil || string(cfg.WebProxySecret) != strings.Repeat("p", 32) {
+		t.Fatalf("32 bytes: err = %v, want trimmed secret accepted", err)
+	}
+
+	env["API_WEB_PROXY_SECRET"] = strings.Repeat("p", 31)
+	_, err = LoadConfig(getenvFrom(env))
+	if err == nil || err.Error() != "API_WEB_PROXY_SECRET must be at least 32 bytes" {
+		t.Fatalf("31 bytes: err = %v, want the length error", err)
+	}
+	if strings.Contains(err.Error(), env["API_WEB_PROXY_SECRET"]) {
+		t.Fatal("error leaks the secret value")
+	}
+}

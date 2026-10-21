@@ -14,6 +14,12 @@ export API_JWT_SECRET="local-only-jwt-secret-not-for-production-0123456789"
 export GITHUB_MOBILE_CLIENT_ID="local-placeholder"
 export GITHUB_MOBILE_CLIENT_SECRET="local-placeholder"
 export GITHUB_MOBILE_REDIRECT_URI="zhuelog-local://oauth/callback"
+# Optional web OAuth App (set all three or none).
+export GITHUB_WEB_CLIENT_ID=""
+export GITHUB_WEB_CLIENT_SECRET=""
+export GITHUB_WEB_REDIRECT_URI=""
+# Optional: secret the Next.js server presents to forward end-user IPs.
+export API_WEB_PROXY_SECRET=""
 export AUTH_ALLOWED_GITHUB_IDS="0"
 
 # Sample members created by scripts/api-local-seed.ts (local test values).

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"crypto/subtle"
 	"log/slog"
 	"net"
 	"net/http"
@@ -138,8 +139,8 @@ func limitBody(next http.Handler) http.Handler {
 
 // requireAuth answers 401/403 unless the request carries a valid
 // "Authorization: Bearer <token>" header; otherwise it stores the Principal in
-// the request context for next.
-func requireAuth(a Auth, next http.Handler) http.Handler {
+// the request context for next. Guest tokens get 403 unless allowGuest is set.
+func requireAuth(a Auth, allowGuest bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		scheme, token, ok := strings.Cut(r.Header.Get("Authorization"), " ")
 		if !ok || !strings.EqualFold(scheme, "Bearer") || token == "" || strings.Contains(token, " ") {
@@ -149,6 +150,10 @@ func requireAuth(a Auth, next http.Handler) http.Handler {
 		p, err := a.Authenticate(r.Context(), token)
 		if err != nil {
 			writeServiceError(w, r, err)
+			return
+		}
+		if p.Role == auth.RoleGuest && !allowGuest {
+			writeError(w, http.StatusForbidden, codeForbidden, msgForbidden)
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), principalKey, p)))
@@ -208,12 +213,43 @@ func (r *RateLimiter) Allow(key string) bool {
 	return true
 }
 
-// clientKey identifies the caller for rate limiting and sign-in throttling: the
+// clientKeyFunc returns the function that identifies the caller for rate limiting and sign-in throttling: the
 // last value of X-Forwarded-For if present, otherwise the host part of
 // RemoteAddr. On Vercel the platform overwrites X-Forwarded-For with the
 // client's IP and drops any value the client sent, so the last value is
 // trustworthy there; behind another proxy, only its appended value is.
-func clientKey(r *http.Request) string {
+//
+// When the Next.js web server is configured with the shared proxy secret, it
+// forwards the end user's IP in X-Zhuelog-Client-IP, since every browser
+// request then reaches this API from the web server itself. That header is
+// trusted only when X-Zhuelog-Proxy-Secret matches secret; with an empty
+// secret it is never trusted.
+func clientKeyFunc(secret []byte) func(*http.Request) string {
+	return func(r *http.Request) string {
+		if len(secret) > 0 &&
+			subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Zhuelog-Proxy-Secret")), secret) == 1 {
+			if ip := strings.TrimSpace(r.Header.Get("X-Zhuelog-Client-IP")); ip != "" {
+				return ip
+			}
+		}
+		return peerKey(r)
+	}
+}
+
+// requireProxySecret answers 403 unless X-Zhuelog-Proxy-Secret matches
+// secret. An empty secret lets every request through.
+func requireProxySecret(secret []byte, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if len(secret) > 0 &&
+			subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Zhuelog-Proxy-Secret")), secret) != 1 {
+			writeForbidden(w, msgWebOnly)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func peerKey(r *http.Request) string {
 	// A client can send several X-Forwarded-For lines; only the last value of
 	// the last line comes from the platform or our own proxy.
 	if vals := r.Header.Values("X-Forwarded-For"); len(vals) > 0 {
@@ -232,9 +268,9 @@ func clientKey(r *http.Request) string {
 	return host
 }
 
-func rateLimit(rl *RateLimiter, next http.Handler) http.Handler {
+func rateLimit(rl *RateLimiter, key func(*http.Request) string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !rl.Allow(clientKey(r)) {
+		if !rl.Allow(key(r)) {
 			writeError(w, http.StatusTooManyRequests, codeRateLimited, msgRateLimited)
 			return
 		}

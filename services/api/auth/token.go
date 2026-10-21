@@ -12,14 +12,24 @@ import (
 const (
 	AccessTTL  = 15 * time.Minute
 	RefreshTTL = 30 * 24 * time.Hour
-	Issuer     = "ffpf-zhuelog-api"
-	Audience   = "ffpf-zhuelog-mobile"
+	// GuestRefreshTTL is short because anyone can start a guest session
+	// without credentials, so dead guest rows must be cheap to clear.
+	GuestRefreshTTL = 24 * time.Hour
+	// RefreshReuseGrace is how long a rotated refresh token may still be
+	// presented without being treated as theft (see Service.Refresh).
+	RefreshReuseGrace = 30 * time.Second
+	Issuer            = "ffpf-zhuelog-api"
+	Audience          = "ffpf-zhuelog-mobile"
 )
 
 const (
 	RoleAdmin  = "admin"
 	RoleMember = "member"
+	RoleGuest  = "guest"
 )
+
+// GuestOwnerID is the owner ID of every guest. Guests own no data.
+const GuestOwnerID = "guest"
 
 var (
 	ErrUnauthorized = errors.New("auth: unauthorized")
@@ -29,7 +39,8 @@ var (
 // Principal is the authenticated caller. For admins, OwnerID is the numeric
 // GitHub user ID (what the allowlist checks) and Login the GitHub login at
 // sign-in, kept for information only and never used for authorization. For
-// members, SessionVersion is set.
+// members, SessionVersion is set. Guests carry neither Login nor
+// SessionVersion.
 type Principal struct {
 	OwnerID        string
 	Role           string
@@ -74,6 +85,10 @@ func (s *Signer) Issue(p Principal) (string, error) {
 		}
 		sv := p.SessionVersion
 		c.SV = &sv
+	case RoleGuest:
+		if p.OwnerID != GuestOwnerID {
+			return "", errors.New("auth: guest principal has the wrong owner id")
+		}
 	default:
 		return "", errors.New("auth: unknown role")
 	}
@@ -118,6 +133,10 @@ func (s *Signer) Verify(token string) (Principal, error) {
 			return Principal{}, ErrUnauthorized
 		}
 		p.SessionVersion = *c.SV
+	case RoleGuest:
+		if c.Subject != GuestOwnerID {
+			return Principal{}, ErrUnauthorized
+		}
 	default:
 		return Principal{}, ErrUnauthorized
 	}

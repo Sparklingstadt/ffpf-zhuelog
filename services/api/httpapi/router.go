@@ -28,6 +28,8 @@ type Auth interface {
 	Logout(ctx context.Context, token string) error
 	Authenticate(ctx context.Context, accessToken string) (auth.Principal, error)
 	ChangePassword(ctx context.Context, p auth.Principal, current, next, confirm string) error
+	LoginGuest(ctx context.Context) (auth.TokenPair, error)
+	Me(ctx context.Context, p auth.Principal) (auth.Me, error)
 }
 
 // Entries is what the handlers need from *store.Store.
@@ -84,12 +86,18 @@ type Deps struct {
 	DB       Pinger
 	Logger   *slog.Logger
 	Now      func() time.Time
+	// WebProxySecret, when non-empty, lets the Next.js web server forward the
+	// end user's IP (see clientKeyFunc).
+	WebProxySecret []byte
 }
 
 const (
 	authRateLimit  = 10
 	authRateWindow = time.Minute
-	pingTimeout    = 3 * time.Second
+	// Refresh has its own, looser limit: the web proxy refreshes for every
+	// signed-in tab, and a refresh needs a valid 256-bit token anyway.
+	refreshRateLimit = 60
+	pingTimeout      = 3 * time.Second
 )
 
 // route records how a pattern was registered, so tests can check every route.
@@ -97,6 +105,9 @@ type route struct {
 	pattern   string
 	authed    bool // behind requireAuth
 	allowUser bool // accepts ?user= (only the five read routes)
+	// allowGuest lets guest tokens through requireAuth. It is the only place
+	// that records it: every other authed route answers guests with 403.
+	allowGuest bool
 }
 
 // NewRouter builds the API handler with all middleware applied.
@@ -129,11 +140,15 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	public := func(pattern string, h http.Handler) { handle(route{pattern: pattern}, h) }
 	// limited applies the per-client rate limit.
 	limiter := NewRateLimiter(authRateLimit, authRateWindow, d.Now)
-	limited := func(h http.Handler) http.Handler { return rateLimit(limiter, h) }
+	clientKey := clientKeyFunc(d.WebProxySecret)
+	limited := func(h http.Handler) http.Handler { return rateLimit(limiter, clientKey, h) }
+	// refreshLimited is the separate per-client limit for POST /v1/auth/refresh.
+	refreshLimiter := NewRateLimiter(refreshRateLimit, authRateWindow, d.Now)
+	refreshLimited := func(h http.Handler) http.Handler { return rateLimit(refreshLimiter, clientKey, h) }
 	// authed requires a valid token and rejects ?user= with 400; the safe default.
-	authed := func(h http.Handler) http.Handler { return requireAuth(d.Auth, rejectUserParam(h)) }
+	authed := func(h http.Handler) http.Handler { return requireAuth(d.Auth, false, rejectUserParam(h)) }
 	// authedAllowUser requires a valid token and lets read handlers honour ?user=.
-	authedAllowUser := func(h http.Handler) http.Handler { return requireAuth(d.Auth, h) }
+	authedAllowUser := func(h http.Handler) http.Handler { return requireAuth(d.Auth, false, h) }
 	// adminOnly is authed plus a 403 for non-admins.
 	adminOnly := func(h http.Handler) http.Handler { return authed(requireAdmin(h)) }
 	// private registers an authed route; privateReadUser one that accepts ?user=.
@@ -153,9 +168,16 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	public("GET /ping", ping())
 
 	public("POST /v1/auth/github", limited(loginGitHub(d.Auth)))
-	public("POST /v1/auth/password", limited(loginPassword(d.Auth)))
-	public("POST /v1/auth/refresh", limited(refresh(d.Auth)))
+	public("POST /v1/auth/password", limited(loginPassword(d.Auth, clientKey)))
+	public("POST /v1/auth/refresh", refreshLimited(refresh(d.Auth)))
 	public("POST /v1/auth/logout", limited(logout(d.Auth)))
+	// With a proxy secret configured, only the web server may start guest
+	// sessions; without one (local development) anyone may.
+	public("POST /v1/auth/guest", limited(requireProxySecret(d.WebProxySecret, loginGuest(d.Auth))))
+
+	// The only route guests may call: it tells the web who is signed in.
+	handle(route{pattern: "GET /v1/me", authed: true, allowGuest: true},
+		requireAuth(d.Auth, true, rejectUserParam(me(d.Auth))))
 
 	// Only these five read routes accept ?user=; every other authed route
 	// rejects it with 400 so it can never be mistaken for being honoured.

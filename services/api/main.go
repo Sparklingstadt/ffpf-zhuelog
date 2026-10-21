@@ -64,16 +64,28 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 	passwords := &auth.PasswordVerifier{}
 	passwords.Warm()
 
-	service := &auth.Service{
-		Store:  db,
-		Signer: auth.NewSigner(cfg.JWTSecret, time.Now),
-		GitHub: &auth.GitHubClient{
-			HTTP:         newGitHubHTTPClient(),
-			ClientID:     cfg.GitHubClientID,
-			ClientSecret: cfg.GitHubClientSecret,
-			RedirectURI:  cfg.GitHubRedirectURI,
+	githubHTTP := newGitHubHTTPClient()
+	githubApps := auth.GitHubApps{{
+		HTTP:         githubHTTP,
+		ClientID:     cfg.GitHubClientID,
+		ClientSecret: cfg.GitHubClientSecret,
+		RedirectURI:  cfg.GitHubRedirectURI,
+		Logger:       logger,
+	}}
+	if cfg.GitHubWebClientID != "" {
+		githubApps = append(githubApps, &auth.GitHubClient{
+			HTTP:         githubHTTP,
+			ClientID:     cfg.GitHubWebClientID,
+			ClientSecret: cfg.GitHubWebClientSecret,
+			RedirectURI:  cfg.GitHubWebRedirectURI,
 			Logger:       logger,
-		},
+		})
+	}
+
+	service := &auth.Service{
+		Store:     db,
+		Signer:    auth.NewSigner(cfg.JWTSecret, time.Now),
+		GitHub:    githubApps,
 		Allowlist: auth.ParseAllowlist(cfg.AllowedGitHubIDs),
 		Passwords: passwords,
 	}
@@ -85,6 +97,8 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 		Hasher:   passwords,
 		DB:       db,
 		Logger:   logger,
+
+		WebProxySecret: cfg.WebProxySecret,
 	})
 
 	ln, err := net.Listen("tcp", ":"+cfg.Port)

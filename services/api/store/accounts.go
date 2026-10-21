@@ -24,6 +24,7 @@ func MemberOwnerID(accountID string) string { return MemberOwnerPrefix + account
 type PasswordAccount struct {
 	ID             string
 	LoginID        string
+	DisplayName    string
 	PasswordHash   string
 	SessionVersion int
 }
@@ -41,8 +42,8 @@ const (
 func (s *Store) findPasswordAccount(ctx context.Context, key accountKey, value string) (PasswordAccount, error) {
 	var a PasswordAccount
 	err := s.pool.QueryRow(ctx,
-		`SELECT "id", "loginId", "passwordHash", "sessionVersion" FROM "PasswordAccount" WHERE "`+string(key)+`" = $1`,
-		value).Scan(&a.ID, &a.LoginID, &a.PasswordHash, &a.SessionVersion)
+		`SELECT "id", "loginId", "displayName", "passwordHash", "sessionVersion" FROM "PasswordAccount" WHERE "`+string(key)+`" = $1`,
+		value).Scan(&a.ID, &a.LoginID, &a.DisplayName, &a.PasswordHash, &a.SessionVersion)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return PasswordAccount{}, ErrNotFound
 	}

@@ -222,7 +222,7 @@ func TestClientKey(t *testing.T) {
 			if tc.xff != "" {
 				r.Header.Set("X-Forwarded-For", tc.xff)
 			}
-			if got := clientKey(r); got != tc.want {
+			if got := clientKeyFunc(nil)(r); got != tc.want {
 				t.Fatalf("clientKey = %q, want %q", got, tc.want)
 			}
 		})
@@ -234,7 +234,7 @@ func TestClientKeyMultipleXFFLines(t *testing.T) {
 	r.RemoteAddr = "192.0.2.7:5555"
 	r.Header.Add("X-Forwarded-For", "6.6.6.6")
 	r.Header.Add("X-Forwarded-For", "1.1.1.1, 203.0.113.9")
-	if got := clientKey(r); got != "203.0.113.9" {
+	if got := clientKeyFunc(nil)(r); got != "203.0.113.9" {
 		t.Fatalf("clientKey = %q, want the last value of the last line", got)
 	}
 
@@ -242,7 +242,7 @@ func TestClientKeyMultipleXFFLines(t *testing.T) {
 	r.RemoteAddr = "192.0.2.7:5555"
 	r.Header.Add("X-Forwarded-For", "6.6.6.6")
 	r.Header.Add("X-Forwarded-For", "")
-	if got := clientKey(r); got != "192.0.2.7" {
+	if got := clientKeyFunc(nil)(r); got != "192.0.2.7" {
 		t.Fatalf("clientKey = %q, want RemoteAddr host when the last line is empty", got)
 	}
 }
@@ -284,14 +284,70 @@ func TestAuthRoutesRateLimited(t *testing.T) {
 	w := do(h, http.MethodPost, "/v1/auth/password", body, nil)
 	wantError(t, w, http.StatusTooManyRequests, "rate_limited")
 
-	// The limit is shared by every /v1/auth/* route for the same client...
+	// The limit is shared by every other /v1/auth/* route for the same client...
 	w = do(h, http.MethodPost, "/v1/auth/logout", `{"refreshToken":"x"}`, nil)
+	wantError(t, w, http.StatusTooManyRequests, "rate_limited")
+	w = do(h, http.MethodPost, "/v1/auth/guest", "", nil)
 	wantError(t, w, http.StatusTooManyRequests, "rate_limited")
 
 	// ...but another client is unaffected.
 	w = do(h, http.MethodPost, "/v1/auth/password", body, map[string]string{"X-Forwarded-For": "203.0.113.50"})
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("other client: status = %d, want 401", w.Code)
+	}
+}
+
+func TestRefreshHasItsOwnRateLimit(t *testing.T) {
+	a := &fakeAuth{
+		password: func(context.Context, string, string, string) (auth.TokenPair, error) {
+			return auth.TokenPair{}, auth.ErrUnauthorized
+		},
+		refresh: func(context.Context, string) (auth.TokenPair, error) {
+			return auth.TokenPair{}, auth.ErrUnauthorized
+		},
+	}
+	h, _ := testRouter(t, a, fakePinger{}, nil)
+	login := `{"loginId":"someone","password":"pw"}`
+	refresh := `{"refreshToken":"x"}`
+
+	// 11 refreshes from one client all reach the handler...
+	for i := range 11 {
+		if w := do(h, http.MethodPost, "/v1/auth/refresh", refresh, nil); w.Code != http.StatusUnauthorized {
+			t.Fatalf("refresh %d: status = %d, want 401", i+1, w.Code)
+		}
+	}
+	// ...and do not use up the login limit: the 11th login is the one limited.
+	for i := range 10 {
+		if w := do(h, http.MethodPost, "/v1/auth/password", login, nil); w.Code != http.StatusUnauthorized {
+			t.Fatalf("login %d: status = %d, want 401", i+1, w.Code)
+		}
+	}
+	wantError(t, do(h, http.MethodPost, "/v1/auth/password", login, nil), http.StatusTooManyRequests, "rate_limited")
+
+	// Refresh keeps its own budget of 60 per minute.
+	for i := 11; i < 60; i++ {
+		if w := do(h, http.MethodPost, "/v1/auth/refresh", refresh, nil); w.Code != http.StatusUnauthorized {
+			t.Fatalf("refresh %d: status = %d, want 401", i+1, w.Code)
+		}
+	}
+	wantError(t, do(h, http.MethodPost, "/v1/auth/refresh", refresh, nil), http.StatusTooManyRequests, "rate_limited")
+}
+
+func TestGuestLoginRequiresProxySecret(t *testing.T) {
+	a := &fakeAuth{guest: func(context.Context) (auth.TokenPair, error) { return testPair, nil }}
+	withSecret := NewRouter(Deps{Auth: a, DB: fakePinger{}, WebProxySecret: []byte(testProxySecret), Now: newClock().Now})
+
+	if w := do(withSecret, http.MethodPost, "/v1/auth/guest", "", map[string]string{"X-Zhuelog-Proxy-Secret": testProxySecret}); w.Code != http.StatusOK {
+		t.Fatalf("matching secret: status = %d, body %q", w.Code, w.Body.String())
+	}
+	wantError(t, do(withSecret, http.MethodPost, "/v1/auth/guest", "", map[string]string{"X-Zhuelog-Proxy-Secret": testProxySecret + "x"}),
+		http.StatusForbidden, "forbidden")
+	wantError(t, do(withSecret, http.MethodPost, "/v1/auth/guest", "", nil), http.StatusForbidden, "forbidden")
+
+	// Without a configured secret (local development) anyone may sign in as a guest.
+	unset := NewRouter(Deps{Auth: a, DB: fakePinger{}, Now: newClock().Now})
+	if w := do(unset, http.MethodPost, "/v1/auth/guest", "", nil); w.Code != http.StatusOK {
+		t.Fatalf("unset secret: status = %d, body %q", w.Code, w.Body.String())
 	}
 }
 
@@ -332,7 +388,7 @@ func TestBearer(t *testing.T) {
 			var gotPrincipal auth.Principal
 			var reached bool
 			mux := http.NewServeMux()
-			mux.Handle("GET /secret", requireAuth(a, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			mux.Handle("GET /secret", requireAuth(a, false, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				reached = true
 				gotPrincipal = principalFrom(r.Context())
 				w.WriteHeader(http.StatusOK)
@@ -397,5 +453,90 @@ func TestAccessLogFields(t *testing.T) {
 		if strings.Contains(buf.String(), leaked) {
 			t.Fatalf("access log leaks %q: %s", leaked, buf.String())
 		}
+	}
+}
+
+const (
+	testProxySecret = "proxy-secret-0123456789-0123456789-abcd"
+)
+
+func proxiedRequest(secret, forwarded string) *http.Request {
+	r := httptest.NewRequest(http.MethodPost, "/", nil)
+	r.RemoteAddr = "192.0.2.7:5555"
+	r.Header.Set("X-Forwarded-For", "198.51.100.1")
+	if secret != "" {
+		r.Header.Set("X-Zhuelog-Proxy-Secret", secret)
+	}
+	if forwarded != "" {
+		r.Header.Set("X-Zhuelog-Client-IP", forwarded)
+	}
+	return r
+}
+
+func TestClientKeyTrustsWebProxy(t *testing.T) {
+	key := clientKeyFunc([]byte(testProxySecret))
+	if got := key(proxiedRequest(testProxySecret, " 203.0.113.5 ")); got != "203.0.113.5" {
+		t.Fatalf("clientKey = %q, want the forwarded client IP", got)
+	}
+}
+
+func TestClientKeyIgnoresWrongSecret(t *testing.T) {
+	key := clientKeyFunc([]byte(testProxySecret))
+	for _, secret := range []string{"", "wrong", testProxySecret + "x", testProxySecret[:10]} {
+		if got := key(proxiedRequest(secret, "203.0.113.5")); got != "198.51.100.1" {
+			t.Fatalf("secret %q: clientKey = %q, want the X-Forwarded-For value", secret, got)
+		}
+	}
+}
+
+func TestClientKeyIgnoresWhenUnset(t *testing.T) {
+	// With no secret configured, even an empty-looking match must not trust the header.
+	for _, secret := range [][]byte{nil, {}} {
+		key := clientKeyFunc(secret)
+		if got := key(proxiedRequest("", "203.0.113.5")); got != "198.51.100.1" {
+			t.Fatalf("clientKey = %q, want the X-Forwarded-For value", got)
+		}
+		if got := key(proxiedRequest(testProxySecret, "203.0.113.5")); got != "198.51.100.1" {
+			t.Fatalf("clientKey = %q, want the X-Forwarded-For value", got)
+		}
+	}
+}
+
+func TestClientKeyEmptyForwardedIP(t *testing.T) {
+	key := clientKeyFunc([]byte(testProxySecret))
+	r := proxiedRequest(testProxySecret, "")
+	r.Header.Set("X-Zhuelog-Client-IP", "   ")
+	if got := key(r); got != "198.51.100.1" {
+		t.Fatalf("clientKey = %q, want the X-Forwarded-For value", got)
+	}
+}
+
+func TestPasswordLoginThrottleUsesWebClientIP(t *testing.T) {
+	var clients []string
+	a := &fakeAuth{password: func(_ context.Context, client, _, _ string) (auth.TokenPair, error) {
+		clients = append(clients, client)
+		return auth.TokenPair{}, auth.ErrUnauthorized
+	}}
+	h := NewRouter(Deps{Auth: a, DB: fakePinger{}, WebProxySecret: []byte(testProxySecret), Now: newClock().Now})
+	send := func(ip string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodPost, "/v1/auth/password", strings.NewReader(`{"loginId":"a","password":"b"}`))
+		r.RemoteAddr = "10.0.0.1:1" // always the same Next.js server
+		r.Header.Set("X-Zhuelog-Proxy-Secret", testProxySecret)
+		r.Header.Set("X-Zhuelog-Client-IP", ip)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	for i := range 10 {
+		if w := send("203.0.113.1"); w.Code != http.StatusUnauthorized {
+			t.Fatalf("request %d: status = %d, want 401", i+1, w.Code)
+		}
+	}
+	wantError(t, send("203.0.113.1"), http.StatusTooManyRequests, "rate_limited")
+	if w := send("203.0.113.2"); w.Code != http.StatusUnauthorized {
+		t.Fatalf("second user: status = %d, want 401 (counted separately)", w.Code)
+	}
+	if last := clients[len(clients)-1]; last != "203.0.113.2" {
+		t.Fatalf("password login client = %q, want the forwarded IP", last)
 	}
 }
