@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -17,14 +16,8 @@ import (
 
 func roleRouter(t *testing.T, e Entries, role string) (http.Handler, *clock) {
 	t.Helper()
-	c := newClock()
-	a := &fakeAuth{authenticate: func(_ context.Context, tok string) (auth.Principal, error) {
-		if tok != "tok" {
-			return auth.Principal{}, auth.ErrUnauthorized
-		}
-		return auth.Principal{OwnerID: testOwner, Role: role}, nil
-	}}
-	return NewRouter(Deps{Auth: a, Entries: e, Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: c.Now}), c
+	h, c, _ := routerWith(t, role, Deps{Entries: e})
+	return h, c
 }
 
 func TestAllTrashRoutesRequireAuth(t *testing.T) {

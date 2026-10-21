@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -38,15 +37,7 @@ func importRouter(t *testing.T, role string, fail error) (http.Handler, *[]impor
 		}
 		return store.Batch{ID: "batch1", ImportedAt: now}, make([]store.Entry, len(drafts)), nil
 	}}
-	a := &fakeAuth{authenticate: func(_ context.Context, tok string) (auth.Principal, error) {
-		if tok != "tok" {
-			return auth.Principal{}, auth.ErrUnauthorized
-		}
-		return auth.Principal{OwnerID: testOwner, Role: role}, nil
-	}}
-	logs := &bytes.Buffer{}
-	c := newClock()
-	h := NewRouter(Deps{Auth: a, Entries: e, Logger: slog.New(slog.NewJSONHandler(logs, nil)), Now: c.Now})
+	h, _, logs := routerWith(t, role, Deps{Entries: e})
 	return h, calls, logs
 }
 
@@ -342,13 +333,8 @@ func TestOtherRoutesKeepServerDeadlines(t *testing.T) {
 		creates.Add(1)
 		return store.Batch{ID: "b", ImportedAt: now}, make([]store.Entry, len(drafts)), nil
 	}}
-	a := &fakeAuth{authenticate: func(_ context.Context, tok string) (auth.Principal, error) {
-		if tok != "tok" {
-			return auth.Principal{}, auth.ErrUnauthorized
-		}
-		return auth.Principal{OwnerID: testOwner, Role: auth.RoleMember}, nil
-	}}
-	srv := slowServer(t, NewRouter(Deps{Auth: a, Entries: e, Logger: slog.New(slog.NewJSONHandler(io.Discard, nil))}))
+	h, _, _ := routerWith(t, auth.RoleMember, Deps{Entries: e})
+	srv := slowServer(t, h)
 	body := `{"entries":[{"kind":"correction","originalText":"a","correctedText":"b","pinyin":"c"}]}`
 
 	// Positive control: the same body sent at once is accepted.

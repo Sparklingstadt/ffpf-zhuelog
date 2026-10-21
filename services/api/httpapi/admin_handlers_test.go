@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"net/http"
 	"strings"
 	"testing"
@@ -72,14 +71,8 @@ func (fakeHasher) Hash(_ context.Context, password string) (string, error) {
 
 func adminRouter(t *testing.T, acc Accounts, role string) (http.Handler, *bytes.Buffer) {
 	t.Helper()
-	buf := &bytes.Buffer{}
-	a := &fakeAuth{authenticate: func(_ context.Context, tok string) (auth.Principal, error) {
-		if tok != "tok" {
-			return auth.Principal{}, auth.ErrUnauthorized
-		}
-		return auth.Principal{OwnerID: testOwner, Role: role}, nil
-	}}
-	return NewRouter(Deps{Auth: a, Accounts: acc, Hasher: fakeHasher{}, Logger: slog.New(slog.NewJSONHandler(buf, nil)), Now: newClock().Now}), buf
+	h, _, buf := routerWith(t, role, Deps{Accounts: acc, Hasher: fakeHasher{}})
+	return h, buf
 }
 
 type accountResp struct {
@@ -408,10 +401,7 @@ func TestAdminAccountsLogsOmitPasswords(t *testing.T) {
 
 func TestAdminHashFailureIs500(t *testing.T) {
 	acc := newFakeAccounts()
-	a := &fakeAuth{authenticate: func(context.Context, string) (auth.Principal, error) {
-		return auth.Principal{OwnerID: testOwner, Role: auth.RoleAdmin}, nil
-	}}
-	h := NewRouter(Deps{Auth: a, Accounts: acc, Hasher: failingHasher{}, Logger: slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil))})
+	h, _, _ := routerWith(t, auth.RoleAdmin, Deps{Accounts: acc, Hasher: failingHasher{}})
 	wantError(t, do(h, http.MethodPost, "/v1/admin/accounts", `{"loginId":"abc","displayName":"x"}`, authHeader), http.StatusInternalServerError, "internal")
 }
 
