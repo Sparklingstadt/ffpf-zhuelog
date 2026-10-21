@@ -4,13 +4,32 @@ import {
   type BrowserContext,
   type Page,
 } from "@playwright/test";
-import { randomBytes } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 import { encode } from "next-auth/jwt";
 import { Client } from "pg";
 import { ScryptPasswordHasher } from "../src/infrastructure/auth/scrypt-password-hasher";
-import { authSecret, baseURL, cookieName, databaseUrl } from "./environment";
+import {
+  authMode,
+  authSecret,
+  baseURL,
+  cookieName,
+  databaseUrl,
+  goJwtSecret,
+} from "./environment";
 
 export const test = base.extend<{ db: Client }>({
+  // The Go API limits /v1/auth/* to 10 calls a minute per client address, in
+  // memory, so it cannot be reset between tests like SignInThrottle. Give
+  // each test its own address instead; locally the web takes it from
+  // X-Forwarded-For and hands it to the Go API.
+  extraHTTPHeaders: async ({ extraHTTPHeaders }, provide) => {
+    if (authMode !== "go") return provide(extraHTTPHeaders);
+    const [a, b, c] = randomBytes(3);
+    await provide({
+      ...extraHTTPHeaders,
+      "X-Forwarded-For": `10.${a}.${b}.${c}`,
+    });
+  },
   db: [
     async ({}, provide) => {
       const db = new Client({ connectionString: databaseUrl });
@@ -43,24 +62,63 @@ export { expect };
 export const adminOwnerId = "10001";
 
 export async function asAdmin(context: BrowserContext) {
-  // Test-only cookie, signed with this run's random secret. No app auth bypass.
-  const value = await encode({
-    secret: authSecret(),
-    salt: cookieName,
-    maxAge: 3600,
-    token: {
-      // Same shape as a real GitHub sign-in: Auth.js puts a random UUID in
-      // sub, and the app stores the numeric GitHub id in its own claim.
-      sub: "1b4e28ba-2fa1-11d2-883f-0016d3cca427",
-      githubId: adminOwnerId,
-      name: "E2E Admin",
-      role: "admin",
-      githubLogin: "e2e-admin",
-    },
+  await addAdminSession(context, {
+    // Same shape as a real GitHub sign-in: Auth.js puts a random UUID in
+    // sub, and the app stores the numeric GitHub id in its own claim.
+    sub: "1b4e28ba-2fa1-11d2-883f-0016d3cca427",
+    githubId: adminOwnerId,
+    name: "E2E Admin",
+    login: "e2e-admin",
   });
+}
+
+// Puts an admin session cookie in the context. Test-only cookie, signed with
+// this run's random secret. No app auth bypass.
+export async function addAdminSession(
+  context: BrowserContext,
+  admin: { sub: string; githubId?: string; name: string; login: string },
+) {
+  const value =
+    authMode === "go"
+      ? goAccessToken({
+          // The Go API puts the numeric GitHub id in sub.
+          sub: admin.githubId ?? admin.sub,
+          role: "admin",
+          login: admin.login,
+        })
+      : await encode({
+          secret: authSecret(),
+          salt: cookieName,
+          maxAge: 3600,
+          token: {
+            sub: admin.sub,
+            githubId: admin.githubId,
+            name: admin.name,
+            role: "admin",
+            githubLogin: admin.login,
+          },
+        });
   await context.addCookies([
     { name: cookieName, value, url: baseURL, httpOnly: true, sameSite: "Lax" },
   ]);
+}
+
+// An HS256 access token as services/api/auth/token.go issues it.
+function goAccessToken(claims: { sub: string; role: string; login: string }) {
+  const now = Math.floor(Date.now() / 1000);
+  const encodePart = (part: object) =>
+    Buffer.from(JSON.stringify(part)).toString("base64url");
+  const unsigned = `${encodePart({ alg: "HS256", typ: "JWT" })}.${encodePart({
+    iss: "ffpf-zhuelog-api",
+    aud: ["ffpf-zhuelog-mobile"],
+    iat: now,
+    exp: now + 3600,
+    ...claims,
+  })}`;
+  const signature = createHmac("sha256", goJwtSecret())
+    .update(unsigned)
+    .digest("base64url");
+  return `${unsigned}.${signature}`;
 }
 
 export async function signInWithPassword(

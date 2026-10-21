@@ -84,6 +84,39 @@ curl -i https://<プロジェクト>.vercel.app/health
 
 `200` が返れば、DB への接続まで確認できています（失敗時は `503`）。`/ping` は DB にアクセスせずに `200` を返します。アプリからのログインは `POST /v1/auth/password` か `POST /v1/auth/github` で確認します。
 
+## 6. Web のログインを Go API に切り替える
+
+Web（Next.js）は、環境変数 `GO_API_URL` があるとき、ログインを Auth.js ではなく Go API で行います。無いときは今までどおり Auth.js です。仕様は `docs/superpowers/specs/2026-10-21-web-auth-via-go-api-design.md` にあります。
+
+### 切り替えの手順
+
+1. Go API の Vercel プロジェクトに、`GITHUB_WEB_CLIENT_ID`・`GITHUB_WEB_CLIENT_SECRET`・`GITHUB_WEB_REDIRECT_URI`・`API_WEB_PROXY_SECRET` を入れ、再デプロイします（手順 3 の表）。
+2. Web の Vercel プロジェクトに、次の値を入れます。
+
+   | 名前                   | 内容                                                                        |
+   | ---------------------- | --------------------------------------------------------------------------- |
+   | `GO_API_URL`           | Go API の URL（例: `https://<プロジェクト>.vercel.app`）。末尾の `/` は不要 |
+   | `API_WEB_PROXY_SECRET` | Go API と **同じ値**                                                        |
+   | `AUTH_URL`             | Web の公開されている origin（例: `https://<Web のホスト>`）                 |
+   | `AUTH_GITHUB_ID`       | 今までどおり。Go API の `GITHUB_WEB_CLIENT_ID` と **同じ OAuth App** の値   |
+
+3. Web を再デプロイします。
+
+注意:
+
+- `AUTH_URL` は必ず設定し、利用者が開く Web の origin と同じにします。GitHub ログインの `redirect_uri` は、この origin から作ります。
+- Go API の `GITHUB_WEB_REDIRECT_URI` は、`<AUTH_URL の origin>/api/auth/callback/github/go` と **1 文字も違わず** 同じにします。違うと Go API が `401` を返し、GitHub ログインができません。そのため、URL が合わないプレビューのデプロイでは GitHub ログインは使えません（パスワードとゲストのログインは使えます）。
+- `AUTH_GITHUB_ID` と `GITHUB_WEB_CLIENT_ID` が別の OAuth App だと、GitHub が発行した `code` を Go API が交換できず、GitHub ログインが失敗します。
+- 切り替えると、Auth.js の Cookie は使われなくなります。**全員が一度ログインし直し** になります。
+
+### 戻す手順
+
+Web の Vercel プロジェクトから `GO_API_URL` を消し、再デプロイします。Auth.js のログインに戻ります。この場合も全員がログインし直しになります。Go API 側の値はそのままで構いません。
+
+### e2e
+
+`ZHUELOG_E2E_AUTH=go pnpm run test:e2e` で、e2e を Go API でのログインで動かせます（Go が必要です）。`services/api` をビルドして `127.0.0.1:3108` で起動し、e2e の DB をそのまま使います。CI は両方の版を動かします。
+
 ## 運用上の注意
 
 ### 本文の上限と CSV

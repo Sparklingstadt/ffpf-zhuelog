@@ -1,6 +1,12 @@
-import { encode } from "next-auth/jwt";
-import { asAdmin, asGuest, expect, test, upload } from "./fixtures";
-import { authSecret, baseURL, cookieName } from "./environment";
+import {
+  addAdminSession,
+  asAdmin,
+  asGuest,
+  expect,
+  test,
+  upload,
+} from "./fixtures";
+import { baseURL, cookieName } from "./environment";
 
 test("nonce CSP is active, rotates, blocks injected scripts and retains working hydration", async ({
   page,
@@ -39,20 +45,12 @@ test("revoked admin JWT cannot access pages or import actions", async ({
   await asAdmin(context);
   await page.goto("/");
   await page.waitForLoadState("networkidle");
-  const value = await encode({
-    secret: authSecret(),
-    salt: cookieName,
-    maxAge: 3600,
-    token: {
-      sub: "removed",
-      name: "Removed",
-      role: "admin",
-      githubLogin: "removed",
-    },
+  // Validly signed, but for an admin who is not on the allowlist.
+  await addAdminSession(context, {
+    sub: "removed",
+    name: "Removed",
+    login: "removed",
   });
-  await context.addCookies([
-    { name: cookieName, value, url: baseURL, httpOnly: true, sameSite: "Lax" },
-  ]);
   await upload(page, "原文,添削,pinyin");
   await expect(
     page.getByText(
