@@ -16,18 +16,20 @@ import (
 const (
 	csvImportPath  = "/v1/imports/csv"
 	csvFileField   = "csvFile"
-	maxCSVFileSize = 5 << 20
-	// maxCSVBodyBytes is this route's body limit: the 5 MiB file plus the
-	// multipart framing and any other fields.
-	maxCSVBodyBytes = 6 << 20
+	maxCSVFileSize = 4 << 20
+	// maxCSVBodyBytes is this route's body limit: the 4 MiB file plus the
+	// multipart framing and any other fields. It stays below the 4.5 MB
+	// request body limit of Vercel Functions.
+	maxCSVBodyBytes = 4<<20 + 256<<10
 )
 
-// csvUploadTimeout is how long a CSV upload may take to arrive. It is a var so
-// tests can shorten it.
-var csvUploadTimeout = 5 * time.Minute
+// csvUploadTimeout is how long a CSV upload may take to arrive. It stays under
+// the maximum duration of a Vercel Function. It is a var so tests can shorten
+// it.
+var csvUploadTimeout = 4 * time.Minute
 
 // extendCSVDeadlines gives this one request longer read and write deadlines
-// than the server's, so a slow 5 MiB upload can finish and still get a JSON
+// than the server's, so a slow 4 MiB upload can finish and still get a JSON
 // answer. It runs after authentication, so unauthenticated requests keep the
 // server's deadlines. It uses the real clock, as deadlines are wall-clock
 // matters. Writers that cannot set deadlines (http.ErrNotSupported, as in
@@ -110,7 +112,7 @@ var (
 // readCSVFile returns the name and contents of the first csvFile part, like
 // the web's formData.get("csvFile"). It fails with errNoCSVFile when that part
 // is missing, is not a file or is empty, and with errCSVFileTooLarge past
-// 5 MiB, reading at most one byte more than that.
+// 4 MiB, reading at most one byte more than that.
 func readCSVFile(mr *multipart.Reader) (string, []byte, error) {
 	for {
 		part, err := mr.NextPart()

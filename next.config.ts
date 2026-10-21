@@ -26,7 +26,8 @@ const nextConfig: NextConfig = {
       "playwright-report/**/*",
     ],
   },
-  experimental: { serverActions: { bodySizeLimit: "6mb" } },
+  // CSV uploads are capped at 4 MiB; Vercel rejects bodies over 4.5 MB anyway.
+  experimental: { serverActions: { bodySizeLimit: "4.5mb" } },
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },

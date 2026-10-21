@@ -1,5 +1,7 @@
 # Go API を AWS（ECS Express Mode）で動かす
 
+> **置き換え済み**: この構成は段階 1（`docs/superpowers/specs/2026-10-21-go-api-on-vercel-design.md`）で Vercel に置き換えた。以下は当時の設計の記録。
+
 `docs/superpowers/specs/2026-10-20-go-mobile-api-design.md` のデプロイの節（Cloud Run）を置き換える。API の動作は変えない。
 
 ## 承認済みの要件

@@ -141,7 +141,7 @@ test("stale admin form is rejected after switching to guest", async ({
 for (const [name, bytes, error] of [
   ["empty.csv", 0, "CSVファイルを選択"],
   ["wrong.txt", 10, "拡張子が.csv"],
-  ["large.csv", 5 * 1024 * 1024 + 1, "5MB以下"],
+  ["large.csv", 4 * 1024 * 1024 + 1, "4MB以下"],
 ] as const) {
   test(`rejects upload ${name}`, async ({ page, context, db }) => {
     await asAdmin(context);

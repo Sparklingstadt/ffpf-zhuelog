@@ -123,7 +123,8 @@ func noStore(next http.Handler) http.Handler {
 	})
 }
 
-// limitBody caps request bodies at 1 MiB, except the CSV import's at 6 MiB.
+// limitBody caps request bodies at 1 MiB, except the CSV import's at
+// 4 MiB + 256 KiB (below the 4.5 MB body limit of Vercel Functions).
 func limitBody(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		limit := int64(maxBodyBytes)
@@ -208,11 +209,13 @@ func (r *RateLimiter) Allow(key string) bool {
 }
 
 // clientKey identifies the caller for rate limiting and sign-in throttling: the
-// last value of X-Forwarded-For (the one our own proxy appended) if present,
-// otherwise the host part of RemoteAddr.
+// last value of X-Forwarded-For if present, otherwise the host part of
+// RemoteAddr. On Vercel the platform overwrites X-Forwarded-For with the
+// client's IP and drops any value the client sent, so the last value is
+// trustworthy there; behind another proxy, only its appended value is.
 func clientKey(r *http.Request) string {
 	// A client can send several X-Forwarded-For lines; only the last value of
-	// the last line was appended by our own proxy.
+	// the last line comes from the platform or our own proxy.
 	if vals := r.Header.Values("X-Forwarded-For"); len(vals) > 0 {
 		last := vals[len(vals)-1]
 		if i := strings.LastIndexByte(last, ','); i >= 0 {

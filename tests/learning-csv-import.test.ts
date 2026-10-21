@@ -81,3 +81,29 @@ test("CSV import rejects users who are not admins or members", async () => {
     message: "この操作を行う権限がありません。再度ログインしてください。",
   });
 });
+
+// The Go API on Vercel cannot take request bodies over 4.5 MB, so the web
+// keeps the same 4 MiB limit.
+test("CSV import accepts exactly 4 MiB and rejects anything larger", async () => {
+  const sized = (size: number) => {
+    const formData = new FormData();
+    formData.set(
+      "csvFile",
+      new File([new Uint8Array(size)], "notes.csv", { type: "text/csv" }),
+    );
+    return formData;
+  };
+  const tooLarge = await handleLearningCsvImport(
+    sized(4 * 1024 * 1024 + 1),
+    dependencies(),
+  );
+  assert.deepEqual(tooLarge, {
+    status: "error",
+    message: "ファイルは4MB以下にしてください。",
+  });
+  const exact = await handleLearningCsvImport(
+    sized(4 * 1024 * 1024),
+    dependencies(),
+  );
+  assert.equal(exact.status, "success");
+});

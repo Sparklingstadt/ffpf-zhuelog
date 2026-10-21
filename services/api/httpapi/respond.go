@@ -39,7 +39,7 @@ const (
 	msgAccountNotFound = "アカウントが見つかりません。"
 
 	msgSelectCSVFile   = "CSVファイルを選択してください。"
-	msgCSVFileTooLarge = "ファイルは5MB以下にしてください。"
+	msgCSVFileTooLarge = "ファイルは4MB以下にしてください。"
 	msgCSVExtension    = "拡張子が.csvのファイルを選択してください。"
 )
 

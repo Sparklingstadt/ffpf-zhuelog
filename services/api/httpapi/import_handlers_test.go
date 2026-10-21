@@ -136,7 +136,7 @@ func TestImportCSVHandlerRejectsFiles(t *testing.T) {
 		msgSelect = "CSVファイルを選択してください。"
 		msgExt    = "拡張子が.csvのファイルを選択してください。"
 	)
-	fivePlus := bytes.Repeat([]byte("a"), 5<<20+1)
+	fourPlus := bytes.Repeat([]byte("a"), 4<<20+1)
 	cases := []struct {
 		name   string
 		parts  []formPart
@@ -151,8 +151,8 @@ func TestImportCSVHandlerRejectsFiles(t *testing.T) {
 		{"txt extension", []formPart{{name: "csvFile", fileName: "a.txt", content: []byte("a,b,c\n")}}, 400, "invalid_request", msgExt},
 		{"no dot", []formPart{{name: "csvFile", fileName: "acsv", content: []byte("a,b,c\n")}}, 400, "invalid_request", msgExt},
 		{"csv not last", []formPart{{name: "csvFile", fileName: "a.csv.txt", content: []byte("a,b,c\n")}}, 400, "invalid_request", msgExt},
-		{"over 5 MiB", []formPart{{name: "csvFile", fileName: "a.csv", content: fivePlus}}, 413, "too_large", "ファイルは5MB以下にしてください。"},
-		{"over 5 MiB and not csv: size first", []formPart{{name: "csvFile", fileName: "a.txt", content: fivePlus}}, 413, "too_large", "ファイルは5MB以下にしてください。"},
+		{"over 4 MiB", []formPart{{name: "csvFile", fileName: "a.csv", content: fourPlus}}, 413, "too_large", "ファイルは4MB以下にしてください。"},
+		{"over 4 MiB and not csv: size first", []formPart{{name: "csvFile", fileName: "a.txt", content: fourPlus}}, 413, "too_large", "ファイルは4MB以下にしてください。"},
 		{"unclosed quote", []formPart{{name: "csvFile", fileName: "a.csv", content: []byte("a,b,\"c\n")}}, 400, "invalid_csv",
 			"CSVの形式を確認してください。引用符が閉じていないか、1行が長すぎる可能性があります。"},
 		{"missing pinyin", []formPart{{name: "csvFile", fileName: "a.csv", content: []byte("a,b,c\nd,e,\n")}}, 400, "invalid_csv",
@@ -193,25 +193,39 @@ func TestImportCSVHandlerRejectsNUL(t *testing.T) {
 	}
 }
 
-func TestImportCSVHandlerAllowsExactly5MiB(t *testing.T) {
-	// 5 MiB passes the size check (and the 6 MiB body limit of this route,
-	// above the 1 MiB used elsewhere); it then fails on the row limit.
+func TestImportCSVHandlerAllowsExactly4MiB(t *testing.T) {
+	// 4 MiB passes the size check (and this route's body limit, above the
+	// 1 MiB used elsewhere); it then fails on the row limit.
 	h, _, _ := importRouter(t, auth.RoleMember, nil)
-	content := bytes.Repeat([]byte("a,b,c\n"), 5<<20/6)
-	content = append(content, bytes.Repeat([]byte("\n"), 5<<20-len(content))...)
+	content := bytes.Repeat([]byte("a,b,c\n"), 4<<20/6)
+	content = append(content, bytes.Repeat([]byte("\n"), 4<<20-len(content))...)
 	wantErrorMessage(t, postImport(t, h, "/v1/imports/csv", formPart{name: "csvFile", fileName: "a.csv", content: content}),
 		http.StatusBadRequest, "invalid_csv", "一度にインポートできるのは1000件までです。")
 }
 
 func TestImportCSVHandlerBodyLimit(t *testing.T) {
+	// The limit is 4 MiB + 256 KiB (fixed here, not read from the constant,
+	// so a change to the constant fails this test). A padding field of that
+	// size puts the whole body just over it.
+	const limit = 4<<20 + 256<<10
 	h, calls, _ := importRouter(t, auth.RoleMember, nil)
-	big := bytes.Repeat([]byte("x"), 6<<20)
+	big := bytes.Repeat([]byte("x"), limit)
 	w := postImport(t, h, "/v1/imports/csv",
 		formPart{name: "padding", content: big},
 		formPart{name: "csvFile", fileName: "a.csv", content: []byte("a,b,c\n")})
 	wantError(t, w, http.StatusRequestEntityTooLarge, "too_large")
 	if len(*calls) != 0 {
 		t.Fatalf("store called %d times", len(*calls))
+	}
+
+	// Well under the limit, the body is read: the request is not rejected as
+	// too large (it fails later on the CSV contents).
+	under := bytes.Repeat([]byte("x"), limit-64<<10)
+	w = postImport(t, h, "/v1/imports/csv",
+		formPart{name: "padding", content: under},
+		formPart{name: "csvFile", fileName: "a.csv", content: []byte("a,b,c\n")})
+	if w.Code == http.StatusRequestEntityTooLarge {
+		t.Fatalf("body under maxCSVBodyBytes rejected as too large: %s", w.Body.String())
 	}
 }
 
@@ -364,5 +378,22 @@ func TestOtherRoutesKeepServerDeadlines(t *testing.T) {
 	}
 	if creates.Load() != 1 {
 		t.Fatalf("creates = %d, want 1 (only the control)", creates.Load())
+	}
+}
+
+// Vercel functions reject request bodies over 4.5 MB, so this route's limit
+// must stay below it.
+func TestCSVBodyLimitUnderVercelMax(t *testing.T) {
+	if maxCSVBodyBytes >= 4_500_000 {
+		t.Fatalf("maxCSVBodyBytes = %d, must be < 4.5 MB", maxCSVBodyBytes)
+	}
+	if maxCSVBodyBytes <= maxCSVFileSize {
+		t.Fatalf("maxCSVBodyBytes = %d leaves no room for multipart framing", maxCSVBodyBytes)
+	}
+}
+
+func TestCSVUploadTimeoutDefault(t *testing.T) {
+	if csvUploadTimeout != 4*time.Minute {
+		t.Fatalf("csvUploadTimeout = %v, want 4m (under Vercel's max duration)", csvUploadTimeout)
 	}
 }

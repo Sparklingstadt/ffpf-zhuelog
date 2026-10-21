@@ -1,6 +1,6 @@
 # Go API（`services/api`）をローカルで試す
 
-ネイティブアプリ向けの Go API を、この Mac の上だけで動かして試すための手順です。本番の Neon や AWS には一切つながりません。
+ネイティブアプリ向けの Go API を、この Mac の上だけで動かして試すための手順です。本番の Neon や Vercel には一切つながりません。
 
 必要なもの: Docker、Go（`services/api/go.mod` の版）、pnpm（`pnpm install` 済み）、`curl` と `jq`。
 
