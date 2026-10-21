@@ -15,6 +15,7 @@ import (
 const (
 	msgUnauthorized      = "認証が必要です。"
 	msgForbidden         = "このアカウントは利用できません。"
+	msgShareMembersOnly  = "共有できるのは会員だけです。"
 	msgBadRequest        = "リクエストが不正です。"
 	msgNotFound          = "見つかりません。"
 	msgMethodNotAllowed  = "このメソッドは使用できません。"

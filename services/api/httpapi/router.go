@@ -32,6 +32,11 @@ type Entries interface {
 	CreateBatch(ctx context.Context, ownerID string, drafts []store.EntryDraft, now time.Time) (store.Batch, []store.Entry, error)
 	UpdateEntry(ctx context.Context, ownerID, id string, p store.EntryPatch) (store.Entry, error)
 	TrashEntry(ctx context.Context, ownerID, id string, now time.Time) error
+	ListTrashed(ctx context.Context, ownerID string, after *store.Cursor, limit int) ([]store.TrashedEntry, error)
+	RestoreEntry(ctx context.Context, ownerID, id string) (store.Entry, error)
+	PurgeEntry(ctx context.Context, ownerID, id string) error
+	EmptyTrash(ctx context.Context, ownerID string) (int, error)
+	SetShared(ctx context.Context, ownerID, id string, shared bool, now time.Time) (store.Entry, error)
 }
 
 // Pinger checks that the database is reachable.
@@ -88,6 +93,12 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("POST /v1/batches", authed(createBatch(d.Entries, d.Now)))
 	mux.Handle("PATCH /v1/entries/{id}", authed(patchEntry(d.Entries)))
 	mux.Handle("DELETE /v1/entries/{id}", authed(deleteEntry(d.Entries, d.Now)))
+	mux.Handle("GET /v1/trash", authed(listTrash(d.Entries)))
+	mux.Handle("DELETE /v1/trash", authed(emptyTrash(d.Entries)))
+	mux.Handle("POST /v1/trash/{id}/restore", authed(restoreEntry(d.Entries)))
+	mux.Handle("DELETE /v1/trash/{id}", authed(purgeEntry(d.Entries)))
+	mux.Handle("PUT /v1/entries/{id}/share", authed(shareEntry(d.Entries, d.Now, true)))
+	mux.Handle("DELETE /v1/entries/{id}/share", authed(shareEntry(d.Entries, d.Now, false)))
 
 	return wrap(d, jsonMuxErrors(mux))
 }
