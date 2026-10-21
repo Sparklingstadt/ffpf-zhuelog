@@ -125,7 +125,11 @@ func listEntries(e Entries) http.Handler {
 			writeBadRequest(w)
 			return
 		}
-		entries, err := e.ListEntries(r.Context(), principalFrom(r.Context()).OwnerID, after, limit+1)
+		owner, ok := readOwner(w, r)
+		if !ok {
+			return
+		}
+		entries, err := e.ListEntries(r.Context(), owner, after, limit+1)
 		if err != nil {
 			writeServiceError(w, r, err)
 			return
@@ -159,7 +163,11 @@ func getEntry(e Entries) http.Handler {
 		if !ok {
 			return
 		}
-		entry, err := e.GetEntry(r.Context(), principalFrom(r.Context()).OwnerID, id)
+		owner, ok := readOwner(w, r)
+		if !ok {
+			return
+		}
+		entry, err := e.GetEntry(r.Context(), owner, id)
 		if err != nil {
 			writeServiceError(w, r, err)
 			return

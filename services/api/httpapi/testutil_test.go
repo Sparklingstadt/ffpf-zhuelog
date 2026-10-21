@@ -22,6 +22,7 @@ type fakeAuth struct {
 	refresh      func(ctx context.Context, token string) (auth.TokenPair, error)
 	logout       func(ctx context.Context, token string) error
 	authenticate func(ctx context.Context, accessToken string) (auth.Principal, error)
+	changePass   func(ctx context.Context, p auth.Principal, current, next, confirm string) error
 }
 
 type errUnexpectedCall struct{ name string }
@@ -61,6 +62,13 @@ func (f *fakeAuth) Authenticate(ctx context.Context, accessToken string) (auth.P
 		return auth.Principal{}, errUnexpectedCall{"Authenticate"}
 	}
 	return f.authenticate(ctx, accessToken)
+}
+
+func (f *fakeAuth) ChangePassword(ctx context.Context, p auth.Principal, current, next, confirm string) error {
+	if f.changePass == nil {
+		return errUnexpectedCall{"ChangePassword"}
+	}
+	return f.changePass(ctx, p, current, next, confirm)
 }
 
 type fakePinger struct{ err error }
