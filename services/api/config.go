@@ -20,7 +20,10 @@ type Config struct {
 	GitHubWebClientID     string
 	GitHubWebClientSecret string
 	GitHubWebRedirectURI  string
-	AllowedGitHubIDs      string // comma-separated numeric GitHub user IDs of admins
+	// WebProxySecret is optional: the secret the Next.js web server presents
+	// so the API trusts the end-user IP it forwards.
+	WebProxySecret   []byte
+	AllowedGitHubIDs string // comma-separated numeric GitHub user IDs of admins
 }
 
 // LoadConfig reads and validates the configuration. Secret values are never
@@ -74,6 +77,12 @@ func LoadConfig(getenv func(string) string) (Config, error) {
 	}
 	if webSet != 0 && webSet != 3 {
 		return Config{}, errors.New("GITHUB_WEB_CLIENT_ID, GITHUB_WEB_CLIENT_SECRET and GITHUB_WEB_REDIRECT_URI must be set together")
+	}
+	if proxySecret := get("API_WEB_PROXY_SECRET"); proxySecret != "" {
+		if len(proxySecret) < minJWTSecretBytes {
+			return Config{}, fmt.Errorf("API_WEB_PROXY_SECRET must be at least %d bytes", minJWTSecretBytes)
+		}
+		cfg.WebProxySecret = []byte(proxySecret)
 	}
 	if cfg.AllowedGitHubIDs, err = required("AUTH_ALLOWED_GITHUB_IDS"); err != nil {
 		return Config{}, err

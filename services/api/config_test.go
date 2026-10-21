@@ -122,3 +122,26 @@ func TestLoadConfigGitHubWebAllOrNone(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadConfigWebProxySecret(t *testing.T) {
+	cfg, err := LoadConfig(getenvFrom(validEnv()))
+	if err != nil || len(cfg.WebProxySecret) != 0 {
+		t.Fatalf("unset: err = %v, secret len = %d, want none", err, len(cfg.WebProxySecret))
+	}
+
+	env := validEnv()
+	env["API_WEB_PROXY_SECRET"] = "  " + strings.Repeat("p", 32) + "  "
+	cfg, err = LoadConfig(getenvFrom(env))
+	if err != nil || string(cfg.WebProxySecret) != strings.Repeat("p", 32) {
+		t.Fatalf("32 bytes: err = %v, want trimmed secret accepted", err)
+	}
+
+	env["API_WEB_PROXY_SECRET"] = strings.Repeat("p", 31)
+	_, err = LoadConfig(getenvFrom(env))
+	if err == nil || err.Error() != "API_WEB_PROXY_SECRET must be at least 32 bytes" {
+		t.Fatalf("31 bytes: err = %v, want the length error", err)
+	}
+	if strings.Contains(err.Error(), env["API_WEB_PROXY_SECRET"]) {
+		t.Fatal("error leaks the secret value")
+	}
+}

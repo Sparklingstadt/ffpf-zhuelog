@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"crypto/subtle"
 	"log/slog"
 	"net"
 	"net/http"
@@ -212,12 +213,30 @@ func (r *RateLimiter) Allow(key string) bool {
 	return true
 }
 
-// clientKey identifies the caller for rate limiting and sign-in throttling: the
+// clientKeyFunc returns the function that identifies the caller for rate limiting and sign-in throttling: the
 // last value of X-Forwarded-For if present, otherwise the host part of
 // RemoteAddr. On Vercel the platform overwrites X-Forwarded-For with the
 // client's IP and drops any value the client sent, so the last value is
 // trustworthy there; behind another proxy, only its appended value is.
-func clientKey(r *http.Request) string {
+//
+// When the Next.js web server is configured with the shared proxy secret, it
+// forwards the end user's IP in X-Zhuelog-Client-IP, since every browser
+// request then reaches this API from the web server itself. That header is
+// trusted only when X-Zhuelog-Proxy-Secret matches secret; with an empty
+// secret it is never trusted.
+func clientKeyFunc(secret []byte) func(*http.Request) string {
+	return func(r *http.Request) string {
+		if len(secret) > 0 &&
+			subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Zhuelog-Proxy-Secret")), secret) == 1 {
+			if ip := strings.TrimSpace(r.Header.Get("X-Zhuelog-Client-IP")); ip != "" {
+				return ip
+			}
+		}
+		return peerKey(r)
+	}
+}
+
+func peerKey(r *http.Request) string {
 	// A client can send several X-Forwarded-For lines; only the last value of
 	// the last line comes from the platform or our own proxy.
 	if vals := r.Header.Values("X-Forwarded-For"); len(vals) > 0 {
@@ -236,9 +255,9 @@ func clientKey(r *http.Request) string {
 	return host
 }
 
-func rateLimit(rl *RateLimiter, next http.Handler) http.Handler {
+func rateLimit(rl *RateLimiter, key func(*http.Request) string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !rl.Allow(clientKey(r)) {
+		if !rl.Allow(key(r)) {
 			writeError(w, http.StatusTooManyRequests, codeRateLimited, msgRateLimited)
 			return
 		}

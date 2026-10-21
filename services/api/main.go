@@ -97,6 +97,8 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 		Hasher:   passwords,
 		DB:       db,
 		Logger:   logger,
+
+		WebProxySecret: cfg.WebProxySecret,
 	})
 
 	ln, err := net.Listen("tcp", ":"+cfg.Port)

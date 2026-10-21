@@ -86,6 +86,9 @@ type Deps struct {
 	DB       Pinger
 	Logger   *slog.Logger
 	Now      func() time.Time
+	// WebProxySecret, when non-empty, lets the Next.js web server forward the
+	// end user's IP (see clientKeyFunc).
+	WebProxySecret []byte
 }
 
 const (
@@ -134,7 +137,8 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	public := func(pattern string, h http.Handler) { handle(route{pattern: pattern}, h) }
 	// limited applies the per-client rate limit.
 	limiter := NewRateLimiter(authRateLimit, authRateWindow, d.Now)
-	limited := func(h http.Handler) http.Handler { return rateLimit(limiter, h) }
+	clientKey := clientKeyFunc(d.WebProxySecret)
+	limited := func(h http.Handler) http.Handler { return rateLimit(limiter, clientKey, h) }
 	// authed requires a valid token and rejects ?user= with 400; the safe default.
 	authed := func(h http.Handler) http.Handler { return requireAuth(d.Auth, false, rejectUserParam(h)) }
 	// authedAllowUser requires a valid token and lets read handlers honour ?user=.
@@ -158,7 +162,7 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	public("GET /ping", ping())
 
 	public("POST /v1/auth/github", limited(loginGitHub(d.Auth)))
-	public("POST /v1/auth/password", limited(loginPassword(d.Auth)))
+	public("POST /v1/auth/password", limited(loginPassword(d.Auth, clientKey)))
 	public("POST /v1/auth/refresh", limited(refresh(d.Auth)))
 	public("POST /v1/auth/logout", limited(logout(d.Auth)))
 	public("POST /v1/auth/guest", limited(loginGuest(d.Auth)))

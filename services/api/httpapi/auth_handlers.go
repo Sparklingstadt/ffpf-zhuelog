@@ -89,7 +89,7 @@ func loginGitHub(a Auth) http.Handler {
 	})
 }
 
-func loginPassword(a Auth) http.Handler {
+func loginPassword(a Auth, clientKey func(*http.Request) string) http.Handler {
 	type request struct {
 		LoginID  jsonString `json:"loginId"`
 		Password jsonString `json:"password"`
