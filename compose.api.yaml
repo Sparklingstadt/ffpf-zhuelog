@@ -1,0 +1,23 @@
+# Local database for trying the Go API (services/api). See docs/api-local.md.
+# It uses its own port so it never collides with compose.yaml or a host Postgres.
+name: zhuelog-api-local
+services:
+  api-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: zhuelog_api
+      POSTGRES_PASSWORD: local-api-only
+      POSTGRES_DB: zhuelog_api
+    ports:
+      # Reachable only from this machine.
+      - "127.0.0.1:55440:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zhuelog_api -d zhuelog_api"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - zhuelog_api_local_data:/var/lib/postgresql/data
+
+volumes:
+  zhuelog_api_local_data:
