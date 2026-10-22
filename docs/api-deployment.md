@@ -16,24 +16,25 @@ Web 用とは別の OAuth App を新しく作ります。GitHub の **Settings �
 
 控える値は Client ID と Client Secret の 2 つです（手順 3 で使います）。カスタム URL スキームは `GITHUB_MOBILE_REDIRECT_URI` にも同じ値を設定します。Go API は、リクエストの `redirectUri` がこの値と完全一致することを要求します。
 
+アプリがまだ無いときは、OAuth App を作らずに仮の値（例: Client ID `unused-mobile-client`、Client Secret `unused-mobile-secret`、`GITHUB_MOBILE_REDIRECT_URI` は `zhuelog://oauth/callback`）を入れて構いません。Go API は起動し、モバイルの GitHub ログインだけが失敗します（Web とパスワードのログインには影響しません）。アプリを作るときに本物の値に替えます。
+
 ## 2. Vercel プロジェクトを作る
 
-1. Vercel のダッシュボードで **Add New… → Project** を選び、このリポジトリ（`Sparklingstadt/ffpf-zhuelog`）を Import します。Web のプロジェクトとは別に、新しいプロジェクト（例: `zhuelog-api`）を作ります。
+1. Vercel のダッシュボードで **Add New… → Project** を選び、このリポジトリ（`Sparklingstadt/ffpf-zhuelog`）を Import します。Web のプロジェクトとは別に、新しいプロジェクト（本番は `ffpf-zhuelog-api`）を作ります。
 2. **Root Directory** に `services/api` を指定します。
 3. **Framework Preset** が `Go` になっていることを確かめます（`services/api/vercel.json` でも指定しています）。
-4. **Settings → Git → Ignored Build Step** に次を設定し、`services/api/` に変更が無いときはビルドを飛ばします（Root Directory が `services/api` なので、`.` がこのディレクトリを指します）。前回デプロイしたコミット（`VERCEL_GIT_PREVIOUS_SHA`）から今回までをまとめて比べるので、1 回の push に複数のコミットがあっても、途中のコミットの変更を見落としません（前回のデプロイが無いときは直前のコミットと比べます）。
-
-   ```bash
-   git diff --quiet "${VERCEL_GIT_PREVIOUS_SHA:-HEAD^}" HEAD -- .
-   ```
+4. **Settings → Deployment Protection** で **Vercel Authentication** を外します。新しいプロジェクトには最初から付いていて、付いたままだと Web のサーバーもアプリも API を呼べません（API はアプリ層の JWT で認証します）。
+5. **Settings → Build and Deployment → Root Directory** の **Skip deployments when there are no changes to the root directory or its dependencies** をオンにし、`services/api/` に変更が無いときはデプロイを飛ばします。Vercel のビルド環境には `.git` が無いので、`git diff` を使う Ignored Build Step は動きません（エラーになります）。
 
 ## 3. 環境変数
 
 **Settings → Environment Variables** に設定します。`PORT` は Vercel が設定するので不要です。
 
+ビルドのために `GOFLAGS` に `-buildvcs=false` を入れます（Production と Preview）。Vercel のビルド環境には `.git` が無く、`go build` がコミットの情報を埋め込めずに失敗するためです。
+
 | 名前                          | 内容                                                                                                             |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                | Neon の pooled 接続文字列（ホスト名に `-pooler` を含むもの）。`?schema=` は付けない                              |
+| `DATABASE_URL`                | Neon の pooled 接続文字列（ホスト名に `-pooler` を含むもの）。`?schema=` は付けない（下の注を参照）              |
 | `API_JWT_SECRET`              | アクセス JWT の HS256 鍵。`openssl rand -base64 48` で作る（32 バイト以上）。Auth.js の `AUTH_SECRET` とは別の値 |
 | `GITHUB_MOBILE_CLIENT_ID`     | モバイル用 GitHub OAuth App の Client ID                                                                         |
 | `GITHUB_MOBILE_CLIENT_SECRET` | モバイル用 GitHub OAuth App の Client Secret                                                                     |
@@ -43,6 +44,9 @@ Web 用とは別の OAuth App を新しく作ります。GitHub の **Settings �
 | `GITHUB_WEB_CLIENT_SECRET`    | 任意。Web 用 GitHub OAuth App の Client Secret                                                                   |
 | `GITHUB_WEB_REDIRECT_URI`     | 任意。`https://<Web のホスト>/api/auth/callback/github/go`                                                       |
 | `API_WEB_PROXY_SECRET`        | 任意。Web サーバーが共有する秘密。32 バイト以上（`openssl rand -base64 48`）                                     |
+
+- `DATABASE_URL` は、手で入れなくても、チームの **Storage** タブで Web が使っている Neon のストアを開き、**Connect Project** から Go API のプロジェクトをつなぐと入ります（pooled の接続文字列です。`channel_binding=require` が付いていても Go API はそのまま使えます）。
+- `GITHUB_WEB_CLIENT_SECRET` は、Vercel に入れた値を読み戻せないので、GitHub の OAuth App の画面で **Generate a new client secret** を押して新しく作ります。今の Web（Auth.js）のログインが古い Secret を使っているあいだは、古い Secret を消さないでください。
 
 **Production と Preview で値を分けてください。**
 
