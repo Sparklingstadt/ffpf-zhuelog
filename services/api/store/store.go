@@ -69,8 +69,8 @@ func parseConfig(rawURL string) (*pgxpool.Config, error) {
 	return cfg, nil
 }
 
-// secureURL mirrors the web's securePostgresConnectionString
-// (src/infrastructure/config/postgres-connection.ts): for a host other than
+// secureURL mirrors securePostgresConnectionString
+// (prisma/postgres-connection.ts): for a host other than
 // localhost, 127.0.0.1 or ::1, or when sslmode is prefer, require or
 // verify-ca, it forces sslmode=verify-full and drops the libpq-compat "ssl"
 // and "uselibpqcompat" params.

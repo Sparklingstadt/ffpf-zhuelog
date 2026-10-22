@@ -206,6 +206,21 @@ test("signed-out page requests go to /signin with the callback path", async () =
   );
 });
 
+test("pages see the current path in x-zhuelog-path, never the browser's value", async () => {
+  const h = harness(async () => tokens);
+  await goProxy(
+    request("/logs/2026/10/22?user=o1", {
+      cookie: "zl_access=a",
+      headers: { "x-zhuelog-path": "//evil.test" },
+    }),
+    h.deps,
+  );
+  assert.equal(
+    h.forwarded()?.get("x-zhuelog-path"),
+    "/logs/2026/10/22?user=o1",
+  );
+});
+
 test("signed-out /api requests get a 401 JSON that is not cached", async () => {
   const h = harness(async () => tokens);
   const response = await goProxy(request("/api/notes"), h.deps);

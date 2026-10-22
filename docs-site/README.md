@@ -11,8 +11,8 @@ actions:
     link: /reference/
     type: secondary
 features:
-  - title: Web と同じ DB・同じ規則
-    details: 本番の Neon を Web（Next.js）と共有し、権限・入力の検証・エラーの文言を Web と同じにしています。
+  - title: Web も同じ API を使う
+    details: Web（Next.js）も、ログインと学習ノートの読み書きをこの API で行います。DB を読み書きするのは API だけです。
   - title: アプリ向けのトークン
     details: GitHub（PKCE）とパスワードでログインし、15 分のアクセストークンと 30 日のリフレッシュトークンで呼び出します。
   - title: 依存の少ない Go
@@ -54,30 +54,30 @@ services/api/
 
 依存は `github.com/jackc/pgx/v5`、`github.com/golang-jwt/jwt/v5`、`golang.org/x/crypto`（scrypt）だけで、ルーターやフレームワークは使いません。ログは `log/slog` の JSON 形式で、トークン・認可コード・パスワード・ノートの本文・CSV の中身はログに出しません。
 
-## Web と DB を共有する
+## Web と API と DB
 
-API は Web と別のプロセスですが、DB は本番の Neon を **そのまま共有** します。
+Web（Next.js）は DB に直接つながりません。ログインも学習ノートの読み書きも、この API を通して行います。DB は本番の Neon で、読み書きするのは API だけです。
 
 - スキーマの管理は Prisma に一本化しています。Go は既存のテーブルを SQL で読み書きするだけで、テーブルの追加（API 用の `ApiRefreshToken` など）も Prisma のマイグレーションで行います。
-- Go が作る行の ID は Prisma と同じ cuid 形式なので、Web が作った行と区別がつきません。
-- 権限と結果が Web と食い違わないよう、Web と同じ条件（`ownerId`・`deletedAt`・`sharedAt` など）で読み書きします。日付の区切り（日本時間）、会員一覧の並び（ICU の日本語照合順）、CSV の解析、入力の検証の文言も Web に合わせています。
-- 会員のパスワードのハッシュ（`scrypt:N:r:p:salt:key`）は Web と同じ形式です。Web で作った会員はそのまま API でログインでき、API で変えたパスワードは Web でも使えます。パスワードを変えると `sessionVersion` が上がり、Web と API の既存のログインがどちらも無効になります。
-- パスワードログインの試行回数（`SignInThrottle` テーブル）も Web と共有します。同じクライアントからの Web と API の試行は、合わせて数えられます。
+- Go が作る行の ID は Prisma と同じ cuid 形式なので、以前 Web が作った行と区別がつきません。
+- 日付の区切り（日本時間）、会員一覧の並び（ICU の日本語照合順）、CSV の解析、入力の検証の文言は、以前の Web と同じにしてあります。
+- 会員のパスワードのハッシュ（`scrypt:N:r:p:salt:key`）は、以前 Web で作った会員と同じ形式です。そのまま API でログインできます。パスワードを変えると `sessionVersion` が上がり、既存のログインがすべて無効になります。
+- パスワードログインの試行回数は `SignInThrottle` テーブルで数えます。Web からのログインも API を通るので、同じクライアントからの Web とアプリの試行は、合わせて数えられます。
 
 ### 環境変数
 
-| 名前                                                                            | 内容                                                                                                                                                                                     |
-| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PORT`                                                                          | 待ち受けポート（既定 8080）                                                                                                                                                              |
-| `DATABASE_URL`                                                                  | Neon の接続文字列（pooled）                                                                                                                                                              |
-| `API_JWT_SECRET`                                                                | アクセストークンの HS256 鍵。32 バイト以上。Auth.js の `AUTH_SECRET` とは別の値                                                                                                          |
-| `GITHUB_MOBILE_CLIENT_ID` / `GITHUB_MOBILE_CLIENT_SECRET`                       | モバイル用の GitHub OAuth App（Web 用とは別）                                                                                                                                            |
-| `GITHUB_MOBILE_REDIRECT_URI`                                                    | アプリのカスタム URL スキーム。リクエストの `redirectUri` と完全一致を要求します                                                                                                         |
-| `GITHUB_WEB_CLIENT_ID` / `GITHUB_WEB_CLIENT_SECRET` / `GITHUB_WEB_REDIRECT_URI` | 任意。Web 用の GitHub OAuth App。3 つとも設定するか、すべて空。`redirectUri` が完全一致した方の OAuth App で交換します（Web の callback は `https://<Web>/api/auth/callback/github/go`） |
-| `API_WEB_PROXY_SECRET`                                                          | 任意。32 バイト以上。Web が `X-Zhuelog-Proxy-Secret` で渡す秘密。一致したときだけ `X-Zhuelog-Client-IP` を利用者の IP として信頼します                                                   |
-| `AUTH_ALLOWED_GITHUB_IDS`                                                       | Web と同じ admin の許可リスト。GitHub の数値のユーザー ID をカンマ区切りで並べる（前後の空白は除き、数字以外の値は無視）                                                                 |
+| 名前                                                                            | 内容                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `PORT`                                                                          | 待ち受けポート（既定 8080）                                                                                                                                                                                        |
+| `DATABASE_URL`                                                                  | Neon の接続文字列（pooled）                                                                                                                                                                                        |
+| `API_JWT_SECRET`                                                                | アクセストークンの HS256 鍵。32 バイト以上                                                                                                                                                                         |
+| `GITHUB_MOBILE_CLIENT_ID` / `GITHUB_MOBILE_CLIENT_SECRET`                       | モバイル用の GitHub OAuth App（Web 用とは別）                                                                                                                                                                      |
+| `GITHUB_MOBILE_REDIRECT_URI`                                                    | アプリのカスタム URL スキーム。リクエストの `redirectUri` と完全一致を要求します                                                                                                                                   |
+| `GITHUB_WEB_CLIENT_ID` / `GITHUB_WEB_CLIENT_SECRET` / `GITHUB_WEB_REDIRECT_URI` | Web 用の GitHub OAuth App（Web の GitHub ログインに必要）。3 つとも設定するか、すべて空。`redirectUri` が完全一致した方の OAuth App で交換します（Web の callback は `https://<Web>/api/auth/callback/github/go`） |
+| `API_WEB_PROXY_SECRET`                                                          | 32 バイト以上。Web が `X-Zhuelog-Proxy-Secret` で渡す秘密（Web から使うときは必要）。一致したときだけ `X-Zhuelog-Client-IP` を利用者の IP として信頼します                                                         |
+| `AUTH_ALLOWED_GITHUB_IDS`                                                       | admin の許可リスト。GitHub の数値のユーザー ID をカンマ区切りで並べる（前後の空白は除き、数字以外の値は無視）                                                                                                      |
 
-`PORT`・`GITHUB_WEB_*`・`API_WEB_PROXY_SECRET` 以外はすべて必須で、無い・不正なときは起動時に終了します。
+`PORT`・`GITHUB_WEB_*`・`API_WEB_PROXY_SECRET` 以外はすべて必須で、無い・不正なときは起動時に終了します。`GITHUB_WEB_*` と `API_WEB_PROXY_SECRET` は API の起動には要りませんが、Web から使うときは必要です。
 
 ## 関連する文書
 

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { clientAddress } from "../auth/client-address";
 import { GoApiError, type GoTokens } from "./client";
+import { CURRENT_PATH_HEADER } from "./current-path";
 import {
   ACCESS_COOKIE,
   clearedSessionCookies,
@@ -24,6 +25,11 @@ export async function goProxy(
   deps: GoProxyDeps,
 ): Promise<NextResponse> {
   const requestHeaders = new Headers(request.headers);
+  // Overwrites whatever the browser sent; see current-path.ts.
+  requestHeaders.set(
+    CURRENT_PATH_HEADER,
+    `${request.nextUrl.pathname}${request.nextUrl.search}`,
+  );
   // Public routes pass the gate anyway, so they never spend a refresh.
   const responseCookies = isPublicRoute(request.nextUrl.pathname)
     ? []
@@ -90,8 +96,8 @@ function isPublicRoute(pathname: string): boolean {
   return pathname === "/signin" || pathname.startsWith("/api/auth/");
 }
 
-// Same rules as the Auth.js authorized callback. Only checks that a session
-// cookie exists; pages confirm it with GET /v1/me. Returns null to pass.
+// Only checks that a session cookie exists; pages confirm it with
+// GET /v1/me. Returns null to pass.
 function gate(request: NextRequest, signedIn: boolean): NextResponse | null {
   const pathname = request.nextUrl.pathname;
   if (isPublicRoute(pathname) || signedIn) return null;
@@ -111,6 +117,6 @@ function gate(request: NextRequest, signedIn: boolean): NextResponse | null {
     "callbackUrl",
     `${pathname}${request.nextUrl.search}`,
   );
-  // 302, as Response.redirect gives on the Auth.js path.
+  // 302, as Response.redirect gives.
   return NextResponse.redirect(signInUrl, 302);
 }

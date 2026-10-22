@@ -1,17 +1,20 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 
 import {
   getCurrentAdminUser,
   getCurrentMemberUser,
-  passwordAccountUseCases,
-  signOutTo,
+  memberAccounts,
 } from "@/composition/identity-container";
+import { clientAddress } from "@/infrastructure/auth/client-address";
+import { GoApiError } from "@/infrastructure/go-api/client";
+import { signOutViaGo } from "@/infrastructure/go-api/go-api-session";
+import { goFailureMessage } from "@/presentation/controllers/action-state";
 import {
-  accountActionErrorMessage,
-  changePasswordOutcomeMessage,
-  isExpectedAccountActionError,
+  accountForbiddenMessage,
+  accountNotFoundMessage,
 } from "@/presentation/presenters/account-action-errors";
 
 export type AccountActionState =
@@ -26,21 +29,33 @@ export type AccountActionState =
 
 const forbidden = {
   status: "error" as const,
-  message: "この操作を行う権限がありません。再度ログインしてください。",
+  message: accountForbiddenMessage,
 };
+
+type FailedState = { status: "error"; message: string };
 
 function field(formData: FormData, name: string) {
   const value = formData.get(name);
   return typeof value === "string" ? value : "";
 }
 
-// Logs a fixed code only: the error, its message and the form data may carry
-// a plaintext password.
-function failure(error: unknown): AccountActionState {
-  if (!isExpectedAccountActionError(error)) {
-    console.error("PASSWORD_ACCOUNT_ACTION_FAILED");
+// Turns a failed Go call into the form's error. Anything that is not a
+// GoApiError (including Next's redirect to /signin) is rethrown. Only fixed
+// codes are logged: the form data carries plaintext passwords.
+async function attemptAccountCall<T>(
+  code: string,
+  run: () => Promise<T>,
+): Promise<{ ok: true; value: T } | { ok: false; state: FailedState }> {
+  try {
+    return { ok: true, value: await run() };
+  } catch (error) {
+    if (!(error instanceof GoApiError)) throw error;
+    if (error.status === 403) return { ok: false, state: forbidden };
+    return {
+      ok: false,
+      state: { status: "error", message: goFailureMessage(code, error) },
+    };
   }
-  return { status: "error", message: accountActionErrorMessage(error) };
 }
 
 // The mutation has already succeeded, and the one-time password must still
@@ -59,23 +74,18 @@ export async function createPasswordAccountAction(
 ): Promise<AccountActionState> {
   if (!(await getCurrentAdminUser())) return forbidden;
 
-  let result;
-  try {
-    result = await passwordAccountUseCases.create.execute({
-      loginId: field(formData, "loginId"),
-      displayName: field(formData, "displayName"),
-      password: field(formData, "password"),
-    });
-  } catch (error) {
-    return failure(error);
-  }
+  const result = await attemptAccountCall(
+    "PASSWORD_ACCOUNT_CREATE_FAILED",
+    () =>
+      memberAccounts.createAccount({
+        loginId: field(formData, "loginId"),
+        displayName: field(formData, "displayName"),
+        password: field(formData, "password"),
+      }),
+  );
+  if (!result.ok) return result.state;
   refreshAccountList();
-  return {
-    status: "success",
-    loginId: result.account.loginId,
-    password: result.password,
-    generated: result.generated,
-  };
+  return { status: "success", ...result.value };
 }
 
 export async function resetPasswordAccountPasswordAction(
@@ -85,50 +95,40 @@ export async function resetPasswordAccountPasswordAction(
 ): Promise<AccountActionState> {
   if (!(await getCurrentAdminUser())) return forbidden;
 
-  let result;
-  try {
-    result = await passwordAccountUseCases.reset.execute(
-      accountId,
-      field(formData, "password"),
-    );
-  } catch (error) {
-    return failure(error);
-  }
+  const result = await attemptAccountCall("PASSWORD_ACCOUNT_RESET_FAILED", () =>
+    memberAccounts.resetPassword(accountId, field(formData, "password")),
+  );
+  if (!result.ok) return result.state;
+  if (!result.value)
+    return { status: "error", message: accountNotFoundMessage };
   refreshAccountList();
-  return { status: "success", ...result };
+  return { status: "success", ...result.value };
 }
 
 export type ChangePasswordState =
   { status: "idle" } | { status: "error"; message: string };
-
-function changePasswordFailure(error: unknown): ChangePasswordState {
-  if (!isExpectedAccountActionError(error)) {
-    console.error("PASSWORD_CHANGE_FAILED");
-  }
-  return { status: "error", message: accountActionErrorMessage(error) };
-}
 
 export async function changeOwnPasswordAction(
   _previousState: ChangePasswordState,
   formData: FormData,
 ): Promise<ChangePasswordState> {
   const user = await getCurrentMemberUser();
-  if (user?.role !== "member" || !user.accountId) return forbidden;
+  if (user?.role !== "member") return forbidden;
 
-  let outcome;
-  try {
-    outcome = await passwordAccountUseCases.changeOwn.execute(user.accountId, {
-      currentPassword: field(formData, "currentPassword"),
-      newPassword: field(formData, "newPassword"),
-      confirmPassword: field(formData, "confirmPassword"),
-    });
-  } catch (error) {
-    return changePasswordFailure(error);
-  }
-  if (outcome !== "changed") {
-    return { status: "error", message: changePasswordOutcomeMessage(outcome) };
-  }
-  // Runs outside the try/catch: signOut ends by throwing NEXT_REDIRECT.
-  await signOutTo("/signin?notice=password-changed");
+  const clientIp = clientAddress(await headers());
+  const result = await attemptAccountCall("PASSWORD_CHANGE_FAILED", () =>
+    memberAccounts.changeOwnPassword(
+      {
+        currentPassword: field(formData, "currentPassword"),
+        newPassword: field(formData, "newPassword"),
+        confirmPassword: field(formData, "confirmPassword"),
+      },
+      clientIp,
+    ),
+  );
+  if (!result.ok) return result.state;
+  // Go has revoked every session of the member. Runs outside any try/catch:
+  // signOutViaGo ends by throwing NEXT_REDIRECT.
+  await signOutViaGo("/signin?notice=password-changed");
   return { status: "idle" };
 }

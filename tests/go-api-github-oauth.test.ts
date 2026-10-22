@@ -134,12 +134,11 @@ function callback(query: string, cookie?: string) {
   );
 }
 
-function deps(result: GoTokens | Error, enabled = true) {
+function deps(result: GoTokens | Error) {
   const calls: LoginCall[] = [];
   return {
     calls,
     deps: {
-      isEnabled: () => enabled,
       login: async (...args: LoginCall) => {
         calls.push(args);
         if (result instanceof Error) throw result;
@@ -265,15 +264,4 @@ test("a 403 from the Go API is AccessDenied; other failures are OAuthCallbackErr
     );
     assertOAuthCleared(response);
   }
-});
-
-test("the callback is 404 without GO_API_URL", async () => {
-  const start = createOAuthStart("/");
-  const { calls, deps: d } = deps(tokens, false);
-  const response = await handleGitHubCallback(
-    callback(`?code=c&state=${start.state}`, start.cookieValue),
-    d,
-  );
-  assert.equal(response.status, 404);
-  assert.equal(calls.length, 0);
 });

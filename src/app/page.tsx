@@ -12,20 +12,18 @@ import {
   showsRecords,
   type RecordOwner,
 } from "@/application/identity/use-cases/resolve-record-owner";
-import { learningUseCases } from "@/composition/learning-container";
-import { loadRecordOwnerView } from "@/composition/record-owner-options";
+import { learningNotes } from "@/composition/learning-container";
 import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
+import { GoApiError } from "@/infrastructure/go-api/client";
+import type { ViewedOwner } from "@/infrastructure/go-api/learning-gateway";
+import { loadRecordOwnerView } from "@/composition/record-owner-options";
 import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { PageShell } from "@/presentation/components/layout/page-shell";
 import { CsvFormatGuide } from "@/presentation/components/learning/csv-format-guide";
 import { CsvImportForm } from "@/presentation/components/learning/csv-import-form";
 import { LearningEntryCard } from "@/presentation/components/learning/learning-entry-card";
 import { RecordOwnerControls } from "@/presentation/components/records/record-owner-controls";
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-} from "@/presentation/components/ui/alert";
+import { Alert, AlertDescription } from "@/presentation/components/ui/alert";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
 import {
@@ -36,7 +34,12 @@ import {
   CardTitle,
 } from "@/presentation/components/ui/card";
 import { requireSignedInOwner } from "@/presentation/guards/record-owner-guard";
+import { genericErrorMessage } from "@/presentation/presenters/generic-error-message";
 import { getLogDateHref } from "@/presentation/presenters/log-date-presenter";
+import {
+  recentEntriesTotal,
+  recentEntryNumberLabel,
+} from "@/presentation/presenters/recent-entry-number";
 import {
   requestedRecordOwner,
   withRecordOwner,
@@ -44,25 +47,20 @@ import {
 
 export const dynamic = "force-dynamic";
 
-async function loadEntries(ownerId: string): Promise<{
+// Go being unavailable (or failing) still shows the home with a notice. Any
+// other error, including the redirect to /signin, is rethrown.
+async function loadEntries(owner: ViewedOwner): Promise<{
   entries: LearningEntry[];
   total: number;
-  databaseError: string | null;
+  loadFailed: boolean;
 }> {
   try {
-    const result = await learningUseCases.listRecentEntries.execute(
-      ownerId,
-      100,
-    );
-    return { ...result, databaseError: null };
-  } catch {
-    console.error("LEARNING_ENTRIES_UNAVAILABLE");
-    return {
-      entries: [],
-      total: 0,
-      databaseError:
-        "データベースに接続できません。READMEの手順でPostgreSQLを起動し、マイグレーションを実行してください。",
-    };
+    const result = await learningNotes.listRecent(owner, 100);
+    return { ...result, loadFailed: false };
+  } catch (error) {
+    if (!(error instanceof GoApiError)) throw error;
+    console.error("LEARNING_ENTRIES_UNAVAILABLE", error.status, error.code);
+    return { entries: [], total: 0, loadFailed: true };
   }
 }
 
@@ -150,23 +148,25 @@ export default async function Home({ searchParams }: HomeProps) {
     );
   }
 
-  const [{ entries, total, databaseError }, view] = await Promise.all([
-    loadEntries(owner.ownerId),
+  const [{ entries, total, loadFailed }, view] = await Promise.all([
+    loadEntries(owner),
     loadRecordOwnerView(user, owner),
   ]);
   const ownNotes = owner.kind === "self";
 
   return (
     <PageShell user={user} width="6xl" spacious>
-      <HomeHeader owner={owner} total={total} />
+      <HomeHeader
+        owner={owner}
+        total={recentEntriesTotal(total, entries.length)}
+      />
 
       <RecordOwnerControls owner={owner} view={view} path="/" />
 
-      {databaseError ? (
+      {loadFailed ? (
         <Alert variant="destructive">
           <Database />
-          <AlertTitle>PostgreSQLの準備が必要です</AlertTitle>
-          <AlertDescription>{databaseError}</AlertDescription>
+          <AlertDescription>{genericErrorMessage}</AlertDescription>
         </Alert>
       ) : null}
 
@@ -207,7 +207,11 @@ export default async function Home({ searchParams }: HomeProps) {
                 <LearningEntryCard
                   key={entry.id}
                   entry={entry}
-                  numberLabel={`#${total - index}`}
+                  numberLabel={recentEntryNumberLabel(
+                    total,
+                    entries.length,
+                    index,
+                  )}
                   href={withRecordOwner(getLogDateHref(entry.createdAt), owner)}
                   linkLabel="この日の一覧"
                 />
@@ -231,7 +235,7 @@ export default async function Home({ searchParams }: HomeProps) {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <CsvImportForm disabled={Boolean(databaseError)} />
+                <CsvImportForm disabled={loadFailed} />
                 <CsvFormatGuide />
               </CardContent>
             </Card>

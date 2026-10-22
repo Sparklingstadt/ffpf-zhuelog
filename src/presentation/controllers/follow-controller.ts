@@ -1,11 +1,11 @@
-import type { FollowResult } from "@/application/social/use-cases/follow-member";
 import type { AppRole } from "@/domain/identity/entities/authenticated-user";
+import type { FollowResult } from "@/infrastructure/go-api/social-gateway";
 import { z } from "zod";
 
 import {
   actionSuccess,
   actionUnauthorized,
-  attemptAction,
+  attemptGoAction,
   noteIdSchema,
   type ActionState,
 } from "@/presentation/controllers/action-state";
@@ -38,19 +38,20 @@ export async function handleFollow(
   const followerId = user.githubId;
   const followeeId = followeeIdSchema.safeParse(formData.get("followeeId"));
   if (!followeeId.success) return notFound;
-  return attemptAction("FOLLOW_FAILED", async () => {
+  return attemptGoAction("FOLLOW_FAILED", async () => {
     const result = await dependencies.run(followerId, followeeId.data);
     if (result === "followed") return actionSuccess;
     return result === "self" ? selfFollow : notFound;
   });
 }
 
-// Not following any more is what the user asked for, so `false` is a success.
+// Not following any more is what the user asked for, so unfollowing someone
+// not followed is a success too.
 export async function handleUnfollow(
   formData: FormData,
   dependencies: {
     getMember: Member;
-    run: (followerId: string, followeeId: string) => Promise<boolean>;
+    run: (followerId: string, followeeId: string) => Promise<void>;
   },
 ): Promise<ActionState> {
   const user = await dependencies.getMember();
@@ -58,7 +59,7 @@ export async function handleUnfollow(
   const followerId = user.githubId;
   const followeeId = followeeIdSchema.safeParse(formData.get("followeeId"));
   if (!followeeId.success) return notFound;
-  return attemptAction("FOLLOW_FAILED", async () => {
+  return attemptGoAction("FOLLOW_FAILED", async () => {
     await dependencies.run(followerId, followeeId.data);
     return actionSuccess;
   });
@@ -78,7 +79,7 @@ export async function handleShare(
   const id = noteIdSchema.safeParse(formData.get("id"));
   const shared = sharedSchema.safeParse(formData.get("shared"));
   if (!id.success || !shared.success) return notFound;
-  return attemptAction("SHARE_FAILED", async () =>
+  return attemptGoAction("SHARE_FAILED", async () =>
     (await dependencies.run(ownerId, id.data, shared.data === "true"))
       ? actionSuccess
       : notFound,

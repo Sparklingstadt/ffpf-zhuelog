@@ -40,10 +40,10 @@ export function isSecureRequest(requestHeaders: Headers): boolean {
   );
 }
 
-// Must match passwordSignInFailureUrl for CredentialsSignin, so both sign-in
-// paths show the same single message. 400 (malformed input), 401 (wrong
-// credentials) and 429 (too many attempts) are not told apart, and the input
-// is never echoed back.
+// One message for every rejected password sign-in: 400 (malformed input),
+// 401 (wrong credentials) and 429 (too many attempts) are not told apart, and
+// the input is never echoed back. The sign-in page shows it for the
+// CredentialsSignin key.
 export function goPasswordFailureUrl(
   error: unknown,
   redirectTo: string,

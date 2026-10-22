@@ -182,6 +182,17 @@ func (s *Store) ListEntries(ctx context.Context, ownerID string, after *Cursor, 
 	return entries, nil
 }
 
+// CountEntries returns how many of the owner's entries are not in the trash.
+func (s *Store) CountEntries(ctx context.Context, ownerID string) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM "LearningEntry" WHERE "ownerId" = $1 AND "deletedAt" IS NULL`, ownerID).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("store: count entries: %w", err)
+	}
+	return n, nil
+}
+
 // GetEntry returns one of the owner's entries that is not in the trash, or
 // ErrNotFound.
 func (s *Store) GetEntry(ctx context.Context, ownerID, id string) (Entry, error) {

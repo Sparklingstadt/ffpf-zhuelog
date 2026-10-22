@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { clientAddress } from "@/infrastructure/auth/client-address";
-import { isGoAuthEnabled } from "@/infrastructure/config/environment";
 import {
   GoApiError,
   loginGitHub,
@@ -24,7 +23,6 @@ import {
 import { getSafeCallbackPath } from "@/presentation/http/safe-callback-path";
 
 export type GitHubCallbackDeps = {
-  isEnabled: () => boolean;
   login: (
     code: string,
     codeVerifier: string,
@@ -34,7 +32,6 @@ export type GitHubCallbackDeps = {
 };
 
 const defaultDeps: GitHubCallbackDeps = {
-  isEnabled: isGoAuthEnabled,
   login: loginGitHub,
 };
 
@@ -47,8 +44,6 @@ export async function handleGitHubCallback(
   request: NextRequest,
   deps: GitHubCallbackDeps = defaultDeps,
 ): Promise<Response> {
-  if (!deps.isEnabled()) return new Response(null, { status: 404 });
-
   const origin = publicOrigin(requestOrigin(request.headers));
   const secure =
     isSecureRequest(request.headers) || request.nextUrl.protocol === "https:";

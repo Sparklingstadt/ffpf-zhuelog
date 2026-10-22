@@ -3,8 +3,6 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  authMode,
-  authSecret,
   baseURL,
   databaseUrl,
   goApiURL,
@@ -16,25 +14,15 @@ async function main() {
   // Explicit values take precedence over .env.local/.env.production.local.
   const env: NodeJS.ProcessEnv = {
     ...process.env,
+    // For prisma migrate deploy; the web itself reads no database.
     DATABASE_URL: databaseUrl,
-    AUTH_SECRET: authSecret(),
     AUTH_URL: baseURL,
-    NEXTAUTH_URL: baseURL,
-    NEXTAUTH_SECRET: authSecret(),
-    AUTH_TRUST_HOST: "true",
-    AUTH_GITHUB_ID: "",
-    AUTH_GITHUB_SECRET: "",
-    AUTH_ALLOWED_GITHUB_IDS: "10001", // adminOwnerId in fixtures.ts
+    GO_API_URL: goApiURL,
+    API_WEB_PROXY_SECRET: goProxySecret(),
+    // Only shows the GitHub button; the e2e never completes a GitHub login.
+    AUTH_GITHUB_ID: "e2e-client",
     NODE_ENV: "production",
   };
-  if (authMode === "go") {
-    Object.assign(env, {
-      GO_API_URL: goApiURL,
-      API_WEB_PROXY_SECRET: goProxySecret(),
-      // Only shows the GitHub button; the e2e never completes a GitHub login.
-      AUTH_GITHUB_ID: "e2e-client",
-    });
-  }
 
   for (const [bin, args] of [
     ["node_modules/prisma/build/index.js", ["migrate", "deploy"]],
@@ -47,7 +35,7 @@ async function main() {
     if (result.status !== 0) process.exit(result.status ?? 1);
   }
 
-  const api = authMode === "go" ? await startGoApi() : undefined;
+  const api = await startGoApi();
   const server = spawn(
     process.execPath,
     [
@@ -62,17 +50,17 @@ async function main() {
   );
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.on(signal, () => {
-      api?.kill(signal);
+      api.kill(signal);
       server.kill(signal);
     });
   }
-  api?.on("exit", (code) => {
+  api.on("exit", (code) => {
     console.error(`Go API exited (${code}); stopping the web server.`);
     server.kill("SIGTERM");
   });
   server.on("exit", (code) => {
-    api?.removeAllListeners("exit");
-    api?.kill("SIGTERM");
+    api.removeAllListeners("exit");
+    api.kill("SIGTERM");
     process.exit(code ?? 0);
   });
 }

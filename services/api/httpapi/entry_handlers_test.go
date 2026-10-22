@@ -29,11 +29,14 @@ type fakeEntries struct {
 	update       func(ctx context.Context, ownerID, id string, p store.EntryPatch) (store.Entry, error)
 	trash        func(ctx context.Context, ownerID, id string, now time.Time) error
 
-	listTrashed func(ctx context.Context, ownerID string, after *store.Cursor, limit int) ([]store.TrashedEntry, error)
-	restore     func(ctx context.Context, ownerID, id string) (store.Entry, error)
-	purge       func(ctx context.Context, ownerID, id string) error
-	emptyTrash  func(ctx context.Context, ownerID string) (int, error)
-	setShared   func(ctx context.Context, ownerID, id string, shared bool, now time.Time) (store.Entry, error)
+	// count and countTrashed default to 0 when unset.
+	count        func(ctx context.Context, ownerID string) (int, error)
+	countTrashed func(ctx context.Context, ownerID string) (int, error)
+	listTrashed  func(ctx context.Context, ownerID string, after *store.Cursor, limit int) ([]store.TrashedEntry, error)
+	restore      func(ctx context.Context, ownerID, id string) (store.Entry, error)
+	purge        func(ctx context.Context, ownerID, id string) error
+	emptyTrash   func(ctx context.Context, ownerID string) (int, error)
+	setShared    func(ctx context.Context, ownerID, id string, shared bool, now time.Time) (store.Entry, error)
 
 	logDates     func(ctx context.Context, ownerID string) ([]store.LogDateCount, error)
 	dailyEntries func(ctx context.Context, ownerID string, d store.LogDate) ([]store.Entry, error)
@@ -94,6 +97,20 @@ func (f *fakeEntries) SetShared(ctx context.Context, ownerID, id string, shared 
 		return store.Entry{}, errUnexpectedCall{"SetShared"}
 	}
 	return f.setShared(ctx, ownerID, id, shared, now)
+}
+
+func (f *fakeEntries) CountEntries(ctx context.Context, ownerID string) (int, error) {
+	if f.count == nil {
+		return 0, nil
+	}
+	return f.count(ctx, ownerID)
+}
+
+func (f *fakeEntries) CountTrashed(ctx context.Context, ownerID string) (int, error) {
+	if f.countTrashed == nil {
+		return 0, nil
+	}
+	return f.countTrashed(ctx, ownerID)
 }
 
 func (f *fakeEntries) ListEntries(ctx context.Context, ownerID string, after *store.Cursor, limit int) ([]store.Entry, error) {
@@ -321,6 +338,64 @@ func TestListEntriesHandler(t *testing.T) {
 			t.Fatalf("body = %s", w.Body.String())
 		}
 	})
+}
+
+func TestListEntriesTotalIgnoresPaging(t *testing.T) {
+	var gotOwner string
+	h, _ := entriesRouter(t, &fakeEntries{
+		list: func(_ context.Context, _ string, _ *store.Cursor, _ int) ([]store.Entry, error) {
+			return []store.Entry{sampleEntry("a", time.Now()), sampleEntry("b", time.Now())}, nil
+		},
+		count: func(_ context.Context, owner string) (int, error) { gotOwner = owner; return 3, nil },
+	})
+	w := do(h, http.MethodGet, "/v1/entries?limit=1", "", authHeader)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, body %q", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Entries    []entryView `json:"entries"`
+		NextCursor *string     `json:"nextCursor"`
+		Total      *int        `json:"total"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Entries) != 1 || resp.NextCursor == nil || resp.Total == nil || *resp.Total != 3 || gotOwner != testOwner {
+		t.Fatalf("entries=%d cursor=%v total=%v owner=%q", len(resp.Entries), resp.NextCursor, resp.Total, gotOwner)
+	}
+}
+
+func TestListEntriesCountsBeforeListing(t *testing.T) {
+	var calls []string
+	h, _ := entriesRouter(t, &fakeEntries{
+		list: func(context.Context, string, *store.Cursor, int) ([]store.Entry, error) {
+			calls = append(calls, "list")
+			return nil, nil
+		},
+		count: func(context.Context, string) (int, error) {
+			calls = append(calls, "count")
+			return 0, nil
+		},
+	})
+	if w := do(h, http.MethodGet, "/v1/entries", "", authHeader); w.Code != http.StatusOK {
+		t.Fatalf("status = %d", w.Code)
+	}
+	if strings.Join(calls, ",") != "count,list" {
+		t.Fatalf("calls = %v", calls)
+	}
+
+	calls = nil
+	h, _ = entriesRouter(t, &fakeEntries{
+		list: func(context.Context, string, *store.Cursor, int) ([]store.Entry, error) {
+			calls = append(calls, "list")
+			return nil, nil
+		},
+		count: func(context.Context, string) (int, error) { return 0, errors.New("boom") },
+	})
+	wantError(t, do(h, http.MethodGet, "/v1/entries", "", authHeader), http.StatusInternalServerError, "internal")
+	if len(calls) != 0 {
+		t.Fatalf("list ran after a failed count: %v", calls)
+	}
 }
 
 func TestListEntriesBadQuery(t *testing.T) {

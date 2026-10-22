@@ -145,6 +145,39 @@ func TestListTrashHandler(t *testing.T) {
 	})
 }
 
+func TestListTrashTotalIgnoresPaging(t *testing.T) {
+	base := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	mk := func(id string) store.TrashedEntry {
+		return store.TrashedEntry{Entry: sampleEntry(id, base), DeletedAt: base}
+	}
+	h, _ := roleRouter(t, &fakeEntries{
+		listTrashed: func(context.Context, string, *store.Cursor, int) ([]store.TrashedEntry, error) {
+			return []store.TrashedEntry{mk("a"), mk("b")}, nil
+		},
+		countTrashed: func(_ context.Context, owner string) (int, error) {
+			if owner != testOwner {
+				t.Errorf("owner = %q", owner)
+			}
+			return 3, nil
+		},
+	}, auth.RoleMember)
+	w := do(h, http.MethodGet, "/v1/trash?limit=1", "", authHeader)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d", w.Code)
+	}
+	var resp struct {
+		Entries    []json.RawMessage `json:"entries"`
+		NextCursor *string           `json:"nextCursor"`
+		Total      *int              `json:"total"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Entries) != 1 || resp.NextCursor == nil || resp.Total == nil || *resp.Total != 3 {
+		t.Fatalf("entries=%d cursor=%v total=%v", len(resp.Entries), resp.NextCursor, resp.Total)
+	}
+}
+
 func TestListTrashBadQuery(t *testing.T) {
 	h, _ := roleRouter(t, &fakeEntries{}, auth.RoleMember)
 	for _, q := range []string{"limit=0", "limit=101", "limit=abc", "cursor=!!!"} {
@@ -256,5 +289,38 @@ func TestShareRequiresMember(t *testing.T) {
 				t.Fatalf("message = %q", got)
 			}
 		})
+	}
+}
+
+func TestListTrashCountsBeforeListing(t *testing.T) {
+	var calls []string
+	h, _ := roleRouter(t, &fakeEntries{
+		listTrashed: func(context.Context, string, *store.Cursor, int) ([]store.TrashedEntry, error) {
+			calls = append(calls, "list")
+			return nil, nil
+		},
+		countTrashed: func(context.Context, string) (int, error) {
+			calls = append(calls, "count")
+			return 0, nil
+		},
+	}, auth.RoleMember)
+	if w := do(h, http.MethodGet, "/v1/trash", "", authHeader); w.Code != http.StatusOK {
+		t.Fatalf("status = %d", w.Code)
+	}
+	if strings.Join(calls, ",") != "count,list" {
+		t.Fatalf("calls = %v", calls)
+	}
+
+	calls = nil
+	h, _ = roleRouter(t, &fakeEntries{
+		listTrashed: func(context.Context, string, *store.Cursor, int) ([]store.TrashedEntry, error) {
+			calls = append(calls, "list")
+			return nil, nil
+		},
+		countTrashed: func(context.Context, string) (int, error) { return 0, errors.New("boom") },
+	}, auth.RoleMember)
+	wantError(t, do(h, http.MethodGet, "/v1/trash", "", authHeader), http.StatusInternalServerError, "internal")
+	if len(calls) != 0 {
+		t.Fatalf("list ran after a failed count: %v", calls)
 	}
 }

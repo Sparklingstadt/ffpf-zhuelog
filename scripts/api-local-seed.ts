@@ -3,7 +3,7 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 
 import { PrismaClient } from "../src/generated/prisma/client";
-import { ScryptPasswordHasher } from "../src/infrastructure/auth/scrypt-password-hasher";
+import { ScryptPasswordHasher } from "./lib/scrypt-password-hasher";
 
 function required(name: string) {
   const value = process.env[name];

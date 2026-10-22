@@ -1,7 +1,7 @@
 import { ArrowLeft, Languages, RotateCcw, Trash2 } from "lucide-react";
 import Link from "next/link";
 
-import { learningUseCases } from "@/composition/learning-container";
+import { learningNotes } from "@/composition/learning-container";
 import {
   emptyLearningTrashAction,
   purgeLearningEntryAction,
@@ -33,9 +33,7 @@ export default async function LearningTrashPage() {
   );
 
   const trash =
-    owner.kind === "self"
-      ? await learningUseCases.listTrashedEntries.execute(owner.ownerId)
-      : null;
+    owner.kind === "self" ? await learningNotes.listTrashed() : null;
 
   return (
     <PageShell user={user} width="5xl">

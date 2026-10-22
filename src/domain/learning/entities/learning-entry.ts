@@ -18,12 +18,3 @@ export type LearningEntry = {
   sharedAt: Date | null;
   hints: LearningHint[];
 };
-
-export type LearningEntryDraft = {
-  // Stored as "correction" when omitted.
-  kind?: LearningKind;
-  originalText: string;
-  correctedText: string;
-  pinyin: string;
-  hints: string[];
-};

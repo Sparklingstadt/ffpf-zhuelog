@@ -35,12 +35,14 @@ type Auth interface {
 // Entries is what the handlers need from *store.Store.
 type Entries interface {
 	ListEntries(ctx context.Context, ownerID string, after *store.Cursor, limit int) ([]store.Entry, error)
+	CountEntries(ctx context.Context, ownerID string) (int, error)
 	GetEntry(ctx context.Context, ownerID, id string) (store.Entry, error)
 	CreateBatch(ctx context.Context, ownerID string, drafts []store.EntryDraft, now time.Time) (store.Batch, []store.Entry, error)
 	CreateImportBatch(ctx context.Context, ownerID, fileName string, drafts []store.EntryDraft, now time.Time) (store.Batch, []store.Entry, error)
 	UpdateEntry(ctx context.Context, ownerID, id string, p store.EntryPatch) (store.Entry, error)
 	TrashEntry(ctx context.Context, ownerID, id string, now time.Time) error
 	ListTrashed(ctx context.Context, ownerID string, after *store.Cursor, limit int) ([]store.TrashedEntry, error)
+	CountTrashed(ctx context.Context, ownerID string) (int, error)
 	RestoreEntry(ctx context.Context, ownerID, id string) (store.Entry, error)
 	PurgeEntry(ctx context.Context, ownerID, id string) error
 	EmptyTrash(ctx context.Context, ownerID string) (int, error)

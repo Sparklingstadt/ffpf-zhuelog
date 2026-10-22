@@ -18,10 +18,8 @@ const (
 	familyIDBytes     = 16
 )
 
-// Sign-in throttling, shared with the web app through the SignInThrottle
-// table: the values and key formats must match the web's
-// (src/domain/identity/entities/password-account.ts and
-// authenticate-password-account.ts). Keys always include the client address,
+// Sign-in throttling, counted in the SignInThrottle table. These constants
+// are the only source of the limits. Keys always include the client address,
 // so nobody can lock a member out from elsewhere.
 const (
 	throttleWindow       = 15 * time.Minute

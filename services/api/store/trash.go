@@ -43,6 +43,17 @@ func (s *Store) ListTrashed(ctx context.Context, ownerID string, after *Cursor, 
 	return trashed, nil
 }
 
+// CountTrashed returns how many of the owner's entries are in the trash.
+func (s *Store) CountTrashed(ctx context.Context, ownerID string) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM "LearningEntry" WHERE "ownerId" = $1 AND "deletedAt" IS NOT NULL`, ownerID).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("store: count trashed: %w", err)
+	}
+	return n, nil
+}
+
 func scanTrashed(rows pgx.Rows) ([]TrashedEntry, error) {
 	defer rows.Close()
 	out := []TrashedEntry{}

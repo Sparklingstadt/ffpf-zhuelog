@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { showsRecords } from "@/application/identity/use-cases/resolve-record-owner";
-import { learningUseCases } from "@/composition/learning-container";
+import { learningNotes } from "@/composition/learning-container";
 import { loadRecordOwnerView } from "@/composition/record-owner-options";
 import { parseLogDate } from "@/domain/calendar/value-objects/log-date";
 import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
@@ -56,7 +56,7 @@ export default async function LogDatePage({
   const hasNotes = showsRecords(owner);
   const [entries, view] = hasNotes
     ? await Promise.all([
-        learningUseCases.listDailyEntries.execute(owner.ownerId, date),
+        learningNotes.listDailyEntries(owner, date),
         loadRecordOwnerView(user, owner),
       ])
     : [[], null];

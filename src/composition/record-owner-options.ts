@@ -1,7 +1,7 @@
 import type { RecordOwner } from "@/application/identity/use-cases/resolve-record-owner";
 import type { AuthenticatedUser } from "@/domain/identity/entities/authenticated-user";
-import { ownerIdForAccount } from "@/domain/identity/entities/password-account";
-import { passwordAccountUseCases } from "@/composition/identity-container";
+import { memberAccounts } from "@/composition/identity-container";
+import { GoApiError } from "@/infrastructure/go-api/client";
 
 export type RecordOwnerOption = {
   ownerId: string;
@@ -11,9 +11,9 @@ export type RecordOwnerOption = {
 
 // Members an admin can pick as the viewed owner: "表示名（ログインID）".
 export async function listRecordOwnerOptions(): Promise<RecordOwnerOption[]> {
-  const accounts = await passwordAccountUseCases.list.execute();
+  const accounts = await memberAccounts.listAccounts();
   return accounts.map((account) => ({
-    ownerId: ownerIdForAccount(account.id),
+    ownerId: account.ownerId,
     label: `${account.displayName}（${account.loginId}）`,
     displayName: account.displayName,
   }));
@@ -36,13 +36,15 @@ export type RecordOwnerView = {
   viewingName: string | null;
 };
 
-// Member list for the switcher. The top page still renders when the database
-// is down, so a failure leaves only "自分" instead of breaking the page.
+// Member list for the switcher. The top page still renders when the Go API
+// fails, so a failure leaves only "自分" instead of breaking the page. Other
+// errors, such as Next's redirect to /signin, pass through.
 async function loadOptions(): Promise<RecordOwnerOption[]> {
   try {
     return await listRecordOwnerOptions();
-  } catch {
-    console.error("RECORD_OWNER_OPTIONS_UNAVAILABLE");
+  } catch (error) {
+    if (!(error instanceof GoApiError)) throw error;
+    console.error("RECORD_OWNER_OPTIONS_UNAVAILABLE", error.status, error.code);
     return [];
   }
 }

@@ -8,7 +8,7 @@ API の利用者は 3 種類です。ログインに成功すると、どちら�
 | `member`       | ログイン ID とパスワード           | `password:` + `PasswordAccount` の `id` |
 | `guest`        | `POST /v1/auth/guest`（認証なし）  | `guest`（固定）                         |
 
-`ownerId` は Web と同じ値で、ノートやフォローの所有者を表します。ゲストはデータを持たず、使えるのは `GET /v1/me` だけです。
+`ownerId` はノートやフォローの所有者を表します（Web でも同じ値です）。ゲストはデータを持たず、使えるのは `GET /v1/me` だけです。
 
 ## GitHub ログイン（admin）
 
@@ -28,7 +28,7 @@ API    ──(4) code + code_verifier + client_secret を交換、GET /user─�
 
 `code`・`codeVerifier`・`redirectUri` を GitHub が拒否したとき（`bad_verification_code` など）や `redirectUri` が一致しないときは `401 unauthorized`、GitHub に届かない・応答が不正なときは `502 github_unavailable` です。
 
-Web 用の OAuth App は任意です（`GITHUB_WEB_CLIENT_ID`・`GITHUB_WEB_CLIENT_SECRET`・`GITHUB_WEB_REDIRECT_URI` を 3 つそろえて設定したときだけ使えます）。今の Web の OAuth App をそのまま使えます。GitHub は登録した callback URL の下の階層を `redirect_uri` に使えるので、Web の callback は `https://<Web>/api/auth/callback/github/go`（既存の callback の下）にしてあり、OAuth App の設定を変える必要はありません。この場合、PKCE と state は Web（Next.js）が作り、API は `code` の交換だけを行います。
+Web の GitHub ログインには、Web 用の OAuth App を使います（`GITHUB_WEB_CLIENT_ID`・`GITHUB_WEB_CLIENT_SECRET`・`GITHUB_WEB_REDIRECT_URI` を 3 つそろえて設定したときだけ使えます）。以前から Web で使っている OAuth App をそのまま使えます。GitHub は登録した callback URL の下の階層を `redirect_uri` に使えるので、Web の callback は `https://<Web>/api/auth/callback/github/go`（登録済みの `/api/auth/callback/github` の下）にしてあり、OAuth App の設定を変える必要はありません。この場合、PKCE と state は Web（Next.js）が作り、API は `code` の交換だけを行います。
 
 ## ゲスト
 
@@ -42,12 +42,12 @@ Web 用の OAuth App は任意です（`GITHUB_WEB_CLIENT_ID`・`GITHUB_WEB_CLIE
 
 ## パスワードログイン（会員）
 
-`POST /v1/auth/password` に `{loginId, password}` を送ります。規則は Web の `AuthenticatePasswordAccount` と同じです。
+`POST /v1/auth/password` に `{loginId, password}` を送ります。
 
 - `loginId` は前後の空白を除いて小文字にし（JavaScript の `trim` と `toLowerCase` と同じ規則。たとえば「İ」（U+0130）は「i」と結合文字になるので、検証で落ちます）、`^[a-z0-9._-]{3,32}$` に一致すること。`password` は 1〜128 文字。
 - 試行回数には、クライアントのアドレスごとの制限があります（下の [パスワードログインの試行回数](#試行回数の制限)）。超えると、パスワードのハッシュを計算せずに `429 rate_limited` を返します。アカウントごとのロックはありません。
 - 形式の不正・存在しない ID・パスワード違いは、**すべて同じ `401 unauthorized`** です。どの経路でも scrypt を 1 回計算するので（存在しない ID などはダミーのハッシュで計算します）、応答の内容からも時間からも区別できません。
-- パスワードのハッシュは Web と同じ `scrypt:N:r:p:salt:key` 形式です（N ≤ 2^15・r ≤ 8・p ≤ 4 を超えるものは拒否し、比較は定数時間）。scrypt は 1 回に 32 MiB を使うため、タスクごとに同時に 4 件までしか計算しません。
+- パスワードのハッシュは `scrypt:N:r:p:salt:key` 形式です（N ≤ 2^15・r ≤ 8・p ≤ 4 を超えるものは拒否し、比較は定数時間）。scrypt は 1 回に 32 MiB を使うため、タスクごとに同時に 4 件までしか計算しません。
 
 ## トークン
 
@@ -154,7 +154,7 @@ admin を許可リストから外すと、その admin のトークンは期限�
 
 ## 試行回数の制限
 
-パスワードログイン（`POST /v1/auth/password`）には、上のレート制限とは別に、DB の `SignInThrottle` テーブルで数える試行回数の制限があります。Web と同じテーブル・同じキーを使うので、同じクライアントからの Web と API の試行は合わせて数えられます。
+パスワードログイン（`POST /v1/auth/password`）には、上のレート制限とは別に、DB の `SignInThrottle` テーブルで数える試行回数の制限があります。Web からのログインも API を通るので、同じクライアントからの Web とアプリの試行は合わせて数えられます。
 
 | 数える単位                         | 上限（15 分の固定の枠） | 回数が戻るとき                                                  |
 | ---------------------------------- | ----------------------- | --------------------------------------------------------------- |

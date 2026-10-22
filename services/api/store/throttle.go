@@ -12,9 +12,6 @@ const pruneThrottleBatch = 100
 // ConsumeThrottle counts one attempt against key in a fixed window and reports
 // whether the attempt is within limit. The first attempt, or the first after
 // the window ended, starts a new window of the given length at now.
-//
-// The statements mirror the web app's PrismaSignInThrottle (same table, same
-// key formats), so the web and the API share one count per key.
 func (s *Store) ConsumeThrottle(ctx context.Context, key string, limit int, window time.Duration, now time.Time) (bool, error) {
 	now = dbTime(now)
 	expires := now.Add(window)

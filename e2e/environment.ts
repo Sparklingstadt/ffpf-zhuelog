@@ -5,20 +5,13 @@ export const databaseUrl =
   "postgresql://zhuelog_e2e:local-e2e-only@127.0.0.1:55439/zhuelog_e2e";
 export const baseURL = "http://127.0.0.1:3107";
 
-// ZHUELOG_E2E_AUTH=go runs the suite with the web signing in through the Go
-// API (services/api). Unset runs it on Auth.js, as before.
-export const authMode = parseAuthMode(process.env.ZHUELOG_E2E_AUTH);
+// The web signs in through the Go API (services/api), which e2e/server.ts
+// starts next to it.
 export const goApiURL = "http://127.0.0.1:3108";
-export const cookieName =
-  authMode === "go" ? "zl_access" : "authjs.session-token";
+export const cookieName = "zl_access";
 
-function parseAuthMode(value: string | undefined): "authjs" | "go" {
-  if (!value || value === "authjs") return "authjs";
-  if (value === "go") return "go";
-  throw new Error('ZHUELOG_E2E_AUTH must be "authjs" or "go".');
-}
-
-export function authSecret() {
+// This run's random secret, from the Playwright config.
+function runSecret() {
   if (!process.env.ZHUELOG_E2E_SECRET)
     throw new Error("Run via the Playwright config.");
   return process.env.ZHUELOG_E2E_SECRET;
@@ -35,5 +28,5 @@ export function goProxySecret() {
 }
 
 function deriveSecret(label: string) {
-  return createHmac("sha256", authSecret()).update(label).digest("hex");
+  return createHmac("sha256", runSecret()).update(label).digest("hex");
 }
