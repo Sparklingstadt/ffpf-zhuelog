@@ -24,15 +24,13 @@ Web 用とは別の OAuth App を新しく作ります。GitHub の **Settings �
 2. **Root Directory** に `services/api` を指定します。
 3. **Framework Preset** が `Go` になっていることを確かめます（`services/api/vercel.json` でも指定しています）。
 4. **Settings → Deployment Protection** で **Vercel Authentication** を外します。新しいプロジェクトには最初から付いていて、付いたままだと Web のサーバーもアプリも API を呼べません（API はアプリ層の JWT で認証します）。
-5. 最初のデプロイが成功してから、**Settings → Git → Ignored Build Step** に次を設定し、`services/api/` に変更が無いときはビルドを飛ばします（Root Directory が `services/api` なので、`.` がこのディレクトリを指します）。前回デプロイしたコミット（`VERCEL_GIT_PREVIOUS_SHA`）から今回までをまとめて比べるので、1 回の push に複数のコミットがあっても、途中のコミットの変更を見落としません（前回のデプロイが無いときは直前のコミットと比べます）。
-
-   ```bash
-   git diff --quiet "${VERCEL_GIT_PREVIOUS_SHA:-HEAD^}" HEAD -- .
-   ```
+5. **Settings → Build and Deployment → Root Directory** の **Skip deployments when there are no changes to the root directory or its dependencies** をオンにし、`services/api/` に変更が無いときはデプロイを飛ばします。Vercel のビルド環境には `.git` が無いので、`git diff` を使う Ignored Build Step は動きません（エラーになります）。
 
 ## 3. 環境変数
 
 **Settings → Environment Variables** に設定します。`PORT` は Vercel が設定するので不要です。
+
+ビルドのために `GOFLAGS` に `-buildvcs=false` を入れます（Production と Preview）。Vercel のビルド環境には `.git` が無く、`go build` がコミットの情報を埋め込めずに失敗するためです。
 
 | 名前                          | 内容                                                                                                             |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------- |
