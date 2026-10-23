@@ -97,6 +97,36 @@ export function createAccountGateway(call: GoApiCall = goApiAuthed) {
         clientIp,
       });
     },
+
+    // Go registers the link routes only when LINE is configured, so a 404
+    // means "not available here", not "not linked". The LINE user id never
+    // reaches the web: Go answers with the flag only.
+    async getLineLink(): Promise<{ linked: boolean; available: boolean }> {
+      try {
+        const json = await call<{ linked: boolean }>("/v1/line/link", {
+          method: "GET",
+        });
+        return { linked: json.linked, available: true };
+      } catch (error) {
+        if (error instanceof GoApiError && error.status === 404)
+          return { linked: false, available: false };
+        throw error;
+      }
+    },
+
+    // Each call invalidates the member's previous code.
+    async issueLineLinkCode(): Promise<{ code: string; expiresAt: Date }> {
+      const json = await call<{ code: string; expiresAt: string }>(
+        "/v1/line/link-code",
+        { method: "POST" },
+      );
+      return { code: json.code, expiresAt: toDate(json.expiresAt) };
+    },
+
+    // Go answers 204 even when nothing was linked.
+    async unlinkLine(): Promise<void> {
+      await call<unknown>("/v1/line/link", { method: "DELETE" });
+    },
   };
 }
 
