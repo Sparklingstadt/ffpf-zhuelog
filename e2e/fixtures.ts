@@ -146,7 +146,10 @@ export async function asGuest(page: Page, callback = "/") {
   await expect(page.getByText("ゲスト", { exact: true })).toBeVisible();
 }
 
+// Imports on /import, opening it unless the page is already there (tests that
+// change the session under an open form must not reload it).
 export async function upload(page: Page, text: string, name = "learning.csv") {
+  if (new URL(page.url()).pathname !== "/import") await page.goto("/import");
   await page
     .getByLabel("CSVファイル", { exact: true })
     .setInputFiles({ name, mimeType: "text/csv", buffer: Buffer.from(text) });

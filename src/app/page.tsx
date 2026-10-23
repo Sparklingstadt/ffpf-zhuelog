@@ -2,8 +2,9 @@ import {
   BookOpenText,
   CalendarDays,
   Database,
+  Download,
+  FileUp,
   Languages,
-  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -19,20 +20,12 @@ import type { ViewedOwner } from "@/infrastructure/go-api/learning-gateway";
 import { loadRecordOwnerView } from "@/composition/record-owner-options";
 import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { PageShell } from "@/presentation/components/layout/page-shell";
-import { CsvFormatGuide } from "@/presentation/components/learning/csv-format-guide";
-import { CsvImportForm } from "@/presentation/components/learning/csv-import-form";
 import { LearningEntryCard } from "@/presentation/components/learning/learning-entry-card";
 import { RecordOwnerControls } from "@/presentation/components/records/record-owner-controls";
 import { Alert, AlertDescription } from "@/presentation/components/ui/alert";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/presentation/components/ui/card";
+import { Card, CardContent } from "@/presentation/components/ui/card";
 import { requireSignedInOwner } from "@/presentation/guards/record-owner-guard";
 import { genericErrorMessage } from "@/presentation/presenters/generic-error-message";
 import { getLogDateHref } from "@/presentation/presenters/log-date-presenter";
@@ -108,6 +101,21 @@ function HomeHeader({
             </Link>
           </Button>
         ) : null}
+        {/* Import and export act on the signed-in user's own notes only. */}
+        {owner.kind === "self" ? (
+          <>
+            <Button asChild variant="outline" size="lg">
+              <Link href="/import">
+                <FileUp /> CSVをインポート
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="lg">
+              <Link href="/export">
+                <Download /> CSVでエクスポート
+              </Link>
+            </Button>
+          </>
+        ) : null}
       </div>
     </header>
   );
@@ -170,77 +178,53 @@ export default async function Home({ searchParams }: HomeProps) {
         </Alert>
       ) : null}
 
-      <section
-        className={
-          ownNotes
-            ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start"
-            : "grid gap-6"
-        }
-      >
-        <div className="order-2 space-y-4 lg:order-1">
-          <div>
-            <h2 className="text-xl font-semibold tracking-tight">学習ノート</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              新しく登録された文から最大100件を表示します。
-            </p>
-          </div>
-
-          {entries.length === 0 ? (
-            <Card className="border-dashed py-14 text-center shadow-none">
-              <CardContent className="flex flex-col items-center gap-3">
-                <div className="rounded-full bg-muted p-3">
-                  <BookOpenText className="size-6 text-muted-foreground" />
-                </div>
-                <div>
-                  <p className="font-medium">まだ学習文がありません</p>
-                  {ownNotes ? (
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      CSVをインポートすると、ここに学習カードが並びます。
-                    </p>
-                  ) : null}
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4">
-              {entries.map((entry, index) => (
-                <LearningEntryCard
-                  key={entry.id}
-                  entry={entry}
-                  numberLabel={recentEntryNumberLabel(
-                    total,
-                    entries.length,
-                    index,
-                  )}
-                  href={withRecordOwner(getLogDateHref(entry.createdAt), owner)}
-                  linkLabel="この日の一覧"
-                />
-              ))}
-            </div>
-          )}
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">学習ノート</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            新しく登録された文から最大100件を表示します。
+          </p>
         </div>
 
-        {/* Imports always go to the signed-in user's own notes, so the form
-            only appears on them. */}
-        {ownNotes ? (
-          <aside className="order-1 lg:order-2 lg:sticky lg:top-24">
-            <Card>
-              <CardHeader>
-                <div className="mb-2 flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                  <Sparkles className="size-4" />
-                </div>
-                <CardTitle>CSVをインポート</CardTitle>
-                <CardDescription>
-                  UTF-8のCSVファイルを選んで、自分の学習ノートに学習文を一括登録します。
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <CsvImportForm disabled={loadFailed} />
-                <CsvFormatGuide />
-              </CardContent>
-            </Card>
-          </aside>
-        ) : null}
+        {entries.length === 0 ? (
+          <Card className="border-dashed py-14 text-center shadow-none">
+            <CardContent className="flex flex-col items-center gap-3">
+              <div className="rounded-full bg-muted p-3">
+                <BookOpenText className="size-6 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="font-medium">まだ学習文がありません</p>
+                {ownNotes ? (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    <Link
+                      href="/import"
+                      className="font-medium text-foreground underline underline-offset-4"
+                    >
+                      CSVをインポート
+                    </Link>
+                    すると、ここに学習カードが並びます。
+                  </p>
+                ) : null}
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-4">
+            {entries.map((entry, index) => (
+              <LearningEntryCard
+                key={entry.id}
+                entry={entry}
+                numberLabel={recentEntryNumberLabel(
+                  total,
+                  entries.length,
+                  index,
+                )}
+                href={withRecordOwner(getLogDateHref(entry.createdAt), owner)}
+                linkLabel="この日の一覧"
+              />
+            ))}
+          </div>
+        )}
       </section>
     </PageShell>
   );
