@@ -66,7 +66,7 @@ LINE ──▶ POST /v1/line/webhook（Go API、maxDuration = 60）
               e. OpenAI で添削・翻訳（20 秒で打ち切り）
                  ・成功 → ノートを保存 → LineMessage を done（text を消す）→ reply
                  ・形が違う・認証の失敗など → LineMessage を failed（text を消す）→ 失敗の reply
-                 ・時間切れ・通信の失敗 → pending のまま残す → 「少し時間がかかっています」と reply
+                 ・時間切れ・通信の失敗 → pending のまま残す → 「時間がかかっています。結果は翌朝までに…」と reply
            3. 200 を返す
 
 GET /v1/line/drain（Vercel Cron、1 日 1 回、Authorization: Bearer ${CRON_SECRET}）
@@ -139,7 +139,7 @@ Prisma のマイグレーションを 1 件足す。ノートの表（`LearningE
   - 同じ `lineUserId` の `LineLink` を作り直す
   - コードを消す
 - 「連携しました」と返す。結び直しのときは「連携先を切り替えました」。
-- 見つからない・期限切れのときは「コードが違うか期限が切れています」と返す。同じ LINE ユーザーの失敗は `SignInThrottle`（キー `line-link:<lineUserId>`、1 時間に 5 回）で数え、超えたら 1 時間は「しばらくしてから試してください」とだけ返す。
+- 見つからない・期限切れのときは「コードが違うか期限が切れています」と返す。同じ LINE ユーザーの失敗は `SignInThrottle`（キー `line-link:<lineUserId>`、1 時間に 5 回）で数え、超えたら 1 時間は「連携コードの試行が多すぎます。しばらくしてから試してください。」とだけ返す。
 
 ### 6.3 Web の画面 `/account/line`
 

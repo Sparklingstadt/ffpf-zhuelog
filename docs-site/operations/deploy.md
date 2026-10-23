@@ -175,8 +175,8 @@ Go API の次の 5 つのルートで動きます。LINE の設定（上の「3.
 | DELETE   | `/v1/line/link`      | 会員・管理者（ゲストは `403`）        | 連携を解除する（連携していなくても `204`）                           |
 | GET      | `/v1/line/drain`     | `Authorization: Bearer <CRON_SECRET>` | 結果が出ないまま残ったメッセージの拾い直し（Vercel Cron が呼びます） |
 
-- 送った文は、webhook のリクエストの中で処理します（保存 → OpenAI → 学習ノートに保存 → reply）。reply は無料です。添削・翻訳の結果は、バッチ名 `LINE` のノートとして保存します。
-- 拾い直しは、`services/api/vercel.json` の Cron（`0 21 * * *`、UTC なので日本時間の毎日 06:00）が `GET /v1/line/drain` を呼んで行います。5 分以上 `pending` のまま残ったメッセージを 1 回だけ試し直し、できたら push で、できなければ失敗を push で知らせます。push は、LINE の無料プランでは月 200 通の枠を使います。
+- 送った文は、webhook のリクエストの中で処理します（保存 → OpenAI → 学習ノートに保存 → reply）。reply は無料です。添削・翻訳の結果は、バッチ名 `LINE` のノートとして保存します。1 回の通知の処理は、リクエストの開始から 45 秒までで、残りが 30 秒を切った文は、保存だけして OpenAI は呼ばず、「時間がかかっています」と返します（翌朝の拾い直しが処理します）。
+- 拾い直しは、`services/api/vercel.json` の Cron（`0 21 * * *`、UTC なので日本時間の毎日 06:00）が `GET /v1/line/drain` を呼んで行います。5 分以上 `pending` のまま残ったメッセージを 1 回だけ試し直し、できたら push で、できなければ失敗を push で知らせます。1 回の実行で残りが 30 秒を切ったら、新しい生成は始めず次の実行に回します（試す回数を使い切った行は、生成せずに失敗にします）。push は、LINE の無料プランでは月 200 通の枠を使います。
 - ログには、イベント ID・メッセージの ID・コードだけを出し、本文・生成結果・鍵・LINE のユーザー ID・連携コードは出しません。
 - 使う表は `LineLink`・`LineLinkCode`・`LineMessage` の 3 つで、Prisma のマイグレーション `20261023090000_add_line_link` で作ります。
 
@@ -184,15 +184,20 @@ Go API の次の 5 つのルートで動きます。LINE の設定（上の「3.
 
 LINE 連携を本番で使い始めるときは、次の順で行います。
 
-1. LINE Developers で、Messaging API のチャネルを用意します（以前のチャネルが残っていれば使えます）。**Webhook URL** を `https://ffpf-zhuelog-api.vercel.app/v1/line/webhook` にして、Webhook の利用をオンにします。「**応答メッセージ**」は **オフ** にします（オンのままだと、LINE の自動応答とこの API の返信が二重に届きます）。
+1. LINE Developers で、Messaging API のチャネルを用意します（以前のチャネルが残っていれば使えます）。**Webhook URL** を `https://ffpf-zhuelog-api.vercel.app/v1/line/webhook` にして、Webhook の利用をオンにします。「**応答メッセージ**」は **オフ** にします（オンのままだと、LINE の自動応答とこの API の返信が二重に届きます）。LINE の「検証」ボタンは、手順 5 で Go API をデプロイするまでは `404` で失敗します（まだ押さないでください）。
 2. Go API の Vercel プロジェクトの Production に、`LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`OPENAI_API_KEY`・`CRON_SECRET` を入れます。Web の Vercel プロジェクトには `LINE_ADD_FRIEND_URL` を入れます。
-3. **main にマージする前に**、本番の Neon にマイグレーション `20261023090000_add_line_link` を適用します（main は Web と Go API の両方の本番へ自動でデプロイされるため。手順は「4. 本番の DB の確認」の `vercel env pull` と `migrate deploy`）。
+3. **main にマージする前に**、本番の Neon にマイグレーション `20261023090000_add_line_link` を適用します（マージすると Web が自動でデプロイされ、Go API もそのすぐ後に手順 5 でデプロイするため、先に表がないと動きません。手順は「4. 本番の DB の確認」の `vercel env pull` と `migrate deploy`）。
 4. main にマージします。
-5. Go API をデプロイします。今の Go API の Vercel プロジェクトは、Git からの自動デプロイが切れている（`createDeployments: disabled`）ので、マージしてもデプロイされません。ダッシュボードの **Deployments → Redeploy**（または Vercel CLI）で手で出すか、**Settings → Git** で自動デプロイを入れ直します。
+5. Go API に main をデプロイします。今の Go API の Vercel プロジェクトは、Git からの自動デプロイが切れている（`createDeployments: disabled`）ので、マージしてもデプロイされません。**Deployments → Redeploy** は使いません（古いデプロイを作り直すだけで、マージ前のコードが出てしまいます）。次のどちらかで、main を明示して出します。
+   - **Settings → Git** で Git からのデプロイを入れ直し、main をデプロイする。
+   - プロジェクトをリンクした状態で、main をチェックアウトした `services/api` から `vercel deploy --prod` を実行する。
+
+   デプロイができたら、`curl -i -X POST https://ffpf-zhuelog-api.vercel.app/v1/line/webhook` が `401`（`404` ではない）を返すことを確かめます。その後で、LINE の「**検証**」ボタンを押します。
+
 6. Web が本番の URL に付いたかも確かめます。Web の Vercel プロジェクトの Deployment Checks は、今はもう無い CI のチェック（`verify (24)`・`verify (26)`・`e2e`）を待ち続けるので、本番の URL が付かないことがあります。直すまでは、デプロイを手で Promote します。
 7. 自分の LINE で、連携・添削・翻訳・解除を試します。
 
-`services/api/vercel.json` の `functions` の `"main.go"`（`maxDuration` が 60 秒）は、Go の Framework Preset で通るのかを確かめられていません。最初のデプロイが、このキーのせいで失敗したら、`functions` のブロックを消してください（既定の最大実行時間でも足ります）。
+`services/api/vercel.json` の `functions` の `"main.go"`（`maxDuration` が 60 秒）は、Go の Framework Preset で通るのかを確かめられていません。最初のデプロイが、このキーのせいで失敗したら、`functions` のブロックを消してください。どちらになっても、最初のデプロイの後に、ダッシュボードで関数の最大実行時間を確かめてください。webhook と拾い直しは最大 60 秒かかるので、**60 秒以上** が必要です（Fluid compute なら既定が 300 秒で足ります。そうでない設定では、既定が短いことがあります）。
 
 ## 運用上の注意
 
