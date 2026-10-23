@@ -170,6 +170,73 @@ func TestDrainDeadlineAlreadyPast(t *testing.T) {
 	}
 }
 
+func TestDrainDoesNotStartGenerationWithLessThanBudgetLeft(t *testing.T) {
+	e := newEnv(t)
+	e.link()
+	e.addPending("a", "correction", "一", 1, 12*time.Minute)
+	if err := e.svc.Drain(context.Background(), e.clock.Now().Add(15*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if len(e.gen.calls) != 0 {
+		t.Error("generator called with 15s left")
+	}
+	if m := e.store.message("a"); m.Status != store.LineStatusPending || m.Attempts != 1 {
+		t.Errorf("row = %+v, want untouched (attempts still 1)", m)
+	}
+	if e.store.called("StartLineMessageAttempt") {
+		t.Error("an attempt was counted")
+	}
+
+	// Exactly the budget left is enough.
+	if err := e.svc.Drain(context.Background(), e.clock.Now().Add(20*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if len(e.gen.calls) != 1 {
+		t.Errorf("generator calls = %d, want 1 with 20s left", len(e.gen.calls))
+	}
+}
+
+func TestDrainStillFailsExhaustedRowWithLittleTimeLeft(t *testing.T) {
+	e := newEnv(t)
+	e.link()
+	e.addPending("a", "correction", "一", 2, 12*time.Minute)
+	if err := e.svc.Drain(context.Background(), e.clock.Now().Add(5*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if m := e.store.message("a"); m.Status != store.LineStatusFailed {
+		t.Errorf("status = %q, want failed", m.Status)
+	}
+	if len(e.gen.calls) != 0 {
+		t.Error("generator called")
+	}
+}
+
+func TestDrainPrunesBeforeTheLoop(t *testing.T) {
+	// Pruning must not depend on the loop finishing: it runs even when every
+	// row is skipped, and before any row is touched.
+	e := newEnv(t)
+	e.link()
+	e.addPending("a", "correction", "一", 1, 12*time.Minute)
+	if err := e.svc.Drain(context.Background(), e.clock.Now().Add(15*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if len(e.store.pruned) != 1 {
+		t.Fatalf("pruned = %v, want one call", e.store.pruned)
+	}
+	if e.store.calls[0] != "PruneLine" {
+		t.Errorf("first store call = %q, want PruneLine", e.store.calls[0])
+	}
+}
+
+func TestDrainListErrorStillPrunes(t *testing.T) {
+	e := newEnv(t)
+	e.store.listErr = errBoom
+	_ = e.svc.Drain(context.Background(), e.deadline())
+	if len(e.store.pruned) != 1 {
+		t.Error("PruneLine must run even when listing fails")
+	}
+}
+
 func TestDrainSkipsRecentRows(t *testing.T) {
 	e := newEnv(t)
 	e.link()

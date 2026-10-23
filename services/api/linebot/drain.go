@@ -16,18 +16,21 @@ const (
 	staleAfter = 5 * time.Minute
 	// drainBatch bounds the rows one Drain call looks at.
 	drainBatch = 20
-	// maxAttempts mirrors the store's cap on OpenAI calls per message.
-	maxAttempts = 2
+	// generationBudget is the longest one generation may take (OpenAI's own
+	// timeout); a row is not started with less time than this left.
+	generationBudget = 20 * time.Second
 	// exhaustedCode is what a message that used up its attempts without an
 	// answer is reported as.
 	exhaustedCode = "OPENAI_TIMEOUT"
 )
 
 // Drain finishes messages that stayed pending for at least 5 minutes, oldest
-// first, and does not start a new one at or after deadline. A row that
-// succeeds becomes a note and a push; a row that fails, retryable or not, is
-// marked failed and the failure is pushed. It ends by pruning old rows. The
-// first error is returned after the whole pass has run.
+// first. It prunes old rows first, so that never depends on the loop. It does
+// not start a generation with less than generationBudget left before deadline
+// (the row waits for the next run), so the pass ends before the deadline. A
+// row that succeeds becomes a note and a push; a row that fails, retryable or
+// not, is marked failed and the failure is pushed. The first error is returned
+// after the whole pass has run.
 func (s *Service) Drain(ctx context.Context, deadline time.Time) error {
 	var first error
 	note := func(err error) {
@@ -36,19 +39,26 @@ func (s *Service) Drain(ctx context.Context, deadline time.Time) error {
 		}
 	}
 
-	rows, err := s.Store.ListStaleLineMessages(ctx, s.now().Add(-staleAfter), drainBatch)
-	if err != nil {
-		return fmt.Errorf("linebot: list stale: %w", err)
-	}
-	for _, row := range rows {
-		if ctx.Err() != nil || !s.now().Before(deadline) {
-			break
-		}
-		note(s.drainRow(ctx, row))
-	}
-
 	if err := s.Store.PruneLine(ctx, s.now()); err != nil {
 		note(fmt.Errorf("linebot: prune: %w", err))
+	}
+
+	rows, err := s.Store.ListStaleLineMessages(ctx, s.now().Add(-staleAfter), drainBatch)
+	if err != nil {
+		note(fmt.Errorf("linebot: list stale: %w", err))
+		return first
+	}
+	for _, row := range rows {
+		left := deadline.Sub(s.now())
+		if ctx.Err() != nil || left <= 0 {
+			break
+		}
+		// A row with attempts left may call OpenAI; an exhausted one is only
+		// failed, which is quick.
+		if row.Attempts < store.LineMaxAttempts && left < generationBudget {
+			continue
+		}
+		note(s.drainRow(ctx, row))
 	}
 	return first
 }
@@ -79,7 +89,7 @@ func (s *Service) drainRow(ctx context.Context, row store.LineMessage) error {
 
 	started, err := s.Store.StartLineMessageAttempt(ctx, row.ID, s.now())
 	if errors.Is(err, store.ErrNotFound) {
-		if row.Attempts < maxAttempts {
+		if row.Attempts < store.LineMaxAttempts {
 			return nil // settled by someone else since the listing
 		}
 		// Both attempts are spent and no answer came: give up.

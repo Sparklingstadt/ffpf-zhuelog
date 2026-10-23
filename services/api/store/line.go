@@ -16,9 +16,10 @@ const (
 	LineStatusFailed  = "failed"
 )
 
+// LineMaxAttempts is how many times OpenAI may be called for one message.
+const LineMaxAttempts = 2
+
 const (
-	// lineMaxAttempts is how many times OpenAI may be called for one message.
-	lineMaxAttempts = 2
 	// lineRetention is how long done and failed messages are kept.
 	lineRetention = 7 * 24 * time.Hour
 )
@@ -204,7 +205,7 @@ func (s *Store) StartLineMessageAttempt(ctx context.Context, id string, now time
 	err := s.pool.QueryRow(ctx,
 		`UPDATE "LineMessage" SET "attempts" = "attempts" + 1, "updatedAt" = $2
 		 WHERE "id" = $1 AND "status" = 'pending' AND "attempts" < $3
-		 RETURNING `+lineMessageColumns, id, dbTime(now), lineMaxAttempts).Scan(m.dest()...)
+		 RETURNING `+lineMessageColumns, id, dbTime(now), LineMaxAttempts).Scan(m.dest()...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return LineMessage{}, ErrNotFound
 	}
