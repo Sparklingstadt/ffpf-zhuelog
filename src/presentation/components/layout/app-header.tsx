@@ -1,6 +1,8 @@
 import {
   CircleUserRound,
+  Download,
   Eye,
+  FileUp,
   KeyRound,
   Languages,
   LogOut,
@@ -50,7 +52,8 @@ function UserControls({ user }: { user: AuthenticatedUser }) {
   const roleLabel = isAdmin ? "管理者" : isMember ? "メンバー" : null;
 
   return (
-    <div className="flex min-w-0 items-center justify-between gap-2 sm:justify-end">
+    // The links wrap below the name when one row cannot hold both.
+    <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 sm:justify-end">
       <div className="flex min-w-0 items-center gap-1.5 text-sm">
         {isGuest ? (
           <Eye className="size-4 shrink-0 text-muted-foreground" />
@@ -64,11 +67,22 @@ function UserControls({ user }: { user: AuthenticatedUser }) {
           </Badge>
         ) : null}
       </div>
-      <nav aria-label="アカウント" className="flex items-center gap-0.5">
+      <nav
+        aria-label="アカウント"
+        className="ml-auto flex shrink-0 items-center gap-0.5"
+      >
         {isMember || isAdmin ? (
-          <NavLink href="/follow" icon={UsersRound}>
-            フォロー
-          </NavLink>
+          <>
+            <NavLink href="/import" icon={FileUp}>
+              CSVインポート
+            </NavLink>
+            <NavLink href="/export" icon={Download}>
+              CSVエクスポート
+            </NavLink>
+            <NavLink href="/follow" icon={UsersRound}>
+              フォロー
+            </NavLink>
+          </>
         ) : null}
         {isMember ? (
           <NavLink href="/account/password" icon={KeyRound}>

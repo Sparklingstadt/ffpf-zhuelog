@@ -48,6 +48,9 @@ test("guest sees no notes and no note tools", async ({ page, db }) => {
   await expect(page.getByRole("link", { name: "CSVをインポート" })).toHaveCount(
     0,
   );
+  const accountNav = page.getByRole("navigation", { name: "アカウント" });
+  for (const name of ["CSVインポート", "CSVエクスポート"])
+    await expect(accountNav.getByRole("link", { name })).toHaveCount(0);
   for (const path of ["/logs", "/logs/2026/9/20", "/import", "/export"]) {
     await page.goto(path);
     await expect(page).toHaveURL(/\/$/);
@@ -113,6 +116,13 @@ test("exports the selected notes as a CSV the import reads back", async ({
     '最初の文A,添削A,pinyin A,"ヒント,1",ヒント2\n"引用""B",添削B,pinyin B\n最初の文C,添削C,pinyin C',
   );
   await expect(page.getByText("3件の学習文を登録しました。")).toBeVisible();
+
+  // The header links reach both pages from anywhere.
+  const accountNav = page.getByRole("navigation", { name: "アカウント" });
+  await accountNav.getByRole("link", { name: "CSVエクスポート" }).click();
+  await expect(page).toHaveURL(/\/export$/);
+  await accountNav.getByRole("link", { name: "CSVインポート" }).click();
+  await expect(page).toHaveURL(/\/import$/);
 
   await page.goto("/");
   await page.getByRole("link", { name: "CSVでエクスポート" }).click();
