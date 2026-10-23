@@ -89,12 +89,12 @@ func TestMessageConstants(t *testing.T) {
 		"MsgLinked":    {MsgLinked, "連携しました"},
 		"MsgRelinked":  {MsgRelinked, "連携先を切り替えました"},
 		"MsgBadCode":   {MsgBadCode, "コードが違うか期限が切れています"},
-		"MsgThrottled": {MsgThrottled, "しばらくしてから試してください"},
+		"MsgThrottled": {MsgThrottled, "連携コードの試行が多すぎます。しばらくしてから試してください。"},
 		"MsgNotLinked": {MsgNotLinked, "/account/line"},
 		"MsgLinkGone":  {MsgLinkGone, "連携が切れました"},
 		"MsgTooLong":   {MsgTooLong, "500"},
 		"MsgUsage":     {MsgUsage, "添削"},
-		"MsgSlow":      {MsgSlow, "少し時間がかかっています"},
+		"MsgSlow":      {MsgSlow, "時間がかかっています。結果は翌朝までにこのトークにお送りします。"},
 	}
 	for name, c := range checks {
 		if !strings.Contains(c.got, c.sub) {

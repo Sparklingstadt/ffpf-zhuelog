@@ -15,7 +15,7 @@ import (
 
 // LineService is what the LINE handlers need from *linebot.Service.
 type LineService interface {
-	HandleEvent(ctx context.Context, ev line.Event) error
+	HandleEvent(ctx context.Context, ev line.Event, deadline time.Time) error
 	IssueCode(ctx context.Context, p auth.Principal) (string, time.Time, error)
 	Linked(ctx context.Context, ownerID string) (bool, error)
 	Unlink(ctx context.Context, ownerID string) error
@@ -33,6 +33,14 @@ const (
 	// drainBudget is how long a drain pass may run, leaving room under
 	// lineWriteTimeout to prune and answer.
 	drainBudget = 50 * time.Second
+	// webhookEventsTimeout bounds the work of one webhook delivery, leaving
+	// room under lineWriteTimeout to answer.
+	webhookEventsTimeout = 55 * time.Second
+	// webhookDeliveryBudget is when, counted from the start of the request, the
+	// service stops starting generations: later texts are saved and left for
+	// the drain. It is shorter than webhookEventsTimeout so the last
+	// generation and reply still fit.
+	webhookDeliveryBudget = 45 * time.Second
 )
 
 // extendLineDeadlines gives one request longer read and write deadlines than
@@ -51,9 +59,13 @@ func extendLineDeadlines(w http.ResponseWriter) {
 // the raw body before anything is parsed. Once it passes, the answer is 200
 // whatever happens to the individual events, so LINE does not redeliver them:
 // a message that could not be finished stays pending for the retry endpoint.
-// Message text is never logged.
-func lineWebhook(svc LineService, channelSecret []byte) http.Handler {
+// The events run on a context that LINE or the edge dropping the connection
+// does not cancel, with a time limit of their own, and share one delivery
+// deadline so that texts beyond the budget are saved rather than lost. Message
+// text is never logged.
+func lineWebhook(svc LineService, channelSecret []byte, now func() time.Time) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := now()
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			writeBodyError(w, r, err)
@@ -69,8 +81,11 @@ func lineWebhook(svc LineService, channelSecret []byte) http.Handler {
 			writeBadRequest(w)
 			return
 		}
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), webhookEventsTimeout)
+		defer cancel()
+		deadline := start.Add(webhookDeliveryBudget)
 		for _, ev := range events {
-			if err := svc.HandleEvent(r.Context(), ev); err != nil {
+			if err := svc.HandleEvent(ctx, ev, deadline); err != nil {
 				// The error is not logged: it may carry more than an event ID.
 				// The service has already logged what it can safely say.
 				loggerFrom(r.Context()).Warn("line event failed", "event_id", ev.WebhookEventID)

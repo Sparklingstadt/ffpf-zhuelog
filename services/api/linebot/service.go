@@ -105,9 +105,11 @@ func (s *Service) reply(ctx context.Context, ev line.Event, texts ...string) err
 }
 
 // HandleEvent processes one LINE message event. Events from groups and rooms
-// are ignored. A returned error means a store failure, or, when nothing else
-// failed, that LINE rejected the reply.
-func (s *Service) HandleEvent(ctx context.Context, ev line.Event) error {
+// are ignored. deadline is when the delivery has to be answered: a text is
+// always saved, but with less than minTimeLeft before deadline it is left
+// pending for the drain instead of being generated. A returned error means a
+// store failure, or, when nothing else failed, that LINE rejected the reply.
+func (s *Service) HandleEvent(ctx context.Context, ev line.Event, deadline time.Time) error {
 	// UserID is also filled for group and room events, so gate on the source.
 	if !ev.FromUser || ev.UserID == "" {
 		return nil
@@ -153,11 +155,11 @@ func (s *Service) HandleEvent(ctx context.Context, ev line.Event) error {
 	default:
 		return s.reply(ctx, ev, line.MsgUsage)
 	}
-	return s.process(ctx, ev, link, kind, text)
+	return s.process(ctx, ev, link, kind, text, deadline)
 }
 
 // process stores the message, generates and saves the note, and replies.
-func (s *Service) process(ctx context.Context, ev line.Event, link store.LineLink, kind, text string) error {
+func (s *Service) process(ctx context.Context, ev line.Event, link store.LineLink, kind, text string, deadline time.Time) error {
 	// The event ID is the dedup key; an empty one would collide with every
 	// later empty one.
 	if ev.WebhookEventID == "" {
@@ -176,6 +178,12 @@ func (s *Service) process(ctx context.Context, ev line.Event, link store.LineLin
 	}
 	if !created {
 		return nil // a redelivery: already handled, or waiting for the drain
+	}
+	if deadline.Sub(s.now()) < minTimeLeft {
+		// Too late in the delivery to call OpenAI: the text is saved, the row
+		// stays pending and the next drain finishes it.
+		s.logger().Info("line message deferred to the drain", "message_id", msg.ID)
+		return s.reply(ctx, ev, line.MsgSlow)
 	}
 	if _, err := s.Store.StartLineMessageAttempt(ctx, msg.ID, s.now()); err != nil {
 		if errors.Is(err, store.ErrNotFound) {

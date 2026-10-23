@@ -27,6 +27,12 @@ var (
 type fakeLine struct {
 	handled   []line.Event
 	handleErr error
+	// Per HandleEvent call: the deadline passed, whether the ctx was already
+	// cancelled, and the ctx's own deadline.
+	handleDeadlines  []time.Time
+	handleCtxErrs    []error
+	handleCtxExpires []time.Time
+	onHandle         func() // runs inside every HandleEvent call
 
 	issueErr   error
 	issuedFor  auth.Principal
@@ -47,8 +53,15 @@ type fakeLine struct {
 
 var testCodeExpiry = time.Date(2026, 10, 20, 12, 10, 0, 123000000, time.FixedZone("JST", 9*3600))
 
-func (f *fakeLine) HandleEvent(_ context.Context, ev line.Event) error {
+func (f *fakeLine) HandleEvent(ctx context.Context, ev line.Event, deadline time.Time) error {
 	f.handled = append(f.handled, ev)
+	f.handleDeadlines = append(f.handleDeadlines, deadline)
+	expires, _ := ctx.Deadline()
+	f.handleCtxExpires = append(f.handleCtxExpires, expires)
+	if f.onHandle != nil {
+		f.onHandle()
+	}
+	f.handleCtxErrs = append(f.handleCtxErrs, ctx.Err())
 	return f.handleErr
 }
 
@@ -163,6 +176,65 @@ func TestWebhookAnswers200WhenAnEventFailsAndKeepsGoing(t *testing.T) {
 	for _, leak := range []string{"secret-user-text", "你好", "U1\""} {
 		if strings.Contains(out, leak) {
 			t.Errorf("log contains %q: %s", leak, out)
+		}
+	}
+}
+
+const threeEventBody = `{"destination":"x","events":[
+{"type":"message","webhookEventId":"E1","replyToken":"r1","source":{"type":"user","userId":"U1"},"message":{"type":"text","text":"一"}},
+{"type":"message","webhookEventId":"E2","replyToken":"r2","source":{"type":"user","userId":"U1"},"message":{"type":"text","text":"二"}},
+{"type":"message","webhookEventId":"E3","replyToken":"r3","source":{"type":"user","userId":"U1"},"message":{"type":"text","text":"三"}}]}`
+
+func TestWebhookGivesEveryEventTheSameDeliveryDeadline(t *testing.T) {
+	f := &fakeLine{}
+	h, c, _ := lineRouter(t, auth.RoleMember, f)
+	start := c.Now()
+	f.onHandle = func() { c.Advance(10 * time.Second) } // later events must not get later deadlines
+	w := postWebhook(h, threeEventBody, lineSig(testLineSecret, threeEventBody))
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %q)", w.Code, w.Body.String())
+	}
+	if len(f.handleDeadlines) != 3 {
+		t.Fatalf("HandleEvent called %d times, want 3", len(f.handleDeadlines))
+	}
+	want := start.Add(45 * time.Second)
+	for i, d := range f.handleDeadlines {
+		if !d.Equal(want) {
+			t.Errorf("event %d deadline = %v, want request start + 45s = %v", i+1, d, want)
+		}
+	}
+}
+
+func TestWebhookEventsRunWithoutTheRequestCancellationAndWithATimeout(t *testing.T) {
+	f := &fakeLine{}
+	h, _, _ := lineRouter(t, auth.RoleMember, f)
+	reqCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	f.onHandle = cancel // the connection drops while the first event is handled
+
+	r := httptest.NewRequest("POST", "/v1/line/webhook", strings.NewReader(threeEventBody)).WithContext(reqCtx)
+	r.Header.Set("X-Line-Signature", lineSig(testLineSecret, threeEventBody))
+	w := httptest.NewRecorder()
+	before := time.Now()
+	h.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %q)", w.Code, w.Body.String())
+	}
+	if len(f.handled) != 3 {
+		t.Fatalf("handled %d events, want all 3 despite the cancelled request", len(f.handled))
+	}
+	for i, err := range f.handleCtxErrs {
+		if err != nil {
+			t.Errorf("event %d: ctx error = %v, want the request's cancellation not to reach it", i+1, err)
+		}
+	}
+	for i, exp := range f.handleCtxExpires {
+		if exp.IsZero() {
+			t.Fatalf("event %d: ctx has no deadline", i+1)
+		}
+		if d := exp.Sub(before); d < 54*time.Second || d > 56*time.Second {
+			t.Errorf("event %d: ctx expires in %v, want about 55s", i+1, d)
 		}
 	}
 }

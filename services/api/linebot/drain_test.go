@@ -140,7 +140,7 @@ func TestDrainStopsStartingRowsPastDeadline(t *testing.T) {
 	e.addPending("b", "correction", "二", 1, 11*time.Minute)
 	e.addPending("c", "correction", "三", 1, 10*time.Minute)
 	deadline := e.deadline()
-	e.gen.after = func() { e.clock.Advance(30 * time.Second) } // 2 rows fit in 50s, the third does not
+	e.gen.after = func() { e.clock.Advance(11 * time.Second) } // 2 rows start with 30s or more left, the third has 28s
 	if err := e.svc.Drain(context.Background(), deadline); err != nil {
 		t.Fatal(err)
 	}
@@ -187,12 +187,20 @@ func TestDrainDoesNotStartGenerationWithLessThanBudgetLeft(t *testing.T) {
 		t.Error("an attempt was counted")
 	}
 
-	// Exactly the budget left is enough.
+	// Exactly the generation budget is no longer enough: the push needs room too.
 	if err := e.svc.Drain(context.Background(), e.clock.Now().Add(20*time.Second)); err != nil {
 		t.Fatal(err)
 	}
+	if len(e.gen.calls) != 0 {
+		t.Error("generator called with 20s left, want the 30s guard (generation + push margin)")
+	}
+
+	// Exactly generation budget + reply margin left is enough.
+	if err := e.svc.Drain(context.Background(), e.clock.Now().Add(30*time.Second)); err != nil {
+		t.Fatal(err)
+	}
 	if len(e.gen.calls) != 1 {
-		t.Errorf("generator calls = %d, want 1 with 20s left", len(e.gen.calls))
+		t.Errorf("generator calls = %d, want 1 with 30s left", len(e.gen.calls))
 	}
 }
 

@@ -154,7 +154,7 @@ func TestLinkWithNormalizedCodes(t *testing.T) {
 	for _, in := range []string{" abcd2345 ", "ＡＢＣＤ２３４５", "ABCD2345"} {
 		e := newEnv(t)
 		e.putCode(testOwner, "member", "ABCD2345", t0.Add(5*time.Minute))
-		if err := e.svc.HandleEvent(context.Background(), textEvent("e1", in)); err != nil {
+		if err := e.svc.HandleEvent(context.Background(), textEvent("e1", in), e.deadline()); err != nil {
 			t.Fatal(err)
 		}
 		if got := e.onlyReply(t); got != line.MsgLinked {
@@ -179,7 +179,7 @@ func TestLinkWithNormalizedCodes(t *testing.T) {
 func TestLinkExpiredCode(t *testing.T) {
 	e := newEnv(t)
 	e.putCode(testOwner, "member", "ABCD2345", t0.Add(-time.Second))
-	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "ABCD2345")); err != nil {
+	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "ABCD2345"), e.deadline()); err != nil {
 		t.Fatal(err)
 	}
 	if got := e.onlyReply(t); got != line.MsgBadCode {
@@ -197,7 +197,7 @@ func TestLinkThrottledOnSixthAttempt(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
 	for i := 0; i < 5; i++ {
-		if err := e.svc.HandleEvent(ctx, textEvent("e"+string(rune('a'+i)), "ZZZZ2345")); err != nil {
+		if err := e.svc.HandleEvent(ctx, textEvent("e"+string(rune('a'+i)), "ZZZZ2345"), e.deadline()); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -207,7 +207,7 @@ func TestLinkThrottledOnSixthAttempt(t *testing.T) {
 	// Even a valid code is refused once throttled, without a store lookup.
 	e.putCode(testOwner, "member", "ABCD2345", t0.Add(5*time.Minute))
 	e.msg.replies = nil
-	if err := e.svc.HandleEvent(ctx, textEvent("e6", "ABCD2345")); err != nil {
+	if err := e.svc.HandleEvent(ctx, textEvent("e6", "ABCD2345"), e.deadline()); err != nil {
 		t.Fatal(err)
 	}
 	if got := e.onlyReply(t); got != line.MsgThrottled {
@@ -226,7 +226,7 @@ func TestLinkThrottleWindowAndLimit(t *testing.T) {
 	e := newEnv(t)
 	rec := &throttleRecorder{fakeStore: e.store}
 	e.svc.Store = rec
-	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "ZZZZ2345")); err != nil {
+	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "ZZZZ2345"), e.deadline()); err != nil {
 		t.Fatal(err)
 	}
 	if rec.key != "line-link:"+testLineUser || rec.limit != 5 || rec.window != time.Hour {
@@ -250,7 +250,7 @@ func TestRelink(t *testing.T) {
 	e := newEnv(t)
 	e.link()
 	e.putCode("owner-2", "member", "ABCD2345", t0.Add(5*time.Minute))
-	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "abcd2345")); err != nil {
+	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "abcd2345"), e.deadline()); err != nil {
 		t.Fatal(err)
 	}
 	if got := e.onlyReply(t); got != line.MsgRelinked {
@@ -271,7 +271,7 @@ func TestCodeShapedMessageSkipsOtherChecks(t *testing.T) {
 	e.link()
 	e.valid = false
 	e.putCode("owner-2", "member", "ABCD2345", t0.Add(5*time.Minute))
-	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "ABCD2345")); err != nil {
+	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "ABCD2345"), e.deadline()); err != nil {
 		t.Fatal(err)
 	}
 	if got := e.onlyReply(t); got != line.MsgRelinked {
@@ -282,7 +282,7 @@ func TestCodeShapedMessageSkipsOtherChecks(t *testing.T) {
 func TestStoreErrorOnFindLink(t *testing.T) {
 	e := newEnv(t)
 	e.store.findErr = errBoom
-	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "你好马？")); !errors.Is(err, errBoom) {
+	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "你好马？"), e.deadline()); !errors.Is(err, errBoom) {
 		t.Fatalf("err = %v, want errBoom", err)
 	}
 	if len(e.msg.replies) != 0 {

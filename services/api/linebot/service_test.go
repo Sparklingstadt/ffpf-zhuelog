@@ -14,7 +14,7 @@ import (
 
 func TestNotLinkedPlainText(t *testing.T) {
 	e := newEnv(t)
-	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "你好吗")); err != nil {
+	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "你好吗"), e.deadline()); err != nil {
 		t.Fatal(err)
 	}
 	if got := e.onlyReply(t); got != line.MsgNotLinked {
@@ -31,7 +31,7 @@ func TestNotLinkedPlainText(t *testing.T) {
 func TestNotLinkedNonText(t *testing.T) {
 	e := newEnv(t)
 	ev := line.Event{WebhookEventID: "e1", ReplyToken: "t", UserID: testLineUser, FromUser: true}
-	if err := e.svc.HandleEvent(context.Background(), ev); err != nil {
+	if err := e.svc.HandleEvent(context.Background(), ev, e.deadline()); err != nil {
 		t.Fatal(err)
 	}
 	if got := e.onlyReply(t); got != line.MsgNotLinked {
@@ -47,7 +47,7 @@ func TestGroupAndRoomEventsAreIgnored(t *testing.T) {
 		}
 		ev := textEvent("e1", "你好吗")
 		ev.FromUser = false
-		if err := e.svc.HandleEvent(context.Background(), ev); err != nil {
+		if err := e.svc.HandleEvent(context.Background(), ev, e.deadline()); err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
 		if len(e.msg.replies) != 0 || len(e.msg.pushes) != 0 || len(e.store.calls) != 0 || len(e.gen.calls) != 0 {
@@ -56,7 +56,7 @@ func TestGroupAndRoomEventsAreIgnored(t *testing.T) {
 		// A group event carrying a link code must not link either.
 		e.putCode(testOwner, "member", "ABCD2345", t0.Add(5*time.Minute))
 		ev.Text = "ABCD2345"
-		if err := e.svc.HandleEvent(context.Background(), ev); err != nil {
+		if err := e.svc.HandleEvent(context.Background(), ev, e.deadline()); err != nil {
 			t.Fatal(err)
 		}
 		if len(e.store.calls) != 0 || len(e.msg.replies) != 0 {
@@ -69,7 +69,7 @@ func TestLinkedNonTextGetsUsage(t *testing.T) {
 	e := newEnv(t)
 	e.link()
 	ev := line.Event{WebhookEventID: "e1", ReplyToken: "t", UserID: testLineUser, FromUser: true}
-	if err := e.svc.HandleEvent(context.Background(), ev); err != nil {
+	if err := e.svc.HandleEvent(context.Background(), ev, e.deadline()); err != nil {
 		t.Fatal(err)
 	}
 	if got := e.onlyReply(t); got != line.MsgUsage {
@@ -85,7 +85,7 @@ func TestUnsupportedTextGetsUsage(t *testing.T) {
 	e.link()
 	for _, text := range []string{"hello world", "   ", "12345"} {
 		e.msg.replies = nil
-		if err := e.svc.HandleEvent(context.Background(), textEvent("e-"+text, text)); err != nil {
+		if err := e.svc.HandleEvent(context.Background(), textEvent("e-"+text, text), e.deadline()); err != nil {
 			t.Fatal(err)
 		}
 		if got := e.onlyReply(t); got != line.MsgUsage {
@@ -101,7 +101,7 @@ func TestInvalidOwnerDeletesLink(t *testing.T) {
 	e := newEnv(t)
 	e.link()
 	e.valid = false
-	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "你好吗")); err != nil {
+	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "你好吗"), e.deadline()); err != nil {
 		t.Fatal(err)
 	}
 	if got := e.onlyReply(t); got != line.MsgLinkGone {
@@ -123,7 +123,7 @@ func TestOwnerCheckReceivesLinkOwnerAndRole(t *testing.T) {
 		gotOwner, gotRole = owner, role
 		return true, nil
 	}
-	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "你好吗")); err != nil {
+	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "你好吗"), e.deadline()); err != nil {
 		t.Fatal(err)
 	}
 	if gotOwner != "12345" || gotRole != "admin" {
@@ -135,7 +135,7 @@ func TestOwnerCheckError(t *testing.T) {
 	e := newEnv(t)
 	e.link()
 	e.svc.OwnerValid = func(context.Context, string, string) (bool, error) { return false, errBoom }
-	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "你好吗")); !errors.Is(err, errBoom) {
+	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "你好吗"), e.deadline()); !errors.Is(err, errBoom) {
 		t.Fatalf("err = %v, want errBoom", err)
 	}
 	if len(e.store.links) != 1 {
@@ -149,7 +149,7 @@ func TestOwnerCheckError(t *testing.T) {
 func TestCorrectionSuccess(t *testing.T) {
 	e := newEnv(t)
 	e.link()
-	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "  你好马？\n")); err != nil {
+	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "  你好马？\n"), e.deadline()); err != nil {
 		t.Fatal(err)
 	}
 	if len(e.gen.calls) != 1 || e.gen.calls[0] != (genCall{learning.KindCorrection, "你好马？"}) {
@@ -185,7 +185,7 @@ func TestTranslationSuccess(t *testing.T) {
 	e := newEnv(t)
 	e.link()
 	e.gen.result = learning.Result{Text: "我想吃饭。", Pinyin: "wǒ xiǎng chī fàn.", Hints: []string{"想 = したい"}}
-	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "ご飯が食べたい")); err != nil {
+	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "ご飯が食べたい"), e.deadline()); err != nil {
 		t.Fatal(err)
 	}
 	if e.gen.calls[0] != (genCall{learning.KindTranslation, "ご飯が食べたい"}) {
@@ -205,11 +205,11 @@ func TestRedeliveryAfterDoneDoesNothing(t *testing.T) {
 	e := newEnv(t)
 	e.link()
 	ctx := context.Background()
-	if err := e.svc.HandleEvent(ctx, textEvent("e1", "你好马？")); err != nil {
+	if err := e.svc.HandleEvent(ctx, textEvent("e1", "你好马？"), e.deadline()); err != nil {
 		t.Fatal(err)
 	}
 	e.msg.replies = nil
-	if err := e.svc.HandleEvent(ctx, textEvent("e1", "你好马？")); err != nil {
+	if err := e.svc.HandleEvent(ctx, textEvent("e1", "你好马？"), e.deadline()); err != nil {
 		t.Fatal(err)
 	}
 	if len(e.gen.calls) != 1 || len(e.store.entries) != 1 {
@@ -225,11 +225,11 @@ func TestRedeliveryWhilePendingDoesNothing(t *testing.T) {
 	e.link()
 	e.gen.err = &learning.Error{Code: "OPENAI_TIMEOUT", Retryable: true}
 	ctx := context.Background()
-	if err := e.svc.HandleEvent(ctx, textEvent("e1", "你好马？")); err != nil {
+	if err := e.svc.HandleEvent(ctx, textEvent("e1", "你好马？"), e.deadline()); err != nil {
 		t.Fatal(err)
 	}
 	e.msg.replies = nil
-	if err := e.svc.HandleEvent(ctx, textEvent("e1", "你好马？")); err != nil {
+	if err := e.svc.HandleEvent(ctx, textEvent("e1", "你好马？"), e.deadline()); err != nil {
 		t.Fatal(err)
 	}
 	if len(e.gen.calls) != 1 || len(e.msg.replies) != 0 {
@@ -241,7 +241,7 @@ func TestRetryableFailureStaysPending(t *testing.T) {
 	e := newEnv(t)
 	e.link()
 	e.gen.err = &learning.Error{Code: "OPENAI_TIMEOUT", Retryable: true}
-	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "你好马？")); err != nil {
+	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "你好马？"), e.deadline()); err != nil {
 		t.Fatal(err)
 	}
 	m := e.store.messages[0]
@@ -256,6 +256,58 @@ func TestRetryableFailureStaysPending(t *testing.T) {
 	}
 }
 
+func TestTooLittleTimeLeftSavesTheMessageWithoutGenerating(t *testing.T) {
+	e := newEnv(t)
+	e.link()
+	// 25s is below generationBudget + replyMargin (30s).
+	deadline := e.clock.Now().Add(25 * time.Second)
+	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "你好马？"), deadline); err != nil {
+		t.Fatal(err)
+	}
+	if len(e.gen.calls) != 0 {
+		t.Error("generator called with too little time left")
+	}
+	if len(e.store.messages) != 1 {
+		t.Fatalf("messages = %d, want the text saved", len(e.store.messages))
+	}
+	m := e.store.messages[0]
+	if m.Status != store.LineStatusPending || m.Text != "你好马？" || m.Attempts != 0 {
+		t.Errorf("message = %+v, want pending with its text and no attempt counted", m)
+	}
+	if e.store.called("StartLineMessageAttempt") || e.store.called("CompleteLineMessage") || e.store.called("FailLineMessage") {
+		t.Error("the row must be left alone for the drain")
+	}
+	if got := e.onlyReply(t); got != line.MsgSlow {
+		t.Errorf("reply = %q, want MsgSlow", got)
+	}
+}
+
+func TestEnoughTimeLeftGenerates(t *testing.T) {
+	e := newEnv(t)
+	e.link()
+	deadline := e.clock.Now().Add(31 * time.Second)
+	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "你好马？"), deadline); err != nil {
+		t.Fatal(err)
+	}
+	if len(e.gen.calls) != 1 {
+		t.Errorf("generator calls = %d, want 1", len(e.gen.calls))
+	}
+	if m := e.store.messages[0]; m.Status != store.LineStatusDone {
+		t.Errorf("status = %q, want done", m.Status)
+	}
+}
+
+func TestTooLittleTimeLeftDoesNotAffectLinking(t *testing.T) {
+	e := newEnv(t)
+	e.putCode(testOwner, "member", "ABCD2345", t0.Add(5*time.Minute))
+	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "ABCD2345"), e.clock.Now().Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.onlyReply(t); got != line.MsgLinked {
+		t.Errorf("reply = %q, want MsgLinked", got)
+	}
+}
+
 func TestPermanentFailureFailsRow(t *testing.T) {
 	cases := map[string]error{
 		"OPENAI_INVALID_RESPONSE": &learning.Error{Code: "OPENAI_INVALID_RESPONSE"},
@@ -266,7 +318,7 @@ func TestPermanentFailureFailsRow(t *testing.T) {
 		e := newEnv(t)
 		e.link()
 		e.gen.err = genErr
-		if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "你好马？")); err != nil {
+		if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "你好马？"), e.deadline()); err != nil {
 			t.Fatal(err)
 		}
 		m := e.store.messages[0]
@@ -286,7 +338,7 @@ func TestFailureUsesTranslationWording(t *testing.T) {
 	e := newEnv(t)
 	e.link()
 	e.gen.err = &learning.Error{Code: "OPENAI_RATE_LIMITED"}
-	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "ご飯")); err != nil {
+	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "ご飯"), e.deadline()); err != nil {
 		t.Fatal(err)
 	}
 	if got, want := e.onlyReply(t), line.FormatFailure("translation", "OPENAI_RATE_LIMITED"); got != want {
@@ -298,7 +350,7 @@ func TestLengthLimitIsCountedInRunes(t *testing.T) {
 	e := newEnv(t)
 	e.link()
 	ok := strings.Repeat("字", 499) + "😀" // 500 runes, well over 500 bytes
-	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", ok)); err != nil {
+	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", ok), e.deadline()); err != nil {
 		t.Fatal(err)
 	}
 	if len(e.gen.calls) != 1 {
@@ -307,7 +359,7 @@ func TestLengthLimitIsCountedInRunes(t *testing.T) {
 
 	e2 := newEnv(t)
 	e2.link()
-	if err := e2.svc.HandleEvent(context.Background(), textEvent("e2", ok+"字")); err != nil {
+	if err := e2.svc.HandleEvent(context.Background(), textEvent("e2", ok+"字"), e2.deadline()); err != nil {
 		t.Fatal(err)
 	}
 	if got := e2.onlyReply(t); got != line.MsgTooLong {
@@ -322,7 +374,7 @@ func TestTrailingWhitespaceDoesNotCountTowardLimit(t *testing.T) {
 	e := newEnv(t)
 	e.link()
 	text := strings.Repeat("字", 500) + "  \n"
-	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", text)); err != nil {
+	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", text), e.deadline()); err != nil {
 		t.Fatal(err)
 	}
 	if len(e.gen.calls) != 1 || e.gen.calls[0].text != strings.Repeat("字", 500) {
@@ -333,7 +385,7 @@ func TestTrailingWhitespaceDoesNotCountTowardLimit(t *testing.T) {
 func TestMissingEventIDIsSkipped(t *testing.T) {
 	e := newEnv(t)
 	e.link()
-	if err := e.svc.HandleEvent(context.Background(), textEvent("", "你好马？")); err != nil {
+	if err := e.svc.HandleEvent(context.Background(), textEvent("", "你好马？"), e.deadline()); err != nil {
 		t.Fatal(err)
 	}
 	if e.store.called("InsertLineMessage") || len(e.gen.calls) != 0 {
@@ -345,7 +397,7 @@ func TestStoreErrorsPropagate(t *testing.T) {
 	e := newEnv(t)
 	e.link()
 	e.store.insertErr = errBoom
-	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "你好马？")); !errors.Is(err, errBoom) {
+	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "你好马？"), e.deadline()); !errors.Is(err, errBoom) {
 		t.Fatalf("err = %v, want errBoom", err)
 	}
 	if len(e.gen.calls) != 0 {
@@ -357,7 +409,7 @@ func TestCompleteFailureLeavesRowPendingAndReportsSlow(t *testing.T) {
 	e := newEnv(t)
 	e.link()
 	e.store.completeEr = errBoom
-	err := e.svc.HandleEvent(context.Background(), textEvent("e1", "你好马？"))
+	err := e.svc.HandleEvent(context.Background(), textEvent("e1", "你好马？"), e.deadline())
 	if !errors.Is(err, errBoom) {
 		t.Fatalf("err = %v, want errBoom", err)
 	}
@@ -373,7 +425,7 @@ func TestCompleteNotFoundSendsNothing(t *testing.T) {
 	e := newEnv(t)
 	e.link()
 	e.store.completeEr = store.ErrNotFound
-	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "你好马？")); err != nil {
+	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "你好马？"), e.deadline()); err != nil {
 		t.Fatal(err)
 	}
 	if len(e.msg.replies) != 0 {
@@ -386,7 +438,7 @@ func TestFailLineMessageErrorSendsNoFailureReply(t *testing.T) {
 	e.link()
 	e.gen.err = &learning.Error{Code: "OPENAI_AUTH_FAILED"}
 	e.store.failErr = errBoom
-	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "你好马？")); !errors.Is(err, errBoom) {
+	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "你好马？"), e.deadline()); !errors.Is(err, errBoom) {
 		t.Fatalf("err = %v, want errBoom", err)
 	}
 	if len(e.msg.replies) != 0 {
@@ -398,7 +450,7 @@ func TestReplyFailureDoesNotChangeState(t *testing.T) {
 	e := newEnv(t)
 	e.link()
 	e.msg.replyErr = errBoom
-	err := e.svc.HandleEvent(context.Background(), textEvent("e1", "你好马？"))
+	err := e.svc.HandleEvent(context.Background(), textEvent("e1", "你好马？"), e.deadline())
 	if !errors.Is(err, errBoom) {
 		t.Fatalf("err = %v, want the reply error", err)
 	}
@@ -411,7 +463,7 @@ func TestReplyFailureOnLinking(t *testing.T) {
 	e := newEnv(t)
 	e.msg.replyErr = errBoom
 	e.putCode(testOwner, "member", "ABCD2345", t0.Add(5*time.Minute))
-	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "ABCD2345")); !errors.Is(err, errBoom) {
+	if err := e.svc.HandleEvent(context.Background(), textEvent("e1", "ABCD2345"), e.deadline()); !errors.Is(err, errBoom) {
 		t.Fatalf("err = %v", err)
 	}
 	if _, ok := e.store.links[testLineUser]; !ok {
@@ -424,7 +476,7 @@ func TestPrimaryErrorWinsOverReplyError(t *testing.T) {
 	e.link()
 	e.store.completeEr = errBoom
 	e.msg.replyErr = errors.New("reply broke")
-	err := e.svc.HandleEvent(context.Background(), textEvent("e1", "你好马？"))
+	err := e.svc.HandleEvent(context.Background(), textEvent("e1", "你好马？"), e.deadline())
 	if !errors.Is(err, errBoom) {
 		t.Fatalf("err = %v, want the store error", err)
 	}
@@ -443,7 +495,7 @@ func TestLogsNeverContainSensitiveValues(t *testing.T) {
 		e.link()
 		e.gen.result = learning.Result{Text: secretResult, Pinyin: secretResult, Hints: []string{secretResult}}
 		setup(e)
-		_ = e.svc.HandleEvent(ctx, textEvent("event-1", text))
+		_ = e.svc.HandleEvent(ctx, textEvent("event-1", text), e.deadline())
 		return e
 	}
 	envs := []*env{

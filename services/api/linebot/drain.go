@@ -17,8 +17,14 @@ const (
 	// drainBatch bounds the rows one Drain call looks at.
 	drainBatch = 20
 	// generationBudget is the longest one generation may take (OpenAI's own
-	// timeout); a row is not started with less time than this left.
+	// timeout).
 	generationBudget = 20 * time.Second
+	// replyMargin is the time kept after a generation to save the note and send
+	// the reply or push.
+	replyMargin = 10 * time.Second
+	// minTimeLeft is the least time a generation is started with: the budget
+	// plus the margin, so the last one still finishes before the deadline.
+	minTimeLeft = generationBudget + replyMargin
 	// exhaustedCode is what a message that used up its attempts without an
 	// answer is reported as.
 	exhaustedCode = "OPENAI_TIMEOUT"
@@ -26,11 +32,11 @@ const (
 
 // Drain finishes messages that stayed pending for at least 5 minutes, oldest
 // first. It prunes old rows first, so that never depends on the loop. It does
-// not start a generation with less than generationBudget left before deadline
-// (the row waits for the next run), so the pass ends before the deadline. A
-// row that succeeds becomes a note and a push; a row that fails, retryable or
-// not, is marked failed and the failure is pushed. The first error is returned
-// after the whole pass has run.
+// not start a generation with less than minTimeLeft (generation plus push
+// margin) left before deadline (the row waits for the next run), so the pass
+// ends before the deadline. A row that succeeds becomes a note and a push; a
+// row that fails, retryable or not, is marked failed and the failure is
+// pushed. The first error is returned after the whole pass has run.
 func (s *Service) Drain(ctx context.Context, deadline time.Time) error {
 	var first error
 	note := func(err error) {
@@ -55,7 +61,7 @@ func (s *Service) Drain(ctx context.Context, deadline time.Time) error {
 		}
 		// A row with attempts left may call OpenAI; an exhausted one is only
 		// failed, which is quick.
-		if row.Attempts < store.LineMaxAttempts && left < generationBudget {
+		if row.Attempts < store.LineMaxAttempts && left < minTimeLeft {
 			continue
 		}
 		note(s.drainRow(ctx, row))

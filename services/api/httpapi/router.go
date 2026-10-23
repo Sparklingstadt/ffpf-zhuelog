@@ -224,7 +224,7 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	// the drain are public but check their own credential (the LINE signature,
 	// the cron secret); the three link routes are for members and admins.
 	if d.Line != nil {
-		public("POST "+lineWebhookPath, lineWebhook(d.Line, d.LineChannelSecret))
+		public("POST "+lineWebhookPath, lineWebhook(d.Line, d.LineChannelSecret, d.Now))
 		public("GET "+lineDrainPath, lineDrain(d.Line, d.CronSecret, d.Now))
 		private("GET /v1/line/link", authed(lineLinked(d.Line)))
 		private("POST /v1/line/link-code", authed(lineLinkCode(d.Line)))
