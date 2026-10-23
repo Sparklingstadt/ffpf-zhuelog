@@ -36,18 +36,22 @@ Web 用とは別の OAuth App を新しく作ります。GitHub の **Settings �
 
 ビルドのために `GOFLAGS` に `-buildvcs=false` を入れます（Production と Preview）。Vercel のビルド環境には `.git` が無く、`go build` がコミットの情報を埋め込めずに失敗するためです。
 
-| 名前                          | 内容                                                                                                |
-| ----------------------------- | --------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                | Neon の pooled 接続文字列（ホスト名に `-pooler` を含むもの）。`?schema=` は付けない（下の注を参照） |
-| `API_JWT_SECRET`              | アクセス JWT の HS256 鍵。`openssl rand -base64 48` で作る（32 バイト以上）                         |
-| `GITHUB_MOBILE_CLIENT_ID`     | モバイル用 GitHub OAuth App の Client ID                                                            |
-| `GITHUB_MOBILE_CLIENT_SECRET` | モバイル用 GitHub OAuth App の Client Secret                                                        |
-| `GITHUB_MOBILE_REDIRECT_URI`  | アプリのカスタム URL スキーム                                                                       |
-| `AUTH_ALLOWED_GITHUB_IDS`     | admin の許可リスト。GitHub の数値 ID をカンマ区切りで（Go API だけに設定します）                    |
-| `GITHUB_WEB_CLIENT_ID`        | Web 用 GitHub OAuth App の Client ID（Web の GitHub ログインに必要。下の注を参照）                  |
-| `GITHUB_WEB_CLIENT_SECRET`    | Web 用 GitHub OAuth App の Client Secret                                                            |
-| `GITHUB_WEB_REDIRECT_URI`     | `https://<Web のホスト>/api/auth/callback/github/go`                                                |
-| `API_WEB_PROXY_SECRET`        | Web サーバーと共有する秘密。32 バイト以上（`openssl rand -base64 48`）。Web から使うときは必要      |
+| 名前                          | 内容                                                                                                    |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                | Neon の pooled 接続文字列（ホスト名に `-pooler` を含むもの）。`?schema=` は付けない（下の注を参照）     |
+| `API_JWT_SECRET`              | アクセス JWT の HS256 鍵。`openssl rand -base64 48` で作る（32 バイト以上）                             |
+| `GITHUB_MOBILE_CLIENT_ID`     | モバイル用 GitHub OAuth App の Client ID                                                                |
+| `GITHUB_MOBILE_CLIENT_SECRET` | モバイル用 GitHub OAuth App の Client Secret                                                            |
+| `GITHUB_MOBILE_REDIRECT_URI`  | アプリのカスタム URL スキーム                                                                           |
+| `AUTH_ALLOWED_GITHUB_IDS`     | admin の許可リスト。GitHub の数値 ID をカンマ区切りで（Go API だけに設定します）                        |
+| `GITHUB_WEB_CLIENT_ID`        | Web 用 GitHub OAuth App の Client ID（Web の GitHub ログインに必要。下の注を参照）                      |
+| `GITHUB_WEB_CLIENT_SECRET`    | Web 用 GitHub OAuth App の Client Secret                                                                |
+| `GITHUB_WEB_REDIRECT_URI`     | `https://<Web のホスト>/api/auth/callback/github/go`                                                    |
+| `API_WEB_PROXY_SECRET`        | Web サーバーと共有する秘密。32 バイト以上（`openssl rand -base64 48`）。Web から使うときは必要          |
+| `LINE_CHANNEL_SECRET`         | LINE の Messaging API のチャネルシークレット（LINE 連携を使うときだけ。下の注と「7. LINE 連携」を参照） |
+| `LINE_CHANNEL_ACCESS_TOKEN`   | LINE の長期のチャネルアクセストークン                                                                   |
+| `OPENAI_API_KEY`              | OpenAI の API キー                                                                                      |
+| `CRON_SECRET`                 | 拾い直しの Cron の認証用の秘密。Vercel が Cron の呼び出しに `Authorization: Bearer <値>` を付けます     |
 
 - `DATABASE_URL` は、手で入れなくても、チームの **Storage** タブで Web が使っている Neon のストアを開き、**Connect Project** から Go API のプロジェクトをつなぐと入ります（pooled の接続文字列です。`channel_binding=require` が付いていても Go API はそのまま使えます）。
 - `GITHUB_WEB_CLIENT_SECRET` は、Vercel に入れた値を読み戻せないので、GitHub の OAuth App の画面で **Generate a new client secret** を押して新しく作ります。段階3をマージするまでは、本番の Web（Auth.js）のログインが古い Secret を使うので、古い Secret を消さないでください。
@@ -62,6 +66,9 @@ Web 用とは別の OAuth App を新しく作ります。GitHub の **Settings �
 - Web 用の OAuth App は、以前から Web で使っているものをそのまま使えます。GitHub は登録した callback URL の **下の階層** を `redirect_uri` に使えるので、Web の callback（`https://<Web>/api/auth/callback/github/go`）は登録済みの callback（`/api/auth/callback/github`）の下になり、OAuth App の設定を変える必要はありません。
 - `API_WEB_PROXY_SECRET` は、Web（Next.js）が利用者の IP を渡すための共有の秘密です。使い方は [レート制限とクライアントの IP](#レート制限とクライアントの-ip) を見てください。空のときは `X-Zhuelog-Client-IP` を常に無視します。
 - `API_WEB_PROXY_SECRET` も `API_JWT_SECRET` と同じく、Production と Preview で **別の値** にします。同じだと、プレビューの Web が本番の Go API に任意の IP を名乗れてしまいます。
+- LINE の 3 つ（`LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`OPENAI_API_KEY`）は、**すべて設定するか、すべて空** にします。一部だけだと起動時に止まります。すべて空のときは Go API は普通に起動し、`/v1/line/*` の 5 つのルートが `404` になります（LINE 連携が無い状態です）。
+- `CRON_SECRET` が空のときは、`GET /v1/line/drain` は常に `401` です（拾い直しが動きません）。LINE 連携を使うときは設定します。
+- `OPENAI_API_BASE_URL` と `LINE_API_BASE_URL` は、テストが偽のサーバーへつなぐための設定です。`127.0.0.1` などのループバックの URL だけを受け付け、それ以外は起動時に止まります。**本番と Preview には設定しません。**
 
 DB への接続は、TLS で証明書まで検証します。ホストが `localhost`・`127.0.0.1`・`::1` 以外のとき（または `sslmode` が `prefer`・`require`・`verify-ca` のとき）、Go API は `sslmode` を `verify-full` に置き換えます。Neon の接続文字列の `sslmode=require` はそのままで構いません。`?schema=public` は無視しますが、それ以外のスキーマは `search_path` の起動パラメータになり、プーラーに拒否されることがあるので付けないでください。
 
@@ -113,6 +120,14 @@ Go API の Vercel プロジェクトには、`GITHUB_WEB_CLIENT_ID`・`GITHUB_WE
 - `AUTH_GITHUB_ID` と `GITHUB_WEB_CLIENT_ID` が別の OAuth App だと、GitHub が発行した `code` を Go API が交換できず、GitHub ログインが失敗します。
 - `AUTH_SECRET`・`AUTH_GITHUB_SECRET`・`AUTH_ALLOWED_GITHUB_IDS` は、Web では使いません。`DATABASE_URL` も Web の実行とビルドには要りません。ただし、マイグレーションの手順（`vercel env pull`）で本番の `DATABASE_URL` を取るのに使うので、Web のプロジェクトに残しておいて構いません。
 
+LINE 連携を使うときは、Web の Vercel プロジェクトに、もう 1 つ次の値を入れます（無くても Web は動きます）。
+
+| 名前                  | 内容                                                                                                                       |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `LINE_ADD_FRIEND_URL` | LINE 公式アカウントの友だち追加のリンク（例: `https://line.me/R/ti/p/@your-account`）。`https://` で始まるものだけ使います |
+
+`LINE_ADD_FRIEND_URL` が無い・`https://` で始まらないときは、「LINE 連携」画面（`/account/line`）に友だち追加のリンクを出しません（連携コードの発行と解除はできます）。
+
 ### Web のプレビュー（Preview）
 
 PR ごとの Web のプレビューも、ログインとデータの読み書きを Go API で行います。そのため、Web の Vercel プロジェクトの **Preview** の環境変数にも、次の 4 つを入れます。
@@ -145,6 +160,39 @@ PR ごとの Web のプレビューも、ログインとデータの読み書き
 ### 戻す手順
 
 段階3のあとは、Auth.js に切り替える設定はありません。戻すときは、段階3のマージを取り消し（revert し）、Web を再デプロイします。取り消した後の Web は、学習ノートを DB から直接読み書きするので、Web に `DATABASE_URL` が要ります。ログインは、`GO_API_URL` があるうちは Go API のままです。Auth.js のログインまで戻すときは、さらに Web から `GO_API_URL` を消して再デプロイします。このとき `AUTH_SECRET`・`AUTH_GITHUB_SECRET`・`AUTH_ALLOWED_GITHUB_IDS` も要り、全員がログインし直しになります。
+
+## 7. LINE 連携
+
+LINE に送った文を OpenAI で添削・翻訳し、送った人の学習ノートに追加する機能です。会員と管理者が、Web の「LINE 連携」画面（`/account/line`）で連携コードを出し、それを LINE に送ると、その LINE とアカウントが結びつきます。ゲストは使えません。仕様は `docs/superpowers/specs/2026-10-23-line-via-go-api-design.md` にあります。
+
+Go API の次の 5 つのルートで動きます。LINE の設定（上の「3. 環境変数」）が空のときは、どれも `404` です。
+
+| メソッド | パス                 | 認証                                  | 内容                                                                 |
+| -------- | -------------------- | ------------------------------------- | -------------------------------------------------------------------- |
+| POST     | `/v1/line/webhook`   | LINE の署名（`X-Line-Signature`）     | LINE からの通知を受け取り、添削・翻訳して返信する                    |
+| GET      | `/v1/line/link`      | 会員・管理者（ゲストは `403`）        | LINE と連携しているか（`{"linked": true}`）                          |
+| POST     | `/v1/line/link-code` | 会員・管理者（ゲストは `403`）        | 連携コード（8 文字、10 分）を出す。前のコードは無効になる            |
+| DELETE   | `/v1/line/link`      | 会員・管理者（ゲストは `403`）        | 連携を解除する（連携していなくても `204`）                           |
+| GET      | `/v1/line/drain`     | `Authorization: Bearer <CRON_SECRET>` | 結果が出ないまま残ったメッセージの拾い直し（Vercel Cron が呼びます） |
+
+- 送った文は、webhook のリクエストの中で処理します（保存 → OpenAI → 学習ノートに保存 → reply）。reply は無料です。添削・翻訳の結果は、バッチ名 `LINE` のノートとして保存します。
+- 拾い直しは、`services/api/vercel.json` の Cron（`0 21 * * *`、UTC なので日本時間の毎日 06:00）が `GET /v1/line/drain` を呼んで行います。5 分以上 `pending` のまま残ったメッセージを 1 回だけ試し直し、できたら push で、できなければ失敗を push で知らせます。push は、LINE の無料プランでは月 200 通の枠を使います。
+- ログには、イベント ID・メッセージの ID・コードだけを出し、本文・生成結果・鍵・LINE のユーザー ID・連携コードは出しません。
+- 使う表は `LineLink`・`LineLinkCode`・`LineMessage` の 3 つで、Prisma のマイグレーション `20261023090000_add_line_link` で作ります。
+
+### 切り替えの手順
+
+LINE 連携を本番で使い始めるときは、次の順で行います。
+
+1. LINE Developers で、Messaging API のチャネルを用意します（以前のチャネルが残っていれば使えます）。**Webhook URL** を `https://ffpf-zhuelog-api.vercel.app/v1/line/webhook` にして、Webhook の利用をオンにします。「**応答メッセージ**」は **オフ** にします（オンのままだと、LINE の自動応答とこの API の返信が二重に届きます）。
+2. Go API の Vercel プロジェクトの Production に、`LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`OPENAI_API_KEY`・`CRON_SECRET` を入れます。Web の Vercel プロジェクトには `LINE_ADD_FRIEND_URL` を入れます。
+3. **main にマージする前に**、本番の Neon にマイグレーション `20261023090000_add_line_link` を適用します（main は Web と Go API の両方の本番へ自動でデプロイされるため。手順は「4. 本番の DB の確認」の `vercel env pull` と `migrate deploy`）。
+4. main にマージします。
+5. Go API をデプロイします。今の Go API の Vercel プロジェクトは、Git からの自動デプロイが切れている（`createDeployments: disabled`）ので、マージしてもデプロイされません。ダッシュボードの **Deployments → Redeploy**（または Vercel CLI）で手で出すか、**Settings → Git** で自動デプロイを入れ直します。
+6. Web が本番の URL に付いたかも確かめます。Web の Vercel プロジェクトの Deployment Checks は、今はもう無い CI のチェック（`verify (24)`・`verify (26)`・`e2e`）を待ち続けるので、本番の URL が付かないことがあります。直すまでは、デプロイを手で Promote します。
+7. 自分の LINE で、連携・添削・翻訳・解除を試します。
+
+`services/api/vercel.json` の `functions` の `"main.go"`（`maxDuration` が 60 秒）は、Go の Framework Preset で通るのかを確かめられていません。最初のデプロイが、このキーのせいで失敗したら、`functions` のブロックを消してください（既定の最大実行時間でも足ります）。
 
 ## 運用上の注意
 

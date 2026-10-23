@@ -184,6 +184,17 @@ DBマイグレーション `20261008120000_add_note_trash`（`LearningEntry` に
 
 DBマイグレーション `20261010000353_add_follows_and_shared_notes`（`Follow` テーブルの追加と、`LearningEntry` への `sharedAt` 列の追加）が必要です。マージの前に、Vercelとリンク済みのリポジトリで、このPRのブランチを `git switch --detach` で開いて、パスワードアカウントの節と同じ手順で本番DB（Neon）へ適用してください。
 
+## LINE 連携
+
+LINE に中国語や日本語の文を送ると、OpenAI（ChatGPT）で添削・翻訳し、送った人の学習ノートに追加します。会員と管理者が、それぞれ自分の LINE を結びつけて使います（ゲストは使えません）。Go API（`services/api/`）の `/v1/line/*` で動きます。
+
+- **結びつけ**: Web の `/account/line`（ヘッダーの「LINE 連携」）で「連携コードを出す」を押し、出た 8 文字のコード（10 分で切れます）を LINE の公式アカウントに送ります。同じ画面から連携を解除できます。
+- **添削と翻訳**: 漢字だけの文は添削、ひらがなやカタカナを含む文は中国語への翻訳です。結果は LINE に返信され、学習ノートに保存されます（翻訳は `kind=translation`）。500 文字までです。
+- **結びついていない LINE**: 送った文は学習ノートにも OpenAI にも届きません。
+- **失敗したとき**: 時間切れなどで結果が出なかった文は、1 日 1 回の Cron（毎日 06:00 JST）が 1 回だけ試し直し、できた結果か失敗を LINE に送ります。
+- **設定**: Go API に `LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`OPENAI_API_KEY`（3 つともか、すべて空）と `CRON_SECRET`、Web に `LINE_ADD_FRIEND_URL`（友だち追加のリンク。無くても動きます）を入れます。設定が空のときは LINE 連携は使えず、画面には「LINE 連携は今は使えません。」と出ます。ローカルでは使えません。
+- **本番への反映**: DBマイグレーション `20261023090000_add_line_link`（`LineLink`・`LineLinkCode`・`LineMessage` の追加）を、**main へのマージの前に** 本番のNeonへ適用してください。LINE の Webhook URL の設定など、切り替えの手順は [docs/api-deployment.md](docs/api-deployment.md) の「7. LINE 連携」にあります。
+
 ## LINE・チャットのテーブルの削除
 
 DBマイグレーション `20261020090000_drop_line_and_chat` は、LINEと管理者チャットを削除したあとに残っていたテーブル（`LineLearningJob`・`LineDevelopmentSession`・`ChatConversation`）を削除します。今のコードはどれも読み書きしないので、適用する前にデプロイしても、あとにデプロイしても動作は変わりません。**適用すると、保存されていたLINEのジョブとチャットの履歴は元に戻せません。** 残したいデータがあれば、先にNeonでバックアップを取ってください。手順は、パスワードアカウントの節と同じです（`vercel env pull` → `migrate deploy` → `migrate status`）。

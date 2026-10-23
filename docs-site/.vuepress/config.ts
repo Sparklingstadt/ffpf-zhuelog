@@ -33,6 +33,7 @@ export default defineUserConfig({
           "/reference/sharing.md",
           "/reference/follows.md",
           "/reference/log-dates.md",
+          "/reference/line.md",
           "/reference/admin.md",
           "/reference/health.md",
         ],

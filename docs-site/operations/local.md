@@ -45,6 +45,8 @@ pnpm run api:smoke
 
 GitHub ログイン（`POST /v1/auth/github`）は本物の OAuth App が必要なので、ローカルでは使えません。パスワードログインで試してください。
 
+LINE 連携も、ローカルでは使えません。本物の LINE のチャネルと OpenAI の API キーが要るためです。`scripts/api-local-env.sh` は LINE の環境変数を設定しないので、`/v1/line/*` のルート（5 つ）は `404` になります。Web の「LINE 連携」画面（`/account/line`）には、「LINE 連携は今は使えません。」と出ます。
+
 ## curl で試す例
 
 ```bash
