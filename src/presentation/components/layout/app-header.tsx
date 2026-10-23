@@ -4,6 +4,7 @@ import {
   KeyRound,
   Languages,
   LogOut,
+  MessageCircle,
   UserCog,
   UsersRound,
   type LucideIcon,
@@ -68,6 +69,11 @@ function UserControls({ user }: { user: AuthenticatedUser }) {
         {isMember || isAdmin ? (
           <NavLink href="/follow" icon={UsersRound}>
             フォロー
+          </NavLink>
+        ) : null}
+        {isMember || isAdmin ? (
+          <NavLink href="/account/line" icon={MessageCircle}>
+            LINE 連携
           </NavLink>
         ) : null}
         {isMember ? (

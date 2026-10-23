@@ -20,6 +20,7 @@ func TestOnlyReadRoutesAcceptUserParam(t *testing.T) {
 	}}
 	d := Deps{
 		Auth: a, Entries: &fakeEntries{}, Follows: &fakeFollows{},
+		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret,
 		Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
 	}.withDefaults()
 	mux, routes := newMux(d)
@@ -65,13 +66,17 @@ func TestOnlyReadRoutesAcceptUserParam(t *testing.T) {
 	}
 }
 
-// TestPublicRouteSetIsExactlyTheEightKnownRoutes pins the routes that are not
+// TestPublicRouteSetIsExactlyTheKnownRoutes pins the routes that are not
 // behind requireAuth. Both the route table and real behaviour are checked: a
-// request without a token must get 401 on every route except these eight, so
-// a private route registered with public(...) by mistake fails here.
-func TestPublicRouteSetIsExactlyTheEightKnownRoutes(t *testing.T) {
+// request without a token must get 401 on every route except these, so a
+// private route registered with public(...) by mistake fails here. The two
+// LINE routes are public but check their own credential (a signature, the
+// cron secret), so an anonymous request is expected to get 401 from them;
+// their credential checks are tested in line_handlers_test.go.
+func TestPublicRouteSetIsExactlyTheKnownRoutes(t *testing.T) {
 	d := Deps{
 		Auth: &fakeAuth{}, Entries: &fakeEntries{}, Follows: &fakeFollows{},
+		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret,
 		Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
 	}.withDefaults()
 	mux, routes := newMux(d)
@@ -86,7 +91,10 @@ func TestPublicRouteSetIsExactlyTheEightKnownRoutes(t *testing.T) {
 		"POST /v1/auth/refresh",
 		"POST /v1/auth/logout",
 		"POST /v1/auth/guest",
+		"POST /v1/line/webhook",
+		"GET /v1/line/drain",
 	}
+	selfAuthenticated := map[string]bool{"POST /v1/line/webhook": true, "GET /v1/line/drain": true}
 	isPublic := map[string]bool{}
 	for _, p := range want {
 		isPublic[p] = true
@@ -100,6 +108,12 @@ func TestPublicRouteSetIsExactlyTheEightKnownRoutes(t *testing.T) {
 		}
 		method, path, _ := strings.Cut(rt.pattern, " ")
 		w := do(h, method, paths.Replace(path), "", nil)
+		if selfAuthenticated[rt.pattern] {
+			if w.Code != http.StatusUnauthorized {
+				t.Errorf("%s: no credential got %d, want 401", rt.pattern, w.Code)
+			}
+			continue
+		}
 		if isPublic[rt.pattern] {
 			if w.Code == http.StatusUnauthorized {
 				t.Errorf("%s: public route answered 401 without a token", rt.pattern)
@@ -126,6 +140,7 @@ func TestRoutesRejectGuests(t *testing.T) {
 	}}
 	d := Deps{
 		Auth: a, Entries: &fakeEntries{}, Follows: &fakeFollows{},
+		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret,
 		Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
 	}.withDefaults()
 	mux, routes := newMux(d)

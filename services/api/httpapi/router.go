@@ -91,6 +91,12 @@ type Deps struct {
 	// WebProxySecret, when non-empty, lets the Next.js web server forward the
 	// end user's IP (see clientKeyFunc).
 	WebProxySecret []byte
+	// Line serves the LINE routes; nil means LINE is not configured and the
+	// routes are not registered. LineChannelSecret verifies webhook
+	// signatures and CronSecret guards GET /v1/line/drain.
+	Line              LineService
+	LineChannelSecret []byte
+	CronSecret        []byte
 }
 
 const (
@@ -213,6 +219,17 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	private("GET /v1/admin/accounts", adminOnly(listAccounts(d.Accounts)))
 	private("POST /v1/admin/accounts", adminOnly(createAccount(d.Accounts, d.Hasher, d.Now)))
 	private("POST /v1/admin/accounts/{id}/password", adminOnly(resetAccountPassword(d.Accounts, d.Hasher, d.Now)))
+
+	// The LINE routes exist only when the bot is configured. The webhook and
+	// the drain are public but check their own credential (the LINE signature,
+	// the cron secret); the three link routes are for members and admins.
+	if d.Line != nil {
+		public("POST "+lineWebhookPath, lineWebhook(d.Line, d.LineChannelSecret, d.Now))
+		public("GET "+lineDrainPath, lineDrain(d.Line, d.CronSecret, d.Now))
+		private("GET /v1/line/link", authed(lineLinked(d.Line)))
+		private("POST /v1/line/link-code", authed(lineLinkCode(d.Line)))
+		private("DELETE /v1/line/link", authed(lineUnlink(d.Line)))
+	}
 
 	return mux, routes
 }

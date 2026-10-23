@@ -4,42 +4,47 @@
 
 ## 一覧
 
-権限の列：「公開」は認証不要、「全員」は admin と会員（ゲストは `403`。`GET /v1/me` だけ「ゲストも」）、「会員」「admin」はその役割だけ（それ以外は `403`）。`?user=` の列は、admin が他の人のノートを読むためのクエリを受け付けるかどうかです。
+権限の列：「公開」は認証不要（LINE のルートは、括弧の中の別の方法で確かめます。LINE の設定が無いときは `/v1/line/*` の 5 つが `404`）、「全員」は admin と会員（ゲストは `403`。`GET /v1/me` だけ「ゲストも」）、「会員」「admin」はその役割だけ（それ以外は `403`）。`?user=` の列は、admin が他の人のノートを読むためのクエリを受け付けるかどうかです。
 
-| メソッド | パス                                                                                           | 権限             | `?user=` | 成功 | 内容                                 |
-| -------- | ---------------------------------------------------------------------------------------------- | ---------------- | -------- | ---- | ------------------------------------ |
-| POST     | [`/v1/auth/github`](./auth.md#post-v1-auth-github)                                             | 公開             | —        | 200  | GitHub ログイン                      |
-| POST     | [`/v1/auth/guest`](./auth.md#post-v1-auth-guest)                                               | 公開             | —        | 200  | ゲストログイン                       |
-| POST     | [`/v1/auth/password`](./auth.md#post-v1-auth-password)                                         | 公開             | —        | 200  | パスワードログイン                   |
-| POST     | [`/v1/auth/refresh`](./auth.md#post-v1-auth-refresh)                                           | 公開             | —        | 200  | トークンのローテーション             |
-| POST     | [`/v1/auth/logout`](./auth.md#post-v1-auth-logout)                                             | 公開             | —        | 204  | ログアウト                           |
-| GET      | [`/v1/me`](./auth.md#get-v1-me)                                                                | 全員（ゲストも） | ×        | 200  | 自分の情報                           |
-| POST     | [`/v1/account/password`](./auth.md#post-v1-account-password)                                   | 会員             | ×        | 204  | 自分のパスワードの変更               |
-| GET      | [`/v1/entries`](./entries.md#get-v1-entries)                                                   | 全員             | ○        | 200  | ノートの一覧                         |
-| GET      | [`/v1/entries/{id}`](./entries.md#get-v1-entries-id)                                           | 全員             | ○        | 200  | ノートの詳細                         |
-| POST     | [`/v1/batches`](./entries.md#post-v1-batches)                                                  | 全員             | ×        | 201  | ノートの一括作成                     |
-| PATCH    | [`/v1/entries/{id}`](./entries.md#patch-v1-entries-id)                                         | 全員             | ×        | 200  | ノートの部分更新                     |
-| DELETE   | [`/v1/entries/{id}`](./entries.md#delete-v1-entries-id)                                        | 全員             | ×        | 204  | ゴミ箱へ移動                         |
-| POST     | [`/v1/imports/csv`](./entries.md#post-v1-imports-csv)                                          | 全員             | ×        | 201  | CSV のインポート                     |
-| GET      | [`/v1/trash`](./trash.md#get-v1-trash)                                                         | 全員             | ×        | 200  | ゴミ箱の一覧                         |
-| POST     | [`/v1/trash/{id}/restore`](./trash.md#post-v1-trash-id-restore)                                | 全員             | ×        | 200  | 復元                                 |
-| DELETE   | [`/v1/trash/{id}`](./trash.md#delete-v1-trash-id)                                              | 全員             | ×        | 204  | 完全に削除                           |
-| DELETE   | [`/v1/trash`](./trash.md#delete-v1-trash)                                                      | 全員             | ×        | 200  | ゴミ箱を空にする                     |
-| PUT      | [`/v1/entries/{id}/share`](./sharing.md#put-v1-entries-id-share)                               | 会員             | ×        | 200  | 共有する                             |
-| DELETE   | [`/v1/entries/{id}/share`](./sharing.md#delete-v1-entries-id-share)                            | 会員             | ×        | 200  | 共有をやめる                         |
-| GET      | [`/v1/members`](./follows.md#get-v1-members)                                                   | 全員             | ×        | 200  | 会員の一覧                           |
-| PUT      | [`/v1/follows/{ownerId}`](./follows.md#put-v1-follows-ownerid)                                 | 全員             | ×        | 204  | フォロー                             |
-| DELETE   | [`/v1/follows/{ownerId}`](./follows.md#delete-v1-follows-ownerid)                              | 全員             | ×        | 204  | フォローをやめる                     |
-| GET      | [`/v1/timeline`](./follows.md#get-v1-timeline)                                                 | 全員             | ×        | 200  | タイムライン                         |
-| GET      | [`/v1/log-dates`](./log-dates.md#get-v1-log-dates)                                             | 全員             | ○        | 200  | ノートがある日付と件数（カレンダー） |
-| GET      | [`/v1/log-dates/{date}/entries`](./log-dates.md#get-v1-log-dates-date-entries)                 | 全員             | ○        | 200  | その日のノート                       |
-| GET      | [`/v1/log-dates/{date}/entries/{number}`](./log-dates.md#get-v1-log-dates-date-entries-number) | 全員             | ○        | 200  | その日の n 件目のノート              |
-| GET      | [`/v1/admin/accounts`](./admin.md#get-v1-admin-accounts)                                       | admin            | ×        | 200  | 会員の一覧（管理用）                 |
-| POST     | [`/v1/admin/accounts`](./admin.md#post-v1-admin-accounts)                                      | admin            | ×        | 201  | 会員の作成                           |
-| POST     | [`/v1/admin/accounts/{id}/password`](./admin.md#post-v1-admin-accounts-id-password)            | admin            | ×        | 200  | 会員のパスワードのリセット           |
-| GET      | [`/health`](./health.md)                                                                       | 公開             | —        | 200  | DB まで含めたヘルスチェック          |
-| GET      | [`/healthz`](./health.md)                                                                      | 公開             | —        | 200  | `/health` と同じ（ローカル用）       |
-| GET      | [`/ping`](./health.md)                                                                         | 公開             | —        | 200  | DB を見ない死活監視用                |
+| メソッド | パス                                                                                           | 権限                  | `?user=` | 成功 | 内容                                 |
+| -------- | ---------------------------------------------------------------------------------------------- | --------------------- | -------- | ---- | ------------------------------------ |
+| POST     | [`/v1/auth/github`](./auth.md#post-v1-auth-github)                                             | 公開                  | —        | 200  | GitHub ログイン                      |
+| POST     | [`/v1/auth/guest`](./auth.md#post-v1-auth-guest)                                               | 公開                  | —        | 200  | ゲストログイン                       |
+| POST     | [`/v1/auth/password`](./auth.md#post-v1-auth-password)                                         | 公開                  | —        | 200  | パスワードログイン                   |
+| POST     | [`/v1/auth/refresh`](./auth.md#post-v1-auth-refresh)                                           | 公開                  | —        | 200  | トークンのローテーション             |
+| POST     | [`/v1/auth/logout`](./auth.md#post-v1-auth-logout)                                             | 公開                  | —        | 204  | ログアウト                           |
+| GET      | [`/v1/me`](./auth.md#get-v1-me)                                                                | 全員（ゲストも）      | ×        | 200  | 自分の情報                           |
+| POST     | [`/v1/account/password`](./auth.md#post-v1-account-password)                                   | 会員                  | ×        | 204  | 自分のパスワードの変更               |
+| GET      | [`/v1/entries`](./entries.md#get-v1-entries)                                                   | 全員                  | ○        | 200  | ノートの一覧                         |
+| GET      | [`/v1/entries/{id}`](./entries.md#get-v1-entries-id)                                           | 全員                  | ○        | 200  | ノートの詳細                         |
+| POST     | [`/v1/batches`](./entries.md#post-v1-batches)                                                  | 全員                  | ×        | 201  | ノートの一括作成                     |
+| PATCH    | [`/v1/entries/{id}`](./entries.md#patch-v1-entries-id)                                         | 全員                  | ×        | 200  | ノートの部分更新                     |
+| DELETE   | [`/v1/entries/{id}`](./entries.md#delete-v1-entries-id)                                        | 全員                  | ×        | 204  | ゴミ箱へ移動                         |
+| POST     | [`/v1/imports/csv`](./entries.md#post-v1-imports-csv)                                          | 全員                  | ×        | 201  | CSV のインポート                     |
+| GET      | [`/v1/trash`](./trash.md#get-v1-trash)                                                         | 全員                  | ×        | 200  | ゴミ箱の一覧                         |
+| POST     | [`/v1/trash/{id}/restore`](./trash.md#post-v1-trash-id-restore)                                | 全員                  | ×        | 200  | 復元                                 |
+| DELETE   | [`/v1/trash/{id}`](./trash.md#delete-v1-trash-id)                                              | 全員                  | ×        | 204  | 完全に削除                           |
+| DELETE   | [`/v1/trash`](./trash.md#delete-v1-trash)                                                      | 全員                  | ×        | 200  | ゴミ箱を空にする                     |
+| PUT      | [`/v1/entries/{id}/share`](./sharing.md#put-v1-entries-id-share)                               | 会員                  | ×        | 200  | 共有する                             |
+| DELETE   | [`/v1/entries/{id}/share`](./sharing.md#delete-v1-entries-id-share)                            | 会員                  | ×        | 200  | 共有をやめる                         |
+| GET      | [`/v1/members`](./follows.md#get-v1-members)                                                   | 全員                  | ×        | 200  | 会員の一覧                           |
+| PUT      | [`/v1/follows/{ownerId}`](./follows.md#put-v1-follows-ownerid)                                 | 全員                  | ×        | 204  | フォロー                             |
+| DELETE   | [`/v1/follows/{ownerId}`](./follows.md#delete-v1-follows-ownerid)                              | 全員                  | ×        | 204  | フォローをやめる                     |
+| GET      | [`/v1/timeline`](./follows.md#get-v1-timeline)                                                 | 全員                  | ×        | 200  | タイムライン                         |
+| GET      | [`/v1/log-dates`](./log-dates.md#get-v1-log-dates)                                             | 全員                  | ○        | 200  | ノートがある日付と件数（カレンダー） |
+| GET      | [`/v1/log-dates/{date}/entries`](./log-dates.md#get-v1-log-dates-date-entries)                 | 全員                  | ○        | 200  | その日のノート                       |
+| GET      | [`/v1/log-dates/{date}/entries/{number}`](./log-dates.md#get-v1-log-dates-date-entries-number) | 全員                  | ○        | 200  | その日の n 件目のノート              |
+| POST     | [`/v1/line/webhook`](./line.md#post-v1-line-webhook)                                           | 公開（LINE の署名）   | —        | 200  | LINE からの通知を受けて添削・翻訳    |
+| GET      | [`/v1/line/link`](./line.md#get-v1-line-link)                                                  | 会員・admin           | ×        | 200  | LINE と連携しているか                |
+| POST     | [`/v1/line/link-code`](./line.md#post-v1-line-link-code)                                       | 会員・admin           | ×        | 200  | LINE の連携コードを出す              |
+| DELETE   | [`/v1/line/link`](./line.md#delete-v1-line-link)                                               | 会員・admin           | ×        | 204  | LINE の連携を解除                    |
+| GET      | [`/v1/line/drain`](./line.md#get-v1-line-drain)                                                | 公開（`CRON_SECRET`） | —        | 204  | 残ったメッセージの拾い直し（Cron）   |
+| GET      | [`/v1/admin/accounts`](./admin.md#get-v1-admin-accounts)                                       | admin                 | ×        | 200  | 会員の一覧（管理用）                 |
+| POST     | [`/v1/admin/accounts`](./admin.md#post-v1-admin-accounts)                                      | admin                 | ×        | 201  | 会員の作成                           |
+| POST     | [`/v1/admin/accounts/{id}/password`](./admin.md#post-v1-admin-accounts-id-password)            | admin                 | ×        | 200  | 会員のパスワードのリセット           |
+| GET      | [`/health`](./health.md)                                                                       | 公開                  | —        | 200  | DB まで含めたヘルスチェック          |
+| GET      | [`/healthz`](./health.md)                                                                      | 公開                  | —        | 200  | `/health` と同じ（ローカル用）       |
+| GET      | [`/ping`](./health.md)                                                                         | 公開                  | —        | 200  | DB を見ない死活監視用                |
 
 ## 共通の決まり
 

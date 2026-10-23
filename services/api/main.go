@@ -14,6 +14,9 @@ import (
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/httpapi"
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/learning"
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/line"
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/linebot"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
 
@@ -37,15 +40,61 @@ func main() {
 	}
 }
 
-// newGitHubHTTPClient builds the client used to talk to GitHub. It never
-// follows redirects, so the POST body (which carries the client secret) cannot
+// newNoRedirectHTTPClient builds a client for a third-party API. It never
+// follows redirects, so a request body or header that carries a secret cannot
 // be replayed to a redirect target.
-func newGitHubHTTPClient() *http.Client {
+func newNoRedirectHTTPClient(timeout time.Duration) *http.Client {
 	return &http.Client{
-		Timeout: 10 * time.Second,
+		Timeout: timeout,
 		CheckRedirect: func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
+	}
+}
+
+// newGitHubHTTPClient builds the client used to talk to GitHub.
+func newGitHubHTTPClient() *http.Client {
+	return newNoRedirectHTTPClient(10 * time.Second)
+}
+
+// memberChecker is the part of *store.Store ownerValid needs.
+type memberChecker interface {
+	MemberExists(ctx context.Context, ownerID string) (bool, error)
+}
+
+// ownerValid reports whether a linked owner may still use the LINE bot: an
+// admin must still be on the allowlist and a member must still exist. Any
+// other role (guests included) is never valid.
+func ownerValid(allow auth.Allowlist, members memberChecker) linebot.OwnerCheck {
+	return func(ctx context.Context, ownerID, role string) (bool, error) {
+		switch role {
+		case auth.RoleAdmin:
+			return allow.Allows(ownerID), nil
+		case auth.RoleMember:
+			return members.MemberExists(ctx, ownerID)
+		}
+		return false, nil
+	}
+}
+
+// newLineService wires the LINE bot: OpenAI for the text, LINE for the
+// messages. Both clients refuse redirects because their requests carry keys.
+// OpenAI's own 20 s limit applies per generation.
+func newLineService(cfg Config, db *store.Store, allow auth.Allowlist, logger *slog.Logger) *linebot.Service {
+	return &linebot.Service{
+		Store: db,
+		Generator: &learning.OpenAI{
+			HTTP:    newNoRedirectHTTPClient(20 * time.Second),
+			BaseURL: cfg.OpenAIBaseURL,
+			APIKey:  cfg.OpenAIAPIKey,
+		},
+		Messenger: &line.Client{
+			HTTP:        newNoRedirectHTTPClient(10 * time.Second),
+			BaseURL:     cfg.LineAPIBaseURL,
+			AccessToken: cfg.LineChannelAccessToken,
+		},
+		OwnerValid: ownerValid(allow, db),
+		Logger:     logger,
 	}
 }
 
@@ -82,14 +131,15 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 		})
 	}
 
+	allowlist := auth.ParseAllowlist(cfg.AllowedGitHubIDs)
 	service := &auth.Service{
 		Store:     db,
 		Signer:    auth.NewSigner(cfg.JWTSecret, time.Now),
 		GitHub:    githubApps,
-		Allowlist: auth.ParseAllowlist(cfg.AllowedGitHubIDs),
+		Allowlist: allowlist,
 		Passwords: passwords,
 	}
-	handler := httpapi.NewRouter(httpapi.Deps{
+	deps := httpapi.Deps{
 		Auth:     service,
 		Entries:  db,
 		Follows:  db,
@@ -99,7 +149,15 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 		Logger:   logger,
 
 		WebProxySecret: cfg.WebProxySecret,
-	})
+	}
+	// Without the LINE settings the routes stay unregistered (404). Line is
+	// assigned only here so it is a nil interface, not a nil *linebot.Service.
+	if cfg.LineEnabled() {
+		deps.Line = newLineService(cfg, db, allowlist, logger)
+		deps.LineChannelSecret = cfg.LineChannelSecret
+		deps.CronSecret = cfg.CronSecret
+	}
+	handler := httpapi.NewRouter(deps)
 
 	ln, err := net.Listen("tcp", ":"+cfg.Port)
 	if err != nil {

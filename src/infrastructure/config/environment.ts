@@ -35,3 +35,10 @@ export function isSafeGoApiUrl(raw: string): boolean {
     (url.hostname === "localhost" || url.hostname === "127.0.0.1")
   );
 }
+
+// Link to add the LINE official account as a friend. It is shown as a link
+// on the page, so only an https:// URL is used; anything else is ignored.
+export function lineAddFriendUrl(): string | undefined {
+  const url = process.env.LINE_ADD_FRIEND_URL?.trim();
+  return url?.startsWith("https://") ? url : undefined;
+}

@@ -161,3 +161,45 @@ test("changeOwnPassword rethrows Go's errors", async () => {
     (error) => error === mismatch,
   );
 });
+
+test("getLineLink reads whether LINE is linked", async () => {
+  const { call, calls } = fakeCall({ linked: true });
+  const link = await createAccountGateway(call).getLineLink();
+  assert.deepEqual(calls, [{ path: "/v1/line/link", init: { method: "GET" } }]);
+  assert.deepEqual(link, { linked: true, available: true });
+});
+
+test("getLineLink reports LINE as unavailable when Go has no link routes", async () => {
+  const { call } = fakeCall(new GoApiError(404, "not_found", ""));
+  const link = await createAccountGateway(call).getLineLink();
+  assert.deepEqual(link, { linked: false, available: false });
+});
+
+test("getLineLink rethrows other failures", async () => {
+  const failure = new GoApiError(500, "internal", "");
+  const { call } = fakeCall(failure);
+  await assert.rejects(() => createAccountGateway(call).getLineLink(), failure);
+});
+
+test("issueLineLinkCode posts and returns the code with a Date expiry", async () => {
+  const { call, calls } = fakeCall({
+    code: "ABCD2345",
+    expiresAt: "2026-10-23T03:04:05.123Z",
+  });
+  const issued = await createAccountGateway(call).issueLineLinkCode();
+  assert.deepEqual(calls, [
+    { path: "/v1/line/link-code", init: { method: "POST" } },
+  ]);
+  assert.deepEqual(issued, {
+    code: "ABCD2345",
+    expiresAt: new Date("2026-10-23T03:04:05.123Z"),
+  });
+});
+
+test("unlinkLine deletes the link", async () => {
+  const { call, calls } = fakeCall(undefined);
+  await createAccountGateway(call).unlinkLine();
+  assert.deepEqual(calls, [
+    { path: "/v1/line/link", init: { method: "DELETE" } },
+  ]);
+});

@@ -3,6 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -18,6 +21,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
 )
 
 func TestNewGitHubHTTPClientRefusesRedirects(t *testing.T) {
@@ -45,6 +50,89 @@ func TestNewGitHubHTTPClientRefusesRedirects(t *testing.T) {
 	}
 	if n := targetHits.Load(); n != 0 {
 		t.Errorf("redirect target was contacted %d times", n)
+	}
+}
+
+func TestNewNoRedirectHTTPClientRefusesRedirects(t *testing.T) {
+	var targetHits atomic.Int32
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		targetHits.Add(1)
+	}))
+	defer target.Close()
+	redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL, http.StatusTemporaryRedirect)
+	}))
+	defer redirector.Close()
+
+	client := newNoRedirectHTTPClient(20 * time.Second)
+	if client.Timeout != 20*time.Second {
+		t.Errorf("Timeout = %v, want 20s", client.Timeout)
+	}
+	req, _ := http.NewRequest(http.MethodPost, redirector.URL, strings.NewReader(`{"key":"x"}`))
+	req.Header.Set("Authorization", "Bearer secret")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusTemporaryRedirect {
+		t.Errorf("status = %d, want 307 returned as is", resp.StatusCode)
+	}
+	if n := targetHits.Load(); n != 0 {
+		t.Errorf("redirect target was contacted %d times", n)
+	}
+}
+
+type fakeMembers struct {
+	exists map[string]bool
+	err    error
+	asked  []string
+}
+
+func (f *fakeMembers) MemberExists(_ context.Context, ownerID string) (bool, error) {
+	f.asked = append(f.asked, ownerID)
+	return f.exists[ownerID], f.err
+}
+
+func TestOwnerValid(t *testing.T) {
+	allow := auth.ParseAllowlist("111, 222")
+	members := &fakeMembers{exists: map[string]bool{"password:m1": true}}
+	check := ownerValid(allow, members)
+	ctx := context.Background()
+
+	cases := []struct {
+		name, owner, role string
+		want              bool
+		asksMembers       bool
+	}{
+		{"admin on the allowlist", "111", auth.RoleAdmin, true, false},
+		{"admin removed from the allowlist", "999", auth.RoleAdmin, false, false},
+		{"member that exists", "password:m1", auth.RoleMember, true, true},
+		{"member that is gone", "password:m2", auth.RoleMember, false, true},
+		{"guest", auth.GuestOwnerID, auth.RoleGuest, false, false},
+		{"unknown role", "111", "owner", false, false},
+		{"no role", "111", "", false, false},
+		{"allowlisted ID with the member role is not enough", "111", auth.RoleMember, false, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			members.asked = nil
+			got, err := check(ctx, c.owner, c.role)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != c.want {
+				t.Errorf("valid = %v, want %v", got, c.want)
+			}
+			if asked := len(members.asked) > 0; asked != c.asksMembers {
+				t.Errorf("asked members = %v, want %v", asked, c.asksMembers)
+			}
+		})
+	}
+
+	members.err = errors.New("db down")
+	if _, err := check(ctx, "password:m1", auth.RoleMember); err == nil {
+		t.Error("a store error was swallowed")
 	}
 }
 
@@ -261,6 +349,14 @@ func TestRunEndToEnd(t *testing.T) {
 		}
 	}
 
+	// No LINE settings in cfg: the LINE routes are not registered.
+	if code := c.do("POST", "/v1/line/webhook", "", nil, nil); code != http.StatusNotFound {
+		t.Fatalf("webhook without LINE settings = %d, want 404", code)
+	}
+	if code := c.do("GET", "/v1/line/drain", "", nil, nil); code != http.StatusNotFound {
+		t.Fatalf("drain without LINE settings = %d, want 404", code)
+	}
+
 	var first tokens
 	if code := c.do("POST", "/v1/auth/password", "",
 		map[string]string{"loginId": loginID, "password": "correct horse battery"}, &first); code != http.StatusOK {
@@ -410,5 +506,173 @@ func TestShutdownTimeoutFitsStopGrace(t *testing.T) {
 	// ECS sends SIGKILL 30 seconds after SIGTERM by default.
 	if shutdownTimeout != 8*time.Second {
 		t.Fatalf("shutdownTimeout = %v, want 8s (well under ECS's 30s stop timeout)", shutdownTimeout)
+	}
+}
+
+// TestRunLineRoutesEndToEnd runs the server with the LINE settings against a
+// fake LINE API: a member issues a link code, sends it from LINE, sees the
+// link and removes it. OpenAI is never reached.
+func TestRunLineRoutesEndToEnd(t *testing.T) {
+	dbURL := os.Getenv("API_TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("API_TEST_DATABASE_URL is not set")
+	}
+	hashBytes, err := os.ReadFile("auth/testdata/node_scrypt_hash.txt")
+	if err != nil {
+		t.Fatalf("read hash: %v", err)
+	}
+	hash := strings.TrimSpace(string(hashBytes))
+
+	conn := directConn(t, dbURL)
+	accountID := "cline" + strings.ToLower(strings.ReplaceAll(time.Now().Format("150405.000000"), ".", ""))
+	loginID := "e2e-" + accountID
+	owner := "password:" + accountID
+	lineUser := "U" + accountID
+	if _, err := conn.Exec(context.Background(),
+		`INSERT INTO "PasswordAccount" ("id", "loginId", "displayName", "passwordHash", "updatedAt")
+		 VALUES ($1, $2, $3, $4, now())`, accountID, loginID, "E2E", hash); err != nil {
+		t.Fatalf("insert account: %v", err)
+	}
+	clearThrottle := func() {
+		_, _ = conn.Exec(context.Background(),
+			`DELETE FROM "SignInThrottle" WHERE "key" = 'client:127.0.0.1' OR "key" LIKE 'login:127.0.0.1:e2e-%' OR "key" = $1`,
+			"line-link:"+lineUser)
+	}
+	clearThrottle()
+	t.Cleanup(func() {
+		ctx := context.Background()
+		clearThrottle()
+		_, _ = conn.Exec(ctx, `DELETE FROM "LineLink" WHERE "ownerId" = $1`, owner)
+		_, _ = conn.Exec(ctx, `DELETE FROM "LineLinkCode" WHERE "ownerId" = $1`, owner)
+		_, _ = conn.Exec(ctx, `DELETE FROM "ApiRefreshToken" WHERE "ownerId" = $1`, owner)
+		_, _ = conn.Exec(ctx, `DELETE FROM "PasswordAccount" WHERE id = $1`, accountID)
+	})
+
+	var replies atomic.Int32
+	fakeLine := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v2/bot/message/reply" && r.Header.Get("Authorization") == "Bearer line-access-token" {
+			replies.Add(1)
+		}
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer fakeLine.Close()
+
+	channelSecret := "e2e-line-channel-secret"
+	cfg := Config{
+		Port:                   "0",
+		DatabaseURL:            dbURL,
+		JWTSecret:              bytes.Repeat([]byte("e2e-secret-"), 4),
+		GitHubClientID:         "dummy-client-id",
+		GitHubClientSecret:     "dummy-client-secret",
+		GitHubRedirectURI:      "zhuelog://oauth/callback",
+		AllowedGitHubIDs:       "1",
+		LineChannelSecret:      []byte(channelSecret),
+		LineChannelAccessToken: "line-access-token",
+		OpenAIAPIKey:           "openai-key",
+		CronSecret:             []byte("e2e-cron-secret"),
+		OpenAIBaseURL:          "http://127.0.0.1:1",
+		LineAPIBaseURL:         fakeLine.URL,
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ready := make(chan string, 1)
+	done := make(chan error, 1)
+	go func() { done <- run(ctx, cfg, slog.New(slog.NewJSONHandler(io.Discard, nil)), ready) }()
+	var addr string
+	select {
+	case addr = <-ready:
+	case err := <-done:
+		t.Fatalf("run exited before ready: %v", err)
+	case <-time.After(20 * time.Second):
+		t.Fatal("run did not become ready")
+	}
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		t.Fatalf("bad ready address %q: %v", addr, err)
+	}
+	base := "http://" + net.JoinHostPort("127.0.0.1", port)
+	c := apiClient{t: t, base: base}
+
+	var tok tokens
+	if code := c.do("POST", "/v1/auth/password", "",
+		map[string]string{"loginId": loginID, "password": "correct horse battery"}, &tok); code != http.StatusOK {
+		t.Fatalf("password login = %d", code)
+	}
+
+	var linked struct {
+		Linked bool `json:"linked"`
+	}
+	if code := c.do("GET", "/v1/line/link", tok.AccessToken, nil, &linked); code != http.StatusOK || linked.Linked {
+		t.Fatalf("GET link before = %d %+v", code, linked)
+	}
+	var issued struct {
+		Code      string `json:"code"`
+		ExpiresAt string `json:"expiresAt"`
+	}
+	if code := c.do("POST", "/v1/line/link-code", tok.AccessToken, nil, &issued); code != http.StatusOK || len(issued.Code) != 8 || issued.ExpiresAt == "" {
+		t.Fatalf("POST link-code = %d %+v", code, issued)
+	}
+
+	body := `{"destination":"x","events":[{"type":"message","webhookEventId":"` + accountID + `","replyToken":"rt","source":{"type":"user","userId":"` + lineUser + `"},"message":{"type":"text","text":"` + issued.Code + `"}}]}`
+	mac := hmac.New(sha256.New, []byte(channelSecret))
+	mac.Write([]byte(body))
+	post := func(sig string) int {
+		req, _ := http.NewRequest("POST", base+"/v1/line/webhook", strings.NewReader(body))
+		req.Header.Set("X-Line-Signature", sig)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("webhook: %v", err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	if code := post("bogus"); code != http.StatusUnauthorized {
+		t.Fatalf("webhook with a bad signature = %d, want 401", code)
+	}
+	if code := post(base64.StdEncoding.EncodeToString(mac.Sum(nil))); code != http.StatusOK {
+		t.Fatalf("webhook = %d, want 200", code)
+	}
+	if n := replies.Load(); n != 1 {
+		t.Errorf("LINE replies = %d, want 1 (the linked notice)", n)
+	}
+
+	if code := c.do("GET", "/v1/line/link", tok.AccessToken, nil, &linked); code != http.StatusOK || !linked.Linked {
+		t.Fatalf("GET link after = %d %+v", code, linked)
+	}
+
+	drain := func(header string) int {
+		req, _ := http.NewRequest("GET", base+"/v1/line/drain", nil)
+		if header != "" {
+			req.Header.Set("Authorization", header)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("drain: %v", err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	if code := drain(""); code != http.StatusUnauthorized {
+		t.Errorf("drain without a secret = %d, want 401", code)
+	}
+	if code := drain("Bearer e2e-cron-secret"); code != http.StatusNoContent {
+		t.Errorf("drain = %d, want 204", code)
+	}
+
+	if code := c.do("DELETE", "/v1/line/link", tok.AccessToken, nil, nil); code != http.StatusNoContent {
+		t.Fatalf("DELETE link = %d", code)
+	}
+	if code := c.do("DELETE", "/v1/line/link", tok.AccessToken, nil, nil); code != http.StatusNoContent {
+		t.Fatalf("second DELETE link = %d, want 204", code)
+	}
+	if code := c.do("GET", "/v1/line/link", tok.AccessToken, nil, &linked); code != http.StatusOK || linked.Linked {
+		t.Fatalf("GET link after unlink = %d %+v", code, linked)
+	}
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(15 * time.Second):
+		t.Fatal("run did not stop")
 	}
 }

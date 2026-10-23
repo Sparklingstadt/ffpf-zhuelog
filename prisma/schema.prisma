@@ -105,3 +105,44 @@ model ApiRefreshToken {
   @@index([familyId])
   @@index([ownerId])
 }
+
+// Ties one LINE account to one Zhuelog owner (a PasswordAccount id prefixed
+// "password:", or an admin's GitHub numeric id). ownerId has no foreign key:
+// admins have no row in the database. role is "member" | "admin" (CHECK).
+model LineLink {
+  lineUserId String   @id
+  ownerId    String   @unique
+  role       String
+  createdAt  DateTime @default(now())
+}
+
+// One-time link codes shown on /account/line. Only the SHA-256 hex of the code
+// is stored; issuing a new code replaces the previous one of the same owner.
+// role is "member" | "admin" (CHECK).
+model LineLinkCode {
+  codeHash  String   @id
+  ownerId   String   @unique
+  role      String
+  expiresAt DateTime
+}
+
+// A LINE message waiting for, or done with, correction/translation by the Go
+// API. text is cleared once the row is done or failed. webhookEventId makes
+// redelivered webhooks idempotent. kind is "correction" | "translation" and
+// status is "pending" | "done" | "failed" (CHECK); the (status, createdAt)
+// index is declared in the migration's SQL.
+model LineMessage {
+  id             String   @id @default(cuid())
+  webhookEventId String   @unique
+  lineUserId     String
+  ownerId        String
+  kind           String
+  text           String?
+  status         String   @default("pending")
+  attempts       Int      @default(0)
+  entryId        String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status, createdAt])
+}
