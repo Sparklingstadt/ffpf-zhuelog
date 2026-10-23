@@ -236,7 +236,10 @@ func TestGenerateMapsHTTPStatus(t *testing.T) {
 		{429, "OPENAI_RATE_LIMITED", false},
 		{500, "OPENAI_REQUEST_FAILED", true},
 		{503, "OPENAI_REQUEST_FAILED", true},
-		{400, "OPENAI_REQUEST_FAILED", true},
+		{400, "OPENAI_REQUEST_FAILED", false},
+		{404, "OPENAI_REQUEST_FAILED", false},
+		{413, "OPENAI_REQUEST_FAILED", false},
+		{422, "OPENAI_REQUEST_FAILED", false},
 	} {
 		t.Run(fmt.Sprint(tc.status), func(t *testing.T) {
 			o, _ := serve(t, tc.status, `{"error":{"message":"leaky-body-marker `+testKey+`"}}`)
@@ -324,8 +327,40 @@ func TestGenerateNilHTTPUsesDefault(t *testing.T) {
 
 func TestGenerateUnknownKind(t *testing.T) {
 	o, _ := serve(t, 200, "{}")
-	if _, err := o.Generate(context.Background(), "other", testText); err == nil {
-		t.Fatal("want error")
+	_, err := o.Generate(context.Background(), "other", testText)
+	var le *Error
+	if !errors.As(err, &le) || le.Code != "OPENAI_REQUEST_FAILED" || le.Retryable {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestRequestSchemaHasNoUnsupportedKeywords(t *testing.T) {
+	var raw []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ = io.ReadAll(r.Body)
+		_, _ = io.WriteString(w, outputBody(t, validJSON("correctedText")))
+	}))
+	defer srv.Close()
+	o := &OpenAI{HTTP: srv.Client(), BaseURL: srv.URL, APIKey: testKey}
+	for _, kind := range []string{KindCorrection, KindTranslation} {
+		if _, err := o.Generate(context.Background(), kind, testText); err != nil && kind == KindCorrection {
+			t.Fatal(err)
+		}
+		var req struct {
+			Text struct {
+				Format struct {
+					Schema json.RawMessage `json:"schema"`
+				} `json:"format"`
+			} `json:"text"`
+		}
+		if err := json.Unmarshal(raw, &req); err != nil || len(req.Text.Format.Schema) == 0 {
+			t.Fatalf("schema missing: %v", err)
+		}
+		for _, kw := range []string{"minLength", "maxLength", "minItems", "maxItems"} {
+			if strings.Contains(string(req.Text.Format.Schema), kw) {
+				t.Errorf("%s schema contains %s", kind, kw)
+			}
+		}
 	}
 }
 

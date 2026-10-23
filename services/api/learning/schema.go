@@ -43,18 +43,18 @@ var specs = map[string]kindSpec{
 	},
 }
 
-// jsonSchema is the strict JSON Schema sent as text.format.schema.
+// jsonSchema is the strict JSON Schema sent as text.format.schema. Strict mode
+// rejects length keywords (minLength, maxLength, minItems, maxItems), so the
+// limits live in the instructions and in parse.
 func (s kindSpec) jsonSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			s.textKey: map[string]any{"type": "string", "minLength": 1, "maxLength": maxBodyRunes},
-			"pinyin":  map[string]any{"type": "string", "minLength": 1, "maxLength": maxPinyinRunes},
+			s.textKey: map[string]any{"type": "string"},
+			"pinyin":  map[string]any{"type": "string"},
 			"hints": map[string]any{
-				"type":     "array",
-				"minItems": minHints,
-				"maxItems": maxHints,
-				"items":    map[string]any{"type": "string", "minLength": 1, "maxLength": maxHintRunes},
+				"type":  "array",
+				"items": map[string]any{"type": "string"},
 			},
 		},
 		"required":             []string{s.textKey, "pinyin", "hints"},

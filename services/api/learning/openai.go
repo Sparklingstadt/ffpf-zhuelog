@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -36,8 +35,8 @@ type Result struct {
 }
 
 // Error is a generation failure. Its string is only the Code, so it never
-// carries the API key, the input text or the response body. Timeouts and
-// transport/upstream failures are Retryable; the rest are not.
+// carries the API key, the input text or the response body. Retryable is set
+// only for timeouts, transport failures and 5xx responses.
 type Error struct {
 	Code      string
 	Retryable bool
@@ -45,8 +44,8 @@ type Error struct {
 
 func (e *Error) Error() string { return e.Code }
 
-func newError(code string) *Error {
-	return &Error{Code: code, Retryable: code == "OPENAI_TIMEOUT" || code == "OPENAI_REQUEST_FAILED"}
+func newError(code string, retryable bool) *Error {
+	return &Error{Code: code, Retryable: retryable}
 }
 
 // OpenAI calls the OpenAI Responses API. HTTP should be set by main; nil uses a
@@ -63,7 +62,7 @@ type OpenAI struct {
 func (o *OpenAI) Generate(ctx context.Context, kind, text string) (Result, error) {
 	spec, ok := specs[kind]
 	if !ok {
-		return Result{}, fmt.Errorf("learning: unknown kind %q", kind)
+		return Result{}, newError("OPENAI_REQUEST_FAILED", false)
 	}
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
@@ -83,7 +82,7 @@ func (o *OpenAI) Generate(ctx context.Context, kind, text string) (Result, error
 		}},
 	})
 	if err != nil {
-		return Result{}, newError("OPENAI_REQUEST_FAILED")
+		return Result{}, newError("OPENAI_REQUEST_FAILED", false)
 	}
 	base := o.BaseURL
 	if base == "" {
@@ -91,39 +90,40 @@ func (o *OpenAI) Generate(ctx context.Context, kind, text string) (Result, error
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(base, "/")+"/v1/responses", bytes.NewReader(payload))
 	if err != nil {
-		return Result{}, newError("OPENAI_REQUEST_FAILED")
+		return Result{}, newError("OPENAI_REQUEST_FAILED", false)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+o.APIKey)
 
 	resp, err := o.client().Do(req)
 	if err != nil {
-		return Result{}, newError(transportCode(ctx, err))
+		return Result{}, transportError(ctx, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		switch resp.StatusCode {
 		case http.StatusUnauthorized, http.StatusForbidden:
-			return Result{}, newError("OPENAI_AUTH_FAILED")
+			return Result{}, newError("OPENAI_AUTH_FAILED", false)
 		case http.StatusTooManyRequests:
-			return Result{}, newError("OPENAI_RATE_LIMITED")
+			return Result{}, newError("OPENAI_RATE_LIMITED", false)
 		}
-		return Result{}, newError("OPENAI_REQUEST_FAILED")
+		// Only 5xx may succeed on a later attempt; other 4xx are our fault.
+		return Result{}, newError("OPENAI_REQUEST_FAILED", resp.StatusCode >= 500)
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxRespBody+1))
 	if err != nil {
-		return Result{}, newError(transportCode(ctx, err))
+		return Result{}, transportError(ctx, err)
 	}
 	if len(body) > maxRespBody {
-		return Result{}, newError("OPENAI_INVALID_RESPONSE")
+		return Result{}, newError("OPENAI_INVALID_RESPONSE", false)
 	}
 	out, ok := outputText(body)
 	if !ok {
-		return Result{}, newError("OPENAI_INVALID_RESPONSE")
+		return Result{}, newError("OPENAI_INVALID_RESPONSE", false)
 	}
 	res, err := spec.parse(out)
 	if err != nil {
-		return Result{}, newError("OPENAI_INVALID_RESPONSE")
+		return Result{}, newError("OPENAI_INVALID_RESPONSE", false)
 	}
 	return res, nil
 }
@@ -140,15 +140,15 @@ func (o *OpenAI) client() *http.Client {
 	return c
 }
 
-// transportCode maps a failed round trip to a code: any deadline is a timeout,
-// everything else (including cancellation) is a retryable request failure.
-func transportCode(ctx context.Context, err error) string {
+// transportError maps a failed round trip: any deadline is a timeout, everything
+// else (including cancellation) is a request failure; both are retryable.
+func transportError(ctx context.Context, err error) *Error {
 	var ne net.Error
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) ||
 		(errors.As(err, &ne) && ne.Timeout()) {
-		return "OPENAI_TIMEOUT"
+		return newError("OPENAI_TIMEOUT", true)
 	}
-	return "OPENAI_REQUEST_FAILED"
+	return newError("OPENAI_REQUEST_FAILED", true)
 }
 
 // outputText concatenates the output_text parts of a completed Responses API
