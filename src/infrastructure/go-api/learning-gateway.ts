@@ -29,6 +29,7 @@ export type TrashedLearningEntries = {
 };
 
 type EntriesJson = { entries: GoEntryJson[]; total: number };
+type PagedEntriesJson = EntriesJson & { nextCursor?: string | null };
 type LogDatesJson = { dates: { date: string; count: number }[] };
 type DailyEntriesJson = { entries: GoEntryJson[] };
 type DailyEntryJson = { entry: GoEntryJson; total: number };
@@ -39,6 +40,10 @@ type TrashJson = {
 
 // The trash page lists one page of notes.
 const TRASH_LIST_LIMIT = 100;
+
+// The export reads Go's largest page (100) up to 100 times: 10,000 notes.
+const EXPORT_PAGE_SIZE = 100;
+const EXPORT_MAX_PAGES = 100;
 
 export function createLearningGateway(
   call: GoApiCall = goApiAuthed,
@@ -57,6 +62,24 @@ export function createLearningGateway(
     ): Promise<RecentLearningEntries> {
       const json = await read<EntriesJson>(`/v1/entries?limit=${limit}`, owner);
       return { entries: json.entries.map(toLearningEntry), total: json.total };
+    },
+
+    // Every one of the signed-in user's own notes, newest first, read page by
+    // page; maxPages bounds the loop should Go keep returning a cursor.
+    async listAll(maxPages = EXPORT_MAX_PAGES): Promise<LearningEntry[]> {
+      const entries: LearningEntry[] = [];
+      let cursor: string | null | undefined;
+      for (let page = 0; page < maxPages; page++) {
+        const query = cursor ? `&cursor=${encodeURIComponent(cursor)}` : "";
+        const json = await call<PagedEntriesJson>(
+          `/v1/entries?limit=${EXPORT_PAGE_SIZE}${query}`,
+          { method: "GET" },
+        );
+        entries.push(...json.entries.map(toLearningEntry));
+        cursor = json.nextCursor;
+        if (!cursor) break;
+      }
+      return entries;
     },
 
     // Go groups the notes by Japan date, newest first.

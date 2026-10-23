@@ -5,7 +5,6 @@ test("long imported text stays inside cards at narrow widths", async ({
   context,
 }) => {
   await asAdmin(context);
-  await page.goto("/");
   const longWord = "pīnyīn".repeat(50);
   const hint = "長いヒントの説明です。".repeat(20) + longWord;
   await upload(
@@ -13,6 +12,7 @@ test("long imported text stays inside cards at narrow widths", async ({
     ["原文" + longWord, "添削文" + longWord, longWord, hint].join(","),
   );
   await expect(page.getByText("1件の学習文を登録しました。")).toBeVisible();
+  await page.goto("/");
   const dateHref = await page
     .getByRole("link", { name: "この日の一覧" })
     .getAttribute("href");

@@ -126,7 +126,9 @@ test("admin views a member's notes read-only and keeps the choice while navigati
   await expect(
     page.getByText("管理者の記録", { exact: true }).first(),
   ).toBeVisible();
-  await expect(page.getByLabel("CSVファイル", { exact: true })).toBeEnabled();
+  await expect(
+    page.getByRole("link", { name: "CSVをインポート", exact: true }),
+  ).toBeVisible();
   await page
     .getByLabel("表示するユーザー")
     .selectOption({ label: "太郎（taro）" });
@@ -145,10 +147,9 @@ test("admin views a member's notes read-only and keeps the choice while navigati
     page.getByText("太郎の記録2", { exact: true }).first(),
   ).toBeVisible();
   await expect(page.getByText("管理者の記録")).toHaveCount(0);
-  await expect(page.getByLabel("CSVファイル", { exact: true })).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "CSVをインポート", exact: true }),
-  ).toHaveCount(0);
+  // Import and export act on the admin's own notes, so neither is offered.
+  for (const name of ["CSVをインポート", "CSVでエクスポート"])
+    await expect(page.getByRole("link", { name, exact: true })).toHaveCount(0);
 
   // Following the links keeps showing the member's notes.
   await page.getByRole("link", { name: "日付から見る" }).click();

@@ -47,6 +47,34 @@ test("listRecent reads one page of 100 with the total", async () => {
   );
 });
 
+test("listAll follows the cursor until Go has no next page", async () => {
+  const pages = [
+    { entries: [entryJson], nextCursor: "c 1", total: 3 },
+    { entries: [entryJson, entryJson], nextCursor: null, total: 3 },
+  ];
+  const paths: string[] = [];
+  const call = (async (path: string) => {
+    paths.push(path);
+    return pages[paths.length - 1];
+  }) as GoApiCall;
+  const entries = await createLearningGateway(call).listAll();
+  assert.deepEqual(paths, [
+    "/v1/entries?limit=100",
+    "/v1/entries?limit=100&cursor=c%201",
+  ]);
+  assert.equal(entries.length, 3);
+});
+
+test("listAll stops after its page limit", async () => {
+  let calls = 0;
+  const call = (async () => {
+    calls += 1;
+    return { entries: [entryJson], nextCursor: "again", total: 1 };
+  }) as GoApiCall;
+  await createLearningGateway(call).listAll(3);
+  assert.equal(calls, 3);
+});
+
 test("only another member's notes add ?user=", async () => {
   const { call, paths } = fakeCall({ entries: [], total: 0 });
   const gateway = createLearningGateway(call);

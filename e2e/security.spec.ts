@@ -43,7 +43,7 @@ test("revoked admin JWT cannot access pages or import actions", async ({
   db,
 }) => {
   await asAdmin(context);
-  await page.goto("/");
+  await page.goto("/import");
   await page.waitForLoadState("networkidle");
   // Validly signed, but for an admin who is not on the allowlist.
   await addAdminSession(context, { githubId: "removed", login: "removed" });
@@ -65,13 +65,12 @@ test("stored CSV markup renders as text and huge log ordinals return 404", async
   context,
 }) => {
   await asAdmin(context);
-  await page.goto("/");
   await upload(
     page,
     "<script>document.documentElement.dataset.injected='yes'</script>,添削,pinyin,<img src=x onerror=alert(1)>",
   );
   await expect(page.getByText("1件の学習文を登録しました。")).toBeVisible();
-  await page.reload();
+  await page.goto("/");
   await expect(page.locator("details script, details img")).toHaveCount(0);
   await expect(page.locator("html")).not.toHaveAttribute(
     "data-injected",
