@@ -9,6 +9,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 func TestNewIDFormat(t *testing.T) {
@@ -48,6 +50,12 @@ func TestParseConfigPrismaSchemaParam(t *testing.T) {
 	}
 	if cfg.MaxConns != 3 {
 		t.Errorf("MaxConns = %d, want 3", cfg.MaxConns)
+	}
+	// Neon's pooler (PgBouncer, transaction mode) shares server connections,
+	// so pgx's named, cached prepared statements collide there (SQLSTATE
+	// 08P01 "prepared statement name is already in use").
+	if got := cfg.ConnConfig.DefaultQueryExecMode; got != pgx.QueryExecModeExec {
+		t.Errorf("DefaultQueryExecMode = %v, want QueryExecModeExec", got)
 	}
 
 	for _, raw := range []string{

@@ -11,6 +11,7 @@ import (
 	neturl "net/url"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -66,6 +67,12 @@ func parseConfig(rawURL string) (*pgxpool.Config, error) {
 	// Vercel scales instances out on its own, so keep each one's share of
 	// Neon's pooled connections small.
 	cfg.MaxConns = 3
+	// Neon's pooler (PgBouncer, transaction mode) hands one server connection
+	// to many clients, so the default named, cached prepared statements can
+	// collide there ("prepared statement name is already in use"). Exec uses
+	// only the unnamed statement, in one round trip, and lets the server infer
+	// parameter types.
+	cfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeExec
 	return cfg, nil
 }
 
