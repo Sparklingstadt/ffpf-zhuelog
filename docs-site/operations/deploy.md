@@ -197,7 +197,7 @@ LINE 連携を本番で使い始めるときは、次の順で行います。
 6. Web が本番の URL に付いたかも確かめます。Web の Vercel プロジェクトの Deployment Checks は、今はもう無い CI のチェック（`verify (24)`・`verify (26)`・`e2e`）を待ち続けるので、本番の URL が付かないことがあります。直すまでは、デプロイを手で Promote します。
 7. 自分の LINE で、連携・添削・翻訳・解除を試します。
 
-`services/api/vercel.json` の `functions` の `"main.go"`（`maxDuration` が 60 秒）は、Go の Framework Preset で通るのかを確かめられていません。最初のデプロイが、このキーのせいで失敗したら、`functions` のブロックを消してください。どちらになっても、最初のデプロイの後に、ダッシュボードで関数の最大実行時間を確かめてください。webhook と拾い直しは最大 60 秒かかるので、**60 秒以上** が必要です（Fluid compute なら既定が 300 秒で足ります。そうでない設定では、既定が短いことがあります）。
+関数の最大実行時間は `services/api/vercel.json` では指定しません。Go の Framework Preset では `functions` のキーが関数に合わず、ビルドが失敗するためです（`The pattern "main.go" defined in functions doesn't match any Serverless Functions`）。webhook と拾い直しは最大 60 秒かかるので、**60 秒以上** が必要です。今の Go API のプロジェクトは Fluid compute で、既定が 300 秒なので足ります。Fluid compute を切るなど設定を変えるときは、ダッシュボードの **Settings → Functions** で 60 秒以上にしてください。
 
 ## 運用上の注意
 

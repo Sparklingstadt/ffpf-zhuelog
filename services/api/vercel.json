@@ -1,8 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "go",
-  "functions": {
-    "main.go": { "maxDuration": 60 }
-  },
   "crons": [{ "path": "/v1/line/drain", "schedule": "0 21 * * *" }]
 }

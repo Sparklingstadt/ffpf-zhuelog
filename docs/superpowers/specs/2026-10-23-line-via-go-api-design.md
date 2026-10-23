@@ -205,7 +205,7 @@ Go API に足す環境変数：
 - LINE の 3 つ（`LINE_*` と `OPENAI_API_KEY`）は、すべて設定するか、すべて空にする。一部だけだと起動時に止まる。すべて空のときは LINE のルートが `404` になり、Go API は起動する（今の `GITHUB_WEB_*` と同じ考え方）。
 - `CRON_SECRET` が空のときは、拾い直しのルートは常に `401` を返す。
 - Web に足す環境変数：`LINE_ADD_FRIEND_URL`（友だち追加のリンク。無ければリンクを出さない）。
-- `services/api/vercel.json` に、関数の最大実行時間 60 秒と、1 日 1 回の Cron を足す。
+- `services/api/vercel.json` に、1 日 1 回の Cron を足す。関数の最大実行時間（60 秒以上）は、Fluid compute の既定（300 秒）で足りる。Go の Framework Preset では `functions` のキーが使えない（ビルドが失敗する）ため、`vercel.json` では指定しない。
 
 ## 10. テスト
 
