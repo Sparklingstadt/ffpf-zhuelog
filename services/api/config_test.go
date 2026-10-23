@@ -157,3 +157,144 @@ func TestLoadConfigWebProxySecret(t *testing.T) {
 		t.Fatal("error leaks the secret value")
 	}
 }
+
+var lineEnv = []string{"LINE_CHANNEL_SECRET", "LINE_CHANNEL_ACCESS_TOKEN", "OPENAI_API_KEY"}
+
+func TestLoadConfigLineAllOrNothing(t *testing.T) {
+	const secretValue = "line-secret-value-xyz"
+
+	cfg, err := LoadConfig(getenvFrom(validEnv()))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.LineEnabled() {
+		t.Error("LineEnabled() = true with none set")
+	}
+
+	// Every proper, non-empty subset of the three must be rejected.
+	for mask := 1; mask < 7; mask++ {
+		env := validEnv()
+		for i, name := range lineEnv {
+			if mask&(1<<i) != 0 {
+				env[name] = secretValue
+			}
+		}
+		_, err := LoadConfig(getenvFrom(env))
+		if err == nil {
+			t.Fatalf("mask %03b: expected error for partial LINE config", mask)
+		}
+		for _, name := range lineEnv {
+			if !strings.Contains(err.Error(), name) {
+				t.Errorf("mask %03b: error %q does not mention %s", mask, err, name)
+			}
+		}
+		if strings.Contains(err.Error(), secretValue) {
+			t.Errorf("mask %03b: error leaks a secret value", mask)
+		}
+	}
+
+	env := validEnv()
+	env["LINE_CHANNEL_SECRET"] = "channel-secret"
+	env["LINE_CHANNEL_ACCESS_TOKEN"] = "access-token"
+	env["OPENAI_API_KEY"] = "openai-key"
+	cfg, err = LoadConfig(getenvFrom(env))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if !cfg.LineEnabled() {
+		t.Error("LineEnabled() = false with all three set")
+	}
+	if string(cfg.LineChannelSecret) != "channel-secret" || cfg.LineChannelAccessToken != "access-token" || cfg.OpenAIAPIKey != "openai-key" {
+		t.Errorf("unexpected LINE config: %+v", cfg)
+	}
+}
+
+func TestLoadConfigBaseURLDefaults(t *testing.T) {
+	cfg, err := LoadConfig(getenvFrom(validEnv()))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.OpenAIBaseURL != "https://api.openai.com" {
+		t.Errorf("OpenAIBaseURL = %q", cfg.OpenAIBaseURL)
+	}
+	if cfg.LineAPIBaseURL != "https://api.line.me" {
+		t.Errorf("LineAPIBaseURL = %q", cfg.LineAPIBaseURL)
+	}
+}
+
+func TestLoadConfigBaseURLLoopbackOnly(t *testing.T) {
+	for _, name := range []string{"OPENAI_API_BASE_URL", "LINE_API_BASE_URL"} {
+		for _, ok := range []string{
+			"http://127.0.0.1:9999",
+			"http://localhost:8080",
+			"http://[::1]:9999",
+			"https://localhost",
+		} {
+			t.Run(name+"/"+ok, func(t *testing.T) {
+				env := validEnv()
+				env[name] = ok
+				cfg, err := LoadConfig(getenvFrom(env))
+				if err != nil {
+					t.Fatalf("LoadConfig: %v", err)
+				}
+				got := cfg.OpenAIBaseURL
+				if name == "LINE_API_BASE_URL" {
+					got = cfg.LineAPIBaseURL
+				}
+				if got != ok {
+					t.Errorf("base URL = %q, want %q", got, ok)
+				}
+			})
+		}
+		for _, bad := range []string{
+			"https://example.com",
+			"http://127.0.0.1.example.com",
+			"http://localhost.evil.com",
+			"http://user@evil.com",
+			"http://10.0.0.1",
+			"not a url",
+			"127.0.0.1:9999",
+		} {
+			t.Run(name+"/"+bad, func(t *testing.T) {
+				env := validEnv()
+				env[name] = bad
+				_, err := LoadConfig(getenvFrom(env))
+				if err == nil {
+					t.Fatalf("expected error for %s=%q", name, bad)
+				}
+				if !strings.Contains(err.Error(), name) {
+					t.Errorf("error %q does not mention %s", err, name)
+				}
+			})
+		}
+	}
+}
+
+func TestLoadConfigCronSecretOptional(t *testing.T) {
+	cfg, err := LoadConfig(getenvFrom(validEnv()))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.CronSecret != nil {
+		t.Errorf("CronSecret = %q, want nil when unset", cfg.CronSecret)
+	}
+
+	env := validEnv()
+	env["CRON_SECRET"] = "  "
+	cfg, err = LoadConfig(getenvFrom(env))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.CronSecret != nil {
+		t.Errorf("CronSecret = %q, want nil when blank", cfg.CronSecret)
+	}
+
+	env["CRON_SECRET"] = "cron-secret"
+	cfg, err = LoadConfig(getenvFrom(env))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if string(cfg.CronSecret) != "cron-secret" {
+		t.Errorf("CronSecret = %q", cfg.CronSecret)
+	}
+}
