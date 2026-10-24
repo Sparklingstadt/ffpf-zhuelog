@@ -9,20 +9,24 @@ import {
 } from "@/application/identity/use-cases/resolve-record-owner";
 import type { AuthenticatedUser } from "@/domain/identity/entities/authenticated-user";
 import type { CurrentUserProvider } from "@/application/identity/ports/current-user-provider";
-import { fetchMe } from "@/infrastructure/go-api/client";
+import { fetchMeOnce } from "@/infrastructure/go-api/act-as";
 import { GoApiCurrentUserProvider } from "@/infrastructure/go-api/go-api-current-user-provider";
 import {
   readAccessToken,
+  readActAsCookie,
   signInAsGuestViaGo,
   signInWithGitHubViaGo,
   signInWithPasswordViaGo,
   signOutViaGo,
+  startActingAsViaGo,
+  stopActingViaGo,
 } from "@/infrastructure/go-api/go-api-session";
 import { createAccountGateway } from "@/infrastructure/go-api/account-gateway";
 
 const goApiUserProvider = new GoApiCurrentUserProvider(
   readAccessToken,
-  fetchMe,
+  fetchMeOnce,
+  readActAsCookie,
 );
 // One GET /v1/me per request, however many guards and pages ask.
 const getGoApiUser = cache(() => goApiUserProvider.getCurrentUser());
@@ -82,4 +86,14 @@ export async function signOutCurrentUser() {
 
 export async function signOutTo(redirectTo: string) {
   await signOutViaGo(redirectTo);
+}
+
+// An admin acting as a member: their records become the member's while the
+// admin keeps the admin role. Returns whether Go confirmed the member.
+export function startActingAs(ownerId: string) {
+  return startActingAsViaGo(ownerId);
+}
+
+export function stopActing() {
+  return stopActingViaGo();
 }

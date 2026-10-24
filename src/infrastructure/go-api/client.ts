@@ -14,6 +14,14 @@ export type GoMe = {
   login: string;
   displayName?: string;
   accountId?: string;
+  // Only while an admin acts as a member (X-Zhuelog-Act-As).
+  actingAs?: GoActingAs;
+};
+
+export type GoActingAs = {
+  ownerId: string;
+  loginId: string;
+  displayName: string;
 };
 
 // status 0 with code "unavailable" means the API was unreachable or timed out.
@@ -38,6 +46,8 @@ const UPLOAD_TIMEOUT_MS = 270_000;
 type CallerInit = {
   accessToken?: string;
   clientIp?: string;
+  // The member an admin acts as. Go only honours it with an admin token.
+  actAs?: string;
 };
 
 export type GoApiInit = CallerInit & {
@@ -72,6 +82,7 @@ export function goUpload<T>(
 function callerHeaders(init: CallerInit): Record<string, string> {
   const headers: Record<string, string> = {};
   if (init.accessToken) headers.authorization = `Bearer ${init.accessToken}`;
+  if (init.accessToken && init.actAs) headers["X-Zhuelog-Act-As"] = init.actAs;
   // The IP is only trusted by Go together with the secret, so send both or neither.
   const secret = process.env.API_WEB_PROXY_SECRET;
   if (init.clientIp && secret) {
@@ -197,6 +208,6 @@ export function logout(refreshToken: string, clientIp: string) {
   });
 }
 
-export function fetchMe(accessToken: string) {
-  return goApi<GoMe>("/v1/me", { method: "GET", accessToken });
+export function fetchMe(accessToken: string, actAs?: string) {
+  return goApi<GoMe>("/v1/me", { method: "GET", accessToken, actAs });
 }

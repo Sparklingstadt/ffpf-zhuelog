@@ -103,3 +103,98 @@ test("other failures are thrown", async () => {
     (error) => error instanceof GoApiError && error.status === 0,
   );
 });
+
+function actingProvider(
+  me: (token: string, actAs?: string) => Promise<GoMe>,
+  actAs: string | undefined = "password:abc",
+) {
+  return new GoApiCurrentUserProvider(
+    async () => "access",
+    me,
+    async () => actAs,
+  );
+}
+
+const admin: GoMe = { ownerId: "12345", role: "admin", login: "octocat" };
+
+test("an admin acting as a member owns the member's records", async () => {
+  const asked: (string | undefined)[] = [];
+  const user = await actingProvider(async (_token, actAs) => {
+    asked.push(actAs);
+    return {
+      ownerId: "password:abc",
+      role: "admin",
+      login: "octocat",
+      actingAs: {
+        ownerId: "password:abc",
+        loginId: "test01",
+        displayName: "テスト",
+      },
+    };
+  }).getCurrentUser();
+  assert.deepEqual(asked, ["password:abc"]);
+  assert.deepEqual(user, {
+    githubLogin: "octocat",
+    githubId: "password:abc",
+    role: "admin",
+    actingAs: {
+      ownerId: "password:abc",
+      loginId: "test01",
+      displayName: "テスト",
+    },
+  });
+});
+
+test("an API that ignores the header leaves the admin as themself, flagged", async () => {
+  const user = await actingProvider(async () => admin).getCurrentUser();
+  assert.deepEqual(user, {
+    githubLogin: "octocat",
+    githubId: "12345",
+    role: "admin",
+    actAsIgnored: true,
+  });
+});
+
+test("a refused member falls back to the admin, flagged", async () => {
+  for (const status of [400, 403, 404]) {
+    const asked: (string | undefined)[] = [];
+    const user = await actingProvider(async (_token, actAs) => {
+      asked.push(actAs);
+      if (actAs) throw new GoApiError(status, "x");
+      return admin;
+    }).getCurrentUser();
+    assert.deepEqual(asked, ["password:abc", undefined], String(status));
+    assert.equal(user?.githubId, "12345");
+    assert.equal(user?.actAsIgnored, true);
+    assert.equal(user?.actingAs, undefined);
+  }
+});
+
+test("acting keeps the usual 401 and failure handling", async () => {
+  assert.equal(
+    await actingProvider(async () => {
+      throw new GoApiError(401, "unauthorized");
+    }).getCurrentUser(),
+    null,
+  );
+  await assert.rejects(
+    actingProvider(async () => {
+      throw new GoApiError(500, "internal");
+    }).getCurrentUser(),
+    (error) => error instanceof GoApiError && error.status === 500,
+  );
+});
+
+test("a member with a stray act-as cookie is just the member", async () => {
+  const user = await actingProvider(async (_token, actAs) => {
+    if (actAs) throw new GoApiError(403, "forbidden");
+    return { ownerId: "password:me", role: "member", login: "m" };
+  }).getCurrentUser();
+  assert.deepEqual(user, {
+    githubLogin: "m",
+    githubId: "password:me",
+    role: "member",
+    displayName: undefined,
+    accountId: undefined,
+  });
+});

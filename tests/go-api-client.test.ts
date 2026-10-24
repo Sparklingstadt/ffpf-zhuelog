@@ -131,6 +131,16 @@ test("fetchMe sends a Bearer token", async () => {
   assert.equal(h.authorization, "Bearer tok");
 });
 
+test("fetchMe names the member an admin acts as, and only then", async () => {
+  stub(() => json({ ownerId: "o", role: "admin", login: "l" }));
+  await fetchMe("tok", "password:abc");
+  await fetchMe("tok");
+  const acting = calls[0]!.init.headers as Record<string, string>;
+  const plain = calls[1]!.init.headers as Record<string, string>;
+  assert.equal(acting["X-Zhuelog-Act-As"], "password:abc");
+  assert.equal("X-Zhuelog-Act-As" in plain, false);
+});
+
 test("maps the Go error JSON to GoApiError", async () => {
   stub(() => json({ error: { code: "rate_limited", message: "x" } }, 429));
   await assert.rejects(

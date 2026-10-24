@@ -25,16 +25,16 @@
 7. **`?user=` との関係。** `readOwner` の「自分」は、なりすまし中は会員になる。`role` は admin のままなので、`?user=` で他の会員を読むこともできる。
 8. **ログ。** なりすましが通ったリクエストごとに、`acting as member` を Info で出す（`actor`＝admin の ID、`owner`＝会員の `ownerId`、`path`）。中身やトークンは出さない。
 9. **Web の Cookie `zl_act_as`。** 値は会員の `ownerId`。`HttpOnly`・`SameSite=Lax`・`Path=/`、HTTPS では `Secure`、`maxAge` はリフレッシュトークンと同じ 30 日。ログイン（3 種類とも）・ログアウトのときに消す。
-10. **ヘッダーを付ける場所。** Web が Go を呼ぶ入口は 3 つなので、そこで `zl_act_as` を読んでヘッダーに付ける：`asSignedInUser`（`goApiAuthed`・`goUploadAuthed`）、`GoApiCurrentUserProvider` の `GET /v1/me`、チャットの中継（`/api/chat`）。`client.ts` の `CallerInit` に `actAs?: string` を足し、`callerHeaders` がヘッダーにする。
+10. **ヘッダーを付ける場所。** Web が Go を呼ぶ入口で `zl_act_as` を読む：`GoApiCurrentUserProvider` の `GET /v1/me`（Cookie があればヘッダー付きで聞く）と、`asSignedInUser`（`goApiAuthed`・`goUploadAuthed`）。`asSignedInUser` は Cookie をそのまま使わず、同じリクエストの `GET /v1/me` が `actingAs` で認めたときだけヘッダーを付ける（`confirmedActAs`。`GET /v1/me` は React の `cache()` で 1 回にまとめる）。チャットの中継（`/api/chat`）は持ち主を使わないので付けない。`client.ts` の `CallerInit` に `actAs?: string` を足し、`callerHeaders` がヘッダーにする。
 11. **Web は Go が認めたときだけ「なりすまし中」と扱う。** Go API は手動でデプロイするので、Web だけが新しくなることがある。古い Go はヘッダーを無視し、記録は admin 自身のものになってしまう。そこで：
     - `AuthenticatedUser` に `actingAs?: { ownerId, loginId, displayName }` を足し、`GET /v1/me` の `actingAs` から入れる。
-    - Cookie があるのに `actingAs` が無いとき（古い Go）は、`actingAs` を付けず `actAsIgnored: true` にする。帯に「会員として操作できませんでした。管理者に戻ってください。」を出す。
+    - Cookie があるのに `actingAs` が無いとき（古い Go）は、`actingAs` を付けず `actAsIgnored: true` にする。帯に「会員として操作できませんでした。…管理者に戻ってください。」を出す。データの呼び出しにもヘッダーを付けないので、古い Go で記録が admin のものになっても、帯でそれが分かる。
     - Cookie があって Go が `404`（会員がいない）・`400`・`403` を返したときは、Cookie を外して `GET /v1/me` をもう一度呼び、`actAsIgnored: true` にする（Server Component は Cookie を消せないので、消すのは「管理者に戻る」の操作）。
 12. **始める・やめる。** Server Action を 2 つ足す。
     - `startActingAs(ownerId)`：admin であること（`RequireAdminUser`）を確かめ、`ownerId` を `isOwnerId` と `password:` で確かめ、ヘッダー付きで `GET /v1/me` を呼んで `actingAs.ownerId` が一致したときだけ Cookie を書き、`/` へ送る。一致しなければ Cookie を書かず、管理画面にエラーを出す。
     - `stopActing()`：Cookie を消して `/admin/accounts` へ送る。
 13. **画面。**
-    - `/admin/accounts` の各会員の行に「この会員として操作」ボタン。
+    - `/admin/accounts` の各会員の行に「この会員として操作」ボタン。始められなかったときは `/admin/accounts?actAs=failed` でエラーを出す。
     - なりすまし中は、全ページの上部（`layout.tsx`）に帯：「{表示名}（{loginId}）として操作中」と「管理者に戻る」ボタン。`actAsIgnored` のときは上の警告と「管理者に戻る」。
     - 画面に出す名前や「自分の記録」の判定は、今までどおり `githubId`（＝`ownerId`）を使うので、ページの変更は要らない。
 
@@ -51,7 +51,7 @@
 
 - `client.ts`：`CallerInit.actAs`、`GoMe.actingAs`。
 - `session-cookies.ts`：`ACT_AS_COOKIE` と、その書き込み・消去。ログイン・ログアウトで消す（`go-api-session.ts`、GitHub の callback）。
-- `authed.ts`・`GoApiCurrentUserProvider`・`/api/chat`：Cookie を読んでヘッダーに。
+- `act-as.ts`（`fetchMeOnce`・`confirmedActAs`）、`authed.ts`・`GoApiCurrentUserProvider`：Cookie を読んでヘッダーに。
 - `AuthenticatedUser.actingAs`・`actAsIgnored`。
 - Server Action `startActingAs`・`stopActing`、管理画面のボタン、`layout.tsx` の帯。
 - `docs/`（Web 側の説明があれば）。

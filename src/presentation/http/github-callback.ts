@@ -17,6 +17,7 @@ import { isSecureRequest } from "@/infrastructure/go-api/go-api-session";
 import {
   OAUTH_COOKIE,
   sessionCookie,
+  clearedActAsCookie,
   sessionCookieOptions,
   type SessionCookie,
 } from "@/infrastructure/go-api/session-cookies";
@@ -68,7 +69,10 @@ export async function handleGitHubCallback(
         githubRedirectUri(origin),
         clientAddress(request.headers),
       );
-      cookies.push(...sessionCookieOptions(tokens, secure));
+      cookies.push(
+        ...sessionCookieOptions(tokens, secure),
+        clearedActAsCookie(secure),
+      );
       target = getSafeCallbackPath(saved.callbackPath);
     } catch (error) {
       if (error instanceof GoApiError && error.status === 403)

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { clientAddress } from "../auth/client-address";
 import {
+  fetchMe,
   GoApiError,
   loginGuest,
   loginPassword,
@@ -19,6 +20,9 @@ import {
 } from "./github-oauth";
 import {
   ACCESS_COOKIE,
+  ACT_AS_COOKIE,
+  actAsCookie,
+  clearedActAsCookie,
   clearedSessionCookies,
   OAUTH_COOKIE,
   REFRESH_COOKIE,
@@ -67,6 +71,10 @@ export async function readAccessToken(): Promise<string | undefined> {
   return (await cookies()).get(ACCESS_COOKIE)?.value || undefined;
 }
 
+export async function readActAsCookie(): Promise<string | undefined> {
+  return (await cookies()).get(ACT_AS_COOKIE)?.value || undefined;
+}
+
 async function writeCookies(list: SessionCookie[]) {
   const store = await cookies();
   for (const cookie of list)
@@ -75,7 +83,35 @@ async function writeCookies(list: SessionCookie[]) {
 
 async function startSession(tokens: GoTokens) {
   const secure = isSecureRequest(await headers());
-  await writeCookies(sessionCookieOptions(tokens, secure));
+  await writeCookies([
+    ...sessionCookieOptions(tokens, secure),
+    clearedActAsCookie(secure),
+  ]);
+}
+
+// Starts acting as the member ownerId. The cookie is written only when Go
+// confirms it (actingAs), so an older API that ignores the header never makes
+// the admin's own records look like the member's. Returns whether it started;
+// a Go failure other than refusing the member is thrown.
+export async function startActingAsViaGo(ownerId: string): Promise<boolean> {
+  const accessToken = await readAccessToken();
+  if (!accessToken) return false;
+  let actingAs: string | undefined;
+  try {
+    const me = await fetchMe(accessToken, ownerId);
+    if (me.role === "admin") actingAs = me.actingAs?.ownerId;
+  } catch (error) {
+    if (error instanceof GoApiError && [400, 403, 404].includes(error.status))
+      return false;
+    throw error;
+  }
+  if (actingAs !== ownerId) return false;
+  await writeCookies([actAsCookie(ownerId, isSecureRequest(await headers()))]);
+  return true;
+}
+
+export async function stopActingViaGo() {
+  await writeCookies([clearedActAsCookie(isSecureRequest(await headers()))]);
 }
 
 export async function signInWithPasswordViaGo(input: {
