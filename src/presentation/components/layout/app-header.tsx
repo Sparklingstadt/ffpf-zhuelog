@@ -62,10 +62,11 @@ function UserControls({ user }: { user: AuthenticatedUser }) {
       : `@${user.githubLogin}`;
   const roleLabel = isAdmin ? "管理者" : isMember ? "メンバー" : null;
   // Labels collapse to icons until there is room for them; the text stays for
-  // screen readers. The admin's six links only fit with labels from `xl`.
+  // screen readers. Members' and admins' six links only fit with labels from
+  // `xl`.
   // `max-*:sr-only` rather than `*:not-sr-only`, which resets the button's
   // `whitespace-nowrap` and lets a squeezed label wrap.
-  const label = isAdmin ? "max-xl:sr-only" : "max-lg:sr-only";
+  const label = isGuest ? "max-lg:sr-only" : "max-xl:sr-only";
 
   return (
     <div className="flex min-w-0 items-center justify-between gap-2 md:justify-end">
@@ -106,7 +107,7 @@ function UserControls({ user }: { user: AuthenticatedUser }) {
             パスワード変更
           </NavLink>
         ) : null}
-        {isAdmin ? (
+        {isMember || isAdmin ? (
           <NavLink label={label} href="/chat" icon={MessagesSquare}>
             ChatGPT と話す
           </NavLink>

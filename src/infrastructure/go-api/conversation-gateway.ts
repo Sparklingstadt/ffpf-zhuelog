@@ -30,7 +30,7 @@ const toSummary = (json: SummaryJson): ConversationSummary => ({
   updatedAt: new Date(json.updatedAt),
 });
 
-// Conversations are always the signed-in admin's own (the token's owner in
+// Conversations are always the signed-in user's own (the token's owner in
 // Go), newest first.
 export function createConversationGateway(call: GoApiCall = goApiAuthed) {
   const path = (id: string) => `/v1/conversations/${encodeURIComponent(id)}`;

@@ -28,7 +28,7 @@ type ConversationSummary struct {
 	UpdatedAt time.Time
 }
 
-// Conversation is an admin's practice conversation with ChatGPT.
+// Conversation is a member's or admin's practice conversation with ChatGPT.
 type Conversation struct {
 	ConversationSummary
 	Messages []ConversationMessage

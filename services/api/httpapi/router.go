@@ -240,13 +240,14 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 		private("DELETE /v1/line/link", authed(notActing(lineUnlink(d.Line))))
 	}
 
-	// The admin chat exists only when OpenAI is configured.
+	// The chat, for members and admins (guests get 403 from requireAuth),
+	// exists only when OpenAI is configured.
 	if d.Chat != nil {
-		private("POST /v1/chat", adminOnly(streamChat(d.Chat)))
-		private("GET /v1/conversations", adminOnly(listConversations(d.Conversations, d.ChatModel)))
-		private("GET /v1/conversations/{id}", adminOnly(getConversation(d.Conversations)))
-		private("PUT /v1/conversations/{id}", adminOnly(putConversation(d.Conversations, d.Now)))
-		private("DELETE /v1/conversations/{id}", adminOnly(deleteConversation(d.Conversations)))
+		private("POST /v1/chat", authed(streamChat(d.Chat)))
+		private("GET /v1/conversations", authed(listConversations(d.Conversations, d.ChatModel)))
+		private("GET /v1/conversations/{id}", authed(getConversation(d.Conversations)))
+		private("PUT /v1/conversations/{id}", authed(putConversation(d.Conversations, d.Now)))
+		private("DELETE /v1/conversations/{id}", authed(deleteConversation(d.Conversations)))
 	}
 
 	return mux, routes

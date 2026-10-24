@@ -10,6 +10,14 @@ import {
 
 const lockMessage = "IDまたはパスワードが違うか、一時的にロックされています。";
 
+// The role badge in the top bar is hidden below `sm` to leave room for the
+// links.
+async function expectRoleBadge(page: Page, role: string) {
+  const badge = page.getByText(role, { exact: true });
+  if ((page.viewportSize()?.width ?? 0) < 640) await expect(badge).toBeHidden();
+  else await expect(badge).toBeVisible();
+}
+
 async function readOutputPassword(page: Page) {
   const output = page.locator("output");
   await expect(output).toContainText("この画面を離れると再表示できません");
@@ -27,7 +35,10 @@ test("admin creates a member who can open their notes", async ({
 }) => {
   await asAdmin(context);
   await page.goto("/");
-  await expect(page.getByText("管理者", { exact: true })).toBeVisible();
+  // The role badge is hidden below `sm` to leave room for the links.
+  const badge = page.getByText("管理者", { exact: true });
+  if ((page.viewportSize()?.width ?? 0) < 640) await expect(badge).toBeHidden();
+  else await expect(badge).toBeVisible();
   await page.goto("/admin/accounts");
   await page.getByLabel("ログインID", { exact: true }).fill("taro");
   await page.getByLabel("表示名").fill("太郎");
@@ -44,9 +55,7 @@ test("admin creates a member who can open their notes", async ({
       memberPage.getByRole("heading", { name: "日付別の学習ノート" }),
     ).toBeVisible();
     await expect(memberPage.getByText("太郎")).toBeVisible();
-    await expect(
-      memberPage.getByText("メンバー", { exact: true }),
-    ).toBeVisible();
+    await expectRoleBadge(memberPage, "メンバー");
   } finally {
     await memberContext.close();
   }

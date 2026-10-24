@@ -102,18 +102,32 @@ func ndjsonLines(t *testing.T, body string) []map[string]string {
 
 const oneUserMessage = `{"messages":[{"role":"user","text":"你好"}]}`
 
-func TestChatRoutesAreAdminOnly(t *testing.T) {
-	for _, role := range []string{auth.RoleMember, auth.RoleGuest} {
-		h, _ := chatRouter(t, role, &fakeChat{}, &fakeConversations{})
-		for _, rt := range []struct{ method, path, body string }{
-			{"POST", "/v1/chat", oneUserMessage},
-			{"GET", "/v1/conversations", ""},
-			{"GET", "/v1/conversations/" + testConversationID, ""},
-			{"PUT", "/v1/conversations/" + testConversationID, `{}`},
-			{"DELETE", "/v1/conversations/" + testConversationID, ""},
-		} {
-			wantError(t, do(h, rt.method, rt.path, rt.body, jsonAuth), http.StatusForbidden, "forbidden")
-		}
+func TestChatRoutesRejectGuests(t *testing.T) {
+	h, _ := chatRouter(t, auth.RoleGuest, &fakeChat{}, &fakeConversations{})
+	for _, rt := range []struct{ method, path, body string }{
+		{"POST", "/v1/chat", oneUserMessage},
+		{"GET", "/v1/conversations", ""},
+		{"GET", "/v1/conversations/" + testConversationID, ""},
+		{"PUT", "/v1/conversations/" + testConversationID, `{}`},
+		{"DELETE", "/v1/conversations/" + testConversationID, ""},
+	} {
+		wantError(t, do(h, rt.method, rt.path, rt.body, jsonAuth), http.StatusForbidden, "forbidden")
+	}
+}
+
+func TestMembersChatAndSaveTheirOwnConversations(t *testing.T) {
+	c := &fakeConversations{}
+	h, _ := chatRouter(t, auth.RoleMember, &fakeChat{pieces: []string{"你好"}}, c)
+	if w := do(h, "POST", "/v1/chat", oneUserMessage, jsonAuth); w.Code != http.StatusOK {
+		t.Fatalf("chat = %d %q", w.Code, w.Body.String())
+	}
+	body := `{"title":"你好","modelName":"m","ended":false,"createdAt":"2026-10-24T01:02:03.000Z",` +
+		`"messages":[{"id":"u1","role":"user","text":"你好"}]}`
+	if w := do(h, "PUT", "/v1/conversations/"+testConversationID, body, jsonAuth); w.Code != http.StatusOK {
+		t.Fatalf("put = %d %q", w.Code, w.Body.String())
+	}
+	if c.putOwner != testOwner {
+		t.Fatalf("saved for %q, want %q", c.putOwner, testOwner)
 	}
 }
 

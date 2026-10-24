@@ -16,6 +16,7 @@ import {
   type RecordOwner,
 } from "@/application/identity/use-cases/resolve-record-owner";
 import { learningNotes } from "@/composition/learning-container";
+import { isMemberRole } from "@/domain/identity/entities/authenticated-user";
 import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
 import { GoApiError } from "@/infrastructure/go-api/client";
 import type { ViewedOwner } from "@/infrastructure/go-api/learning-gateway";
@@ -66,13 +67,13 @@ type HomeProps = {
 function HomeHeader({
   owner,
   total,
-  isAdmin,
+  canChat,
 }: {
   owner: RecordOwner;
   // Number of entries for the viewed owner; null when no notes are shown.
   total: number | null;
-  // Admins also get the ChatGPT chat and its conversation notes.
-  isAdmin: boolean;
+  // Members and admins also get the ChatGPT chat and its conversation notes.
+  canChat: boolean;
 }) {
   const hasNotes = showsRecords(owner);
   return (
@@ -106,7 +107,7 @@ function HomeHeader({
             </Link>
           </Button>
         ) : null}
-        {isAdmin ? (
+        {canChat ? (
           <>
             <Button asChild variant="outline" size="lg">
               <Link href="/chat">
@@ -154,7 +155,7 @@ export default async function Home({ searchParams }: HomeProps) {
         <HomeHeader
           owner={owner}
           total={null}
-          isAdmin={user.role === "admin"}
+          canChat={isMemberRole(user.role)}
         />
         <Card className="border-dashed py-14 text-center shadow-none">
           <CardContent className="flex flex-col items-center gap-4">
@@ -176,7 +177,7 @@ export default async function Home({ searchParams }: HomeProps) {
         <HomeHeader
           owner={owner}
           total={null}
-          isAdmin={user.role === "admin"}
+          canChat={isMemberRole(user.role)}
         />
         <ReauthNotice subject="学習ノート" />
       </PageShell>
@@ -194,7 +195,7 @@ export default async function Home({ searchParams }: HomeProps) {
       <HomeHeader
         owner={owner}
         total={recentEntriesTotal(total, entries.length)}
-        isAdmin={user.role === "admin"}
+        canChat={isMemberRole(user.role)}
       />
 
       <RecordOwnerControls owner={owner} view={view} path="/" />

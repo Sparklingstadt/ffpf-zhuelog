@@ -14,8 +14,8 @@ import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
 import {
   loadConversationList,
-  requireChatAdmin,
-} from "@/presentation/guards/chat-admin-guard";
+  requireChatUser,
+} from "@/presentation/guards/chat-guard";
 import { listConversationDates } from "@/presentation/presenters/conversation-dates";
 import {
   formatLogDateKey,
@@ -25,7 +25,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function ConversationsPage() {
-  const user = await requireChatAdmin("/signin?callbackUrl=/conversations");
+  const user = await requireChatUser("/signin?callbackUrl=/conversations");
   const conversations = await loadConversationList();
   const dates = conversations ? listConversationDates(conversations) : [];
 

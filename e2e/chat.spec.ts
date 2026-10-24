@@ -4,6 +4,7 @@ import {
   asMember,
   createMember,
   expect,
+  memberOwnerId,
   test,
 } from "./fixtures";
 
@@ -55,21 +56,43 @@ test("admin chats, the conversation is saved and can be continued and deleted", 
   await expect(page.getByText("まだ会話ノートがありません")).toBeVisible();
 });
 
-test("members and guests have no way in", async ({ page, db, browser }) => {
-  await createMember(db, "taro", "太郎", "member-password-1");
+test("a member chats and keeps their own conversation notes; guests have no way in", async ({
+  page,
+  db,
+  browser,
+}) => {
+  const accountId = await createMember(db, "taro", "太郎", "member-password-1");
   await asMember(page, "taro", "member-password-1");
-  await expect(page.getByRole("link", { name: "ChatGPT と話す" })).toHaveCount(
-    0,
-  );
-  await expect(page.getByRole("link", { name: "会話ノート" })).toHaveCount(0);
-  expect((await page.goto("/chat"))?.status()).toBe(404);
-  expect((await page.goto("/conversations"))?.status()).toBe(404);
+  await page
+    .getByRole("main")
+    .getByRole("link", { name: "ChatGPT と話す" })
+    .click();
+  await expect(page).toHaveURL((url) => url.pathname === "/chat");
+  const input = page.getByLabel("ChatGPTへのメッセージ");
+  await input.fill("我今天很忙");
+  await input.press("Enter");
+  await expect(
+    page.getByRole("article", { name: "ChatGPTのメッセージ" }),
+  ).toHaveText(["你好！「我今天很忙」ですね。"]);
+  await expect(page).toHaveURL((url) => url.searchParams.has("id"));
+  await expect
+    .poll(async () => {
+      const { rows } = await db.query(
+        `SELECT "ownerId" FROM "ChatConversation"`,
+      );
+      return rows.map((row) => row.ownerId);
+    })
+    .toEqual([memberOwnerId(accountId)]);
+  await page.goto("/conversations");
+  await page.getByText("1件の会話").click();
+  await expect(page.getByText("#1 我今天很忙")).toBeVisible();
 
   const guest = await browser.newPage();
   await asGuest(guest);
   await expect(guest.getByRole("link", { name: "ChatGPT と話す" })).toHaveCount(
     0,
   );
+  await expect(guest.getByRole("link", { name: "会話ノート" })).toHaveCount(0);
   expect((await guest.goto("/chat"))?.status()).toBe(404);
   expect((await guest.goto("/conversations"))?.status()).toBe(404);
   await guest.close();

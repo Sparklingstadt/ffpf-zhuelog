@@ -1,4 +1,4 @@
-// Package chat holds the admin's practice chat with ChatGPT: the system
+// Package chat holds the members' and admins' practice chat with ChatGPT: the system
 // prompt, the limits on a conversation and the streaming OpenAI call.
 package chat
 

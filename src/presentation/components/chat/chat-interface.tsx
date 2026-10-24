@@ -81,7 +81,7 @@ async function failureText(response: Response): Promise<string> {
   return FAILURE;
 }
 
-// The admin's chat with ChatGPT. Every answer that arrives whole is saved
+// The user's chat with ChatGPT (members and admins). Every answer that arrives whole is saved
 // with the whole conversation; an answer that is cut off is shown dimmed and
 // left out, and its question goes back into the input to send again.
 export function ChatInterface({
