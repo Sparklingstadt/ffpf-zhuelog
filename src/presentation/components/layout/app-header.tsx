@@ -19,9 +19,6 @@ import { ThemeSwitcher } from "@/presentation/components/theme/theme-switcher";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
 
-// Labels collapse to icons below `lg`; the text stays for screen readers.
-const label = "sr-only lg:not-sr-only";
-
 const repositoryUrl = "https://github.com/Sparklingstadt/ffpf-zhuelog";
 
 // The GitHub mark. lucide-react no longer ships brand icons.
@@ -36,10 +33,12 @@ function GitHubMark() {
 function NavLink({
   href,
   icon: Icon,
+  label,
   children,
 }: {
   href: string;
   icon: LucideIcon;
+  label: string;
   children: string;
 }) {
   return (
@@ -62,52 +61,62 @@ function UserControls({ user }: { user: AuthenticatedUser }) {
       ? (user.displayName ?? user.githubLogin)
       : `@${user.githubLogin}`;
   const roleLabel = isAdmin ? "管理者" : isMember ? "メンバー" : null;
+  // Labels collapse to icons until there is room for them; the text stays for
+  // screen readers. The admin's six links only fit with labels from `xl`.
+  // `max-*:sr-only` rather than `*:not-sr-only`, which resets the button's
+  // `whitespace-nowrap` and lets a squeezed label wrap.
+  const label = isAdmin ? "max-xl:sr-only" : "max-lg:sr-only";
 
   return (
-    <div className="flex min-w-0 items-center justify-between gap-2 sm:justify-end">
+    <div className="flex min-w-0 items-center justify-between gap-2 md:justify-end">
       <div className="flex min-w-0 items-center gap-1.5 text-sm">
         {isGuest ? (
           <Eye className="size-4 shrink-0 text-muted-foreground" />
         ) : (
           <CircleUserRound className="size-4 shrink-0 text-muted-foreground" />
         )}
-        <span className="truncate font-medium">{name}</span>
+        <span className="truncate font-medium" title={name}>
+          {name}
+        </span>
         {roleLabel ? (
-          <Badge variant="secondary" className="font-normal">
+          <Badge variant="secondary" className="font-normal max-sm:hidden">
             {roleLabel}
           </Badge>
         ) : null}
       </div>
-      <nav aria-label="アカウント" className="flex items-center gap-0.5">
-        <NavLink href="/practice/prepositions" icon={Shuffle}>
+      <nav
+        aria-label="アカウント"
+        className="flex shrink-0 items-center gap-0.5"
+      >
+        <NavLink label={label} href="/practice/prepositions" icon={Shuffle}>
           介詞練習
         </NavLink>
         {isMember || isAdmin ? (
-          <NavLink href="/follow" icon={UsersRound}>
+          <NavLink label={label} href="/follow" icon={UsersRound}>
             フォロー
           </NavLink>
         ) : null}
         {isMember || isAdmin ? (
-          <NavLink href="/account/line" icon={MessageCircle}>
+          <NavLink label={label} href="/account/line" icon={MessageCircle}>
             LINE 連携
           </NavLink>
         ) : null}
         {isMember ? (
-          <NavLink href="/account/password" icon={KeyRound}>
+          <NavLink label={label} href="/account/password" icon={KeyRound}>
             パスワード変更
           </NavLink>
         ) : null}
         {isAdmin ? (
-          <NavLink href="/chat" icon={MessagesSquare}>
+          <NavLink label={label} href="/chat" icon={MessagesSquare}>
             ChatGPT と話す
           </NavLink>
         ) : null}
         {isAdmin ? (
-          <NavLink href="/admin/accounts" icon={UserCog}>
+          <NavLink label={label} href="/admin/accounts" icon={UserCog}>
             アカウント管理
           </NavLink>
         ) : null}
-        <form action={signOutAction}>
+        <form action={signOutAction} className="shrink-0">
           <Button type="submit" variant="ghost" size="sm" title="ログアウト">
             <LogOut />
             <span className={label}>ログアウト</span>
@@ -123,7 +132,7 @@ function UserControls({ user }: { user: AuthenticatedUser }) {
 export function AppHeader({ user }: { user?: AuthenticatedUser | null }) {
   return (
     <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur-md">
-      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 sm:flex-nowrap sm:px-6 lg:px-8">
+      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 sm:px-6 md:flex-nowrap lg:px-8">
         <Link
           href="/"
           className="flex shrink-0 items-center gap-2 rounded-lg font-semibold tracking-tight outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -134,12 +143,12 @@ export function AppHeader({ user }: { user?: AuthenticatedUser | null }) {
           学习録
         </Link>
         {user ? (
-          <div className="order-last w-full border-t pt-2 sm:order-none sm:ml-auto sm:w-auto sm:border-0 sm:pt-0">
+          <div className="order-last w-full min-w-0 border-t pt-2 md:order-none md:ml-auto md:w-auto md:border-0 md:pt-0">
             <UserControls user={user} />
           </div>
         ) : null}
         <div
-          className={`flex items-center gap-1 ${user ? "ml-auto sm:ml-0 sm:border-l sm:pl-4" : "ml-auto"}`}
+          className={`flex items-center gap-1 ${user ? "ml-auto md:ml-0 md:border-l md:pl-4" : "ml-auto"}`}
         >
           <Button asChild variant="ghost" size="icon-sm" title="GitHub">
             <a href={repositoryUrl} target="_blank" rel="noopener noreferrer">
