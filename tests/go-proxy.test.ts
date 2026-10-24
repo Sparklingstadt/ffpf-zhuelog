@@ -111,7 +111,7 @@ test("refreshes on /api routes too, so Route Handlers see the new token", async 
   assert.match(h.forwarded()?.get("cookie") ?? "", /zl_access=new-access/);
 });
 
-test("a rejected refresh token clears both cookies and signs out", async () => {
+test("a rejected refresh token clears the session cookies and signs out", async () => {
   const h = harness(async () => {
     throw new GoApiError(401, "unauthorized");
   });
@@ -124,8 +124,8 @@ test("a rejected refresh token clears both cookies and signs out", async () => {
   const location = new URL(response.headers.get("location")!);
   assert.equal(location.pathname, "/signin");
   const cookies = setCookies(response);
-  assert.equal(cookies.length, 2);
-  for (const name of ["zl_access", "zl_refresh"])
+  assert.equal(cookies.length, 3);
+  for (const name of ["zl_access", "zl_refresh", "zl_act_as"])
     assert.ok(
       cookies.some((c) => c.startsWith(`${name}=;`) && /Max-Age=0/.test(c)),
       name,

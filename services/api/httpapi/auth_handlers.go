@@ -168,11 +168,18 @@ func loginGuest(a Auth) http.Handler {
 }
 
 type meResponse struct {
+	OwnerID     string            `json:"ownerId"`
+	Role        string            `json:"role"`
+	Login       string            `json:"login"`
+	DisplayName string            `json:"displayName,omitempty"`
+	AccountID   string            `json:"accountId,omitempty"`
+	ActingAs    *actingAsResponse `json:"actingAs,omitempty"`
+}
+
+type actingAsResponse struct {
 	OwnerID     string `json:"ownerId"`
-	Role        string `json:"role"`
-	Login       string `json:"login"`
-	DisplayName string `json:"displayName,omitempty"`
-	AccountID   string `json:"accountId,omitempty"`
+	LoginID     string `json:"loginId"`
+	DisplayName string `json:"displayName"`
 }
 
 // me answers who the caller is.
@@ -183,9 +190,15 @@ func me(a Auth) http.Handler {
 			writeServiceError(w, r, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, meResponse{
+		res := meResponse{
 			OwnerID: m.OwnerID, Role: m.Role, Login: m.Login,
 			DisplayName: m.DisplayName, AccountID: m.AccountID,
-		})
+		}
+		if m.ActingAs.OwnerID != "" {
+			res.ActingAs = &actingAsResponse{
+				OwnerID: m.ActingAs.OwnerID, LoginID: m.ActingAs.LoginID, DisplayName: m.ActingAs.DisplayName,
+			}
+		}
+		writeJSON(w, http.StatusOK, res)
 	})
 }

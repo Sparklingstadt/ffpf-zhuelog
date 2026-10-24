@@ -30,6 +30,7 @@ type Auth interface {
 	ChangePassword(ctx context.Context, p auth.Principal, current, next, confirm string) error
 	LoginGuest(ctx context.Context) (auth.TokenPair, error)
 	Me(ctx context.Context, p auth.Principal) (auth.Me, error)
+	ActAs(ctx context.Context, p auth.Principal, ownerID string) (auth.Principal, error)
 }
 
 // Entries is what the handlers need from *store.Store.
@@ -228,13 +229,15 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 
 	// The LINE routes exist only when the bot is configured. The webhook and
 	// the drain are public but check their own credential (the LINE signature,
-	// the cron secret); the three link routes are for members and admins.
+	// the cron secret); the three link routes are for members and admins, and
+	// closed while an admin acts as a member, so the admin's LINE account is
+	// never tied to the member.
 	if d.Line != nil {
 		public("POST "+lineWebhookPath, lineWebhook(d.Line, d.LineChannelSecret, d.Now))
 		public("GET "+lineDrainPath, lineDrain(d.Line, d.CronSecret, d.Now))
-		private("GET /v1/line/link", authed(lineLinked(d.Line)))
-		private("POST /v1/line/link-code", authed(lineLinkCode(d.Line)))
-		private("DELETE /v1/line/link", authed(lineUnlink(d.Line)))
+		private("GET /v1/line/link", authed(notActing(lineLinked(d.Line))))
+		private("POST /v1/line/link-code", authed(notActing(lineLinkCode(d.Line))))
+		private("DELETE /v1/line/link", authed(notActing(lineUnlink(d.Line))))
 	}
 
 	// The admin chat exists only when OpenAI is configured.

@@ -25,6 +25,7 @@ type fakeAuth struct {
 	changePass   func(ctx context.Context, p auth.Principal, current, next, confirm string) error
 	guest        func(ctx context.Context) (auth.TokenPair, error)
 	me           func(ctx context.Context, p auth.Principal) (auth.Me, error)
+	actAs        func(ctx context.Context, p auth.Principal, ownerID string) (auth.Principal, error)
 }
 
 type errUnexpectedCall struct{ name string }
@@ -85,6 +86,13 @@ func (f *fakeAuth) Me(ctx context.Context, p auth.Principal) (auth.Me, error) {
 		return auth.Me{}, errUnexpectedCall{"Me"}
 	}
 	return f.me(ctx, p)
+}
+
+func (f *fakeAuth) ActAs(ctx context.Context, p auth.Principal, ownerID string) (auth.Principal, error) {
+	if f.actAs == nil {
+		return auth.Principal{}, errUnexpectedCall{"ActAs"}
+	}
+	return f.actAs(ctx, p, ownerID)
 }
 
 type fakePinger struct{ err error }

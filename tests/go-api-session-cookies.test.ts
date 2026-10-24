@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   ACCESS_COOKIE,
+  ACT_AS_COOKIE,
+  actAsCookie,
+  clearedActAsCookie,
   clearedSessionCookies,
   REFRESH_COOKIE,
   sessionCookieOptions,
@@ -60,6 +63,25 @@ test("cleared cookies expire immediately", () => {
     [
       [ACCESS_COOKIE, "", 0],
       [REFRESH_COOKIE, "", 0],
+      [ACT_AS_COOKIE, "", 0],
     ],
+  );
+});
+
+test("the act-as cookie is HttpOnly, lasts 30 days and clears to empty", () => {
+  const set = actAsCookie("password:abc", true);
+  assert.equal(set.name, ACT_AS_COOKIE);
+  assert.equal(set.value, "password:abc");
+  assert.deepEqual(set.options, {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    secure: true,
+    maxAge: 30 * 24 * 60 * 60,
+  });
+  const cleared = clearedActAsCookie(false);
+  assert.deepEqual(
+    [cleared.name, cleared.value, cleared.options.maxAge],
+    [ACT_AS_COOKIE, "", 0],
   );
 });

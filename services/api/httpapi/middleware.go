@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"crypto/subtle"
+	"errors"
 	"log/slog"
 	"net"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
 
 const maxBodyBytes = 1 << 20
@@ -137,9 +139,13 @@ func limitBody(next http.Handler) http.Handler {
 	})
 }
 
+// actAsHeader names the member an admin acts as (see actAs).
+const actAsHeader = "X-Zhuelog-Act-As"
+
 // requireAuth answers 401/403 unless the request carries a valid
 // "Authorization: Bearer <token>" header; otherwise it stores the Principal in
 // the request context for next. Guest tokens get 403 unless allowGuest is set.
+// With X-Zhuelog-Act-As, the Principal is the admin acting as that member.
 func requireAuth(a Auth, allowGuest bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		scheme, token, ok := strings.Cut(r.Header.Get("Authorization"), " ")
@@ -156,7 +162,50 @@ func requireAuth(a Auth, allowGuest bool, next http.Handler) http.Handler {
 			writeError(w, http.StatusForbidden, codeForbidden, msgForbidden)
 			return
 		}
+		if vals, ok := r.Header[actAsHeader]; ok {
+			if p, ok = actAs(w, r, a, p, vals); !ok {
+				return
+			}
+		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), principalKey, p)))
+	})
+}
+
+// actAs turns an admin's Principal into the admin acting as the member the
+// X-Zhuelog-Act-As header names: 403 for anyone but an admin, 400 for several
+// headers or a value that is not a member's owner ID, 404 for no such member.
+// On failure it has already written the error and returns false.
+func actAs(w http.ResponseWriter, r *http.Request, a Auth, p auth.Principal, vals []string) (auth.Principal, bool) {
+	if p.Role != auth.RoleAdmin {
+		writeForbidden(w, msgActAsAdminOnly)
+		return auth.Principal{}, false
+	}
+	if len(vals) != 1 || !memberOwnerIDPattern.MatchString(vals[0]) {
+		writeBadRequest(w)
+		return auth.Principal{}, false
+	}
+	acting, err := a.ActAs(r.Context(), p, vals[0])
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, codeNotFound, msgMemberNotFound)
+		return auth.Principal{}, false
+	}
+	if err != nil {
+		writeServiceError(w, r, err)
+		return auth.Principal{}, false
+	}
+	loggerFrom(r.Context()).Info("acting as member",
+		"actor", acting.ActorID, "owner", acting.OwnerID, "path", r.URL.Path)
+	return acting, true
+}
+
+// notActing answers 403 while an admin acts as a member.
+func notActing(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if principalFrom(r.Context()).ActorID != "" {
+			writeForbidden(w, msgNotWhileActing)
+			return
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 

@@ -5,6 +5,7 @@ import {
   getCurrentAdminUser,
   memberAccounts,
 } from "@/composition/identity-container";
+import { startActingAsAction } from "@/presentation/actions/acting-actions";
 import { CreateAccountForm } from "@/presentation/components/auth/create-account-form";
 import { ResetPasswordForm } from "@/presentation/components/auth/reset-password-form";
 import {
@@ -15,6 +16,7 @@ import {
   CardTitle,
 } from "@/presentation/components/ui/card";
 import { AppHeader } from "@/presentation/components/layout/app-header";
+import { Button } from "@/presentation/components/ui/button";
 
 export const dynamic = "force-dynamic";
 
@@ -25,9 +27,12 @@ const dateFormat = new Intl.DateTimeFormat("ja-JP", {
   day: "2-digit",
 });
 
-export default async function AdminAccountsPage() {
+export default async function AdminAccountsPage({
+  searchParams,
+}: PageProps<"/admin/accounts">) {
   const user = await getCurrentAdminUser();
   if (!user) redirect("/");
+  const actAsFailed = (await searchParams).actAs === "failed";
 
   const accounts = await memberAccounts.listAccounts();
 
@@ -50,6 +55,16 @@ export default async function AdminAccountsPage() {
               ID・パスワードでログインするアカウントを作成し、パスワードを再設定します。
             </p>
           </header>
+
+          {actAsFailed ? (
+            <p
+              role="alert"
+              className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+            >
+              この会員として操作できませんでした。会員が存在するか、API
+              が最新かを確認してください。
+            </p>
+          ) : null}
 
           <Card>
             <CardHeader>
@@ -88,6 +103,20 @@ export default async function AdminAccountsPage() {
                           作成日 {dateFormat.format(account.createdAt)}
                         </span>
                       </div>
+                      <form
+                        action={startActingAsAction.bind(null, account.ownerId)}
+                      >
+                        <Button
+                          type="submit"
+                          size="sm"
+                          variant="outline"
+                          disabled={user.actingAs?.ownerId === account.ownerId}
+                        >
+                          {user.actingAs?.ownerId === account.ownerId
+                            ? "この会員として操作中"
+                            : "この会員として操作"}
+                        </Button>
+                      </form>
                       <ResetPasswordForm
                         accountId={account.id}
                         loginId={account.loginId}

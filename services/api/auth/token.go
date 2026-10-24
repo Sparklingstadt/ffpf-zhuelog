@@ -40,12 +40,14 @@ var (
 // GitHub user ID (what the allowlist checks) and Login the GitHub login at
 // sign-in, kept for information only and never used for authorization. For
 // members, SessionVersion is set. Guests carry neither Login nor
-// SessionVersion.
+// SessionVersion. While an admin acts as a member (see Service.ActAs), OwnerID
+// is the member's and ActorID the admin's own; ActorID is empty otherwise.
 type Principal struct {
 	OwnerID        string
 	Role           string
 	Login          string
 	SessionVersion int
+	ActorID        string
 }
 
 type claims struct {

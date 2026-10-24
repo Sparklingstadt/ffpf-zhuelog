@@ -208,17 +208,35 @@ API に `API_WEB_PROXY_SECRET` を設定したときは、`X-Zhuelog-Proxy-Secre
 }
 ```
 
-| フィールド    | 型     | 内容                                                             |
-| ------------- | ------ | ---------------------------------------------------------------- |
-| `ownerId`     | string | ノートの所有者 ID。ゲストは `guest`                              |
-| `role`        | string | `admin`・`member`・`guest`                                       |
-| `login`       | string | admin は GitHub のログイン名、会員は `loginId`、ゲストは `guest` |
-| `displayName` | string | 会員だけ。DB から読む。空のときは省く                            |
-| `accountId`   | string | 会員だけ。`PasswordAccount` の `id`                              |
+| フィールド    | 型     | 内容                                                                                                             |
+| ------------- | ------ | ---------------------------------------------------------------------------------------------------------------- |
+| `ownerId`     | string | ノートの所有者 ID。ゲストは `guest`                                                                              |
+| `role`        | string | `admin`・`member`・`guest`                                                                                       |
+| `login`       | string | admin は GitHub のログイン名、会員は `loginId`、ゲストは `guest`                                                 |
+| `displayName` | string | 会員だけ。DB から読む。空のときは省く                                                                            |
+| `accountId`   | string | 会員だけ。`PasswordAccount` の `id`                                                                              |
+| `actingAs`    | object | admin が [会員として操作](../guide/auth.md#会員として操作する) している間だけ。`{ownerId, loginId, displayName}` |
+
+`X-Zhuelog-Act-As` を付けたときは、`ownerId` が会員の `ownerId`、`role` が `admin`、`login` が admin の GitHub のログイン名になります。
+
+```json
+{
+  "ownerId": "password:ckx…",
+  "role": "admin",
+  "login": "octocat",
+  "actingAs": {
+    "ownerId": "password:ckx…",
+    "loginId": "test01",
+    "displayName": "テスト"
+  }
+}
+```
 
 **エラー**
 
-| HTTP | code           | 状況                                                                       |
-| ---- | -------------- | -------------------------------------------------------------------------- |
-| 401  | `unauthorized` | トークンが無い・無効・失効。会員のアカウントが消えた、パスワードが変わった |
-| 403  | `forbidden`    | admin が許可リストから外れた                                               |
+| HTTP | code              | 状況                                                                       |
+| ---- | ----------------- | -------------------------------------------------------------------------- |
+| 401  | `unauthorized`    | トークンが無い・無効・失効。会員のアカウントが消えた、パスワードが変わった |
+| 403  | `forbidden`       | admin が許可リストから外れた。admin 以外が `X-Zhuelog-Act-As` を付けた     |
+| 400  | `invalid_request` | `X-Zhuelog-Act-As` が 2 つ以上、または会員の `ownerId` の形でない          |
+| 404  | `not_found`       | `X-Zhuelog-Act-As` の会員がいない                                          |
