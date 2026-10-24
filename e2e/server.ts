@@ -8,7 +8,9 @@ import {
   goApiURL,
   goJwtSecret,
   goProxySecret,
+  openAiStubURL,
 } from "./environment";
+import { startOpenAiStub } from "./openai-stub";
 
 async function main() {
   // Explicit values take precedence over .env.local/.env.production.local.
@@ -35,6 +37,7 @@ async function main() {
     if (result.status !== 0) process.exit(result.status ?? 1);
   }
 
+  await startOpenAiStub(Number(new URL(openAiStubURL).port));
   const api = await startGoApi();
   const server = spawn(
     process.execPath,
@@ -90,13 +93,15 @@ async function startGoApi(): Promise<ChildProcess> {
       GITHUB_WEB_CLIENT_SECRET: "",
       GITHUB_WEB_REDIRECT_URI: "",
       // Go registers the LINE link routes only when LINE and OpenAI are
-      // configured. Dummy values and loopback base URLs (nothing listens on
-      // port 9) make the routes exist without any call leaving this machine.
+      // configured, and the chat routes when OpenAI is. Dummy values and
+      // loopback base URLs (nothing listens on port 9; the OpenAI stub runs in
+      // this process) make the routes exist without any call leaving this
+      // machine.
       LINE_CHANNEL_SECRET: "e2e-line-channel-secret",
       LINE_CHANNEL_ACCESS_TOKEN: "e2e-line-channel-access-token",
       OPENAI_API_KEY: "e2e-openai-api-key",
       LINE_API_BASE_URL: "http://127.0.0.1:9",
-      OPENAI_API_BASE_URL: "http://127.0.0.1:9",
+      OPENAI_API_BASE_URL: openAiStubURL,
     },
     stdio: "inherit",
   });
