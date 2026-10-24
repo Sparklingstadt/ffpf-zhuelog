@@ -9,6 +9,7 @@ import {
 } from "@/domain/calendar/value-objects/log-date";
 import { deleteConversationAction } from "@/presentation/actions/conversation-actions";
 import { ChatMessage } from "@/presentation/components/chat/chat-message";
+import { ConversationExportButton } from "@/presentation/components/chat/conversation-export-button";
 import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
 import { NoteActionForm } from "@/presentation/components/records/note-action-form";
@@ -19,6 +20,10 @@ import {
   requireChatAdmin,
 } from "@/presentation/guards/chat-admin-guard";
 import { conversationsOn } from "@/presentation/presenters/conversation-dates";
+import {
+  conversationMarkdownFileName,
+  toConversationMarkdown,
+} from "@/presentation/presenters/conversation-markdown-export";
 import {
   formatLogDate,
   formatTokyoDateTime,
@@ -69,6 +74,10 @@ export default async function ConversationDetailPage({
                 </Link>
               </Button>
             )}
+            <ConversationExportButton
+              markdown={toConversationMarkdown(conversation)}
+              fileName={conversationMarkdownFileName(date, conversationNumber)}
+            />
             <NoteActionForm
               action={deleteConversationAction}
               fields={{ id: conversation.id }}

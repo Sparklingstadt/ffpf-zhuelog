@@ -6,6 +6,7 @@ import { Download } from "lucide-react";
 import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
+import { downloadFile } from "@/presentation/lib/download-file";
 import {
   learningCsvFileName,
   toLearningCsv,
@@ -16,16 +17,11 @@ import { formatTokyoDateTime } from "@/presentation/presenters/log-date-presente
 const UTF8_BOM = "﻿";
 
 function download(entries: LearningEntry[]) {
-  const blob = new Blob([UTF8_BOM, toLearningCsv(entries)], {
-    type: "text/csv;charset=utf-8",
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = learningCsvFileName(new Date());
-  link.click();
-  // Revoking at once can cancel the download in some browsers.
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  downloadFile(
+    [UTF8_BOM, toLearningCsv(entries)],
+    "text/csv;charset=utf-8",
+    learningCsvFileName(new Date()),
+  );
 }
 
 const checkboxClass = "size-4 shrink-0 cursor-pointer accent-primary";
