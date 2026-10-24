@@ -29,6 +29,9 @@ const (
 	msgInternal          = "サーバーでエラーが発生しました。"
 	msgUnavailable       = "サービスを利用できません。"
 	msgWebOnly           = "この操作は Web からだけ利用できます。"
+	msgActAsAdminOnly    = "他の人として操作できるのは管理者だけです。"
+	msgMemberNotFound    = "会員が見つかりません。"
+	msgNotWhileActing    = "会員として操作している間は使えません。"
 
 	msgInvalidNewPassword     = "パスワードは12〜128文字にしてください。"
 	msgPasswordMismatch       = "確認用のパスワードが一致しません。"

@@ -1817,3 +1817,41 @@ func TestLoginGuestRefreshTokenLifetimeAndCleanup(t *testing.T) {
 		t.Fatalf("rotated guest row expires at %v, want %v", f.store.row(t, next.RefreshToken).ExpiresAt, want)
 	}
 }
+
+func TestActAs(t *testing.T) {
+	f := newFixture()
+	ctx := context.Background()
+	acc := f.store.addAccount("cacc1", "test01", "pw", 0)
+	acc.DisplayName = "テスト"
+	admin := Principal{OwnerID: "42", Role: RoleAdmin, Login: "Alice"}
+
+	got, err := f.svc.ActAs(ctx, admin, "password:cacc1")
+	want := Principal{OwnerID: "password:cacc1", Role: RoleAdmin, Login: "Alice", ActorID: "42"}
+	if err != nil || got != want {
+		t.Fatalf("ActAs = %+v, %v; want %+v", got, err, want)
+	}
+
+	me, err := f.svc.Me(ctx, got)
+	wantMe := Me{OwnerID: "password:cacc1", Role: RoleAdmin, Login: "Alice",
+		ActingAs: ActingAs{OwnerID: "password:cacc1", LoginID: "test01", DisplayName: "テスト"}}
+	if err != nil || me != wantMe {
+		t.Fatalf("Me while acting = %+v, %v; want %+v", me, err, wantMe)
+	}
+
+	if _, err := f.svc.ActAs(ctx, admin, "password:gone"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("missing member err = %v, want store.ErrNotFound", err)
+	}
+	if _, err := f.svc.ActAs(ctx, admin, "42"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("admin owner id err = %v, want store.ErrNotFound", err)
+	}
+	member := Principal{OwnerID: "password:cacc1", Role: RoleMember}
+	if _, err := f.svc.ActAs(ctx, member, "password:cacc1"); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("member err = %v, want ErrForbidden", err)
+	}
+	if _, err := f.svc.ActAs(ctx, got, "password:cacc1"); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("acting twice err = %v, want ErrForbidden", err)
+	}
+	if _, err := f.svc.Me(ctx, Principal{OwnerID: "password:gone", Role: RoleAdmin, ActorID: "42"}); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("Me for a vanished member err = %v, want store.ErrNotFound", err)
+	}
+}

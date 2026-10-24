@@ -15,7 +15,7 @@
 2. **確かめる順番**（`requireAuth` の中、トークンの確認とゲストの判定の後）：
    1. ヘッダーが無ければ、今までどおり。値が空でも「無い」とは扱わず、下の 3 で `400` にする。
    2. 呼んだのが admin でなければ `403 forbidden`「他の人として操作できるのは管理者だけです。」（会員がヘッダーを付けたとき）。
-   3. ヘッダーが 2 つ以上、または値が `^password:[a-z0-9]{20,32}$` に合わなければ `400 invalid_request`。なれるのは **会員だけ** で、admin（GitHub の数値 ID）やゲストにはなれない。
+   3. ヘッダーが 2 つ以上、または値が `^password:[a-z0-9]{1,64}$`（フォローと同じ） に合わなければ `400 invalid_request`。なれるのは **会員だけ** で、admin（GitHub の数値 ID）やゲストにはなれない。
    4. その `PasswordAccount` が無ければ `404 not_found`「会員が見つかりません。」。
    5. 通ったら、`Principal` の `OwnerID` を会員の `ownerId` にし、`ActorID` に admin の GitHub ID を入れる。`Role`・`Login` は admin のまま。
 3. **`auth.Principal.ActorID`。** なりすまし中だけ値がある（admin の `ownerId`）。持ち主を使うハンドラーは今までどおり `OwnerID` を使うので、ハンドラーの変更は要らない。
