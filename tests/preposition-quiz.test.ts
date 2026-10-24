@@ -107,9 +107,11 @@ test("the answer lands in every position", () => {
 });
 
 test("a quiz asks about different prepositions", () => {
-  const quiz = buildQuiz(10, seeded(3));
-  assert.equal(quiz.length, 10);
-  assert.equal(new Set(quiz.map((question) => question.answer)).size, 10);
+  for (const count of [10, 25]) {
+    const quiz = buildQuiz(count, seeded(3));
+    assert.equal(quiz.length, count);
+    assert.equal(new Set(quiz.map((question) => question.answer)).size, count);
+  }
 });
 
 test("progress grows with each question and stops at 100%", () => {
