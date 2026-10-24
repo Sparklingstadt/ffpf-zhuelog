@@ -146,3 +146,22 @@ model LineMessage {
 
   @@index([status, createdAt])
 }
+
+// An admin's practice conversation with ChatGPT, saved whole by the Go API
+// after every answer. id is a UUID made by the browser; messages is
+// [{id, role, text}] with role "user" | "assistant". ownerId has no foreign
+// key: admins have no row in the database.
+model ChatConversation {
+  id        String   @id
+  ownerId   String
+  title     String
+  modelName String
+  ended     Boolean
+  messages  Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([id, ownerId])
+  @@index([ownerId, updatedAt])
+  @@index([ownerId, createdAt])
+}
