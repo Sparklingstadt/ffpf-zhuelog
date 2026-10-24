@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/chat"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/httpapi"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/learning"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/line"
@@ -156,6 +157,17 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 		deps.Line = newLineService(cfg, db, allowlist, logger)
 		deps.LineChannelSecret = cfg.LineChannelSecret
 		deps.CronSecret = cfg.CronSecret
+	}
+	if cfg.ChatEnabled() {
+		// The client's limit sits above the streamer's own 60 s one.
+		deps.Chat = &chat.Streamer{
+			HTTP:    newNoRedirectHTTPClient(65 * time.Second),
+			BaseURL: cfg.OpenAIBaseURL,
+			APIKey:  cfg.OpenAIAPIKey,
+			Model:   cfg.OpenAIChatModel,
+		}
+		deps.Conversations = db
+		deps.ChatModel = cfg.OpenAIChatModel
 	}
 	handler := httpapi.NewRouter(deps)
 
