@@ -5,6 +5,8 @@ import {
   Download,
   FileUp,
   Languages,
+  MessageCircle,
+  MessagesSquare,
 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -64,10 +66,13 @@ type HomeProps = {
 function HomeHeader({
   owner,
   total,
+  isAdmin,
 }: {
   owner: RecordOwner;
   // Number of entries for the viewed owner; null when no notes are shown.
   total: number | null;
+  // Admins also get the ChatGPT chat and its conversation notes.
+  isAdmin: boolean;
 }) {
   const hasNotes = showsRecords(owner);
   return (
@@ -101,6 +106,20 @@ function HomeHeader({
             </Link>
           </Button>
         ) : null}
+        {isAdmin ? (
+          <>
+            <Button asChild variant="outline" size="lg">
+              <Link href="/chat">
+                <MessageCircle /> ChatGPT と話す
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="lg">
+              <Link href="/conversations">
+                <MessagesSquare /> 会話ノート
+              </Link>
+            </Button>
+          </>
+        ) : null}
         {/* Import and export act on the signed-in user's own notes only. */}
         {owner.kind === "self" ? (
           <>
@@ -132,7 +151,11 @@ export default async function Home({ searchParams }: HomeProps) {
   if (owner.kind === "denied" && owner.reason === "guest") {
     return (
       <PageShell user={user} width="6xl" spacious>
-        <HomeHeader owner={owner} total={null} />
+        <HomeHeader
+          owner={owner}
+          total={null}
+          isAdmin={user.role === "admin"}
+        />
         <Card className="border-dashed py-14 text-center shadow-none">
           <CardContent className="flex flex-col items-center gap-4">
             <div className="rounded-full bg-muted p-3">
@@ -150,7 +173,11 @@ export default async function Home({ searchParams }: HomeProps) {
   if (owner.kind === "denied") {
     return (
       <PageShell user={user} width="6xl" spacious>
-        <HomeHeader owner={owner} total={null} />
+        <HomeHeader
+          owner={owner}
+          total={null}
+          isAdmin={user.role === "admin"}
+        />
         <ReauthNotice subject="学習ノート" />
       </PageShell>
     );
@@ -167,6 +194,7 @@ export default async function Home({ searchParams }: HomeProps) {
       <HomeHeader
         owner={owner}
         total={recentEntriesTotal(total, entries.length)}
+        isAdmin={user.role === "admin"}
       />
 
       <RecordOwnerControls owner={owner} view={view} path="/" />
