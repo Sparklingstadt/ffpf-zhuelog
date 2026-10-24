@@ -243,7 +243,10 @@ func putConversation(cs Conversations, now func() time.Time) http.Handler {
 
 // validConversation applies the limits of chat.Validate to a saved
 // conversation, which may end with either role (a finished one ends with the
-// answer).
+// answer). A trailing answer is left out of the 40,000 characters: the
+// question was within the limit when it was sent, and the answer that pushes
+// the conversation over it must still be saved (as ended). It is bounded by
+// chat.MaxAnswerChars instead.
 func validConversation(title, modelName string, msgs []store.ConversationMessage) bool {
 	if n := utf8.RuneCountInString(strings.TrimSpace(title)); n == 0 || n > maxConversationTitle {
 		return false
@@ -265,6 +268,13 @@ func validConversation(title, modelName string, msgs []store.ConversationMessage
 			return false
 		}
 		total += utf8.RuneCountInString(m.Text)
+	}
+	if last := msgs[len(msgs)-1]; last.Role == "assistant" {
+		answer := utf8.RuneCountInString(last.Text)
+		if answer > chat.MaxAnswerChars {
+			return false
+		}
+		total -= answer
 	}
 	return total <= chat.MaxTotalChars
 }
