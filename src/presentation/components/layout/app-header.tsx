@@ -5,6 +5,7 @@ import {
   Languages,
   LogOut,
   MessageCircle,
+  Shuffle,
   UserCog,
   UsersRound,
   type LucideIcon,
@@ -77,6 +78,9 @@ function UserControls({ user }: { user: AuthenticatedUser }) {
         ) : null}
       </div>
       <nav aria-label="アカウント" className="flex items-center gap-0.5">
+        <NavLink href="/practice/prepositions" icon={Shuffle}>
+          介詞練習
+        </NavLink>
         {isMember || isAdmin ? (
           <NavLink href="/follow" icon={UsersRound}>
             フォロー
