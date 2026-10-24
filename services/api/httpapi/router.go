@@ -104,6 +104,8 @@ type Deps struct {
 	Chat          ChatStreamer
 	Conversations Conversations
 	ChatModel     string
+	// PrepositionRecords keeps finished rounds of preposition practice.
+	PrepositionRecords PrepositionRecords
 }
 
 const (
@@ -226,6 +228,12 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	private("GET /v1/admin/accounts", adminOnly(listAccounts(d.Accounts)))
 	private("POST /v1/admin/accounts", adminOnly(createAccount(d.Accounts, d.Hasher, d.Now)))
 	private("POST /v1/admin/accounts/{id}/password", adminOnly(resetAccountPassword(d.Accounts, d.Hasher, d.Now)))
+
+	// Finished rounds of preposition practice, for members and admins.
+	// Guests may practice in the web, but nothing of theirs is saved.
+	private("GET /v1/preposition-records", authed(listPrepositionRecords(d.PrepositionRecords)))
+	private("GET /v1/preposition-records/{id}", authed(getPrepositionRecord(d.PrepositionRecords)))
+	private("PUT /v1/preposition-records/{id}", authed(putPrepositionRecord(d.PrepositionRecords, d.Now)))
 
 	// The LINE routes exist only when the bot is configured. The webhook and
 	// the drain are public but check their own credential (the LINE signature,

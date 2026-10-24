@@ -49,6 +49,9 @@ const (
 	msgChatInvalid          = "会話内容が上限を超えているか、形式が不正です。"
 	msgChatFailed           = "ChatGPTから応答を受信できませんでした。"
 	msgConversationNotFound = "会話が見つかりません。"
+
+	msgPrepositionRecordInvalid  = "練習の記録の形式が不正です。"
+	msgPrepositionRecordNotFound = "練習の記録が見つかりません。"
 )
 
 // Error codes in the {"error":{"code":...}} body.

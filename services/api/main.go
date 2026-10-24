@@ -149,7 +149,8 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 		DB:       db,
 		Logger:   logger,
 
-		WebProxySecret: cfg.WebProxySecret,
+		PrepositionRecords: db,
+		WebProxySecret:     cfg.WebProxySecret,
 	}
 	// Without the LINE settings the routes stay unregistered (404). Line is
 	// assigned only here so it is a nil interface, not a nil *linebot.Service.

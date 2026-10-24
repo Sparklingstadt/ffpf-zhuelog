@@ -30,6 +30,7 @@ model LearningEntry {
   batchId       String
   batch         ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
   hints         Hint[]
+
   @@index([ownerId, createdAt])
   @@index([ownerId, deletedAt])
   @@index([ownerId, sharedAt])
@@ -42,6 +43,7 @@ model Hint {
   position        Int
   learningEntryId String
   learningEntry   LearningEntry @relation(fields: [learningEntryId], references: [id], onDelete: Cascade)
+
   @@unique([learningEntryId, position])
   @@index([learningEntryId])
 }
@@ -163,5 +165,25 @@ model ChatConversation {
 
   @@unique([id, ownerId])
   @@index([ownerId, updatedAt])
+  @@index([ownerId, createdAt])
+}
+
+// One finished round of preposition practice by a member or admin, written by
+// the Go API. id is a UUID made by the browser, so a retried save keeps one
+// row. questions is [{answer, noun, prompt, misses}] in the order asked, with
+// the wrong prepositions picked in misses; the counts are derived from it by
+// Go. ownerId has no foreign key: admins have no row in the database.
+model PrepositionPracticeRecord {
+  id            String   @id
+  ownerId       String
+  questionCount Int
+  firstTryCount Int
+  missCount     Int
+  elapsedMs     Int
+  questions     Json
+  startedAt     DateTime
+  createdAt     DateTime @default(now())
+
+  @@unique([id, ownerId])
   @@index([ownerId, createdAt])
 }
