@@ -1,13 +1,22 @@
 "use client";
 
-import { ArrowRight, Check, RotateCcw, X } from "lucide-react";
-import { useState } from "react";
+import { ArrowRight, Check, History, RotateCcw, X } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 
+import {
+  accuracyPercent,
+  scoreRound,
+  type PrepositionAnswer,
+} from "@/domain/practice/preposition-record";
 import {
   buildQuiz,
   progressPercent,
   type PrepositionQuestion,
 } from "@/domain/practice/preposition-quiz";
+import { savePrepositionRoundAction } from "@/presentation/actions/preposition-record-actions";
+import { PrepositionAnswerList } from "@/presentation/components/practice/preposition-answer-list";
+import { PrepositionStats } from "@/presentation/components/practice/preposition-stats";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
 import { cn } from "@/presentation/lib/utils";
@@ -83,34 +92,109 @@ function Choice({
   );
 }
 
+type SaveState =
+  | { status: "idle" | "saving" | "saved" }
+  | { status: "error"; message: string };
+
+type FinishedRound = {
+  id: string;
+  startedAt: Date;
+  elapsedMs: number;
+  questions: PrepositionAnswer[];
+};
+
+const RECORDS_HREF = "/practice/prepositions/records";
+
+// The round as it stands when its last question is answered, under a new id
+// that a retried save reuses.
+function finishRound(
+  startedAt: number,
+  questions: PrepositionAnswer[],
+): FinishedRound {
+  return {
+    id: crypto.randomUUID(),
+    startedAt: new Date(startedAt),
+    elapsedMs: Date.now() - startedAt,
+    questions,
+  };
+}
+
 // One quiz round: a noun, the meaning and the phrase with a blank, and four
 // prepositions of which one fits. A wrong pick is crossed out and the
-// question stays until the right one is picked.
+// question stays until the right one is picked. The accuracy, misses and time
+// run above the question; when the last one is answered a member's or
+// admin's round is saved (`canSave`), and the result shows them again.
 export function PrepositionPractice({
   initialQuiz,
+  canSave,
 }: {
   initialQuiz: PrepositionQuestion[];
+  canSave: boolean;
 }) {
   const [quiz, setQuiz] = useState(initialQuiz);
   const [index, setIndex] = useState(0);
   const [wrong, setWrong] = useState<string[]>([]);
   const [solved, setSolved] = useState(false);
-  // Questions answered without a wrong pick.
-  const [firstTry, setFirstTry] = useState(0);
+  // The questions answered so far, with their misses.
+  const [answers, setAnswers] = useState<PrepositionAnswer[]>([]);
+  // Both start at the same moment, so the server and the browser show 0:00.
+  const [startedAt, setStartedAt] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
+  const [round, setRound] = useState<FinishedRound | null>(null);
+  const [save, setSave] = useState<SaveState>({ status: "idle" });
 
   const total = quiz.length;
   const finished = index >= total;
   const done = Math.min(total, index + (solved ? 1 : 0));
   const question = finished ? null : quiz[index];
+  const score = scoreRound(answers);
+  const elapsedMs = round ? round.elapsedMs : now - startedAt;
+
+  // The clock ticks until the last question is answered.
+  useEffect(() => {
+    if (round) return;
+    const timer = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(timer);
+  }, [round]);
+
+  async function store(finishedRound: FinishedRound) {
+    setSave({ status: "saving" });
+    try {
+      const result = await savePrepositionRoundAction({
+        ...finishedRound,
+        startedAt: finishedRound.startedAt.toISOString(),
+      });
+      setSave(result.ok ? { status: "saved" } : { status: "error", ...result });
+    } catch {
+      setSave({
+        status: "error",
+        message: "記録を保存できませんでした。もう一度お試しください。",
+      });
+    }
+  }
 
   function pick(preposition: string) {
     if (!question || solved) return;
-    if (preposition === question.answer) {
-      setSolved(true);
-      if (wrong.length === 0) setFirstTry((count) => count + 1);
-    } else {
+    if (preposition !== question.answer) {
       setWrong((picked) => [...picked, preposition]);
+      return;
     }
+    setSolved(true);
+    const answered = [
+      ...answers,
+      {
+        answer: question.answer,
+        noun: question.noun,
+        prompt: question.prompt,
+        misses: wrong,
+      },
+    ];
+    setAnswers(answered);
+    if (index + 1 < total) return;
+    const finishedRound = finishRound(startedAt, answered);
+    setNow(startedAt + finishedRound.elapsedMs);
+    setRound(finishedRound);
+    if (canSave) void store(finishedRound);
   }
 
   function next() {
@@ -120,16 +204,29 @@ export function PrepositionPractice({
   }
 
   function restart() {
+    const startAt = Date.now();
     setQuiz(buildQuiz(total));
     setIndex(0);
     setWrong([]);
     setSolved(false);
-    setFirstTry(0);
+    setAnswers([]);
+    setStartedAt(startAt);
+    setNow(startAt);
+    setRound(null);
+    setSave({ status: "idle" });
   }
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <ProgressBar done={done} total={total} />
+      {/* The result shows them again, larger. */}
+      {finished ? null : (
+        <PrepositionStats
+          accuracy={accuracyPercent(score.firstTryCount, score.questionCount)}
+          missCount={score.missCount + (solved ? 0 : wrong.length)}
+          elapsedMs={elapsedMs}
+        />
+      )}
 
       {question ? (
         <Card className="py-10 sm:py-14">
@@ -208,24 +305,89 @@ export function PrepositionPractice({
           </CardContent>
         </Card>
       ) : (
-        <Card className="py-14 text-center">
-          <CardContent className="flex flex-col items-center gap-4">
+        <Card className="py-12">
+          <CardContent className="flex flex-col items-center gap-6">
             <p className="text-2xl font-semibold tracking-tight">
               {total}問 終了！
             </p>
+            <PrepositionStats
+              accuracy={accuracyPercent(
+                score.firstTryCount,
+                score.questionCount,
+              )}
+              missCount={score.missCount}
+              elapsedMs={elapsedMs}
+              size="lg"
+            />
             <p className="text-sm text-muted-foreground">
               1回目で正解した問題:{" "}
               <strong className="font-mono text-base text-foreground">
-                {firstTry}
+                {score.firstTryCount}
               </strong>{" "}
               / {total}
             </p>
-            <Button size="lg" onClick={restart} ref={focusInPlace}>
-              <RotateCcw /> もう一度
-            </Button>
+            <PrepositionAnswerList
+              answers={answers}
+              onlyMissed
+              className="max-w-md"
+            />
+            <SaveStatus
+              canSave={canSave}
+              save={save}
+              onRetry={round ? () => void store(round) : undefined}
+            />
+            <div className="flex flex-wrap justify-center gap-3">
+              <Button size="lg" onClick={restart} ref={focusInPlace}>
+                <RotateCcw /> もう一度
+              </Button>
+              {canSave ? (
+                <Button asChild size="lg" variant="outline">
+                  <Link href={RECORDS_HREF}>
+                    <History /> 過去の記録
+                  </Link>
+                </Button>
+              ) : null}
+            </div>
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+function SaveStatus({
+  canSave,
+  save,
+  onRetry,
+}: {
+  canSave: boolean;
+  save: SaveState;
+  onRetry?: () => void;
+}) {
+  if (!canSave)
+    return (
+      <p className="text-sm text-muted-foreground">
+        ゲストの練習は記録に残りません。
+      </p>
+    );
+  return (
+    <div aria-live="polite" className="flex flex-col items-center gap-2">
+      {save.status === "saving" ? (
+        <p className="text-sm text-muted-foreground">記録を保存しています…</p>
+      ) : save.status === "saved" ? (
+        <p className="text-sm text-muted-foreground">記録に保存しました。</p>
+      ) : save.status === "error" ? (
+        <>
+          <p role="alert" className="text-sm text-destructive">
+            {save.message}
+          </p>
+          {onRetry ? (
+            <Button size="sm" variant="outline" onClick={onRetry}>
+              保存し直す
+            </Button>
+          ) : null}
+        </>
+      ) : null}
     </div>
   );
 }
