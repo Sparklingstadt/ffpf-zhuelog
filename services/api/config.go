@@ -12,6 +12,9 @@ const minJWTSecretBytes = 32
 const (
 	defaultOpenAIBaseURL  = "https://api.openai.com"
 	defaultLineAPIBaseURL = "https://api.line.me"
+	// defaultChatModel is the model of the admin chat unless OPENAI_CHAT_MODEL
+	// names another.
+	defaultChatModel = "gpt-6.1-sol"
 )
 
 // Config holds the API server settings read from the environment.
@@ -30,10 +33,12 @@ type Config struct {
 	// so the API trusts the end-user IP it forwards.
 	WebProxySecret   []byte
 	AllowedGitHubIDs string // comma-separated numeric GitHub user IDs of admins
-	// The LINE bot is optional: all three values are set, or none.
+	// The LINE bot is optional: the two LINE values are set together with
+	// OpenAIAPIKey, or not at all. OpenAIAPIKey alone enables the admin chat.
 	LineChannelSecret      []byte
 	LineChannelAccessToken string
 	OpenAIAPIKey           string
+	OpenAIChatModel        string
 	// CronSecret is optional: the bearer secret the scheduler presents to the
 	// LINE retry endpoint. Unset means that endpoint always answers 401.
 	CronSecret []byte
@@ -45,6 +50,11 @@ type Config struct {
 // LineEnabled reports whether the LINE webhook routes should be registered.
 func (c Config) LineEnabled() bool {
 	return len(c.LineChannelSecret) > 0
+}
+
+// ChatEnabled reports whether the admin chat routes should be registered.
+func (c Config) ChatEnabled() bool {
+	return c.OpenAIAPIKey != ""
 }
 
 // LoadConfig reads and validates the configuration. Secret values are never
@@ -115,14 +125,13 @@ func LoadConfig(getenv func(string) string) (Config, error) {
 	lineSecret := get("LINE_CHANNEL_SECRET")
 	cfg.LineChannelAccessToken = get("LINE_CHANNEL_ACCESS_TOKEN")
 	cfg.OpenAIAPIKey = get("OPENAI_API_KEY")
-	lineSet := 0
-	for _, v := range []string{lineSecret, cfg.LineChannelAccessToken, cfg.OpenAIAPIKey} {
-		if v != "" {
-			lineSet++
-		}
-	}
-	if lineSet != 0 && lineSet != 3 {
+	// OPENAI_API_KEY alone is fine (the chat); either LINE value needs all three.
+	if (lineSecret != "" || cfg.LineChannelAccessToken != "") &&
+		(lineSecret == "" || cfg.LineChannelAccessToken == "" || cfg.OpenAIAPIKey == "") {
 		return Config{}, errors.New("LINE_CHANNEL_SECRET, LINE_CHANNEL_ACCESS_TOKEN and OPENAI_API_KEY must be set together")
+	}
+	if cfg.OpenAIChatModel = get("OPENAI_CHAT_MODEL"); cfg.OpenAIChatModel == "" {
+		cfg.OpenAIChatModel = defaultChatModel
 	}
 	if lineSecret != "" {
 		cfg.LineChannelSecret = []byte(lineSecret)

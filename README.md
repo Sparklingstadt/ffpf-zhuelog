@@ -193,8 +193,18 @@ LINE に中国語や日本語の文を送ると、OpenAI（ChatGPT）で添削�
 - **添削と翻訳**: 漢字だけの文は添削、ひらがなやカタカナを含む文は中国語への翻訳です。結果は LINE に返信され、学習ノートに保存されます（翻訳は `kind=translation`）。500 文字までです。
 - **結びついていない LINE**: 送った文は学習ノートにも OpenAI にも届きません。
 - **失敗したとき**: 時間切れなどで結果が出なかった文は、1 日 1 回の Cron（毎日 06:00 JST）が 1 回だけ試し直し、できた結果か失敗を LINE に送ります。
-- **設定**: Go API に `LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`OPENAI_API_KEY`（3 つともか、すべて空）と `CRON_SECRET`、Web に `LINE_ADD_FRIEND_URL`（友だち追加のリンク。無くても動きます）を入れます。設定が空のときは LINE 連携は使えず、画面には「LINE 連携は今は使えません。」と出ます。ローカルでは使えません。
+- **設定**: Go API に `LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`OPENAI_API_KEY`（LINE を使うときは 3 つとも）と `CRON_SECRET`、Web に `LINE_ADD_FRIEND_URL`（友だち追加のリンク。無くても動きます）を入れます。設定が空のときは LINE 連携は使えず、画面には「LINE 連携は今は使えません。」と出ます。ローカルでは使えません。
 - **本番への反映**: DBマイグレーション `20261023090000_add_line_link`（`LineLink`・`LineLinkCode`・`LineMessage` の追加）を、**main へのマージの前に** 本番のNeonへ適用してください。LINE の Webhook URL の設定など、切り替えの手順は [docs/api-deployment.md](docs/api-deployment.md) の「7. LINE 連携」にあります。
+
+## ChatGPT との会話練習
+
+管理者は `/chat`（ホームとヘッダーの「ChatGPT と話す」）で ChatGPT と中国語の会話練習ができます。会員とゲストには出ません。Go API（`services/api/`）の `POST /v1/chat` と `/v1/conversations` で動きます。
+
+- **会話**: 回答は少しずつ表示されます。停止ボタンで止められます。途中で切れた回答は保存せず、その発言は入力欄に戻ります。
+- **会話ノート**: 回答が届くたびに、会話をまるごと保存します。`/conversations` で話した日（日本時間）ごとに見返せ、「続きを話す」で続きから話せます。削除もできます（ゴミ箱はありません）。
+- **上限**: 1 つの会話は 40 発言・合計 4 万字までです。上限に達した会話は読むだけになります。
+- **設定**: Go API に `OPENAI_API_KEY`（と任意で `OPENAI_CHAT_MODEL`）を入れます。空のときは画面に「ChatGPT が設定されていません」と出ます。
+- **本番への反映**: DBマイグレーション `20261024090000_add_chat_conversations`（`ChatConversation` の追加）を、**main へのマージの前に** 本番のNeonへ適用してください。手順は [docs/api-deployment.md](docs/api-deployment.md) の「8. 会話練習（ChatGPT）」にあります。
 
 ## LINE・チャットのテーブルの削除
 

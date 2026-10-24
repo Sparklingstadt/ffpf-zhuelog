@@ -179,6 +179,9 @@ func TestLoadConfigLineAllOrNothing(t *testing.T) {
 				env[name] = secretValue
 			}
 		}
+		if env["LINE_CHANNEL_SECRET"] == "" && env["LINE_CHANNEL_ACCESS_TOKEN"] == "" {
+			continue // OPENAI_API_KEY alone enables the chat only; see TestLoadConfigOpenAIAloneEnablesChatNotLine
+		}
 		_, err := LoadConfig(getenvFrom(env))
 		if err == nil {
 			t.Fatalf("mask %03b: expected error for partial LINE config", mask)
@@ -296,5 +299,58 @@ func TestLoadConfigCronSecretOptional(t *testing.T) {
 	}
 	if string(cfg.CronSecret) != "cron-secret" {
 		t.Errorf("CronSecret = %q", cfg.CronSecret)
+	}
+}
+
+func TestLoadConfigOpenAIAloneEnablesChatNotLine(t *testing.T) {
+	cfg, err := LoadConfig(getenvFrom(validEnv()))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.ChatEnabled() {
+		t.Error("ChatEnabled() = true without OPENAI_API_KEY")
+	}
+
+	env := validEnv()
+	env["OPENAI_API_KEY"] = "openai-key"
+	cfg, err = LoadConfig(getenvFrom(env))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if !cfg.ChatEnabled() || cfg.LineEnabled() {
+		t.Errorf("ChatEnabled() = %v, LineEnabled() = %v; want true, false", cfg.ChatEnabled(), cfg.LineEnabled())
+	}
+}
+
+func TestLoadConfigLineWithoutOpenAIFails(t *testing.T) {
+	env := validEnv()
+	env["LINE_CHANNEL_SECRET"] = "channel-secret"
+	env["LINE_CHANNEL_ACCESS_TOKEN"] = "access-token"
+	if _, err := LoadConfig(getenvFrom(env)); err == nil {
+		t.Fatal("expected error for LINE without OPENAI_API_KEY")
+	}
+}
+
+func TestLoadConfigLinePartialFails(t *testing.T) {
+	env := validEnv()
+	env["LINE_CHANNEL_SECRET"] = "channel-secret"
+	env["OPENAI_API_KEY"] = "openai-key"
+	if _, err := LoadConfig(getenvFrom(env)); err == nil {
+		t.Fatal("expected error for LINE without LINE_CHANNEL_ACCESS_TOKEN")
+	}
+}
+
+func TestLoadConfigChatModelDefaultAndOverride(t *testing.T) {
+	cfg, err := LoadConfig(getenvFrom(validEnv()))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.OpenAIChatModel != "gpt-6.1-sol" {
+		t.Errorf("default OpenAIChatModel = %q", cfg.OpenAIChatModel)
+	}
+	env := validEnv()
+	env["OPENAI_CHAT_MODEL"] = " gpt-x "
+	if cfg, err = LoadConfig(getenvFrom(env)); err != nil || cfg.OpenAIChatModel != "gpt-x" {
+		t.Errorf("OpenAIChatModel = %q, err %v", cfg.OpenAIChatModel, err)
 	}
 }
