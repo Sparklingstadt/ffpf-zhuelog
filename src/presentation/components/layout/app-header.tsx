@@ -5,6 +5,7 @@ import {
   Languages,
   LogOut,
   MessageCircle,
+  MessagesSquare,
   UserCog,
   UsersRound,
   type LucideIcon,
@@ -90,6 +91,11 @@ function UserControls({ user }: { user: AuthenticatedUser }) {
         {isMember ? (
           <NavLink href="/account/password" icon={KeyRound}>
             パスワード変更
+          </NavLink>
+        ) : null}
+        {isAdmin ? (
+          <NavLink href="/chat" icon={MessagesSquare}>
+            ChatGPT と話す
           </NavLink>
         ) : null}
         {isAdmin ? (
