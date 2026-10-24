@@ -6,7 +6,6 @@ import { useState } from "react";
 import {
   buildQuiz,
   progressPercent,
-  type Preposition,
   type PrepositionQuestion,
 } from "@/domain/practice/preposition-quiz";
 import { Button } from "@/presentation/components/ui/button";
@@ -48,7 +47,7 @@ function Choice({
   disabled,
   onPick,
 }: {
-  preposition: Preposition;
+  preposition: string;
   state: "idle" | "correct" | "wrong";
   disabled: boolean;
   onPick: () => void;
@@ -84,8 +83,9 @@ function Choice({
   );
 }
 
-// One quiz round: a noun with four prepositions, one of which fits. A wrong
-// pick is crossed out and the question stays until the right one is picked.
+// One quiz round: a noun, the meaning and the phrase with a blank, and four
+// prepositions of which one fits. A wrong pick is crossed out and the
+// question stays until the right one is picked.
 export function PrepositionPractice({
   initialQuiz,
 }: {
@@ -93,7 +93,7 @@ export function PrepositionPractice({
 }) {
   const [quiz, setQuiz] = useState(initialQuiz);
   const [index, setIndex] = useState(0);
-  const [wrong, setWrong] = useState<Preposition[]>([]);
+  const [wrong, setWrong] = useState<string[]>([]);
   const [solved, setSolved] = useState(false);
   // Questions answered without a wrong pick.
   const [firstTry, setFirstTry] = useState(0);
@@ -103,7 +103,7 @@ export function PrepositionPractice({
   const done = Math.min(total, index + (solved ? 1 : 0));
   const question = finished ? null : quiz[index];
 
-  function pick(preposition: Preposition) {
+  function pick(preposition: string) {
     if (!question || solved) return;
     if (preposition === question.answer) {
       setSolved(true);
@@ -144,8 +144,8 @@ export function PrepositionPractice({
               >
                 {question.noun}
               </p>
-              <p className="font-mono text-sm text-muted-foreground">
-                {question.pinyin}
+              <p lang="zh-CN" className="text-lg text-muted-foreground">
+                {question.prompt}
               </p>
             </div>
 
@@ -172,16 +172,29 @@ export function PrepositionPractice({
               ))}
             </div>
 
-            <div className="flex min-h-9 items-center gap-3" aria-live="polite">
+            <div
+              className="flex min-h-9 flex-col items-center gap-4 text-center"
+              aria-live="polite"
+            >
               {solved ? (
                 <>
-                  <p className="text-sm font-medium">
-                    正解！{" "}
-                    <span lang="zh-CN" className="text-base">
-                      {question.answer}
-                      {question.noun}
-                    </span>
-                  </p>
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">
+                      正解！{" "}
+                      <span lang="zh-CN" className="text-base">
+                        {question.phrase}
+                      </span>{" "}
+                      <span className="font-mono text-muted-foreground">
+                        {question.answer} {question.pinyin}
+                      </span>
+                    </p>
+                    <p lang="zh-CN" className="text-sm">
+                      {question.example}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {question.translation}
+                    </p>
+                  </div>
                   <Button size="lg" onClick={next} ref={focusInPlace}>
                     {index + 1 < total ? "次へ" : "結果を見る"} <ArrowRight />
                   </Button>

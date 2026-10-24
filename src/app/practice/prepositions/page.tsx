@@ -24,7 +24,7 @@ export default async function PrepositionPracticePage() {
         icon={Shuffle}
         eyebrow="Preposition practice"
         title="介詞の練習"
-        description="日本語の意味に合う介詞を、4つの中から選んでください。"
+        description="名詞と日本語の意味に合う介詞を、4つの中から選んでください。"
         actions={
           <Button asChild variant="outline" size="sm">
             <Link href="/">
