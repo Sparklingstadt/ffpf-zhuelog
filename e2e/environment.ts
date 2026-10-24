@@ -9,6 +9,8 @@ export const baseURL = "http://127.0.0.1:3107";
 // starts next to it.
 export const goApiURL = "http://127.0.0.1:3108";
 export const cookieName = "zl_access";
+// e2e/openai-stub.ts, which the Go API calls instead of OpenAI.
+export const openAiStubURL = "http://127.0.0.1:3109";
 
 // This run's random secret, from the Playwright config.
 function runSecret() {
