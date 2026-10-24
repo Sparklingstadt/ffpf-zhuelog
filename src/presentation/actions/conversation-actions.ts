@@ -57,7 +57,8 @@ export async function saveConversationAction(
       createdAt: new Date(parsed.data.createdAt),
       updatedAt: new Date(),
     });
-    revalidatePath("/conversations", "layout");
+    // No revalidatePath: it would re-render /chat under the open chat. The
+    // conversation pages are dynamic and read Go on every visit.
     return { ok: true };
   } catch (error) {
     // Anything but a Go failure (including Next's redirect) is rethrown.

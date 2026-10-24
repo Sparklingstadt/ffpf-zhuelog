@@ -74,3 +74,76 @@ test("members and guests have no way in", async ({ page, db, browser }) => {
   expect((await guest.goto("/conversations"))?.status()).toBe(404);
   await guest.close();
 });
+
+test("saving keeps the conversation on screen, in a new chat and after 新しい会話", async ({
+  page,
+  context,
+}) => {
+  await asAdmin(context);
+  await page.goto("/chat");
+  const input = page.getByLabel("ChatGPTへのメッセージ");
+  const answers = page.getByRole("article", { name: "ChatGPTのメッセージ" });
+
+  await input.fill("第一");
+  await input.press("Enter");
+  await expect(answers).toHaveText(["你好！「第一」ですね。"]);
+  await expect(page).toHaveURL((url) => url.searchParams.has("id"));
+  await input.fill("第二");
+  await input.press("Enter");
+  await expect(answers).toHaveText([
+    "你好！「第一」ですね。",
+    "你好！「第二」ですね。",
+  ]);
+  // Typed text survives the save that follows the answer.
+  await input.fill("まだ送らない");
+  await page.waitForLoadState("networkidle");
+  await expect(answers).toHaveCount(2);
+  await expect(input).toHaveValue("まだ送らない");
+
+  const firstId = new URL(page.url()).searchParams.get("id");
+  await page.reload();
+  await expect(answers).toHaveCount(2);
+  await page.getByRole("button", { name: "新しい会話" }).click();
+  await expect(answers).toHaveCount(0);
+  await input.fill("第三");
+  await input.press("Enter");
+  await expect(answers).toHaveText(["你好！「第三」ですね。"]);
+  await expect(page).toHaveURL(
+    (url) =>
+      url.searchParams.has("id") && url.searchParams.get("id") !== firstId,
+  );
+  await page.waitForLoadState("networkidle");
+  await expect(answers).toHaveText(["你好！「第三」ですね。"]);
+});
+
+test("a save that fails says so and is retried after the next answer", async ({
+  page,
+  context,
+}) => {
+  await asAdmin(context);
+  await page.goto("/chat");
+  // Server Actions post to the page with a next-action header.
+  let failSaves = true;
+  await page.route("**/chat**", (route) =>
+    failSaves && route.request().headers()["next-action"]
+      ? route.abort()
+      : route.continue(),
+  );
+  const input = page.getByLabel("ChatGPTへのメッセージ");
+  await input.fill("第一");
+  await input.press("Enter");
+  await expect(
+    page.getByText(
+      "保存できませんでした。次の回答のときにもう一度保存します。",
+    ),
+  ).toBeVisible();
+
+  failSaves = false;
+  await input.fill("第二");
+  await input.press("Enter");
+  await expect(page).toHaveURL((url) => url.searchParams.has("id"));
+  await page.goto("/conversations");
+  await page.getByText("1件の会話").click();
+  await page.getByText("#1 第一").click();
+  await expect(page.getByRole("article")).toHaveCount(4);
+});

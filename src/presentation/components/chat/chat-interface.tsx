@@ -145,7 +145,13 @@ export function ChatInterface({
     const json = JSON.stringify(value);
     if (json === savedJson.current) return true;
     const started = generation.current;
-    const result = await saveConversationAction(value);
+    let result: Awaited<ReturnType<typeof saveConversationAction>>;
+    try {
+      result = await saveConversationAction(value);
+    } catch {
+      // Unreachable server or a failed action: retried after the next answer.
+      result = { ok: false, message: "" };
+    }
     // "新しい会話" was pressed meanwhile: the saved conversation is no longer
     // on screen.
     if (generation.current !== started) return true;
@@ -233,7 +239,13 @@ export function ChatInterface({
       { id: crypto.randomUUID(), role: "assistant", text: received },
     ];
     setMessages(answered);
-    if (!(await save(current, answered))) setNotice(SAVE_FAILED);
+    // The answer that crosses the limits ends the conversation; Go accepts
+    // it because the question was within them.
+    const next = fitsLimits(answered) ? current : { ...current, ended: true };
+    if (next.ended) setMeta(next);
+    const saved = await save(next, answered);
+    if (next.ended) setNotice(saved ? LIMIT : `${LIMIT} ${SAVE_FAILED}`);
+    else if (!saved) setNotice(SAVE_FAILED);
   }
 
   function startNew() {

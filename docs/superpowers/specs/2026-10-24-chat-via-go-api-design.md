@@ -106,6 +106,7 @@ Go API
 - `id`（パス）は UUID
 - `title` は 1〜100 字、`modelName` は 1〜150 字
 - `messages` は 1〜40 件、`id` は 1〜200 字で重ならない、`text` は上と同じ
+- 最後が `assistant` の回答なら、その回答は 4 万字に数えない（2 万字まで）。上限の近くで届いた回答も保存でき、Web はその会話を `ended` にする
 - `createdAt` は ISO 8601。最初の保存の値を残し、後の `PUT` では変えない。`updatedAt` は Go が付ける
 
 ### 5.3 生成（`services/api/chat`）

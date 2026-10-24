@@ -262,3 +262,33 @@ func TestConversationCRUD(t *testing.T) {
 	}
 	wantError(t, do(h, "DELETE", "/v1/conversations/"+testConversationID, "", jsonAuth), http.StatusNotFound, "not_found")
 }
+
+// The answer that pushes a conversation over the 40,000 characters must still
+// be savable: the question was within the limit when it was sent.
+func TestConversationPutAllowsTheLastAnswerOverTheLimit(t *testing.T) {
+	h, _ := chatRouter(t, auth.RoleAdmin, &fakeChat{}, &fakeConversations{})
+	body := func(question, answer string, ended bool) string {
+		b, _ := json.Marshal(map[string]any{
+			"title": "t", "modelName": "m", "ended": ended, "createdAt": "2026-10-20T11:00:00.000Z",
+			"messages": []map[string]string{
+				{"id": "m1", "role": "user", "text": question},
+				{"id": "m2", "role": "assistant", "text": answer},
+			},
+		})
+		return string(b)
+	}
+	path := "/v1/conversations/" + testConversationID
+	if w := do(h, "PUT", path, body(strings.Repeat("字", chat.MaxTotalChars), strings.Repeat("答", 1500), true), jsonAuth); w.Code != http.StatusOK {
+		t.Fatalf("near-limit answer: status %d %s", w.Code, w.Body.String())
+	}
+	// Without the answer the conversation must still fit.
+	wantError(t, do(h, "PUT", path, body(strings.Repeat("字", chat.MaxTotalChars+1), "答", true), jsonAuth), http.StatusBadRequest, "invalid_request")
+	// An answer longer than any OpenAI answer can be is rejected.
+	wantError(t, do(h, "PUT", path, body("你好", strings.Repeat("答", chat.MaxAnswerChars+1), false), jsonAuth), http.StatusBadRequest, "invalid_request")
+	// A conversation ending with the user's turn gets no allowance.
+	tooLong, _ := json.Marshal(map[string]any{
+		"title": "t", "modelName": "m", "ended": false, "createdAt": "2026-10-20T11:00:00.000Z",
+		"messages": []map[string]string{{"id": "m1", "role": "user", "text": strings.Repeat("字", chat.MaxTotalChars+1)}},
+	})
+	wantError(t, do(h, "PUT", path, string(tooLong), jsonAuth), http.StatusBadRequest, "invalid_request")
+}

@@ -13,6 +13,9 @@ const (
 	// conversation). Characters are counted as runes.
 	MaxMessages   = 40
 	MaxTotalChars = 40_000
+	// MaxAnswerChars bounds a saved answer. It is far above what
+	// maxOutputTokens can produce, so no real answer reaches it.
+	MaxAnswerChars = 20_000
 	// maxOutputTokens bounds one answer.
 	maxOutputTokens = 1600
 )
