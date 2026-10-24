@@ -9,7 +9,7 @@ import { EmptyState } from "@/presentation/components/layout/empty-state";
 import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
 import { Button } from "@/presentation/components/ui/button";
-import { requireChatAdmin } from "@/presentation/guards/chat-admin-guard";
+import { requireChatUser } from "@/presentation/guards/chat-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +30,7 @@ async function loadChatModel(): Promise<string | null> {
 }
 
 export default async function ChatPage({ searchParams }: ChatPageProps) {
-  const user = await requireChatAdmin("/signin?callbackUrl=/chat");
+  const user = await requireChatUser("/signin?callbackUrl=/chat");
 
   const { id } = await searchParams;
   if (id !== undefined && (typeof id !== "string" || !UUID.test(id)))

@@ -10,8 +10,8 @@ import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
 import {
   loadConversationList,
-  requireChatAdmin,
-} from "@/presentation/guards/chat-admin-guard";
+  requireChatUser,
+} from "@/presentation/guards/chat-guard";
 import { conversationsOn } from "@/presentation/presenters/conversation-dates";
 import {
   formatLogDate,
@@ -28,7 +28,7 @@ type ConversationDayPageProps = {
 export default async function ConversationDayPage({
   params,
 }: ConversationDayPageProps) {
-  const user = await requireChatAdmin("/signin?callbackUrl=/conversations");
+  const user = await requireChatUser("/signin?callbackUrl=/conversations");
   const { year, month, day } = await params;
   const date = parseLogDate(year, month, day);
   if (!date) notFound();

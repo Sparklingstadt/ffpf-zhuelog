@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { conversationNotes } from "@/composition/chat-container";
 import { getCurrentViewerUser } from "@/composition/identity-container";
+import { isMemberRole } from "@/domain/identity/entities/authenticated-user";
 import { GoApiError } from "@/infrastructure/go-api/client";
 import {
   actionSuccess,
@@ -38,16 +39,17 @@ export type SaveConversationResult =
 
 const invalidConversation = "会話の形式または上限を確認してください。";
 
-// The chat is for admins only; Go checks the role again.
-async function isAdmin() {
-  return (await getCurrentViewerUser())?.role === "admin";
+// The chat is for members and admins; Go checks the role again.
+async function canChat() {
+  const user = await getCurrentViewerUser();
+  return user ? isMemberRole(user.role) : false;
 }
 
 // Saves the whole conversation after each answer.
 export async function saveConversationAction(
   input: SaveConversationInput,
 ): Promise<SaveConversationResult> {
-  if (!(await isAdmin()))
+  if (!(await canChat()))
     return { ok: false, message: accountForbiddenMessage };
   const parsed = conversationInput.safeParse(input);
   if (!parsed.success) return { ok: false, message: invalidConversation };
@@ -76,7 +78,7 @@ export async function deleteConversationAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  if (!(await isAdmin())) return actionUnauthorized;
+  if (!(await canChat())) return actionUnauthorized;
   const id = z.uuid().safeParse(formData.get("id"));
   if (!id.success) return { status: "error", message: invalidConversation };
   const result = await attemptGoAction(

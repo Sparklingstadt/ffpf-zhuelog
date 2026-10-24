@@ -17,8 +17,8 @@ import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
 import {
   loadConversationList,
-  requireChatAdmin,
-} from "@/presentation/guards/chat-admin-guard";
+  requireChatUser,
+} from "@/presentation/guards/chat-guard";
 import { conversationsOn } from "@/presentation/presenters/conversation-dates";
 import {
   conversationMarkdownFileName,
@@ -39,7 +39,7 @@ type ConversationDetailPageProps = {
 export default async function ConversationDetailPage({
   params,
 }: ConversationDetailPageProps) {
-  const user = await requireChatAdmin("/signin?callbackUrl=/conversations");
+  const user = await requireChatUser("/signin?callbackUrl=/conversations");
   const { year, month, day, number } = await params;
   const date = parseLogDate(year, month, day);
   const conversationNumber = parseLogNumber(number);

@@ -39,11 +39,11 @@
 | POST     | [`/v1/line/link-code`](./line.md#post-v1-line-link-code)                                       | 会員・admin           | ×        | 200  | LINE の連携コードを出す              |
 | DELETE   | [`/v1/line/link`](./line.md#delete-v1-line-link)                                               | 会員・admin           | ×        | 204  | LINE の連携を解除                    |
 | GET      | [`/v1/line/drain`](./line.md#get-v1-line-drain)                                                | 公開（`CRON_SECRET`） | —        | 204  | 残ったメッセージの拾い直し（Cron）   |
-| POST     | [`/v1/chat`](./chat.md#post-v1-chat)                                                           | admin                 | ×        | 200  | ChatGPT の回答を流す（NDJSON）       |
-| GET      | [`/v1/conversations`](./chat.md#get-v1-conversations)                                          | admin                 | ×        | 200  | 会話ノートの一覧                     |
-| GET      | [`/v1/conversations/{id}`](./chat.md#get-v1-conversations-id)                                  | admin                 | ×        | 200  | 会話ノート 1 件                      |
-| PUT      | [`/v1/conversations/{id}`](./chat.md#put-v1-conversations-id)                                  | admin                 | ×        | 200  | 会話ノートを保存                     |
-| DELETE   | [`/v1/conversations/{id}`](./chat.md#delete-v1-conversations-id)                               | admin                 | ×        | 204  | 会話ノートを削除                     |
+| POST     | [`/v1/chat`](./chat.md#post-v1-chat)                                                           | 全員                  | ×        | 200  | ChatGPT の回答を流す（NDJSON）       |
+| GET      | [`/v1/conversations`](./chat.md#get-v1-conversations)                                          | 全員                  | ×        | 200  | 会話ノートの一覧                     |
+| GET      | [`/v1/conversations/{id}`](./chat.md#get-v1-conversations-id)                                  | 全員                  | ×        | 200  | 会話ノート 1 件                      |
+| PUT      | [`/v1/conversations/{id}`](./chat.md#put-v1-conversations-id)                                  | 全員                  | ×        | 200  | 会話ノートを保存                     |
+| DELETE   | [`/v1/conversations/{id}`](./chat.md#delete-v1-conversations-id)                               | 全員                  | ×        | 204  | 会話ノートを削除                     |
 | GET      | [`/v1/admin/accounts`](./admin.md#get-v1-admin-accounts)                                       | admin                 | ×        | 200  | 会員の一覧（管理用）                 |
 | POST     | [`/v1/admin/accounts`](./admin.md#post-v1-admin-accounts)                                      | admin                 | ×        | 201  | 会員の作成                           |
 | POST     | [`/v1/admin/accounts/{id}/password`](./admin.md#post-v1-admin-accounts-id-password)            | admin                 | ×        | 200  | 会員のパスワードのリセット           |

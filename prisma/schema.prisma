@@ -147,7 +147,7 @@ model LineMessage {
   @@index([status, createdAt])
 }
 
-// An admin's practice conversation with ChatGPT, saved whole by the Go API
+// A member's or admin's practice conversation with ChatGPT, saved whole by the Go API
 // after every answer. id is a UUID made by the browser; messages is
 // [{id, role, text}] with role "user" | "assistant". ownerId has no foreign
 // key: admins have no row in the database.
