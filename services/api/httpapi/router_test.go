@@ -21,6 +21,7 @@ func TestOnlyReadRoutesAcceptUserParam(t *testing.T) {
 	d := Deps{
 		Auth: a, Entries: &fakeEntries{}, Follows: &fakeFollows{},
 		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret,
+		Chat: &fakeChat{}, Conversations: &fakeConversations{},
 		Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
 	}.withDefaults()
 	mux, routes := newMux(d)
@@ -77,6 +78,7 @@ func TestPublicRouteSetIsExactlyTheKnownRoutes(t *testing.T) {
 	d := Deps{
 		Auth: &fakeAuth{}, Entries: &fakeEntries{}, Follows: &fakeFollows{},
 		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret,
+		Chat: &fakeChat{}, Conversations: &fakeConversations{},
 		Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
 	}.withDefaults()
 	mux, routes := newMux(d)
@@ -141,6 +143,7 @@ func TestRoutesRejectGuests(t *testing.T) {
 	d := Deps{
 		Auth: a, Entries: &fakeEntries{}, Follows: &fakeFollows{},
 		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret,
+		Chat: &fakeChat{}, Conversations: &fakeConversations{},
 		Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
 	}.withDefaults()
 	mux, routes := newMux(d)

@@ -97,6 +97,12 @@ type Deps struct {
 	Line              LineService
 	LineChannelSecret []byte
 	CronSecret        []byte
+	// Chat serves the admin chat and its saved conversations; nil means
+	// OpenAI is not configured and the routes are not registered. ChatModel
+	// is the model name the conversation list reports.
+	Chat          ChatStreamer
+	Conversations Conversations
+	ChatModel     string
 }
 
 const (
@@ -229,6 +235,15 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 		private("GET /v1/line/link", authed(lineLinked(d.Line)))
 		private("POST /v1/line/link-code", authed(lineLinkCode(d.Line)))
 		private("DELETE /v1/line/link", authed(lineUnlink(d.Line)))
+	}
+
+	// The admin chat exists only when OpenAI is configured.
+	if d.Chat != nil {
+		private("POST /v1/chat", adminOnly(streamChat(d.Chat)))
+		private("GET /v1/conversations", adminOnly(listConversations(d.Conversations, d.ChatModel)))
+		private("GET /v1/conversations/{id}", adminOnly(getConversation(d.Conversations)))
+		private("PUT /v1/conversations/{id}", adminOnly(putConversation(d.Conversations, d.Now)))
+		private("DELETE /v1/conversations/{id}", adminOnly(deleteConversation(d.Conversations)))
 	}
 
 	return mux, routes
