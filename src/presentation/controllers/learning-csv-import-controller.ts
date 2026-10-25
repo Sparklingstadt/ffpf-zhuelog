@@ -1,20 +1,19 @@
-import type { ImportLearningCsv } from "@/application/learning/use-cases/import-learning-csv";
-import { csvImportErrorMessage } from "@/domain/learning/csv-validation-error";
+import {
+  attemptGoAction,
+  type ActionState,
+} from "@/presentation/controllers/action-state";
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
-
-export type ImportState = {
-  status: "idle" | "success" | "error";
-  message: string;
-};
+export type ImportState = ActionState;
 
 // Imports into the signed-in user's own notes. The viewed owner (`?user=`) is
 // never read here: an admin viewing someone else still writes to their own.
+// Go checks the file's size, extension and rows and answers with the message
+// to show.
 export async function handleLearningCsvImport(
   formData: FormData,
   dependencies: {
     getMember: () => Promise<{ githubId?: string } | null>;
-    importCsv: Pick<ImportLearningCsv, "execute">;
+    importCsv: (file: File) => Promise<number>;
   },
 ): Promise<ImportState> {
   const user = await dependencies.getMember();
@@ -36,30 +35,9 @@ export async function handleLearningCsvImport(
   if (!(file instanceof File) || file.size === 0) {
     return { status: "error", message: "CSVファイルを選択してください。" };
   }
-  if (file.size > MAX_FILE_SIZE) {
-    return { status: "error", message: "ファイルは5MB以下にしてください。" };
-  }
-  if (!file.name.toLowerCase().endsWith(".csv")) {
-    return {
-      status: "error",
-      message: "拡張子が.csvのファイルを選択してください。",
-    };
-  }
 
-  try {
-    const rowCount = await dependencies.importCsv.execute(
-      user.githubId,
-      file.name,
-      await file.text(),
-    );
-    return {
-      status: "success",
-      message: `${rowCount}件の学習文を登録しました。`,
-    };
-  } catch (error) {
-    return {
-      status: "error",
-      message: csvImportErrorMessage(error),
-    };
-  }
+  return attemptGoAction("CSV_IMPORT_FAILED", async () => {
+    const count = await dependencies.importCsv(file);
+    return { status: "success", message: `${count}件の学習文を登録しました。` };
+  });
 }

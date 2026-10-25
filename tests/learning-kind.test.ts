@@ -3,8 +3,7 @@ import { test } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { LearningEntry } from "../src/domain/learning/entities/learning-entry";
-import { CsvParseLearningParser } from "../src/infrastructure/csv/csv-parse-learning-parser";
-import { toLearningEntry } from "../src/infrastructure/persistence/prisma/mappers/learning-entry-mapper";
+import { toLearningEntry } from "../src/infrastructure/go-api/learning-json";
 import { LearningEntryCard } from "../src/presentation/components/learning/learning-entry-card";
 
 const record = {
@@ -13,7 +12,7 @@ const record = {
   originalText: "我去学校。",
   correctedText: "我去了学校。",
   pinyin: "Wǒ qù le xuéxiào.",
-  createdAt: new Date("2026-10-05T00:00:00.000Z"),
+  createdAt: "2026-10-05T00:00:00.000Z",
   sharedAt: null,
   hints: [{ id: "hint-1", content: "「了」で完了を表す", position: 0 }],
 };
@@ -28,14 +27,6 @@ test("the stored kind is carried onto the learning entry", () => {
 
 test("an unknown stored kind is rejected", () => {
   assert.throws(() => toLearningEntry({ ...record, kind: "summary" }));
-});
-
-test("imported CSV rows leave the kind to the database default", () => {
-  const drafts = new CsvParseLearningParser().parse(
-    "最初の文,添削後の文,ピン音,ヒント\n我去学校。,我去了学校。,Wǒ qù le xuéxiào.,ヒント",
-  );
-  assert.equal(drafts.length, 1);
-  assert.ok(!("kind" in drafts[0]));
 });
 
 function render(entry: LearningEntry) {

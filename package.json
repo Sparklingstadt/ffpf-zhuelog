@@ -1,9 +1,9 @@
 {
   "name": "@ffpf-zhuelog/web",
-  "version": "0.12.0",
+  "version": "0.20.0",
   "private": true,
   "engines": {
-    "node": "24.x || 26.x"
+    "node": "24.x"
   },
   "scripts": {
     "dev": "next dev",
@@ -24,6 +24,12 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
+    "api:db": "bash scripts/api-local.sh db",
+    "api:db:stop": "bash scripts/api-local.sh stop",
+    "api:dev": "bash scripts/api-local.sh dev",
+    "api:smoke": "bash scripts/api-smoke.sh",
+    "api-docs:dev": "vuepress dev docs-site",
+    "api-docs:build": "vuepress build docs-site",
     "postinstall": "prisma generate",
     "test:regression": "pnpm run typecheck && pnpm run lint && pnpm run test:unit && pnpm run build && pnpm run test:e2e"
   },
@@ -33,12 +39,10 @@
     "@prisma/client": "^7.10.1",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
-    "csv-parse": "^7.0.3",
     "dotenv": "18.0.8",
     "geist": "^1.8.1",
     "lucide-react": "^1.58.0",
     "next": "16.4.1",
-    "next-auth": "^5.0.0-beta.32",
     "pg": "^8.23.1",
     "radix-ui": "^1.8.1",
     "react": "19.3.0",
@@ -54,14 +58,19 @@
     "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vuepress/bundler-vite": "2.0.0-rc.31",
+    "@vuepress/theme-default": "2.0.0-rc.137",
     "eslint": "^9",
     "eslint-config-next": "16.4.1",
     "lefthook": "^2.2.2",
     "prettier": "^3.9.10",
     "prisma": "^7.10.1",
+    "sass-embedded": "1.105.2",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
-    "typescript": "^6"
+    "typescript": "^6",
+    "vue": "3.5.44",
+    "vuepress": "2.0.0-rc.31"
   },
   "packageManager": "pnpm@11.25.0"
 }

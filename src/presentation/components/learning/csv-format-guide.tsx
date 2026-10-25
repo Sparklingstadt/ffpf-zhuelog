@@ -37,7 +37,7 @@ export function CsvFormatGuide() {
       </figure>
 
       <ul className="list-disc space-y-1 pl-4 text-xs leading-5 text-muted-foreground">
-        <li>UTF-8の.csvファイルに対応しています（5MB・1,000行まで）。</li>
+        <li>UTF-8の.csvファイルに対応しています（4MB・1,000行まで）。</li>
         <li>ヘッダー行は省略できます。</li>
         <li>各項目は1万文字、1行は10万文字までです。</li>
         <li>

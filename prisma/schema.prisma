@@ -30,6 +30,7 @@ model LearningEntry {
   batchId       String
   batch         ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
   hints         Hint[]
+
   @@index([ownerId, createdAt])
   @@index([ownerId, deletedAt])
   @@index([ownerId, sharedAt])
@@ -42,6 +43,7 @@ model Hint {
   position        Int
   learningEntryId String
   learningEntry   LearningEntry @relation(fields: [learningEntryId], references: [id], onDelete: Cascade)
+
   @@unique([learningEntryId, position])
   @@index([learningEntryId])
 }
@@ -53,10 +55,26 @@ model PasswordAccount {
   displayName    String
   passwordHash   String
   sessionVersion Int       @default(0)
+  // Unused since sign-in throttling moved to SignInThrottle. Kept so the
+  // previous deployment keeps working while the migration is rolled out;
+  // drop them in a later migration.
   failedAttempts Int       @default(0)
   lockedUntil    DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+}
+
+// Fixed-window sign-in attempt counters, shared by the web app and the Go API.
+// Keys always include the client address ("client:<ip>",
+// "login:<ip>:<loginId>"), so nobody can lock another person out from
+// elsewhere; "password-change:<accountId>" is only reachable by the signed-in
+// member. Rows past expiresAt are dead and pruned opportunistically.
+model SignInThrottle {
+  key       String   @id
+  count     Int
+  expiresAt DateTime
+
+  @@index([expiresAt])
 }
 
 // One-way follow. Admins have no row in the database, so neither column has a
@@ -68,4 +86,104 @@ model Follow {
 
   @@id([followerId, followeeId])
   @@index([followeeId])
+}
+
+// Refresh tokens issued by the Go mobile API (services/api). Only the SHA-256
+// hash of the token is stored. Tokens of one login share a familyId so reuse of
+// a rotated token can revoke the whole family. ownerId has no foreign key:
+// admins have no row in the database.
+model ApiRefreshToken {
+  id             String    @id @default(cuid())
+  ownerId        String
+  role           String // "admin" | "member"
+  login          String? // admin only: GitHub login at issue time
+  sessionVersion Int? // member only: PasswordAccount.sessionVersion at issue time
+  tokenHash      String    @unique // SHA-256 hex
+  familyId       String
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([familyId])
+  @@index([ownerId])
+}
+
+// Ties one LINE account to one Zhuelog owner (a PasswordAccount id prefixed
+// "password:", or an admin's GitHub numeric id). ownerId has no foreign key:
+// admins have no row in the database. role is "member" | "admin" (CHECK).
+model LineLink {
+  lineUserId String   @id
+  ownerId    String   @unique
+  role       String
+  createdAt  DateTime @default(now())
+}
+
+// One-time link codes shown on /account/line. Only the SHA-256 hex of the code
+// is stored; issuing a new code replaces the previous one of the same owner.
+// role is "member" | "admin" (CHECK).
+model LineLinkCode {
+  codeHash  String   @id
+  ownerId   String   @unique
+  role      String
+  expiresAt DateTime
+}
+
+// A LINE message waiting for, or done with, correction/translation by the Go
+// API. text is cleared once the row is done or failed. webhookEventId makes
+// redelivered webhooks idempotent. kind is "correction" | "translation" and
+// status is "pending" | "done" | "failed" (CHECK); the (status, createdAt)
+// index is declared in the migration's SQL.
+model LineMessage {
+  id             String   @id @default(cuid())
+  webhookEventId String   @unique
+  lineUserId     String
+  ownerId        String
+  kind           String
+  text           String?
+  status         String   @default("pending")
+  attempts       Int      @default(0)
+  entryId        String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status, createdAt])
+}
+
+// A member's or admin's practice conversation with ChatGPT, saved whole by the Go API
+// after every answer. id is a UUID made by the browser; messages is
+// [{id, role, text}] with role "user" | "assistant". ownerId has no foreign
+// key: admins have no row in the database.
+model ChatConversation {
+  id        String   @id
+  ownerId   String
+  title     String
+  modelName String
+  ended     Boolean
+  messages  Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([id, ownerId])
+  @@index([ownerId, updatedAt])
+  @@index([ownerId, createdAt])
+}
+
+// One finished round of preposition practice by a member or admin, written by
+// the Go API. id is a UUID made by the browser, so a retried save keeps one
+// row. questions is [{answer, noun, prompt, misses}] in the order asked, with
+// the wrong prepositions picked in misses; the counts are derived from it by
+// Go. ownerId has no foreign key: admins have no row in the database.
+model PrepositionPracticeRecord {
+  id            String   @id
+  ownerId       String
+  questionCount Int
+  firstTryCount Int
+  missCount     Int
+  elapsedMs     Int
+  questions     Json
+  startedAt     DateTime
+  createdAt     DateTime @default(now())
+
+  @@unique([id, ownerId])
+  @@index([ownerId, createdAt])
 }

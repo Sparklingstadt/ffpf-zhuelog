@@ -8,13 +8,12 @@ import {
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { learningUseCases } from "@/composition/learning-container";
+import { learningNotes } from "@/composition/learning-container";
 import { loadRecordOwnerView } from "@/composition/record-owner-options";
 import {
   parseLogDate,
   parseLogNumber,
 } from "@/domain/calendar/value-objects/log-date";
-import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { shareLearningEntryAction } from "@/presentation/actions/follow-actions";
 import { trashLearningEntryAction } from "@/presentation/actions/note-trash-actions";
@@ -63,20 +62,17 @@ export default async function LogDetailPage({
     eyebrow: "Daily learning log",
     title: `${formatLogDate(date)} · #${entryNumber}`,
     actions: (
-      <>
-        <Button asChild variant="outline" size="sm">
-          <Link href={withRecordOwner(dateHref, owner)}>
-            <ArrowLeft /> この日の一覧へ
-          </Link>
-        </Button>
-        <AuthControls user={user} />
-      </>
+      <Button asChild variant="outline" size="sm">
+        <Link href={withRecordOwner(dateHref, owner)}>
+          <ArrowLeft /> この日の一覧へ
+        </Link>
+      </Button>
     ),
   };
 
   if (owner.kind === "denied") {
     return (
-      <PageShell width="5xl">
+      <PageShell user={user} width="5xl">
         <PageHeader {...header} />
         <ReauthNotice subject="学習ノート" />
       </PageShell>
@@ -84,7 +80,7 @@ export default async function LogDetailPage({
   }
 
   const [result, view] = await Promise.all([
-    learningUseCases.getDailyEntry.execute(owner.ownerId, date, entryNumber),
+    learningNotes.getDailyEntry(owner, date, entryNumber),
     loadRecordOwnerView(user, owner),
   ]);
   if (!result) notFound();
@@ -93,7 +89,7 @@ export default async function LogDetailPage({
   const canShare = owner.kind === "self" && user.role === "member";
 
   return (
-    <PageShell width="5xl">
+    <PageShell user={user} width="5xl">
       <PageHeader
         {...header}
         description={`この日の${entryNumber}件目／全${total}件`}

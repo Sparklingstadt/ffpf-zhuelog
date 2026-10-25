@@ -5,7 +5,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import "dotenv/config";
 
 import { PrismaClient } from "../src/generated/prisma/client";
-import { securePostgresConnectionString } from "../src/infrastructure/config/postgres-connection";
+import { securePostgresConnectionString } from "./postgres-connection";
 
 // Seeded notes belong to the administrator, matching the migration that
 // assigned the pre-existing shared notes to this GitHub account.

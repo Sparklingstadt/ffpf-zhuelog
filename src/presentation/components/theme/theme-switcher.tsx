@@ -30,11 +30,11 @@ export function ThemeSwitcher() {
   }
 
   return (
-    <div className="flex flex-col items-end gap-2">
+    <div className="relative">
       <div
         role="group"
         aria-label="カラーテーマ"
-        className="flex items-center gap-1 rounded-xl border bg-card p-1 shadow-xs"
+        className="flex items-center gap-0.5 rounded-lg border bg-card p-0.5"
       >
         {options.map(({ value, label, Icon }) => (
           <Button
@@ -43,15 +43,19 @@ export function ThemeSwitcher() {
             variant={preference === value ? "secondary" : "ghost"}
             aria-pressed={preference === value}
             onClick={() => selectTheme(value)}
-            className="h-10 gap-1.5 px-3 text-xs"
+            size="icon-sm"
+            title={label}
           >
-            <Icon className="size-3.5" aria-hidden="true" />
-            {label}
+            <Icon aria-hidden="true" />
+            <span className="sr-only">{label}</span>
           </Button>
         ))}
       </div>
       {saveFailed ? (
-        <p role="status" className="max-w-xs text-xs text-muted-foreground">
+        <p
+          role="status"
+          className="absolute top-full right-0 mt-2 w-64 rounded-lg border bg-popover p-2 text-xs text-popover-foreground shadow-md"
+        >
           端末に設定を保存できないため、この画面内だけで切り替えます。
         </p>
       ) : null}

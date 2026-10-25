@@ -1,13 +1,12 @@
 import { ArrowLeft, Languages, RotateCcw, Trash2 } from "lucide-react";
 import Link from "next/link";
 
-import { learningUseCases } from "@/composition/learning-container";
+import { learningNotes } from "@/composition/learning-container";
 import {
   emptyLearningTrashAction,
   purgeLearningEntryAction,
   restoreLearningEntryAction,
 } from "@/presentation/actions/note-trash-actions";
-import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
@@ -34,12 +33,10 @@ export default async function LearningTrashPage() {
   );
 
   const trash =
-    owner.kind === "self"
-      ? await learningUseCases.listTrashedEntries.execute(owner.ownerId)
-      : null;
+    owner.kind === "self" ? await learningNotes.listTrashed() : null;
 
   return (
-    <PageShell width="5xl">
+    <PageShell user={user} width="5xl">
       <PageHeader
         icon={Languages}
         eyebrow="Learning notes trash"
@@ -62,7 +59,6 @@ export default async function LearningTrashPage() {
                 confirmMessage={emptyConfirmMessage(trash.total)}
               />
             ) : null}
-            <AuthControls user={user} />
           </>
         }
       />

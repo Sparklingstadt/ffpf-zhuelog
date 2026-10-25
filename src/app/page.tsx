@@ -2,8 +2,11 @@ import {
   BookOpenText,
   CalendarDays,
   Database,
+  Download,
+  FileUp,
   Languages,
-  Sparkles,
+  MessageCircle,
+  MessagesSquare,
 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -12,33 +15,27 @@ import {
   showsRecords,
   type RecordOwner,
 } from "@/application/identity/use-cases/resolve-record-owner";
-import type { AuthenticatedUser } from "@/domain/identity/entities/authenticated-user";
-import { learningUseCases } from "@/composition/learning-container";
-import { loadRecordOwnerView } from "@/composition/record-owner-options";
+import { learningNotes } from "@/composition/learning-container";
+import { isMemberRole } from "@/domain/identity/entities/authenticated-user";
 import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
-import { AuthControls } from "@/presentation/components/auth/auth-controls";
+import { GoApiError } from "@/infrastructure/go-api/client";
+import type { ViewedOwner } from "@/infrastructure/go-api/learning-gateway";
+import { loadRecordOwnerView } from "@/composition/record-owner-options";
 import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { PageShell } from "@/presentation/components/layout/page-shell";
-import { CsvFormatGuide } from "@/presentation/components/learning/csv-format-guide";
-import { CsvImportForm } from "@/presentation/components/learning/csv-import-form";
 import { LearningEntryCard } from "@/presentation/components/learning/learning-entry-card";
 import { RecordOwnerControls } from "@/presentation/components/records/record-owner-controls";
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-} from "@/presentation/components/ui/alert";
+import { Alert, AlertDescription } from "@/presentation/components/ui/alert";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/presentation/components/ui/card";
+import { Card, CardContent } from "@/presentation/components/ui/card";
 import { requireSignedInOwner } from "@/presentation/guards/record-owner-guard";
+import { genericErrorMessage } from "@/presentation/presenters/generic-error-message";
 import { getLogDateHref } from "@/presentation/presenters/log-date-presenter";
+import {
+  recentEntriesTotal,
+  recentEntryNumberLabel,
+} from "@/presentation/presenters/recent-entry-number";
 import {
   requestedRecordOwner,
   withRecordOwner,
@@ -46,25 +43,20 @@ import {
 
 export const dynamic = "force-dynamic";
 
-async function loadEntries(ownerId: string): Promise<{
+// Go being unavailable (or failing) still shows the home with a notice. Any
+// other error, including the redirect to /signin, is rethrown.
+async function loadEntries(owner: ViewedOwner): Promise<{
   entries: LearningEntry[];
   total: number;
-  databaseError: string | null;
+  loadFailed: boolean;
 }> {
   try {
-    const result = await learningUseCases.listRecentEntries.execute(
-      ownerId,
-      100,
-    );
-    return { ...result, databaseError: null };
-  } catch {
-    console.error("LEARNING_ENTRIES_UNAVAILABLE");
-    return {
-      entries: [],
-      total: 0,
-      databaseError:
-        "データベースに接続できません。READMEの手順でPostgreSQLを起動し、マイグレーションを実行してください。",
-    };
+    const result = await learningNotes.listRecent(owner, 100);
+    return { ...result, loadFailed: false };
+  } catch (error) {
+    if (!(error instanceof GoApiError)) throw error;
+    console.error("LEARNING_ENTRIES_UNAVAILABLE", error.status, error.code);
+    return { entries: [], total: 0, loadFailed: true };
   }
 }
 
@@ -73,14 +65,15 @@ type HomeProps = {
 };
 
 function HomeHeader({
-  user,
   owner,
   total,
+  canChat,
 }: {
-  user: AuthenticatedUser;
   owner: RecordOwner;
   // Number of entries for the viewed owner; null when no notes are shown.
   total: number | null;
+  // Members and admins also get the ChatGPT chat and its conversation notes.
+  canChat: boolean;
 }) {
   const hasNotes = showsRecords(owner);
   return (
@@ -98,25 +91,51 @@ function HomeHeader({
           </p>
         </div>
       </div>
-      <div className="flex flex-col items-start gap-2 sm:items-end">
-        <AuthControls user={user} />
-        <div className="flex flex-wrap gap-2 sm:justify-end">
-          {hasNotes ? (
-            <Button asChild variant="outline" size="sm">
-              <Link href={withRecordOwner("/logs", owner)}>
-                <CalendarDays /> 日付から見る
-              </Link>
-            </Button>
-          ) : null}
-        </div>
+      <div className="flex flex-wrap items-center gap-2">
         {total === null ? null : (
-          <div className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3 text-sm shadow-xs">
+          <div className="flex h-9 items-center gap-2 rounded-lg border bg-card px-3 text-sm shadow-xs">
             <Database className="size-4 text-muted-foreground" />
             <span className="text-muted-foreground">登録済み</span>
-            <strong className="font-mono text-lg">{total}</strong>
+            <strong className="font-mono text-base">{total}</strong>
             <span className="text-muted-foreground">文</span>
           </div>
         )}
+        {hasNotes ? (
+          <Button asChild variant="outline" size="lg">
+            <Link href={withRecordOwner("/logs", owner)}>
+              <CalendarDays /> 日付から見る
+            </Link>
+          </Button>
+        ) : null}
+        {canChat ? (
+          <>
+            <Button asChild variant="outline" size="lg">
+              <Link href="/chat">
+                <MessageCircle /> ChatGPT と話す
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="lg">
+              <Link href="/conversations">
+                <MessagesSquare /> 会話ノート
+              </Link>
+            </Button>
+          </>
+        ) : null}
+        {/* Import and export act on the signed-in user's own notes only. */}
+        {owner.kind === "self" ? (
+          <>
+            <Button asChild variant="outline" size="lg">
+              <Link href="/import">
+                <FileUp /> CSVをインポート
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="lg">
+              <Link href="/export">
+                <Download /> CSVでエクスポート
+              </Link>
+            </Button>
+          </>
+        ) : null}
       </div>
     </header>
   );
@@ -132,8 +151,12 @@ export default async function Home({ searchParams }: HomeProps) {
   // Guests have no notes of their own.
   if (owner.kind === "denied" && owner.reason === "guest") {
     return (
-      <PageShell width="6xl" spacious>
-        <HomeHeader user={user} owner={owner} total={null} />
+      <PageShell user={user} width="6xl" spacious>
+        <HomeHeader
+          owner={owner}
+          total={null}
+          canChat={isMemberRole(user.role)}
+        />
         <Card className="border-dashed py-14 text-center shadow-none">
           <CardContent className="flex flex-col items-center gap-4">
             <div className="rounded-full bg-muted p-3">
@@ -150,100 +173,87 @@ export default async function Home({ searchParams }: HomeProps) {
 
   if (owner.kind === "denied") {
     return (
-      <PageShell width="6xl" spacious>
-        <HomeHeader user={user} owner={owner} total={null} />
+      <PageShell user={user} width="6xl" spacious>
+        <HomeHeader
+          owner={owner}
+          total={null}
+          canChat={isMemberRole(user.role)}
+        />
         <ReauthNotice subject="学習ノート" />
       </PageShell>
     );
   }
 
-  const [{ entries, total, databaseError }, view] = await Promise.all([
-    loadEntries(owner.ownerId),
+  const [{ entries, total, loadFailed }, view] = await Promise.all([
+    loadEntries(owner),
     loadRecordOwnerView(user, owner),
   ]);
   const ownNotes = owner.kind === "self";
 
   return (
-    <PageShell width="6xl" spacious>
-      <HomeHeader user={user} owner={owner} total={total} />
+    <PageShell user={user} width="6xl" spacious>
+      <HomeHeader
+        owner={owner}
+        total={recentEntriesTotal(total, entries.length)}
+        canChat={isMemberRole(user.role)}
+      />
 
       <RecordOwnerControls owner={owner} view={view} path="/" />
 
-      {databaseError ? (
+      {loadFailed ? (
         <Alert variant="destructive">
           <Database />
-          <AlertTitle>PostgreSQLの準備が必要です</AlertTitle>
-          <AlertDescription>{databaseError}</AlertDescription>
+          <AlertDescription>{genericErrorMessage}</AlertDescription>
         </Alert>
       ) : null}
 
-      <section
-        className={
-          ownNotes
-            ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start"
-            : "grid gap-6"
-        }
-      >
-        <div className="order-2 space-y-4 lg:order-1">
-          <div>
-            <h2 className="text-xl font-semibold tracking-tight">学習ノート</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              新しく登録された文から最大100件を表示します。
-            </p>
-          </div>
-
-          {entries.length === 0 ? (
-            <Card className="border-dashed py-14 text-center shadow-none">
-              <CardContent className="flex flex-col items-center gap-3">
-                <div className="rounded-full bg-muted p-3">
-                  <BookOpenText className="size-6 text-muted-foreground" />
-                </div>
-                <div>
-                  <p className="font-medium">まだ学習文がありません</p>
-                  {ownNotes ? (
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      CSVをインポートすると、ここに学習カードが並びます。
-                    </p>
-                  ) : null}
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4">
-              {entries.map((entry, index) => (
-                <LearningEntryCard
-                  key={entry.id}
-                  entry={entry}
-                  numberLabel={`#${total - index}`}
-                  href={withRecordOwner(getLogDateHref(entry.createdAt), owner)}
-                  linkLabel="この日の一覧"
-                />
-              ))}
-            </div>
-          )}
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">学習ノート</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            新しく登録された文から最大100件を表示します。
+          </p>
         </div>
 
-        {/* Imports always go to the signed-in user's own notes, so the form
-            only appears on them. */}
-        {ownNotes ? (
-          <aside className="order-1 lg:order-2 lg:sticky lg:top-8">
-            <Card>
-              <CardHeader>
-                <div className="mb-2 flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                  <Sparkles className="size-4" />
-                </div>
-                <CardTitle>CSVをインポート</CardTitle>
-                <CardDescription>
-                  UTF-8のCSVファイルを選んで、自分の学習ノートに学習文を一括登録します。
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <CsvImportForm disabled={Boolean(databaseError)} />
-                <CsvFormatGuide />
-              </CardContent>
-            </Card>
-          </aside>
-        ) : null}
+        {entries.length === 0 ? (
+          <Card className="border-dashed py-14 text-center shadow-none">
+            <CardContent className="flex flex-col items-center gap-3">
+              <div className="rounded-full bg-muted p-3">
+                <BookOpenText className="size-6 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="font-medium">まだ学習文がありません</p>
+                {ownNotes ? (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    <Link
+                      href="/import"
+                      className="font-medium text-foreground underline underline-offset-4"
+                    >
+                      CSVをインポート
+                    </Link>
+                    すると、ここに学習カードが並びます。
+                  </p>
+                ) : null}
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-4">
+            {entries.map((entry, index) => (
+              <LearningEntryCard
+                key={entry.id}
+                entry={entry}
+                numberLabel={recentEntryNumberLabel(
+                  total,
+                  entries.length,
+                  index,
+                )}
+                href={withRecordOwner(getLogDateHref(entry.createdAt), owner)}
+                linkLabel="この日の一覧"
+              />
+            ))}
+          </div>
+        )}
       </section>
     </PageShell>
   );

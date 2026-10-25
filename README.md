@@ -7,10 +7,10 @@
 ## 技術構成
 
 - Next.js 16（App Router / Server Actions）
-- PostgreSQL 17
-- Prisma ORM 7
+- Go API（`services/api/`）: ログイン（GitHub OAuth / ID・パスワード / ゲスト）と、学習ノートの読み書き
+- PostgreSQL 17（読み書きするのは Go API だけ）
+- Prisma ORM 7（スキーマとマイグレーション、seed）
 - shadcn/ui + Tailwind CSS 4
-- Auth.js v5（GitHub OAuth / ID・パスワード）
 
 ## アーキテクチャ
 
@@ -20,7 +20,7 @@
 src/
 ├── domain/          # エンティティ、値オブジェクト、リポジトリの契約
 ├── application/     # ユースケースと外部サービスのポート
-├── infrastructure/  # Prisma、Auth.js、CSV解析の実装
+├── infrastructure/  # Go API の呼び出し、Cookie、設定の実装
 ├── presentation/    # 画面部品、Server Action、コントローラー
 ├── composition/     # 実装を組み立ててユースケースを公開
 └── app/             # Next.js App Routerのエントリーポイント
@@ -35,35 +35,34 @@ src/
 
 ## 起動方法
 
-前提: Node.js 24 または 26、Docker Desktop
+前提: Node.js 24 または 26、Docker Desktop、Go（`services/api/go.mod` の版）
+
+Web は DB に直接つながらず、ログインも学習ノートの読み書きも Go API で行います。手元では、ローカル専用の Go API（[docs/api-local.md](docs/api-local.md)）を使います。
 
 ```bash
 cp .env.example .env
-docker compose up -d
 pnpm install
-pnpm run db:migrate --name init
+pnpm run api:db    # Go API 用の DB を起動し、マイグレーションとサンプルデータを入れる
+pnpm run api:dev   # Go API を 127.0.0.1:8081 で起動（起動したまま、別のターミナルで次へ）
 pnpm run dev
 ```
 
-ブラウザで <http://localhost:3000> を開きます。
+ブラウザで <http://localhost:3000> を開き、ゲストか、サンプルの会員（`docs/api-local.md` の表）でログインします。GitHub ログインは本物の OAuth App が要るので、手元では使えません。
+
+`.env` の `GO_API_URL`・`API_WEB_PROXY_SECRET`・`AUTH_URL`・`AUTH_GITHUB_ID` が Web の設定です。`DATABASE_URL` は Prisma のマイグレーションと seed だけが使います（`docker compose up -d` の開発用 DB）。
 
 ## 認証・認可の設定
 
-GitHubの **Settings → Developer settings → OAuth Apps** でOAuth Appを作成します。
+ログインは Go API が行います。Web の Vercel プロジェクトに入れる値は `GO_API_URL`・`API_WEB_PROXY_SECRET`・`AUTH_URL`・`AUTH_GITHUB_ID` の 4 つです。Go API に入れる値も含めて、手順は [docs/api-deployment.md](docs/api-deployment.md) の「6. Web の設定」にあります。
 
-- Homepage URL: `http://localhost:3000`
-- Authorization callback URL: `http://localhost:3000/api/auth/callback/github`
+GitHubの **Settings → Developer settings → OAuth Apps** で、Web 用のOAuth Appを作成します。
 
-`.env` に以下を設定してください。
+- Homepage URL: `https://本番ドメイン`
+- Authorization callback URL: `https://本番ドメイン/api/auth/callback/github`（実際の callback は、この下の `/api/auth/callback/github/go` です）
 
-```env
-AUTH_SECRET="openssl rand -base64 32 で生成した値"
-AUTH_GITHUB_ID="OAuth AppのClient ID"
-AUTH_GITHUB_SECRET="OAuth AppのClient Secret"
-AUTH_ALLOWED_GITHUB_LOGINS="github-login-1,github-login-2"
-```
+Client ID は Web の `AUTH_GITHUB_ID` と Go API の `GITHUB_WEB_CLIENT_ID` に、Client Secret は Go API の `GITHUB_WEB_CLIENT_SECRET` だけに入れます。
 
-許可リストは大文字・小文字を区別しません。空の場合は安全側に倒し、すべてのGitHubユーザーを拒否します。本番環境では本番URL専用のGitHub OAuth Appを作成し、コールバックURLを `https://本番ドメイン/api/auth/callback/github` にしてください。
+管理者の許可リストは、Go API の `AUTH_ALLOWED_GITHUB_IDS` です。GitHubユーザーの **数字のID** をカンマ区切りで並べます。IDは `https://api.github.com/users/<ログイン名>` の `id` で確認できます。ログイン名は使いません。ログイン名は変更でき、空いた名前を別人が取得できるためです。空の場合は安全側に倒し、すべてのGitHubユーザーを拒否します。
 
 ### ロールとID・パスワードのアカウント
 
@@ -78,8 +77,8 @@ memberのアカウントは、GitHub管理者が `/admin/accounts` で作りま�
 
 - **作成・再設定**: ログインID（英小文字・数字・`.` `_` `-` の3〜32文字）と表示名を入力します。パスワードは12〜128文字で、空欄にすると自動生成します。パスワードは作成・再設定の直後に一度だけ画面に表示され、あとから確認できません。管理者から本人に別の経路で伝えてください。
 - **パスワード変更**: memberは、ヘッダーの「パスワード変更」（`/account/password`）から自分で変更できます。変更するとログアウトされ、新しいパスワードでログインし直します。
-- **ロック**: 5回続けて間違えると、そのアカウントは15分間ロックされます。ロック中は正しいパスワードでもログインできません。ログイン画面には、IDの有無やロックの状態を区別せず「IDまたはパスワードが違うか、一時的にロックされています。」とだけ表示します。ロック中のアカウントは `/admin/accounts` に「ロック中」と表示され、管理者がパスワードを再設定すると解除されます。
-- **セッションの失効**: パスワードを再設定・変更すると、そのアカウントの既存のセッションは、すべて使えなくなります。セッションの有効性（`sessionVersion`）は、サーバー側でユーザーを読むたびにDBで確認します。
+- **試行回数の制限**: 接続元（IPアドレス。IPv6は /64 単位）ごとに数えます。同じ接続元から同じログインIDへ15分間に5回まで、ログインID全体で15分間に20回までです。超えると、その接続元からは15分間、正しいパスワードでもログインできません。アカウント単位ではロックしないので、ほかの場所からの失敗で本人が締め出されることはありません。接続元は Vercel が設定する `x-real-ip` / `x-forwarded-for` で判定し、Web が Go API に渡します。回数は Go API が DB のテーブル（`SignInThrottle`）で数えます。ログイン画面には、IDの有無や制限の状態を区別せず「IDまたはパスワードが違うか、一時的にロックされています。」とだけ表示します。パスワード変更画面の現在のパスワードも、アカウントごとに15分間5回までです。
+- **セッションの失効**: パスワードを再設定・変更すると、そのアカウントの既存のセッションは、すべて使えなくなります。セッションの有効性（`sessionVersion`）は、Go API がリクエストのたびにDBで確認します。
 - **パスワードの保存**: scrypt（N=2^15, r=8, p=1）でハッシュ化したものだけを保存します。平文はDBにもログにも残しません。
 - **記録の持ち主**: memberの学習ノートは、所有者 `password:<アカウントID>` に紐づきます。本人と管理者が見られます（詳細は「学習ノートの公開範囲」）。
 
@@ -94,11 +93,15 @@ rm .env.production.local
 
 適用前にデプロイすると、ID・パスワードでのログインと `/admin/accounts` だけがエラーになります。GitHubログインとゲストログインは影響を受けません。
 
-認可はProxyによるページ保護に加え、画面のServer ComponentとCSVインポートのServer Actionでも検証します。
+認可はProxyによるページ保護に加え、画面のServer ComponentとServer Actionでも検証します。データの権限は、最後に Go API が確かめます。
 
 ログイン画面からは、GitHub認証を使わずゲストとしてログインすることもできます。学習ノート・日付別ログ・CSVインポート・フォローは管理者・メンバー専用です。書き込み権限と記録の持ち主はServer Actionでも検証します。
 
 開発用PostgreSQLはDockerホストの `127.0.0.1` にだけ公開されます。`.env` はGit管理対象外です。秘密情報をコミットせず、公開・漏洩した可能性がある場合は該当する認証情報を直ちに失効・再発行してください。
+
+## ネイティブアプリ向け API
+
+`services/api/` に、ネイティブアプリ（iOS など）と Web が使う Go 製 API があります。Web とは別の Vercel プロジェクトとして動かし、本番の Neon を読み書きします。ローカルでのテストは `pnpm run test:unit` に含まれます（DB を使うテストは `API_TEST_DATABASE_URL` が無いと skip されます）。Vercel の準備、モバイル用 GitHub OAuth App の登録、本番へのマイグレーション適用、デプロイの手順は [docs/api-deployment.md](docs/api-deployment.md) を参照してください。手元で API を起動して試す手順（`pnpm run api:db` → `pnpm run api:dev` → `pnpm run api:smoke`）は [docs/api-local.md](docs/api-local.md) にあります。
 
 ## 表示テーマ
 
@@ -111,10 +114,11 @@ rm .env.production.local
 学習ノートは、ユーザーごとの個人の記録です（本人が共有したノートだけ、フォロワーが読めます）。
 
 - **本人**: 自分の学習ノート・日付別ログだけを見られます。番号（`#1` やその日の n 件目）も持ち主ごとに数えます。memberが `?user=` に他人を指定しても、自分の記録のページに戻されます。
-- **管理者**: 自分の記録に加えて、ヘッダー下の切り替え欄（「表示するユーザー」）でmemberを選ぶと、そのユーザーの学習ノート・日付別ログを見られます。閲覧のみで、「〇〇さんの記録を表示中（閲覧のみ）」のバナーを出し、CSVインポートのフォームは出しません。日付や詳細へのリンクでも `?user=` を引き継ぎます。
-- **ゲスト**: 記録を持ちません。`/logs` は `/` に戻されます。
+- **管理者**: 自分の記録に加えて、ヘッダー下の切り替え欄（「表示するユーザー」）でmemberを選ぶと、そのユーザーの学習ノート・日付別ログを見られます。閲覧のみで、「〇〇さんの記録を表示中（閲覧のみ）」のバナーを出し、CSVのインポート・エクスポートへのリンクは出しません。日付や詳細へのリンクでも `?user=` を引き継ぎます。
+- **ゲスト**: 記録を持ちません。`/logs`・`/import`・`/export` は `/` に戻されます。
 - **フォロワー**: フォロー中のメンバーが共有した学習ノートだけを `/follow` で読めます。
-- **CSVインポート**: `?user=` に関わらず、ログイン中のユーザー自身の学習ノートに登録します。
+- **CSVインポート**（`/import`）: `?user=` に関わらず、ログイン中のユーザー自身の学習ノートに登録します。
+- **CSVエクスポート**（`/export`）: ログイン中のユーザー自身の学習ノートから選んだものを、インポートと同じ形式のCSV（UTF-8、BOM付き）でダウンロードします。書き出したファイルは、そのままインポートし直せます。
 
 ## 学習ノートの持ち主の本番への反映
 
@@ -172,6 +176,7 @@ DBマイグレーション `20261008120000_add_note_trash`（`LearningEntry` に
 
 - **だれがフォローできるか**: メンバーと管理者が、ヘッダーの「フォロー」（`/follow`）からフォローできます。ゲストはフォローの画面を開けず、`/` に戻されます。
 - **だれをフォローできるか**: メンバーだけです。管理者はDBに行がないため、一覧に出ず、フォローされません。自分自身もフォローできません。
+- **一覧に出る情報**: 表示名だけです。ログインIDはログイン情報の半分にあたるため、ほかのメンバーには見せません（管理者は `/admin/accounts` で確認できます）。
 - **共有の切り替え**: メンバーが自分の学習ノートの詳細画面（`/logs/年/月/日/番号`）で「共有する」「共有をやめる」を押します。共有中のノートには「共有中（フォロワーが見られます）」と表示されます。ノートは最初は共有されません。管理者が他人の記録を表示しているときは、共有のボタンは出ません。
 - **タイムライン**: `/follow` の「フォロー中の人の共有ノート」に出るのは、フォロー中の人が共有中で、ゴミ箱にない学習ノートだけです。登録日時の新しい順に、最新100件まで表示します。ノートの詳細ページへのリンクは出しません。
 - **フォロー関係**: 一覧の「フォローされています」で、自分をフォローしている人が分かります。「フォロー中 N人・フォロワー N人」の人数も同じ画面に出ます。管理者のフォローは、フォロワーの人数にだけ数えます。
@@ -179,6 +184,36 @@ DBマイグレーション `20261008120000_add_note_trash`（`LearningEntry` に
 ### 本番への反映
 
 DBマイグレーション `20261010000353_add_follows_and_shared_notes`（`Follow` テーブルの追加と、`LearningEntry` への `sharedAt` 列の追加）が必要です。マージの前に、Vercelとリンク済みのリポジトリで、このPRのブランチを `git switch --detach` で開いて、パスワードアカウントの節と同じ手順で本番DB（Neon）へ適用してください。
+
+## LINE 連携
+
+LINE に中国語や日本語の文を送ると、OpenAI（ChatGPT）で添削・翻訳し、送った人の学習ノートに追加します。会員と管理者が、それぞれ自分の LINE を結びつけて使います（ゲストは使えません）。Go API（`services/api/`）の `/v1/line/*` で動きます。
+
+- **結びつけ**: Web の `/account/line`（ヘッダーの「LINE 連携」）で「連携コードを出す」を押し、出た 8 文字のコード（10 分で切れます）を LINE の公式アカウントに送ります。同じ画面から連携を解除できます。
+- **添削と翻訳**: 漢字だけの文は添削、ひらがなやカタカナを含む文は中国語への翻訳です。結果は LINE に返信され、学習ノートに保存されます（翻訳は `kind=translation`）。500 文字までです。
+- **結びついていない LINE**: 送った文は学習ノートにも OpenAI にも届きません。
+- **失敗したとき**: 時間切れなどで結果が出なかった文は、1 日 1 回の Cron（毎日 06:00 JST）が 1 回だけ試し直し、できた結果か失敗を LINE に送ります。
+- **設定**: Go API に `LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`OPENAI_API_KEY`（LINE を使うときは 3 つとも）と `CRON_SECRET`、Web に `LINE_ADD_FRIEND_URL`（友だち追加のリンク。無くても動きます）を入れます。設定が空のときは LINE 連携は使えず、画面には「LINE 連携は今は使えません。」と出ます。ローカルでは使えません。
+- **本番への反映**: DBマイグレーション `20261023090000_add_line_link`（`LineLink`・`LineLinkCode`・`LineMessage` の追加）を、**main へのマージの前に** 本番のNeonへ適用してください。LINE の Webhook URL の設定など、切り替えの手順は [docs/api-deployment.md](docs/api-deployment.md) の「7. LINE 連携」にあります。
+
+## ChatGPT との会話練習
+
+管理者は `/chat`（ホームとヘッダーの「ChatGPT と話す」）で ChatGPT と中国語の会話練習ができます。会員とゲストには出ません。Go API（`services/api/`）の `POST /v1/chat` と `/v1/conversations` で動きます。
+
+- **会話**: 回答は少しずつ表示されます。停止ボタンで止められます。途中で切れた回答は保存せず、その発言は入力欄に戻ります。
+- **会話ノート**: 回答が届くたびに、会話をまるごと保存します。`/conversations` で話した日（日本時間）ごとに見返せ、「続きを話す」で続きから話せます。削除もできます（ゴミ箱はありません）。
+- **上限**: 1 つの会話は 40 発言・合計 4 万字までです。上限に達した会話は読むだけになります。
+- **設定**: Go API に `OPENAI_API_KEY`（と任意で `OPENAI_CHAT_MODEL`）を入れます。空のときは画面に「ChatGPT が設定されていません」と出ます。
+- **本番への反映**: DBマイグレーション `20261024090000_add_chat_conversations`（`ChatConversation` の追加）を、**main へのマージの前に** 本番のNeonへ適用してください。手順は [docs/api-deployment.md](docs/api-deployment.md) の「8. 会話練習（ChatGPT）」にあります。
+
+## 介詞の練習
+
+`/practice/prepositions`（ヘッダーの「介詞練習」）で、名詞と日本語の意味に合う介詞を 4 つから選ぶ練習が 25 問ずつできます。ゲストも練習できます。
+
+- **練習中**: 正答率（1 回目で正解した問題の割合）・ミス数（間違えて選んだ回数）・経過時間を問題の上に出します。
+- **結果**: 25 問を解き終えると、正答率・ミス数・経過時間と、ミスした問題（正解と、間違えて選んだ介詞）を出します。
+- **記録**: 会員と管理者の結果は、解き終えたときに Go API の `/v1/preposition-records` へ保存します。`/practice/prepositions/records`（練習画面の「過去の記録」）で新しい順に見返せ、1 件ずつ全問の結果も見られます。ゲストの練習は記録に残りません。
+- **本番への反映**: DBマイグレーション `20261024150000_add_preposition_practice_records`（`PrepositionPracticeRecord` の追加）を、**main へのマージの前に** 本番のNeonへ適用してください（`vercel env pull` → `migrate deploy` → `migrate status`）。
 
 ## LINE・チャットのテーブルの削除
 
@@ -214,7 +249,7 @@ UTF-8のCSVを利用します。ヘッダー行は省略可能です。
 - 1〜3列目は必須です。
 - 4列目以降の空でないセルは、すべて順番付きのヒントとして保存します。
 - 「最初の文 / 添削後の文 / ピン音」のほか、「原文 / 添削文 / 拼音」または英語ヘッダーにも対応します。
-- 1ファイル5MB、1回1,000行までです。
+- 1ファイル4MB、1回1,000行までです。
 - 1項目1万文字・1行10万文字・ヒント100個までです（行ごとに個数を変えられます）。
 - サンプルは [`examples/sample.csv`](examples/sample.csv) にあります。
 
@@ -223,13 +258,14 @@ UTF-8のCSVを利用します。ヘッダー行は省略可能です。
 - `ImportBatch`: インポートしたファイル名・件数・日時
 - `LearningEntry`: 最初の文・添削後の文・ピン音・所有者（GitHubの数字のID、または `password:<アカウントID>`）
 - `Hint`: 学習文に属する可変個数のヒントと表示順
-- `PasswordAccount`: ID・パスワードのアカウント（ログインID・表示名・パスワードのハッシュ・`sessionVersion`・失敗回数・ロック期限）
+- `PasswordAccount`: ID・パスワードのアカウント（ログインID・表示名・パスワードのハッシュ・`sessionVersion`）。`failedAttempts`・`lockedUntil` は旧ロック用で、今は使っていません
+- `SignInThrottle`: ログイン試行回数の制限用のカウンター（キー・回数・期限）。Go API が使います
 
 インポートはファイル単位のトランザクションです。途中の行でエラーになった場合、そのファイルのデータは1件も保存されません。
 
 ## セキュリティ
 
-ページの保護は `src/proxy.ts` と各Server Componentで、書き込みはServer Action内で再検証します。管理者の許可リストはセッションを読むたびに確認されます。リモートPostgreSQL接続は `sslmode=verify-full` に統一し、証明書とホスト名を検証します。
+ページの保護は `src/proxy.ts` と各Server Componentで、書き込みはServer Action内で再検証します。管理者の許可リストは、Go API がリクエストのたびに確認します。リモートPostgreSQL接続は `sslmode=verify-full` に統一し、証明書とホスト名を検証します。
 
 HTMLにはリクエストごとのnonce付きCSPを設定します。ログの秘匿化、監査範囲と制約は [2026-09-24 セキュリティレビュー](docs/security-review-2026-09-24.md) を参照してください（AI機能はその後削除しました）。
 
@@ -246,7 +282,7 @@ pnpm run db:seed
 
 ## Playwright E2E
 
-Node.js 24 または 26 と、起動済みのDocker（Compose v2）が必要です。
+Node.js 24 または 26、起動済みのDocker（Compose v2）、Go（`services/api/go.mod` の版）が必要です。
 
 ```bash
 pnpm install --frozen-lockfile
@@ -259,11 +295,11 @@ pnpm run test:e2e:stop
 ```
 
 Desktop Chromiumとモバイル幅（Pixel 7 / Chromium）の両方で検証します。
-テスト起動時に専用PostgreSQLを起動し、既存マイグレーションを適用してTurbopackでビルド、`127.0.0.1:3107`に本番モードのサーバーを起動します。
+テスト起動時に専用PostgreSQLを起動し、既存マイグレーションを適用してTurbopackでビルド、`127.0.0.1:3107`に本番モードのサーバーを起動します。Go API（`services/api`）もビルドして `127.0.0.1:3108` で起動し、Web はこれを通してログインとデータの読み書きを行います。
 既存サーバーは再利用しません。通常の開発サーバーは停止してから実行してください（ビルド先の`.next`を共有します）。
 
 - 認証前のリダイレクト、ゲストログイン／ログアウト、外部URLへのリダイレクト拒否
-- ID・パスワードのアカウント（管理者による作成、作成直後のパスワード表示（再表示できない旨の注記つき）、memberのログイン、アカウント管理画面の拒否、ログイン失敗の共通メッセージ、5回失敗でのロック、再設定によるセッション失効、パスワード変更）
+- ID・パスワードのアカウント（管理者による作成、作成直後のパスワード表示（再表示できない旨の注記つき）、memberのログイン、アカウント管理画面の拒否、ログイン失敗の共通メッセージ、別の接続元からの5回失敗では本人がロックされないこと、再設定によるセッション失効、パスワード変更）
 - ゲストへの学習ノートの非表示・CSV操作の拒否（古い管理者フォームからの投稿も拒否）
 - CSVの登録・リロード後の永続化・可変ヒント・BOM・引用符・改行・入力エラー
 - 日付一覧・ノート詳細・前後移動・JST日付境界・無効なURL・折り畳み
@@ -297,5 +333,5 @@ GitHub OAuthの外部ログインは、このE2Eの対象外です。
 
 ## pnpm移行の回帰テスト
 
-`pnpm install --frozen-lockfile` 後、`pnpm run test:regression` で既存機能の検証を実行します。GitHub Actions では同じ内容を CI ワークフローが並列で実行します（`verify` を本番の Vercel と同じ Node 24 と、次の版の Node 26 で、`e2e` を Node 24 で実行）。`package.json` の `engines` は `24.x || 26.x` で、Vercel はこの中で対応している一番新しい版を使います。
+`pnpm install --frozen-lockfile` 後、`pnpm run test:regression` で既存機能の検証を実行します。GitHub Actions では同じ内容を CI ワークフローが並列で実行します（`verify` と `e2e` を、本番の Vercel と同じ Node 24 で実行）。`package.json` の `engines` は `24.x` です（Vercel はまだ Node 26 に対応していないため）。
 ブラウザーテストの前に `pnpm exec playwright install chromium` を実行してください。Webの回帰テストは本番ビルドを使い、既存サーバーを再利用しません。

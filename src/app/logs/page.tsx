@@ -3,9 +3,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { showsRecords } from "@/application/identity/use-cases/resolve-record-owner";
-import { learningUseCases } from "@/composition/learning-container";
+import { learningNotes } from "@/composition/learning-container";
 import { loadRecordOwnerView } from "@/composition/record-owner-options";
-import { AuthControls } from "@/presentation/components/auth/auth-controls";
 import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { EmptyState } from "@/presentation/components/layout/empty-state";
 import { PageHeader } from "@/presentation/components/layout/page-header";
@@ -40,13 +39,13 @@ export default async function LogsPage({ searchParams }: LogsPageProps) {
   const hasNotes = showsRecords(owner);
   const [dates, view] = hasNotes
     ? await Promise.all([
-        learningUseCases.listLogDates.execute(owner.ownerId),
+        learningNotes.listLogDates(owner),
         loadRecordOwnerView(user, owner),
       ])
     : [[], null];
 
   return (
-    <PageShell width="4xl">
+    <PageShell user={user} width="4xl">
       <PageHeader
         icon={Languages}
         eyebrow="Chinese learning log"
@@ -60,7 +59,6 @@ export default async function LogsPage({ searchParams }: LogsPageProps) {
               </Link>
             </Button>
             {owner.kind === "self" ? <TrashLink href="/logs/trash" /> : null}
-            <AuthControls user={user} />
           </>
         }
       />

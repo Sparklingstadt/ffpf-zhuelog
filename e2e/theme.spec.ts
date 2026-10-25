@@ -119,13 +119,13 @@ test("both themes cover sign-in, notes, CSV and dated logs", async ({
     fullPage: true,
   });
   await asAdmin(context);
-  await page.goto("/");
   await upload(
     page,
     '"今天我很busy。","今天我很忙。","Jīntiān wǒ hěn máng.","忙＝忙しい","今日は、という意味の今天"',
   );
   await expect(page.getByText("1件の学習文を登録しました。")).toBeVisible();
-  const paths = ["/", "/logs"];
+  await page.goto("/");
+  const paths = ["/", "/logs", "/import", "/export"];
   await page
     .getByRole("link", { name: "この日の一覧", exact: true })
     .first()

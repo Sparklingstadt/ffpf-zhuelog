@@ -10,6 +10,14 @@ import {
 
 const lockMessage = "IDまたはパスワードが違うか、一時的にロックされています。";
 
+// The role badge in the top bar is hidden below `sm` to leave room for the
+// links.
+async function expectRoleBadge(page: Page, role: string) {
+  const badge = page.getByText(role, { exact: true });
+  if ((page.viewportSize()?.width ?? 0) < 640) await expect(badge).toBeHidden();
+  else await expect(badge).toBeVisible();
+}
+
 async function readOutputPassword(page: Page) {
   const output = page.locator("output");
   await expect(output).toContainText("この画面を離れると再表示できません");
@@ -27,7 +35,10 @@ test("admin creates a member who can open their notes", async ({
 }) => {
   await asAdmin(context);
   await page.goto("/");
-  await expect(page.getByText("ロール：管理者")).toBeVisible();
+  // The role badge is hidden below `sm` to leave room for the links.
+  const badge = page.getByText("管理者", { exact: true });
+  if ((page.viewportSize()?.width ?? 0) < 640) await expect(badge).toBeHidden();
+  else await expect(badge).toBeVisible();
   await page.goto("/admin/accounts");
   await page.getByLabel("ログインID", { exact: true }).fill("taro");
   await page.getByLabel("表示名").fill("太郎");
@@ -44,7 +55,7 @@ test("admin creates a member who can open their notes", async ({
       memberPage.getByRole("heading", { name: "日付別の学習ノート" }),
     ).toBeVisible();
     await expect(memberPage.getByText("太郎")).toBeVisible();
-    await expect(memberPage.getByText("ロール：メンバー")).toBeVisible();
+    await expectRoleBadge(memberPage, "メンバー");
   } finally {
     await memberContext.close();
   }
@@ -73,18 +84,43 @@ test("wrong password shows one generic error", async ({ page, db }) => {
   await expect(page.getByText(lockMessage)).toBeVisible();
 });
 
-test("five failures lock the account", async ({ page, db }) => {
+test("five failures pause that login ID for that client only", async ({
+  browser,
+  baseURL,
+  db,
+}) => {
   await createMember(db, "taro", "太郎", "member-password-1");
+  // The app reads the client address from x-real-ip, which Vercel sets.
+  const attacker = await browser.newContext({
+    baseURL,
+    extraHTTPHeaders: { "x-real-ip": "203.0.113.7" },
+  });
+  const owner = await browser.newContext({
+    baseURL,
+    extraHTTPHeaders: { "x-real-ip": "198.51.100.9" },
+  });
+  try {
+    const attackerPage = await attacker.newPage();
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await signInWithPassword(
+        attackerPage,
+        "taro",
+        `wrong-password-${attempt}`,
+      );
+      await expect(attackerPage.getByText(lockMessage)).toBeVisible();
+    }
 
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    await signInWithPassword(page, "taro", `wrong-password-${attempt}`);
-    await expect(page.getByText(lockMessage)).toBeVisible();
+    // Even the correct password is refused from that client for now.
+    await signInWithPassword(attackerPage, "taro", "member-password-1");
+    await expect(attackerPage.getByText(lockMessage)).toBeVisible();
+    await expect(attackerPage).toHaveURL(/\/signin/);
+
+    // The failures elsewhere never lock the member out of their own client.
+    await asMember(await owner.newPage(), "taro", "member-password-1");
+  } finally {
+    await attacker.close();
+    await owner.close();
   }
-
-  // Even the correct password is refused while the account is locked.
-  await signInWithPassword(page, "taro", "member-password-1");
-  await expect(page.getByText(lockMessage)).toBeVisible();
-  await expect(page).toHaveURL(/\/signin/);
 });
 
 test("reset revokes existing member sessions", async ({

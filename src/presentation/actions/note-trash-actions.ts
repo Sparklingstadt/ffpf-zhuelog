@@ -3,7 +3,7 @@
 import { redirect, RedirectType } from "next/navigation";
 
 import { getCurrentMemberUser } from "@/composition/identity-container";
-import { learningUseCases } from "@/composition/learning-container";
+import { learningNotes } from "@/composition/learning-container";
 import { revalidateNotes } from "@/presentation/actions/revalidate-notes";
 import type { ActionState } from "@/presentation/controllers/action-state";
 import {
@@ -17,21 +17,14 @@ import { trashedRedirectPath } from "@/presentation/presenters/note-trash-href";
 function redirectAfterTrash(path: string): never {
   redirect(path, RedirectType.replace);
 }
-type Run = (ownerId: string, id: string) => Promise<boolean>;
+
+// Go acts on the token's owner, so the owner the controller checked is not sent.
+type Run = (id: string) => Promise<boolean>;
 
 async function noteAction(formData: FormData, run: Run) {
   const state = await handleNoteAction(formData, {
     getMember: getCurrentMemberUser,
-    run,
-  });
-  if (state.status === "success") revalidateNotes();
-  return state;
-}
-
-async function emptyAction(run: (ownerId: string) => Promise<number>) {
-  const state = await handleEmptyTrash({
-    getMember: getCurrentMemberUser,
-    run,
+    run: (_ownerId, id) => run(id),
   });
   if (state.status === "success") revalidateNotes();
   return state;
@@ -41,9 +34,7 @@ export async function trashLearningEntryAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const state = await noteAction(formData, (ownerId, id) =>
-    learningUseCases.trashLearningEntry.execute(ownerId, id),
-  );
+  const state = await noteAction(formData, (id) => learningNotes.trash(id));
   if (state.status === "success")
     redirectAfterTrash(trashedRedirectPath("/logs", formData));
   return state;
@@ -53,22 +44,21 @@ export async function restoreLearningEntryAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  return noteAction(formData, (ownerId, id) =>
-    learningUseCases.restoreLearningEntry.execute(ownerId, id),
-  );
+  return noteAction(formData, (id) => learningNotes.restore(id));
 }
 
 export async function purgeLearningEntryAction(
   _previous: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  return noteAction(formData, (ownerId, id) =>
-    learningUseCases.purgeLearningEntry.execute(ownerId, id),
-  );
+  return noteAction(formData, (id) => learningNotes.purge(id));
 }
 
 export async function emptyLearningTrashAction(): Promise<ActionState> {
-  return emptyAction((ownerId) =>
-    learningUseCases.emptyLearningTrash.execute(ownerId),
-  );
+  const state = await handleEmptyTrash({
+    getMember: getCurrentMemberUser,
+    run: () => learningNotes.emptyTrash(),
+  });
+  if (state.status === "success") revalidateNotes();
+  return state;
 }

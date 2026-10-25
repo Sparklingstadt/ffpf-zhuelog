@@ -9,7 +9,7 @@ type Props = {
   eyebrow: string;
   title: ReactNode;
   description?: ReactNode;
-  // Links and buttons on the right: back links, the trash, sign-out.
+  // Links and buttons for this page on the right: back links, the trash.
   actions: ReactNode;
 };
 

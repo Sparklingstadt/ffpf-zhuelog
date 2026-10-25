@@ -57,3 +57,56 @@ test("application ports never expose HTTP types", () => {
     .map(({ path }) => path);
   assert.deepEqual(http, []);
 });
+
+// The web reaches data only through the Go API: no Prisma, no Postgres
+// driver and no Auth.js anywhere in src (the generated client aside).
+const forbiddenModule = (specifier: string) =>
+  /^@\/generated\/prisma(\/|$)/.test(specifier) ||
+  /(^|\/)generated\/prisma(\/|$)/.test(specifier) ||
+  /^@prisma\//.test(specifier) ||
+  /^pg(\/|$)/.test(specifier) ||
+  /^next-auth(\/|$)/.test(specifier);
+
+const moduleSpecifiers = (text: string) =>
+  [
+    ...text.matchAll(
+      /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\brequire\s*\(\s*)["']([^"']+)["']/g,
+    ),
+  ].map((match) => match[1]!);
+
+test("nothing in src imports Prisma, pg or next-auth", () => {
+  const files = readdirSync(root, { recursive: true, encoding: "utf8" })
+    .map((path) => path.replaceAll("\\", "/"))
+    .filter((path) => /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(path))
+    .filter((path) => !path.startsWith("generated/"));
+  assert.ok(files.length > 0);
+  const offenders = files.flatMap((path) =>
+    moduleSpecifiers(readFileSync(`${root}${path}`, "utf8"))
+      .filter(forbiddenModule)
+      .map((specifier) => `${path}: ${specifier}`),
+  );
+  assert.deepEqual(offenders, []);
+});
+
+test("the import check catches each forbidden form", () => {
+  const sample = [
+    'import { PrismaClient } from "@/generated/prisma/client";',
+    'import { PrismaPg } from "@prisma/adapter-pg";',
+    'import type { Pool } from "pg";',
+    'import NextAuth from "next-auth";',
+    'export { auth } from "next-auth/react";',
+    'const m = await import("../generated/prisma/client");',
+    'import "pg";',
+    'import { pgTable } from "pgx";',
+    'import { x } from "@/infrastructure/go-api/client";',
+  ].join("\n");
+  assert.deepEqual(moduleSpecifiers(sample).filter(forbiddenModule), [
+    "@/generated/prisma/client",
+    "@prisma/adapter-pg",
+    "pg",
+    "next-auth",
+    "next-auth/react",
+    "../generated/prisma/client",
+    "pg",
+  ]);
+});

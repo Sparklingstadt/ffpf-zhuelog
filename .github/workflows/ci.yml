@@ -10,16 +10,14 @@ permissions:
 
 jobs:
   verify:
-    # The engines range: 24 is the Vercel runtime, 26 is the next one (and local dev).
+    # engines is 24.x, the Vercel runtime (Vercel does not offer Node 26 yet).
     strategy:
       fail-fast: false
       matrix:
-        node: [24, 26]
+        node: [24]
     name: verify (${{ matrix.node }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      DATABASE_URL: postgresql://zhuelog:zhuelog@127.0.0.1:5432/zhuelog?schema=public
     steps:
       - uses: actions/checkout@v7
         with:
@@ -29,6 +27,11 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: pnpm
+      # test:unit also runs the Go API tests (DB tests skip without API_TEST_DATABASE_URL).
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: services/api/go.mod
+          cache-dependency-path: services/api/go.sum
       - run: pnpm install --frozen-lockfile
       - run: pnpm audit
       - run: pnpm run typecheck
@@ -36,11 +39,25 @@ jobs:
       - run: pnpm run test:unit
       - run: pnpm run build
 
-  e2e:
+  go:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      DATABASE_URL: postgresql://zhuelog_e2e:local-e2e-only@127.0.0.1:55439/zhuelog_e2e
+      DATABASE_URL: postgresql://zhuelog_api_test:zhuelog_api_test@127.0.0.1:5432/zhuelog_api_test
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: zhuelog_api_test
+          POSTGRES_PASSWORD: zhuelog_api_test
+          POSTGRES_DB: zhuelog_api_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U zhuelog_api_test -d zhuelog_api_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v7
         with:
@@ -50,6 +67,38 @@ jobs:
         with:
           node-version: 24 # the Vercel runtime
           cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # The schema is owned by Prisma; Go never runs DDL.
+      - run: pnpm exec prisma migrate deploy
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: services/api/go.mod
+          cache-dependency-path: services/api/go.sum
+      - run: go vet ./...
+        working-directory: services/api
+      - run: go test -race ./...
+        working-directory: services/api
+        env:
+          API_TEST_DATABASE_URL: ${{ env.DATABASE_URL }}
+
+  e2e:
+    # The web signs in and reads data through the Go API, which e2e/server.ts
+    # builds and starts. The database URL is fixed in e2e/environment.ts.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24 # the Vercel runtime
+          cache: pnpm
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: services/api/go.mod
+          cache-dependency-path: services/api/go.sum
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm run test:e2e

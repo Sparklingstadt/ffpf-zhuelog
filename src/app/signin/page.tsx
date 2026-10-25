@@ -33,6 +33,7 @@ import {
 } from "@/presentation/components/ui/card";
 import { Separator } from "@/presentation/components/ui/separator";
 import { getSafeCallbackPath } from "@/presentation/http/safe-callback-path";
+import { AppHeader } from "@/presentation/components/layout/app-header";
 
 const errorMessages: Record<string, string> = {
   CredentialsSignin: "IDまたはパスワードが違うか、一時的にロックされています。",
@@ -65,108 +66,111 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   const showPasswordChangedNotice = params.notice === "password-changed";
 
   return (
-    <main className="flex flex-1 items-center justify-center px-4 py-8 sm:py-12">
-      <Card className="w-full max-w-md shadow-lg">
-        <CardHeader className="space-y-4 text-center">
-          <div className="mx-auto flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <Languages className="size-6" />
-          </div>
-          <div className="space-y-2">
-            <Badge variant="secondary" className="gap-1.5">
-              <ShieldCheck className="size-3.5" /> 管理者 / メンバー / ゲスト
-            </Badge>
-            <CardTitle className="text-2xl">学习録にログイン</CardTitle>
-            <CardDescription>
-              学習ノートはログインしたユーザーごとの記録です。
-            </CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {errorMessage ? (
-            <Alert variant="destructive">
-              <LockKeyhole />
-              <AlertTitle>ログインできませんでした</AlertTitle>
-              <AlertDescription>{errorMessage}</AlertDescription>
-            </Alert>
-          ) : null}
-
-          {showPasswordChangedNotice ? (
-            <Alert>
-              <KeyRound />
-              <AlertDescription>
-                パスワードを変更しました。新しいパスワードでログインしてください。
-              </AlertDescription>
-            </Alert>
-          ) : null}
-
-          {!isConfigured ? (
-            <Alert>
-              <LockKeyhole />
-              <AlertTitle>OAuth設定が必要です</AlertTitle>
-              <AlertDescription>
-                GitHubでのログインは現在利用できません。READMEに従ってGitHub
-                OAuth Appと許可ユーザーを設定してください。
-              </AlertDescription>
-            </Alert>
-          ) : null}
-
-          <form
-            action={signInWithPasswordAction.bind(null, callbackPath)}
-            className="space-y-3"
-          >
-            <div className="space-y-2">
-              <Label htmlFor="loginId">ログインID</Label>
-              <Input
-                id="loginId"
-                name="loginId"
-                type="text"
-                autoComplete="username"
-                autoCapitalize="none"
-                spellCheck={false}
-                required
-              />
+    <>
+      <AppHeader />
+      <main className="flex flex-1 items-center justify-center px-4 py-8 sm:py-12">
+        <Card className="w-full max-w-md shadow-lg">
+          <CardHeader className="space-y-4 text-center">
+            <div className="mx-auto flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+              <Languages className="size-6" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">パスワード</Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-              />
+              <Badge variant="secondary" className="gap-1.5">
+                <ShieldCheck className="size-3.5" /> 管理者 / メンバー / ゲスト
+              </Badge>
+              <CardTitle className="text-2xl">学习録にログイン</CardTitle>
+              <CardDescription>
+                学習ノートはログインしたユーザーごとの記録です。
+              </CardDescription>
             </div>
-            <Button type="submit" className="w-full">
-              <KeyRound /> IDとパスワードでログイン
-            </Button>
-          </form>
-          <div className="flex items-center gap-3" aria-hidden="true">
-            <Separator className="flex-1" />
-            <span className="text-xs text-muted-foreground">または</span>
-            <Separator className="flex-1" />
-          </div>
-          <form action={signInWithGitHubAction.bind(null, callbackPath)}>
-            <Button type="submit" className="w-full" disabled={!isConfigured}>
-              <CircleUserRound /> GitHubでログイン
-            </Button>
-          </form>
-          <div className="flex items-center gap-3" aria-hidden="true">
-            <Separator className="flex-1" />
-            <span className="text-xs text-muted-foreground">または</span>
-            <Separator className="flex-1" />
-          </div>
-          <form action={signInAsGuestAction.bind(null, callbackPath)}>
-            <Button type="submit" className="w-full" variant="outline">
-              <Eye /> ゲストとして使う
-            </Button>
-          </form>
-          <p className="text-center text-xs leading-5 text-muted-foreground">
-            ゲストは学習ノート・CSVインポートを利用できません。
-            GitHub認証ではユーザー名・表示名・メールアドレス・プロフィール画像が利用されます。
-            IDとパスワードのアカウントは管理者が発行します。
-          </p>
-        </CardContent>
-      </Card>
-    </main>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {errorMessage ? (
+              <Alert variant="destructive">
+                <LockKeyhole />
+                <AlertTitle>ログインできませんでした</AlertTitle>
+                <AlertDescription>{errorMessage}</AlertDescription>
+              </Alert>
+            ) : null}
+
+            {showPasswordChangedNotice ? (
+              <Alert>
+                <KeyRound />
+                <AlertDescription>
+                  パスワードを変更しました。新しいパスワードでログインしてください。
+                </AlertDescription>
+              </Alert>
+            ) : null}
+
+            {!isConfigured ? (
+              <Alert>
+                <LockKeyhole />
+                <AlertTitle>OAuth設定が必要です</AlertTitle>
+                <AlertDescription>
+                  GitHubでのログインは現在利用できません。READMEに従ってGitHub
+                  OAuth Appと許可ユーザーを設定してください。
+                </AlertDescription>
+              </Alert>
+            ) : null}
+
+            <form
+              action={signInWithPasswordAction.bind(null, callbackPath)}
+              className="space-y-3"
+            >
+              <div className="space-y-2">
+                <Label htmlFor="loginId">ログインID</Label>
+                <Input
+                  id="loginId"
+                  name="loginId"
+                  type="text"
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">パスワード</Label>
+                <Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                />
+              </div>
+              <Button type="submit" className="w-full">
+                <KeyRound /> IDとパスワードでログイン
+              </Button>
+            </form>
+            <div className="flex items-center gap-3" aria-hidden="true">
+              <Separator className="flex-1" />
+              <span className="text-xs text-muted-foreground">または</span>
+              <Separator className="flex-1" />
+            </div>
+            <form action={signInWithGitHubAction.bind(null, callbackPath)}>
+              <Button type="submit" className="w-full" disabled={!isConfigured}>
+                <CircleUserRound /> GitHubでログイン
+              </Button>
+            </form>
+            <div className="flex items-center gap-3" aria-hidden="true">
+              <Separator className="flex-1" />
+              <span className="text-xs text-muted-foreground">または</span>
+              <Separator className="flex-1" />
+            </div>
+            <form action={signInAsGuestAction.bind(null, callbackPath)}>
+              <Button type="submit" className="w-full" variant="outline">
+                <Eye /> ゲストとして使う
+              </Button>
+            </form>
+            <p className="text-center text-xs leading-5 text-muted-foreground">
+              ゲストは学習ノート・CSVインポートを利用できません。
+              GitHub認証ではユーザー名・表示名・メールアドレス・プロフィール画像が利用されます。
+              IDとパスワードのアカウントは管理者が発行します。
+            </p>
+          </CardContent>
+        </Card>
+      </main>
+    </>
   );
 }

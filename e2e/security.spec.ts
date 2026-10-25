@@ -1,6 +1,12 @@
-import { encode } from "next-auth/jwt";
-import { asAdmin, asGuest, expect, test, upload } from "./fixtures";
-import { authSecret, baseURL, cookieName } from "./environment";
+import {
+  addAdminSession,
+  asAdmin,
+  asGuest,
+  expect,
+  test,
+  upload,
+} from "./fixtures";
+import { baseURL, cookieName } from "./environment";
 
 test("nonce CSP is active, rotates, blocks injected scripts and retains working hydration", async ({
   page,
@@ -28,9 +34,7 @@ test("nonce CSP is active, rotates, blocks injected scripts and retains working 
     "yes",
   );
   await page.getByRole("button", { name: "ゲストとして使う" }).click();
-  await expect(
-    page.getByText("ゲスト（自分のAPIキーでの添削のみ）"),
-  ).toBeVisible();
+  await expect(page.getByText("ゲスト", { exact: true })).toBeVisible();
 });
 
 test("revoked admin JWT cannot access pages or import actions", async ({
@@ -39,22 +43,10 @@ test("revoked admin JWT cannot access pages or import actions", async ({
   db,
 }) => {
   await asAdmin(context);
-  await page.goto("/");
+  await page.goto("/import");
   await page.waitForLoadState("networkidle");
-  const value = await encode({
-    secret: authSecret(),
-    salt: cookieName,
-    maxAge: 3600,
-    token: {
-      sub: "removed",
-      name: "Removed",
-      role: "admin",
-      githubLogin: "removed",
-    },
-  });
-  await context.addCookies([
-    { name: cookieName, value, url: baseURL, httpOnly: true, sameSite: "Lax" },
-  ]);
+  // Validly signed, but for an admin who is not on the allowlist.
+  await addAdminSession(context, { githubId: "removed", login: "removed" });
   await upload(page, "原文,添削,pinyin");
   await expect(
     page.getByText(
@@ -73,13 +65,12 @@ test("stored CSV markup renders as text and huge log ordinals return 404", async
   context,
 }) => {
   await asAdmin(context);
-  await page.goto("/");
   await upload(
     page,
     "<script>document.documentElement.dataset.injected='yes'</script>,添削,pinyin,<img src=x onerror=alert(1)>",
   );
   await expect(page.getByText("1件の学習文を登録しました。")).toBeVisible();
-  await page.reload();
+  await page.goto("/");
   await expect(page.locator("details script, details img")).toHaveCount(0);
   await expect(page.locator("html")).not.toHaveAttribute(
     "data-injected",

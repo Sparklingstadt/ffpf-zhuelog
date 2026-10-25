@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ScryptPasswordHasher } from "../src/infrastructure/auth/scrypt-password-hasher";
+import { ScryptPasswordHasher } from "../scripts/lib/scrypt-password-hasher";
 
 const hasher = new ScryptPasswordHasher();
 
@@ -37,30 +37,4 @@ test("verify refuses stored parameters that would exhaust memory", async () => {
   const [, , r, p, salt, key] = stored.split(":");
   const hostile = `scrypt:${2 ** 24}:${r}:${p}:${salt}:${key}`;
   assert.equal(await hasher.verify("correct horse battery", hostile), false);
-});
-
-test("generate returns a 20 character url-safe password", () => {
-  const password = hasher.generate();
-  assert.match(password, /^[\w-]{20}$/);
-  assert.notEqual(password, hasher.generate());
-});
-
-test("simulateVerify resolves", async () => {
-  await assert.doesNotReject(hasher.simulateVerify("x"));
-  await assert.doesNotReject(hasher.simulateVerify("y"));
-});
-
-test("simulateVerify retries after the cached dummy hash failed", async () => {
-  class FailsOnce extends ScryptPasswordHasher {
-    calls = 0;
-    override async hash(password: string) {
-      this.calls += 1;
-      if (this.calls === 1) throw new Error("transient");
-      return super.hash(password);
-    }
-  }
-  const flaky = new FailsOnce();
-  await assert.rejects(flaky.simulateVerify("x"), /transient/);
-  await assert.doesNotReject(flaky.simulateVerify("x"));
-  assert.equal(flaky.calls, 2);
 });

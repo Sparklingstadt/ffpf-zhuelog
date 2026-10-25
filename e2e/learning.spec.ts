@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 import {
   adminOwnerId,
   asAdmin,
@@ -8,7 +10,14 @@ import {
 } from "./fixtures";
 
 test("unauthenticated pages redirect to signin", async ({ page }) => {
-  for (const path of ["/", "/logs", "/logs/2026/9/20", "/logs/2026/9/20/1"]) {
+  for (const path of [
+    "/",
+    "/logs",
+    "/logs/2026/9/20",
+    "/logs/2026/9/20/1",
+    "/import",
+    "/export",
+  ]) {
     await page.goto(path);
     await expect(page).toHaveURL(/\/signin(?:\?|$)/);
     await expect(
@@ -36,7 +45,10 @@ test("guest sees no notes and no note tools", async ({ page, db }) => {
   await expect(page.getByText("まだ学習文がありません")).toHaveCount(0);
   await expect(page.getByLabel("CSVファイル", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "日付から見る" })).toHaveCount(0);
-  for (const path of ["/logs", "/logs/2026/9/20"]) {
+  await expect(page.getByRole("link", { name: "CSVをインポート" })).toHaveCount(
+    0,
+  );
+  for (const path of ["/logs", "/logs/2026/9/20", "/import", "/export"]) {
     await page.goto(path);
     await expect(page).toHaveURL(/\/$/);
   }
@@ -59,7 +71,7 @@ test("CSV persists variable hints, quoted fields and survives reload", async ({
   db,
 }) => {
   await asAdmin(context);
-  await page.goto("/");
+  await page.goto("/import");
   await expect(
     page.getByRole("heading", { name: "対応するCSV形式" }),
   ).toBeVisible();
@@ -68,7 +80,7 @@ test("CSV persists variable hints, quoted fields and survives reload", async ({
     '\uFEFF最初の文,添削後の文,ピン音,ヒント1,ヒント2\n"最初の文A","添削A","pīn,yīn","引用符""のヒント","複数行\nヒント"\n最初の文B,添削B,pinyin\n最初の文C,添削C,pinyin,ヒントC,,ヒントD',
   );
   await expect(page.getByText("3件の学習文を登録しました。")).toBeVisible();
-  await page.reload();
+  await page.goto("/");
   await expect(page.locator("details")).toHaveCount(3);
   await expect(page.getByText("pīn,yīn", { exact: true })).toBeVisible();
   await expect(
@@ -90,6 +102,65 @@ test("CSV persists variable hints, quoted fields and survives reload", async ({
   await expect(card.getByText("添削A", { exact: true })).toBeVisible();
 });
 
+test("exports the selected notes as a CSV the import reads back", async ({
+  context,
+  page,
+  db,
+}) => {
+  await asAdmin(context);
+  await upload(
+    page,
+    '最初の文A,添削A,pinyin A,"ヒント,1",ヒント2\n"引用""B",添削B,pinyin B\n最初の文C,添削C,pinyin C',
+  );
+  await expect(page.getByText("3件の学習文を登録しました。")).toBeVisible();
+
+  await page.goto("/");
+  await page.getByRole("link", { name: "CSVでエクスポート" }).click();
+  await expect(page).toHaveURL(/\/export$/);
+  const download = page.getByRole("button", { name: "CSVをダウンロード" });
+  await expect(download).toBeDisabled();
+  await expect(page.getByText("0 / 3件を選択中")).toBeVisible();
+
+  await page.getByRole("checkbox", { name: /添削A/ }).check();
+  await page.getByRole("checkbox", { name: /添削B/ }).check();
+  await expect(page.getByText("2 / 3件を選択中")).toBeVisible();
+  const [file] = await Promise.all([
+    page.waitForEvent("download"),
+    download.click(),
+  ]);
+  expect(file.suggestedFilename()).toMatch(/^xuexilu-\d{4}-\d{2}-\d{2}\.csv$/);
+  const text = (await readFile(await file.path())).toString("utf8");
+  // A BOM for Excel, the import's header, then one row per selected note.
+  // Notes from one import share a time, so their order is not checked.
+  expect(text.startsWith("\uFEFF")).toBe(true);
+  const [header, ...rows] = text.slice(1).split("\r\n");
+  expect(header).toBe('"最初の文","添削後の文","ピン音","ヒント1","ヒント2"');
+  expect(rows.sort()).toEqual([
+    "",
+    '"引用""B","添削B","pinyin B"',
+    '"最初の文A","添削A","pinyin A","ヒント,1","ヒント2"',
+  ]);
+
+  // The file imports back as the same two notes.
+  await upload(page, text, file.suggestedFilename());
+  await expect(page.getByText("2件の学習文を登録しました。")).toBeVisible();
+  expect(
+    (
+      await db.query(
+        'SELECT "originalText" AS text, count(*)::int AS n FROM "LearningEntry" GROUP BY 1 ORDER BY 1',
+      )
+    ).rows,
+  ).toEqual([
+    { text: '引用"B', n: 2 },
+    { text: "最初の文A", n: 2 },
+    { text: "最初の文C", n: 1 },
+  ]);
+
+  await page.goto("/export");
+  await page.getByText("すべて選択").click();
+  await expect(page.getByText("5 / 5件を選択中")).toBeVisible();
+});
+
 for (const [name, csv, error] of [
   ["missing columns", "原文,添削", "3列未満"],
   ["missing required value", "原文,,pinyin", "必須"],
@@ -100,7 +171,6 @@ for (const [name, csv, error] of [
 ]) {
   test(`invalid CSV: ${name} writes nothing`, async ({ context, page, db }) => {
     await asAdmin(context);
-    await page.goto("/");
     await upload(page, csv);
     await expect(page.getByText("インポートできませんでした")).toBeVisible();
     await expect(
@@ -119,10 +189,10 @@ test("stale admin form is rejected after switching to guest", async ({
   db,
 }) => {
   await asAdmin(context);
-  await page.goto("/");
+  await page.goto("/import");
   await expect(page.getByLabel("CSVファイル", { exact: true })).toBeEnabled();
   // Drain initial prefetch responses before replacing the shared session;
-  // Auth.js proxy responses refresh cookies, including in-flight requests.
+  // proxy responses refresh cookies, including in-flight requests.
   await page.waitForLoadState("networkidle");
   await context.clearCookies();
   const guestTab = await context.newPage();
@@ -141,11 +211,11 @@ test("stale admin form is rejected after switching to guest", async ({
 for (const [name, bytes, error] of [
   ["empty.csv", 0, "CSVファイルを選択"],
   ["wrong.txt", 10, "拡張子が.csv"],
-  ["large.csv", 5 * 1024 * 1024 + 1, "5MB以下"],
+  ["large.csv", 4 * 1024 * 1024 + 1, "4MB以下"],
 ] as const) {
   test(`rejects upload ${name}`, async ({ page, context, db }) => {
     await asAdmin(context);
-    await page.goto("/");
+    await page.goto("/import");
     await page.getByLabel("CSVファイル", { exact: true }).setInputFiles({
       name,
       mimeType: "text/csv",
