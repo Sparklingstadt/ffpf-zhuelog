@@ -11,12 +11,3 @@ allowBuilds:
   "lefthook": true
   "prisma": true
   "unrs-resolver": true
-auditConfig:
-  ignoreGhsas:
-    # braces <=3.0.3: 修正版が未公開。shadcn CLI と eslint-config-next 経由の
-    # 開発時のみの依存で、アプリの実行時には読み込まれない。修正版が出たら削除する。
-    - GHSA-vfj7-8cjw-p6xm
-    # sprintf-js <=1.1.3: 修正版が未公開。VuePress（docs-site）の gray-matter >
-    # js-yaml@3 > argparse 経由の開発時のみの依存で、argparse は js-yaml の CLI
-    # でしか使われず、ドキュメントのビルドでも呼ばれない。修正版が出たら削除する。
-    - GHSA-hp3w-g68c-fv3c
