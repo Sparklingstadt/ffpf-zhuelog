@@ -36,6 +36,18 @@ export function isSafeGoApiUrl(raw: string): boolean {
   );
 }
 
+// FFPF ID sign-in on the web needs the portal's issuer (to build the
+// authorize URL) and this service's client id; the secret stays with the Go
+// API. Without both, the FFPF ID button is not shown. The issuer must be
+// HTTPS unless it is this machine (local development and e2e).
+export function ffpfIdConfig():
+  { issuer: string; clientId: string } | undefined {
+  const issuer = process.env.FFPF_ID_ISSUER?.trim().replace(/\/+$/, "");
+  const clientId = process.env.FFPF_ID_CLIENT_ID?.trim();
+  if (!issuer || !clientId || !isSafeGoApiUrl(issuer)) return undefined;
+  return { issuer, clientId };
+}
+
 // Link to add the LINE official account as a friend. It is shown as a link
 // on the page, so only an https:// URL is used; anything else is ignored.
 export function lineAddFriendUrl(): string | undefined {

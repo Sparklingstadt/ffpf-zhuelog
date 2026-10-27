@@ -15,6 +15,7 @@ import {
   readAccessToken,
   readActAsCookie,
   signInAsGuestViaGo,
+  signInWithFfpfViaGo,
   signInWithGitHubViaGo,
   signInWithPasswordViaGo,
   signOutViaGo,
@@ -66,6 +67,10 @@ export async function getRecordOwner(requested: string | undefined): Promise<{
 
 export async function signInWithGitHub(redirectTo: string) {
   await signInWithGitHubViaGo(redirectTo);
+}
+
+export async function signInWithFfpf(redirectTo: string) {
+  await signInWithFfpfViaGo(redirectTo);
 }
 
 export async function signInAsGuest(redirectTo: string) {
