@@ -412,6 +412,11 @@ func TestLoadConfigFFPFIssuer(t *testing.T) {
 		"https://":                    false,
 		"https://u:p@portal.example":  false,
 		"portal.ffpf.example":         false,
+		"https://portal.example/?x=1": false,
+		"https://portal.example?":     false,
+		"https://portal.example/#f":   false,
+		"https://portal.example#":     false,
+		"https://portal.example/id":   true,
 	} {
 		t.Run(issuer, func(t *testing.T) {
 			env := validEnv()

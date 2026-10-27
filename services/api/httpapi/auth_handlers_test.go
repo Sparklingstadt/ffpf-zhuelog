@@ -113,6 +113,98 @@ func TestLoginGitHubHandler(t *testing.T) {
 	}
 }
 
+func TestLoginFFPFHandler(t *testing.T) {
+	const valid = `{"code":"c1","codeVerifier":"v1","redirectUri":"https://zl.example/cb","nonce":"n1"}`
+
+	t.Run("success passes the fields through", func(t *testing.T) {
+		var got [4]string
+		a := &fakeAuth{ffpf: func(_ context.Context, code, verifier, redirectURI, nonce string) (auth.TokenPair, error) {
+			got = [4]string{code, verifier, redirectURI, nonce}
+			return testPair, nil
+		}}
+		h, _ := testRouter(t, a, fakePinger{}, nil)
+		w := do(h, http.MethodPost, "/v1/auth/ffpf", valid, nil)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, body %q", w.Code, w.Body.String())
+		}
+		wantPair(t, w.Body.Bytes())
+		if w.Header().Get("Cache-Control") != "no-store" {
+			t.Fatal("missing Cache-Control: no-store")
+		}
+		if want := [4]string{"c1", "v1", "https://zl.example/cb", "n1"}; got != want {
+			t.Fatalf("service got %q, want %q", got, want)
+		}
+	})
+
+	// The route is public: a guest's (or any) bearer token is ignored, not
+	// answered with 403.
+	t.Run("guest token is ignored", func(t *testing.T) {
+		a := &fakeAuth{
+			ffpf: func(context.Context, string, string, string, string) (auth.TokenPair, error) { return testPair, nil },
+			authenticate: func(context.Context, string) (auth.Principal, error) {
+				return auth.Principal{OwnerID: auth.GuestOwnerID, Role: auth.RoleGuest}, nil
+			},
+		}
+		h, _ := testRouter(t, a, fakePinger{}, nil)
+		w := do(h, http.MethodPost, "/v1/auth/ffpf", valid, authHeader)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, body %q", w.Code, w.Body.String())
+		}
+		wantPair(t, w.Body.Bytes())
+	})
+
+	bad := map[string]string{
+		"unknown field":    `{"code":"c","codeVerifier":"v","redirectUri":"r","nonce":"n","extra":1}`,
+		"spec field name":  `{"code":"c","verifier":"v","redirectUri":"r","nonce":"n"}`,
+		"invalid json":     `{"code":`,
+		"empty body":       ``,
+		"missing code":     `{"codeVerifier":"v","redirectUri":"r","nonce":"n"}`,
+		"empty code":       `{"code":"","codeVerifier":"v","redirectUri":"r","nonce":"n"}`,
+		"empty verifier":   `{"code":"c","codeVerifier":"","redirectUri":"r","nonce":"n"}`,
+		"empty redirect":   `{"code":"c","codeVerifier":"v","redirectUri":"","nonce":"n"}`,
+		"missing nonce":    `{"code":"c","codeVerifier":"v","redirectUri":"r"}`,
+		"empty nonce":      `{"code":"c","codeVerifier":"v","redirectUri":"r","nonce":""}`,
+		"null nonce":       `{"code":"c","codeVerifier":"v","redirectUri":"r","nonce":null}`,
+		"wrong type":       `{"code":"c","codeVerifier":"v","redirectUri":"r","nonce":1}`,
+		"trailing data":    valid + ` {}`,
+		"trailing garbage": valid + `x`,
+		"array":            `[]`,
+		"null":             `null`,
+	}
+	for name, body := range bad {
+		t.Run("400 "+name, func(t *testing.T) {
+			h, _ := testRouter(t, &fakeAuth{}, fakePinger{}, nil) // service must not be called
+			wantError(t, do(h, http.MethodPost, "/v1/auth/ffpf", body, nil), http.StatusBadRequest, "invalid_request")
+		})
+	}
+
+	errs := []struct {
+		name   string
+		err    error
+		status int
+		code   string
+	}{
+		{"unauthorized", auth.ErrUnauthorized, 401, "unauthorized"},
+		{"ffpf unavailable", auth.ErrFFPFUnavailable, 502, "ffpf_unavailable"},
+		{"wrapped ffpf unavailable", fmt.Errorf("exchange: %w", auth.ErrFFPFUnavailable), 502, "ffpf_unavailable"},
+		{"disabled", auth.ErrFFPFDisabled, 503, "unavailable"},
+		{"other", errors.New("db exploded"), 500, "internal"},
+	}
+	for _, tc := range errs {
+		t.Run(tc.name, func(t *testing.T) {
+			a := &fakeAuth{ffpf: func(context.Context, string, string, string, string) (auth.TokenPair, error) {
+				return auth.TokenPair{}, tc.err
+			}}
+			h, _ := testRouter(t, a, fakePinger{}, nil)
+			w := do(h, http.MethodPost, "/v1/auth/ffpf", valid, nil)
+			wantError(t, w, tc.status, tc.code)
+			if strings.Contains(w.Body.String(), "db exploded") {
+				t.Fatal("internal error detail leaked to the client")
+			}
+		})
+	}
+}
+
 func TestErrorMessagesAreJapanese(t *testing.T) {
 	cases := []struct {
 		err  error
@@ -122,6 +214,8 @@ func TestErrorMessagesAreJapanese(t *testing.T) {
 		{auth.ErrForbidden, "このアカウントは利用できません。"},
 		{auth.ErrThrottled, "しばらくしてから再度お試しください。"},
 		{auth.ErrGitHubUnavailable, "GitHub に接続できませんでした。"},
+		{auth.ErrFFPFUnavailable, "FFPF ID に接続できませんでした。"},
+		{auth.ErrFFPFDisabled, "サービスを利用できません。"},
 		{errors.New("x"), "サーバーでエラーが発生しました。"},
 	}
 	for _, tc := range cases {

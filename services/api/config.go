@@ -138,7 +138,7 @@ func LoadConfig(getenv func(string) string) (Config, error) {
 		return Config{}, errors.New("FFPF_ID_ISSUER, FFPF_ID_CLIENT_ID, FFPF_ID_CLIENT_SECRET and FFPF_ID_REDIRECT_URI must be set together")
 	}
 	if cfg.FFPFIssuer != "" && !validFFPFIssuer(cfg.FFPFIssuer) {
-		return Config{}, errors.New("FFPF_ID_ISSUER must be an https URL (http only for localhost or 127.0.0.1)")
+		return Config{}, errors.New("FFPF_ID_ISSUER must be an https URL without a query or fragment (http only for localhost or 127.0.0.1)")
 	}
 	if proxySecret := get("API_WEB_PROXY_SECRET"); proxySecret != "" {
 		if len(proxySecret) < minJWTSecretBytes {
@@ -177,8 +177,13 @@ func LoadConfig(getenv func(string) string) (Config, error) {
 
 // validFFPFIssuer reports whether issuer may be FFPF ID's issuer: an https URL
 // with a host and no credentials, or an http one on localhost or 127.0.0.1 for
-// local development. The client secret is sent there.
+// local development. The client secret is sent there. A query or fragment
+// (even an empty one) is refused: the endpoints are built by appending paths
+// to the issuer, and the ID token's iss must equal it exactly.
 func validFFPFIssuer(issuer string) bool {
+	if strings.ContainsAny(issuer, "?#") {
+		return false
+	}
 	u, err := url.Parse(issuer)
 	if err != nil || u.Host == "" || u.User != nil {
 		return false
