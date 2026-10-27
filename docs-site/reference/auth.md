@@ -73,7 +73,7 @@ FFPF ID（ffpf-portal の OpenID Connect）の認可コード（PKCE）でログ
 | `redirectUri`  | string | ○    | 認可に使ったリダイレクト URI。`FFPF_ID_REDIRECT_URI` と完全一致 |
 | `nonce`        | string | ○    | 認可リクエストの `nonce`。ID トークンの `nonce` と比べる        |
 
-**レスポンス** `200`：`/v1/auth/github` と同じ形。`ownerId` は `ffpf:<sub>`、`role` は `member` です。リフレッシュトークンの寿命は 30 日です。
+**レスポンス** `200`：`/v1/auth/github` と同じトークン一式（`accessToken`・`refreshToken`・`expiresIn`・`refreshExpiresIn`）で、`ownerId` や `role` の項目はありません。アクセストークンの `sub` が `ffpf:<sub>`、`role` が `member` です（`GET /v1/me` でも確かめられます）。リフレッシュトークンの寿命は 30 日です。
 
 portal の `/oauth/token` で `code` を交換し（client_secret_basic）、ID トークンを portal の JWKS で検証します（ES256・`iss`・`aud`・`exp`（60 秒の余裕）・`nonce`・`email_verified`・`sub` が `^[a-z0-9]{1,64}$`）。成功すると `FfpfAccount` を最新のメールアドレスと表示名（`name`。空ならメールアドレスの `@` の前）で作るか更新します。許可リストはありません。
 

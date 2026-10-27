@@ -77,7 +77,11 @@ DB への接続は、TLS で証明書まで検証します。ホストが `local
 
 ## 4. 本番の DB の確認
 
-Go API が使うテーブルは、Prisma のマイグレーションで本番の Neon に適用済みです（`ApiRefreshToken`、`SignInThrottle` など）。今後スキーマを変えるときは、main へマージする前に本番へ適用します（main は Web と Go API の両方の本番へ自動でデプロイされるため）。
+Go API が使うテーブルは、Prisma のマイグレーションで本番の Neon に適用済みです（`ApiRefreshToken`、`SignInThrottle` など）。マイグレーションは、Web の **本番ビルド** が自動で適用します。`vercel.json` の `buildCommand` が `scripts/vercel-build.sh` を動かし、`VERCEL_ENV=production` のときだけ `prisma migrate deploy` を実行してから `next build` します（Preview のビルドは本番と同じ DB を使うので、マイグレーションは当てません）。そのため、Web の Production には `DATABASE_URL` が必要です。無い・つながらない・DDL が失敗すると、本番の Web のデプロイが失敗します（失敗したビルドの本番は、前のバージョンのままです）。
+
+**マイグレーションの制約**: Web のデプロイで自動的に当たる一方、Go API は別のプロジェクトで、あとから手で（main をマージした後に）デプロイします。この間、DB のスキーマは新しく、動いている Go API は古いままです。そのため、マイグレーションは今動いている Go API とそのまま両立する形にします。足してよいのは、表の追加と、null を許す列（または既定値のある列）の追加だけです。列・表の削除や名前の変更、型の変更、NOT NULL の追加のような壊す変更は、2 段階に分けます（1 回目で新しい形を足して Go API を切り替え、2 回目のリリースで古い形を削除します）。
+
+マイグレーションが当たったことの確認と、自動で当たらなかったときの手動の適用は、次のとおりです。`migrate status` で未適用が無いこと（「Database schema is up to date!」）を確かめます。
 
 ```bash
 vercel env pull .env.production.local --environment=production --yes
@@ -121,7 +125,7 @@ Go API の Vercel プロジェクトには、`GITHUB_WEB_CLIENT_ID`・`GITHUB_WE
 - `AUTH_URL` は必ず設定し、利用者が開く Web の origin と同じにします。GitHub ログインの `redirect_uri` は、この origin から作ります。
 - Go API の `GITHUB_WEB_REDIRECT_URI` は、`<AUTH_URL の origin>/api/auth/callback/github/go` と **1 文字も違わず** 同じにします。違うと Go API が `401` を返し、GitHub ログインができません。そのため、URL が合わないプレビューのデプロイでは GitHub ログインは使えません（パスワードとゲストのログインは使えます）。
 - `AUTH_GITHUB_ID` と `GITHUB_WEB_CLIENT_ID` が別の OAuth App だと、GitHub が発行した `code` を Go API が交換できず、GitHub ログインが失敗します。
-- `AUTH_SECRET`・`AUTH_GITHUB_SECRET`・`AUTH_ALLOWED_GITHUB_IDS` は、Web では使いません。`DATABASE_URL` も Web の実行とビルドには要りません。ただし、マイグレーションの手順（`vercel env pull`）で本番の `DATABASE_URL` を取るのに使うので、Web のプロジェクトに残しておいて構いません。
+- `AUTH_SECRET`・`AUTH_GITHUB_SECRET`・`AUTH_ALLOWED_GITHUB_IDS` は、Web では使いません。`DATABASE_URL` は、Web の実行には要りませんが、**本番のビルド**が `prisma migrate deploy` に使うので、Web の Production には必ず残してください（「4. 本番の DB の確認」）。消すと本番の Web のデプロイが失敗します。
 
 LINE 連携を使うときは、Web の Vercel プロジェクトに、もう 1 つ次の値を入れます（無くても Web は動きます）。
 
@@ -202,7 +206,7 @@ LINE 連携を本番で使い始めるときは、次の順で行います。
 
 1. LINE Developers で、Messaging API のチャネルを用意します（以前のチャネルが残っていれば使えます）。**Webhook URL** を `https://ffpf-zhuelog-api.vercel.app/v1/line/webhook` にして、Webhook の利用をオンにします。「**応答メッセージ**」は **オフ** にします（オンのままだと、LINE の自動応答とこの API の返信が二重に届きます）。LINE の「検証」ボタンは、手順 5 で Go API をデプロイするまでは `404` で失敗します（まだ押さないでください）。
 2. Go API の Vercel プロジェクトの Production に、`LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`OPENAI_API_KEY`・`CRON_SECRET` を入れます。Web の Vercel プロジェクトには `LINE_ADD_FRIEND_URL` を入れます。
-3. **main にマージする前に**、本番の Neon にマイグレーション `20261023090000_add_line_link` を適用します（マージすると Web が自動でデプロイされ、Go API もそのすぐ後に手順 5 でデプロイするため、先に表がないと動きません。手順は「4. 本番の DB の確認」の `vercel env pull` と `migrate deploy`）。
+3. マイグレーション `20261023090000_add_line_link` は、main へのマージで Web の本番ビルドが自動で適用します（「4. 本番の DB の確認」）。マージの後、手順 5 で Go API をデプロイするまでに `migrate status` で適用済みを確かめます。自動で当たらなかったときだけ、`vercel env pull` と `migrate deploy` で手で当てます。
 4. main にマージします。
 5. Go API に main をデプロイします。今の Go API の Vercel プロジェクトは、Git からの自動デプロイが切れている（`createDeployments: disabled`）ので、マージしてもデプロイされません。**Deployments → Redeploy** は使いません（古いデプロイを作り直すだけで、マージ前のコードが出てしまいます）。次のどちらかで、main を明示して出します。
    - **Settings → Git** で Git からのデプロイを入れ直し、main をデプロイする。
@@ -225,7 +229,7 @@ LINE 連携を本番で使い始めるときは、次の順で行います。
 
 ### 切り替えの手順
 
-1. **マージの前に**、本番の Neon にマイグレーション `20261024090000_add_chat_conversations`（`ChatConversation` の追加）を当てます。
+1. マイグレーション `20261024090000_add_chat_conversations`（`ChatConversation` の追加）は、main へのマージで Web の本番ビルドが自動で当てます（「4. 本番の DB の確認」）。Go API をデプロイする前に `migrate status` で適用済みを確かめ、当たっていなければ手で当てます。
 2. **マージの前に**、Go API のプレビューのデプロイで `/chat` を開き、回答が少しずつ表示されること（最後にまとめて表示されないこと）を確かめます。Go は回答を 1 行ずつ `Flush` しますが、Vercel の Go の関数で途中の書き込みがそのまま届くかは、まだ本番で確かめていません。
 3. Go API の Vercel プロジェクトの Production に `OPENAI_API_KEY`（と、変えるなら `OPENAI_CHAT_MODEL`）を入れます。
 4. マージの後に、Go API のプロジェクトへ main を手でデプロイします（Git の自動デプロイは切っています）。Web は main への push で自動でデプロイされます。
@@ -243,7 +247,7 @@ FFPF ID（ffpf-portal が提供する OpenID Connect のプロバイダー）の
 ### 切り替えの手順
 
 1. ffpf-portal で `pnpm run oidc:client zhuelog` を実行し、シークレット（`secret=…`）とクライアントの JSON を作ります。JSON の `redirectUris` に `https://<Web のホスト>/api/auth/callback/ffpf` を入れて portal の `FFPF_OIDC_CLIENTS` に足し、portal を再デプロイします（詳しくは ffpf-portal の README）。
-2. **マージの前に**、本番の Neon にマイグレーション `20261027120000_add_ffpf_accounts` を当てます（「4. 本番の DB の確認」の `vercel env pull` と `migrate deploy`）。
+2. マイグレーション `20261027120000_add_ffpf_accounts`（`FfpfAccount` の追加）は、main へのマージで Web の本番ビルドが自動で当てます（「4. 本番の DB の確認」）。Go API をデプロイする前に `migrate status` で適用済みを確かめ、当たっていなければ手で当てます。表を足すだけなので、今の Go API とも両立します。
 3. Go API の Vercel プロジェクトの Production に `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID`・`FFPF_ID_CLIENT_SECRET`・`FFPF_ID_REDIRECT_URI` を入れます。`FFPF_ID_REDIRECT_URI` は、portal に登録した redirect URI と、`<AUTH_URL の origin>/api/auth/callback/ffpf` の両方に **1 文字も違わず** 合わせます。
 4. Web の Vercel プロジェクトに `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID` を入れます。
 5. マージの後に、Go API のプロジェクトへ main を手でデプロイします（Git の自動デプロイは切っています）。Web は main への push で自動でデプロイされます。
