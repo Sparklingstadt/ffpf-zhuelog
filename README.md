@@ -49,11 +49,11 @@ pnpm run dev
 
 ブラウザで <http://localhost:3000> を開き、ゲストか、サンプルの会員（`docs/api-local.md` の表）でログインします。GitHub ログインは本物の OAuth App が要るので、手元では使えません。
 
-`.env` の `GO_API_URL`・`API_WEB_PROXY_SECRET`・`AUTH_URL`・`AUTH_GITHUB_ID` が Web の設定です。`DATABASE_URL` は Prisma のマイグレーションと seed だけが使います（`docker compose up -d` の開発用 DB）。
+`.env` の `GO_API_URL`・`API_WEB_PROXY_SECRET`・`AUTH_URL`・`AUTH_GITHUB_ID` が Web の設定です（FFPF ID を試すときは `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID` も）。`DATABASE_URL` は Prisma のマイグレーションと seed だけが使います（`docker compose up -d` の開発用 DB）。
 
 ## 認証・認可の設定
 
-ログインは Go API が行います。Web の Vercel プロジェクトに入れる値は `GO_API_URL`・`API_WEB_PROXY_SECRET`・`AUTH_URL`・`AUTH_GITHUB_ID` の 4 つです。Go API に入れる値も含めて、手順は [docs/api-deployment.md](docs/api-deployment.md) の「6. Web の設定」にあります。
+ログインは Go API が行います。Web の Vercel プロジェクトに入れる値は `GO_API_URL`・`API_WEB_PROXY_SECRET`・`AUTH_URL`・`AUTH_GITHUB_ID` の 4 つです（FFPF ID を使うときは、下の「FFPF ID でのログイン」の 2 つも）。Go API に入れる値も含めて、手順は [docs/api-deployment.md](docs/api-deployment.md) の「6. Web の設定」にあります。
 
 GitHubの **Settings → Developer settings → OAuth Apps** で、Web 用のOAuth Appを作成します。
 
@@ -64,23 +64,32 @@ Client ID は Web の `AUTH_GITHUB_ID` と Go API の `GITHUB_WEB_CLIENT_ID` に
 
 管理者の許可リストは、Go API の `AUTH_ALLOWED_GITHUB_IDS` です。GitHubユーザーの **数字のID** をカンマ区切りで並べます。IDは `https://api.github.com/users/<ログイン名>` の `id` で確認できます。ログイン名は使いません。ログイン名は変更でき、空いた名前を別人が取得できるためです。空の場合は安全側に倒し、すべてのGitHubユーザーを拒否します。
 
+### FFPF ID でのログイン
+
+ログイン画面の「FFPF IDでログイン」から、FFPF ID（ffpf-portal の OpenID Connect）のアカウントでメンバーとしてログインできます。任意の機能で、設定が無ければボタンは出ません。
+
+- portal で `pnpm run oidc:client zhuelog` を実行してクライアントを登録します（redirect URI は `https://本番ドメイン/api/auth/callback/ffpf`。手順は ffpf-portal の README）。
+- Web には `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID` を、Go API には `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID`・`FFPF_ID_CLIENT_SECRET`・`FFPF_ID_REDIRECT_URI` を入れます。Client Secret は Go API だけに入れます。
+- 本番 DB にマイグレーション `20261027120000_add_ffpf_accounts`（`FfpfAccount` の追加）が必要です。
+- 詳しい手順は [docs/api-deployment.md](docs/api-deployment.md) の「9. FFPF ID でのログイン」にあります。
+
 ### ロールとID・パスワードのアカウント
 
 ロールは4種類です。
 
 - **admin（管理者）**: GitHub認証で許可リストに載っているユーザー。自分の学習ノート、CSVインポートとアカウント管理を使えます。メンバーの学習ノートは、切り替え欄から閲覧のみで見られます。
-- **member（メンバー）**: ID・パスワードでログインするアカウント。自分の学習ノートとCSVインポートを使えます。CSVインポートは自分の学習ノートに追加されます。ほかのユーザーの記録は見られません。アカウント管理は使えません。
+- **member（メンバー）**: ID・パスワードでログインするアカウント、または FFPF ID でログインした人。自分の学習ノートとCSVインポートを使えます。CSVインポートは自分の学習ノートに追加されます。ほかのユーザーの記録は見られません。アカウント管理は使えません。
 - **guest（ゲスト）**: ログイン画面の「ゲストとして使う」。学習ノートはなく、`/` には案内だけが出ます。`/logs` と `/follow` は `/` に戻されます。
 - **revoked**: 許可リストから外れた管理者や、再設定・変更でセッションが失効したメンバー。どのページも使えず、ログイン画面に戻されます。
 
-memberのアカウントは、GitHub管理者が `/admin/accounts` で作ります。セルフ登録はありません。最初のアカウントも、まずGitHubで管理者としてログインして作成してください。
+ID・パスワードのmemberのアカウントは、GitHub管理者が `/admin/accounts` で作ります。セルフ登録はありません（FFPF ID のメンバーは、初めてログインしたときに作られます）。最初のアカウントも、まずGitHubで管理者としてログインして作成してください。
 
 - **作成・再設定**: ログインID（英小文字・数字・`.` `_` `-` の3〜32文字）と表示名を入力します。パスワードは12〜128文字で、空欄にすると自動生成します。パスワードは作成・再設定の直後に一度だけ画面に表示され、あとから確認できません。管理者から本人に別の経路で伝えてください。
-- **パスワード変更**: memberは、ヘッダーの「パスワード変更」（`/account/password`）から自分で変更できます。変更するとログアウトされ、新しいパスワードでログインし直します。
+- **パスワード変更**: memberは、ヘッダーの「パスワード変更」（`/account/password`）から自分で変更できます。変更するとログアウトされ、新しいパスワードでログインし直します。FFPF ID のメンバーには、この画面に FFPF ID のマイページへのリンクを出します（パスワードは portal で変えます）。
 - **試行回数の制限**: 接続元（IPアドレス。IPv6は /64 単位）ごとに数えます。同じ接続元から同じログインIDへ15分間に5回まで、ログインID全体で15分間に20回までです。超えると、その接続元からは15分間、正しいパスワードでもログインできません。アカウント単位ではロックしないので、ほかの場所からの失敗で本人が締め出されることはありません。接続元は Vercel が設定する `x-real-ip` / `x-forwarded-for` で判定し、Web が Go API に渡します。回数は Go API が DB のテーブル（`SignInThrottle`）で数えます。ログイン画面には、IDの有無や制限の状態を区別せず「IDまたはパスワードが違うか、一時的にロックされています。」とだけ表示します。パスワード変更画面の現在のパスワードも、アカウントごとに15分間5回までです。
 - **セッションの失効**: パスワードを再設定・変更すると、そのアカウントの既存のセッションは、すべて使えなくなります。セッションの有効性（`sessionVersion`）は、Go API がリクエストのたびにDBで確認します。
 - **パスワードの保存**: scrypt（N=2^15, r=8, p=1）でハッシュ化したものだけを保存します。平文はDBにもログにも残しません。
-- **記録の持ち主**: memberの学習ノートは、所有者 `password:<アカウントID>` に紐づきます。本人と管理者が見られます（詳細は「学習ノートの公開範囲」）。
+- **記録の持ち主**: memberの学習ノートは、所有者 `password:<アカウントID>`（FFPF ID のメンバーは `ffpf:<sub>`）に紐づきます。本人と管理者が見られます（詳細は「学習ノートの公開範囲」）。
 
 パスワードアカウントのために新しい環境変数は要りません。ただしDBマイグレーション `20261007090000_password_accounts`（`PasswordAccount` テーブルの追加）が必要です。本番へデプロイする前に、Vercelとリンク済みのmainのチェックアウトで、次の手順で本番DB（Neon）へ適用してください。`prisma.config.ts` は `.env` だけを読み込むので、`vercel env pull` だけでは本番の `DATABASE_URL` が使われません。`--environment=production` で取得したファイルを、`--env-file` で明示して渡します。
 
@@ -256,9 +265,10 @@ UTF-8のCSVを利用します。ヘッダー行は省略可能です。
 ## データ構造
 
 - `ImportBatch`: インポートしたファイル名・件数・日時
-- `LearningEntry`: 最初の文・添削後の文・ピン音・所有者（GitHubの数字のID、または `password:<アカウントID>`）
+- `LearningEntry`: 最初の文・添削後の文・ピン音・所有者（GitHubの数字のID、`password:<アカウントID>`、または `ffpf:<sub>`）
 - `Hint`: 学習文に属する可変個数のヒントと表示順
 - `PasswordAccount`: ID・パスワードのアカウント（ログインID・表示名・パスワードのハッシュ・`sessionVersion`）。`failedAttempts`・`lockedUntil` は旧ロック用で、今は使っていません
+- `FfpfAccount`: FFPF ID でログインしたメンバー（`sub`・メールアドレス・表示名・`sessionVersion`・最終ログイン日時）。ログインのたびに最新の値で更新します
 - `SignInThrottle`: ログイン試行回数の制限用のカウンター（キー・回数・期限）。Go API が使います
 
 インポートはファイル単位のトランザクションです。途中の行でエラーになった場合、そのファイルのデータは1件も保存されません。

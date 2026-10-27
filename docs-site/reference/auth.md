@@ -49,6 +49,46 @@ GitHub の認可コード（PKCE）でログインします。admin 用です。
 
 一致した方の GitHub OAuth App（モバイル用か Web 用）で認可コードを交換します。Web 用の callback は `https://<Web>/api/auth/callback/github/go` です。
 
+## POST /v1/auth/ffpf
+
+FFPF ID（ffpf-portal の OpenID Connect）の認可コード（PKCE）でログインします。会員用です。
+
+- 権限：公開
+
+**リクエスト**
+
+```json
+{
+  "code": "portal から受け取った認可コード",
+  "codeVerifier": "PKCE の code_verifier",
+  "redirectUri": "https://<Web>/api/auth/callback/ffpf",
+  "nonce": "認可リクエストに付けた nonce"
+}
+```
+
+| フィールド     | 型     | 必須 | 内容                                                            |
+| -------------- | ------ | ---- | --------------------------------------------------------------- |
+| `code`         | string | ○    | 認可コード                                                      |
+| `codeVerifier` | string | ○    | PKCE（S256）の `code_verifier`                                  |
+| `redirectUri`  | string | ○    | 認可に使ったリダイレクト URI。`FFPF_ID_REDIRECT_URI` と完全一致 |
+| `nonce`        | string | ○    | 認可リクエストの `nonce`。ID トークンの `nonce` と比べる        |
+
+**レスポンス** `200`：`/v1/auth/github` と同じ形。`ownerId` は `ffpf:<sub>`、`role` は `member` です。リフレッシュトークンの寿命は 30 日です。
+
+portal の `/oauth/token` で `code` を交換し（client_secret_basic）、ID トークンを portal の JWKS で検証します（ES256・`iss`・`aud`・`exp`（60 秒の余裕）・`nonce`・`email_verified`・`sub` が `^[a-z0-9]{1,64}$`）。成功すると `FfpfAccount` を最新のメールアドレスと表示名（`name`。空ならメールアドレスの `@` の前）で作るか更新します。許可リストはありません。
+
+**エラー**
+
+| HTTP | code               | 状況                                                                                                 |
+| ---- | ------------------ | ---------------------------------------------------------------------------------------------------- |
+| 400  | `invalid_request`  | JSON が不正、項目が空・無い・`null`、未知のフィールド                                                |
+| 401  | `unauthorized`     | `redirectUri` が一致しない、portal がコードや `codeVerifier` を拒否した、ID トークンの検証に失敗した |
+| 429  | `rate_limited`     | レート制限                                                                                           |
+| 502  | `ffpf_unavailable` | portal に届かない、タイムアウト（10 秒）、リダイレクト、5xx、JWKS が取れない                         |
+| 503  | `unavailable`      | API に FFPF ID の設定（`FFPF_ID_*`）が無い                                                           |
+
+Web の callback は `https://<Web>/api/auth/callback/ffpf` です。
+
 ## POST /v1/auth/guest
 
 ゲストとしてログインします。認証もログイン情報も要りません。
@@ -148,7 +188,7 @@ API に `API_WEB_PROXY_SECRET` を設定したときは、`X-Zhuelog-Proxy-Secre
 
 会員が自分のパスワードを変えます。Web の `ChangeOwnPassword` と同じ順に確かめます。
 
-- 権限：会員（admin は `403`）
+- 権限：パスワードの会員（admin と FFPF ID の会員は `403`）
 - `?user=`：不可（付けると `400`）
 
 **リクエスト**
@@ -169,7 +209,7 @@ API に `API_WEB_PROXY_SECRET` を設定したときは、`X-Zhuelog-Proxy-Secre
 
 確かめる順番：
 
-1. 会員であること（違えば `403 forbidden`「この操作は会員だけが利用できます。」）
+1. パスワードの会員であること（admin・FFPF ID の会員は `403 forbidden`「この操作は会員だけが利用できます。」）
 2. `newPassword` が UTF-16 の単位で 12〜128 文字であること（違えば `400 invalid_request`）
 3. `newPassword` と `confirmPassword` が一致すること（違えば `400 password_mismatch`）
 4. 試行を 1 回数えてから（アカウントごとに 15 分で 5 回まで）、`currentPassword` を確かめる。アカウントが無い・形式違い・試行が多すぎる・違うパスワードは、どれも `400 invalid_current_password`
@@ -180,14 +220,14 @@ API に `API_WEB_PROXY_SECRET` を設定したときは、`X-Zhuelog-Proxy-Secre
 
 **エラー**
 
-| HTTP | code                       | message                                                    |
-| ---- | -------------------------- | ---------------------------------------------------------- |
-| 400  | `invalid_request`          | 「パスワードは12〜128文字にしてください。」／JSON が不正   |
-| 400  | `password_mismatch`        | 「確認用のパスワードが一致しません。」                     |
-| 400  | `invalid_current_password` | 「現在のパスワードが違うか、一時的にロックされています。」 |
-| 401  | `unauthorized`             | トークンが無い・無効・失効                                 |
-| 403  | `forbidden`                | 「この操作は会員だけが利用できます。」：admin が呼んだ     |
-| 429  | `rate_limited`             | レート制限（認証より前に数える）                           |
+| HTTP | code                       | message                                                               |
+| ---- | -------------------------- | --------------------------------------------------------------------- |
+| 400  | `invalid_request`          | 「パスワードは12〜128文字にしてください。」／JSON が不正              |
+| 400  | `password_mismatch`        | 「確認用のパスワードが一致しません。」                                |
+| 400  | `invalid_current_password` | 「現在のパスワードが違うか、一時的にロックされています。」            |
+| 401  | `unauthorized`             | トークンが無い・無効・失効                                            |
+| 403  | `forbidden`                | 「この操作は会員だけが利用できます。」：admin・FFPF ID の会員が呼んだ |
+| 429  | `rate_limited`             | レート制限（認証より前に数える）                                      |
 
 ## GET /v1/me
 
@@ -212,9 +252,9 @@ API に `API_WEB_PROXY_SECRET` を設定したときは、`X-Zhuelog-Proxy-Secre
 | ------------- | ------ | ---------------------------------------------------------------------------------------------------------------- |
 | `ownerId`     | string | ノートの所有者 ID。ゲストは `guest`                                                                              |
 | `role`        | string | `admin`・`member`・`guest`                                                                                       |
-| `login`       | string | admin は GitHub のログイン名、会員は `loginId`、ゲストは `guest`                                                 |
-| `displayName` | string | 会員だけ。DB から読む。空のときは省く                                                                            |
-| `accountId`   | string | 会員だけ。`PasswordAccount` の `id`                                                                              |
+| `login`       | string | admin は GitHub のログイン名、パスワードの会員は `loginId`、FFPF ID の会員はメールアドレス、ゲストは `guest`     |
+| `displayName` | string | 会員だけ。DB（`PasswordAccount` か `FfpfAccount`）から読む。空のときは省く                                       |
+| `accountId`   | string | パスワードの会員だけ。`PasswordAccount` の `id`（FFPF ID の会員には付けない）                                    |
 | `actingAs`    | object | admin が [会員として操作](../guide/auth.md#会員として操作する) している間だけ。`{ownerId, loginId, displayName}` |
 
 `X-Zhuelog-Act-As` を付けたときは、`ownerId` が会員の `ownerId`、`role` が `admin`、`login` が admin の GitHub のログイン名になります。
@@ -234,9 +274,9 @@ API に `API_WEB_PROXY_SECRET` を設定したときは、`X-Zhuelog-Proxy-Secre
 
 **エラー**
 
-| HTTP | code              | 状況                                                                       |
-| ---- | ----------------- | -------------------------------------------------------------------------- |
-| 401  | `unauthorized`    | トークンが無い・無効・失効。会員のアカウントが消えた、パスワードが変わった |
-| 403  | `forbidden`       | admin が許可リストから外れた。admin 以外が `X-Zhuelog-Act-As` を付けた     |
-| 400  | `invalid_request` | `X-Zhuelog-Act-As` が 2 つ以上、または会員の `ownerId` の形でない          |
-| 404  | `not_found`       | `X-Zhuelog-Act-As` の会員がいない                                          |
+| HTTP | code              | 状況                                                                                                    |
+| ---- | ----------------- | ------------------------------------------------------------------------------------------------------- |
+| 401  | `unauthorized`    | トークンが無い・無効・失効。会員のアカウントが消えた、パスワードが変わった、`sessionVersion` が上がった |
+| 403  | `forbidden`       | admin が許可リストから外れた。admin 以外が `X-Zhuelog-Act-As` を付けた                                  |
+| 400  | `invalid_request` | `X-Zhuelog-Act-As` が 2 つ以上、または会員の `ownerId` の形でない                                       |
+| 404  | `not_found`       | `X-Zhuelog-Act-As` の会員がいない                                                                       |

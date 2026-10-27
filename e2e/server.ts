@@ -5,12 +5,23 @@ import { join } from "node:path";
 import {
   baseURL,
   databaseUrl,
+  ffpfIssuerURL,
   goApiURL,
   goJwtSecret,
   goProxySecret,
   openAiStubURL,
 } from "./environment";
+import { startFfpfOidcStub } from "./fixtures/ffpf-oidc-stub";
 import { startOpenAiStub } from "./openai-stub";
+
+// FFPF ID for this run: the stub is the issuer, and the web and the Go API are
+// its client. The secret is a fixed test value; the stub runs on loopback only.
+const ffpf = {
+  issuer: ffpfIssuerURL,
+  clientId: "e2e-ffpf-client",
+  clientSecret: "e2e-ffpf-client-secret",
+  redirectUri: `${baseURL}/api/auth/callback/ffpf`,
+};
 
 async function main() {
   // Explicit values take precedence over .env.local/.env.production.local.
@@ -23,6 +34,9 @@ async function main() {
     API_WEB_PROXY_SECRET: goProxySecret(),
     // Only shows the GitHub button; the e2e never completes a GitHub login.
     AUTH_GITHUB_ID: "e2e-client",
+    // Shows the FFPF ID button; sign-in completes against the local stub.
+    FFPF_ID_ISSUER: ffpf.issuer,
+    FFPF_ID_CLIENT_ID: ffpf.clientId,
     NODE_ENV: "production",
   };
 
@@ -38,6 +52,7 @@ async function main() {
   }
 
   await startOpenAiStub(Number(new URL(openAiStubURL).port));
+  await startFfpfOidcStub({ ...ffpf, port: Number(new URL(ffpf.issuer).port) });
   const api = await startGoApi();
   const server = spawn(
     process.execPath,
@@ -92,6 +107,10 @@ async function startGoApi(): Promise<ChildProcess> {
       GITHUB_WEB_CLIENT_ID: "",
       GITHUB_WEB_CLIENT_SECRET: "",
       GITHUB_WEB_REDIRECT_URI: "",
+      FFPF_ID_ISSUER: ffpf.issuer,
+      FFPF_ID_CLIENT_ID: ffpf.clientId,
+      FFPF_ID_CLIENT_SECRET: ffpf.clientSecret,
+      FFPF_ID_REDIRECT_URI: ffpf.redirectUri,
       // Go registers the LINE link routes only when LINE and OpenAI are
       // configured, and the chat routes when OpenAI is. Dummy values and
       // loopback base URLs (nothing listens on port 9; the OpenAI stub runs in
