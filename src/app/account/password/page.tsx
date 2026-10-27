@@ -2,6 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getCurrentMemberUser } from "@/composition/identity-container";
+import { FFPF_OWNER_PREFIX } from "@/domain/identity/owner-id";
+import { ffpfIdConfig } from "@/infrastructure/config/environment";
 import { ChangePasswordForm } from "@/presentation/components/auth/change-password-form";
 import {
   Card,
@@ -16,7 +18,12 @@ export const dynamic = "force-dynamic";
 
 export default async function ChangePasswordPage() {
   const user = await getCurrentMemberUser();
-  if (user?.role !== "member" || !user.accountId) redirect("/");
+  if (user?.role !== "member") redirect("/");
+  // FFPF ID members have no password account here (no accountId); their
+  // password lives in the portal.
+  const isFfpfMember = Boolean(user.githubId?.startsWith(FFPF_OWNER_PREFIX));
+  if (!isFfpfMember && !user.accountId) redirect("/");
+  const ffpfIssuer = ffpfIdConfig()?.issuer;
 
   return (
     <>
@@ -35,17 +42,38 @@ export default async function ChangePasswordPage() {
             </h1>
           </header>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>新しいパスワードを設定</CardTitle>
-              <CardDescription>
-                変更するとログアウトされます。新しいパスワードでもう一度ログインしてください。
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ChangePasswordForm />
-            </CardContent>
-          </Card>
+          {isFfpfMember ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>FFPF IDでログインしています</CardTitle>
+                <CardDescription>
+                  パスワードは FFPF ID のマイページで変更できます
+                </CardDescription>
+              </CardHeader>
+              {ffpfIssuer ? (
+                <CardContent>
+                  <a
+                    href={`${ffpfIssuer}/id`}
+                    className="text-sm font-medium underline underline-offset-4"
+                  >
+                    FFPF ID のマイページを開く
+                  </a>
+                </CardContent>
+              ) : null}
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>新しいパスワードを設定</CardTitle>
+                <CardDescription>
+                  変更するとログアウトされます。新しいパスワードでもう一度ログインしてください。
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ChangePasswordForm />
+              </CardContent>
+            </Card>
+          )}
         </div>
       </main>
     </>

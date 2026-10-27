@@ -69,8 +69,14 @@ export function parseOAuthCookie(value: string | undefined): OAuthState | null {
       Buffer.from(value, "base64url").toString("utf8"),
     );
     if (typeof parsed !== "object" || parsed === null) return null;
-    const { state, verifier, callbackPath } = parsed as Record<string, unknown>;
+    const { state, verifier, callbackPath, provider } = parsed as Record<
+      string,
+      unknown
+    >;
+    // An FFPF ID start (ffpf-oauth.ts) shares the cookie but names its
+    // provider; it never finishes at the GitHub callback.
     if (
+      provider !== undefined ||
       typeof state !== "string" ||
       !state ||
       typeof verifier !== "string" ||

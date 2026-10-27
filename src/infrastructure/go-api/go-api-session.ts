@@ -10,6 +10,12 @@ import {
   logout,
   type GoTokens,
 } from "./client";
+import { ffpfIdConfig } from "../config/environment";
+import {
+  createFfpfOAuthStart,
+  ffpfAuthorizeUrl,
+  ffpfRedirectUri,
+} from "./ffpf-oauth";
 import {
   createOAuthStart,
   githubAuthorizeUrl,
@@ -170,6 +176,34 @@ export async function signInWithGitHubViaGo(redirectTo: string) {
       ),
       state: start.state,
       challenge: start.challenge,
+    }),
+  );
+}
+
+// Starts FFPF ID sign-in the same way: PKCE, state and nonce go into
+// zl_oauth (provider "ffpf"), and the browser goes to the portal's authorize
+// endpoint. /api/auth/callback/ffpf finishes it.
+export async function signInWithFfpfViaGo(redirectTo: string) {
+  const config = ffpfIdConfig();
+  if (!config) redirect("/signin?error=Configuration");
+  const requestHeaders = await headers();
+  const start = createFfpfOAuthStart(redirectTo);
+  await writeCookies([
+    sessionCookie(
+      OAUTH_COOKIE,
+      start.cookieValue,
+      OAUTH_COOKIE_MAX_AGE,
+      isSecureRequest(requestHeaders),
+    ),
+  ]);
+  redirect(
+    ffpfAuthorizeUrl({
+      issuer: config.issuer,
+      clientId: config.clientId,
+      redirectUri: ffpfRedirectUri(publicOrigin(requestOrigin(requestHeaders))),
+      state: start.state,
+      challenge: start.challenge,
+      nonce: start.nonce,
     }),
   );
 }

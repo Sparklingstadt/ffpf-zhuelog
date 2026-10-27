@@ -11,8 +11,9 @@ import (
 // guestLogin is the Login shown for guests.
 const guestLogin = "guest"
 
-// Me describes the signed-in caller. DisplayName and AccountID are set for
-// members only. ActingAs is set while an admin acts as a member.
+// Me describes the signed-in caller. DisplayName is set for members only and
+// AccountID for password members only; an FFPF ID member's Login is their
+// email address. ActingAs is set while an admin acts as a member.
 type Me struct {
 	OwnerID, Role, Login, DisplayName, AccountID string
 	ActingAs                                     ActingAs
@@ -71,6 +72,18 @@ func (s *Service) Me(ctx context.Context, p Principal) (Me, error) {
 	case RoleGuest:
 		return Me{OwnerID: GuestOwnerID, Role: RoleGuest, Login: guestLogin}, nil
 	case RoleMember:
+		if sub, ok := ffpfAccountID(p); ok {
+			a, err := s.Store.FindFfpfAccount(ctx, sub)
+			if errors.Is(err, store.ErrNotFound) {
+				return Me{}, ErrUnauthorized
+			}
+			if err != nil {
+				return Me{}, fmt.Errorf("auth: find ffpf account: %w", err)
+			}
+			// Access tokens carry no login for members, so the email comes
+			// from the account, as recorded at the latest sign-in.
+			return Me{OwnerID: p.OwnerID, Role: RoleMember, Login: a.Email, DisplayName: a.DisplayName}, nil
+		}
 		accountID, ok := memberAccountID(p)
 		if !ok {
 			return Me{}, ErrUnauthorized

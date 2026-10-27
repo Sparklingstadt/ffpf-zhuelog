@@ -140,6 +140,20 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 		Allowlist: allowlist,
 		Passwords: passwords,
 	}
+	// Without the FFPF ID settings POST /v1/auth/ffpf answers 503. FFPF is
+	// assigned only here so it is a nil interface, not a nil *auth.FFPFClient.
+	// The client refuses redirects itself (its token request carries the
+	// client secret).
+	if cfg.FFPFEnabled() {
+		service.FFPF = &auth.FFPFClient{
+			HTTP:         &http.Client{Timeout: 10 * time.Second},
+			Issuer:       cfg.FFPFIssuer,
+			ClientID:     cfg.FFPFClientID,
+			ClientSecret: cfg.FFPFClientSecret,
+			RedirectURI:  cfg.FFPFRedirectURI,
+			Logger:       logger,
+		}
+	}
 	deps := httpapi.Deps{
 		Auth:     service,
 		Entries:  db,

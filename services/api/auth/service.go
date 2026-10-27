@@ -30,9 +30,17 @@ const (
 // ErrThrottled means the client made too many sign-in attempts recently.
 var ErrThrottled = errors.New("auth: too many sign-in attempts")
 
+// ErrFFPFDisabled means FFPF ID logins are not configured (Service.FFPF is nil).
+var ErrFFPFDisabled = errors.New("auth: ffpf id logins are disabled")
+
+// maxDisplayNameRunes is the longest display name kept for an FFPF ID member,
+// as for password members.
+const maxDisplayNameRunes = 50
+
 var (
 	_ Store  = (*store.Store)(nil)
 	_ GitHub = (*GitHubClient)(nil)
+	_ FFPF   = (*FFPFClient)(nil)
 	_ Hasher = (*PasswordVerifier)(nil)
 )
 
@@ -51,11 +59,20 @@ type Store interface {
 	InsertSiblingIfFamilyActive(ctx context.Context, next store.RefreshToken, nextHash string, now time.Time) (bool, error)
 	PruneRefreshTokens(ctx context.Context, ownerID string, now time.Time) error
 	DeleteExpiredRefreshTokens(ctx context.Context, ownerID string, now time.Time) error
+	UpsertFfpfAccount(ctx context.Context, a store.FfpfAccount, now time.Time) (store.FfpfAccount, error)
+	FindFfpfAccount(ctx context.Context, id string) (store.FfpfAccount, error)
+	FfpfSessionVersion(ctx context.Context, id string) (int, error)
 }
 
 // GitHub exchanges an OAuth code for the GitHub user; *GitHubClient satisfies it.
 type GitHub interface {
 	Exchange(ctx context.Context, code, verifier, redirectURI string) (GitHubUser, error)
+}
+
+// FFPF exchanges an FFPF ID authorization code for the user its verified ID
+// token names; *FFPFClient satisfies it.
+type FFPF interface {
+	Exchange(ctx context.Context, code, verifier, redirectURI, nonce string) (FFPFUser, error)
 }
 
 // Hasher checks and hashes passwords; *PasswordVerifier satisfies it. Errors
@@ -77,13 +94,15 @@ type TokenPair struct {
 
 // Service runs sign-in, refresh-token rotation, logout, the per-request
 // revocation check, and members' own password changes. Errors are
-// ErrUnauthorized, ErrForbidden, ErrThrottled, the GitHub client's sentinels,
-// ChangePassword's sentinels, or (for store failures) other errors; none of
-// them contain tokens, hashes, codes or passwords.
+// ErrUnauthorized, ErrForbidden, ErrThrottled, ErrFFPFDisabled, the GitHub and
+// FFPF ID clients' sentinels, ChangePassword's sentinels, or (for store
+// failures) other errors; none of them contain tokens, hashes, codes or
+// passwords.
 type Service struct {
 	Store     Store
 	Signer    *Signer
 	GitHub    GitHub
+	FFPF      FFPF // nil when FFPF ID is not configured (ErrFFPFDisabled)
 	Allowlist Allowlist
 	Passwords Hasher
 	Now       func() time.Time // nil means time.Now
@@ -100,6 +119,13 @@ func (s *Service) now() time.Time {
 // ID refers to, or false if p.OwnerID is not a non-empty member owner ID.
 func memberAccountID(p Principal) (string, bool) {
 	id, ok := strings.CutPrefix(p.OwnerID, store.MemberOwnerPrefix)
+	return id, ok && id != ""
+}
+
+// ffpfAccountID returns the FFPF ID sub an FFPF ID member principal's owner
+// ID refers to, or false if p.OwnerID is not a non-empty ffpf: owner ID.
+func ffpfAccountID(p Principal) (string, bool) {
+	id, ok := strings.CutPrefix(p.OwnerID, store.FfpfOwnerPrefix)
 	return id, ok && id != ""
 }
 

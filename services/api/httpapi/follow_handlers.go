@@ -8,7 +8,8 @@ import (
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
 
-var memberOwnerIDPattern = regexp.MustCompile(`^password:[a-z0-9]{1,64}$`)
+// memberOwnerIDPattern matches a member's owner ID, password or FFPF ID.
+var memberOwnerIDPattern = regexp.MustCompile(`^(password|ffpf):[a-z0-9]{1,64}$`)
 
 type memberJSON struct {
 	OwnerID     string `json:"ownerId"`

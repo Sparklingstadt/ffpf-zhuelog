@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
@@ -26,6 +27,43 @@ func (s *Service) LoginGitHub(ctx context.Context, code, verifier, redirectURI s
 		OwnerID: ownerID,
 		Role:    RoleAdmin,
 		Login:   user.Login,
+	})
+}
+
+// LoginFFPF signs in an FFPF ID user as a member: it exchanges the code (see
+// FFPFClient.Exchange for the arguments and its errors), records the account
+// with the current email and display name, and starts a session for the owner
+// ID ffpf:<sub> (ErrUnauthorized when the sub cannot form one). Anyone with a
+// verified FFPF ID account may sign in; there is no allowlist. The email is
+// recorded for display only. It returns ErrFFPFDisabled when FFPF ID is not
+// configured.
+func (s *Service) LoginFFPF(ctx context.Context, code, verifier, redirectURI, nonce string) (TokenPair, error) {
+	if s.FFPF == nil {
+		return TokenPair{}, ErrFFPFDisabled
+	}
+	user, err := s.FFPF.Exchange(ctx, code, verifier, redirectURI, nonce)
+	if err != nil {
+		return TokenPair{}, err
+	}
+	// FFPFClient already checks the sub; check again so no FFPF implementation
+	// can make a malformed owner ID.
+	if !ffpfSub.MatchString(user.Sub) {
+		return TokenPair{}, ErrUnauthorized
+	}
+	name := truncateRunes(strings.TrimSpace(user.Name), maxDisplayNameRunes)
+	if name == "" {
+		name, _, _ = strings.Cut(user.Email, "@")
+		name = truncateRunes(name, maxDisplayNameRunes)
+	}
+	acc, err := s.Store.UpsertFfpfAccount(ctx, store.FfpfAccount{ID: user.Sub, Email: user.Email, DisplayName: name}, s.now())
+	if err != nil {
+		return TokenPair{}, fmt.Errorf("auth: upsert ffpf account: %w", err)
+	}
+	return s.startSession(ctx, Principal{
+		OwnerID:        store.FfpfOwnerID(acc.ID),
+		Role:           RoleMember,
+		Login:          user.Email,
+		SessionVersion: acc.SessionVersion,
 	})
 }
 

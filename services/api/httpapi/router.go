@@ -23,6 +23,7 @@ var (
 // Auth is what the handlers need from *auth.Service.
 type Auth interface {
 	LoginGitHub(ctx context.Context, code, verifier, redirectURI string) (auth.TokenPair, error)
+	LoginFFPF(ctx context.Context, code, verifier, redirectURI, nonce string) (auth.TokenPair, error)
 	LoginPassword(ctx context.Context, client, loginID, password string) (auth.TokenPair, error)
 	Refresh(ctx context.Context, token string) (auth.TokenPair, error)
 	Logout(ctx context.Context, token string) error
@@ -185,6 +186,7 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	public("GET /ping", ping())
 
 	public("POST /v1/auth/github", limited(loginGitHub(d.Auth)))
+	public("POST /v1/auth/ffpf", limited(loginFFPF(d.Auth)))
 	public("POST /v1/auth/password", limited(loginPassword(d.Auth, clientKey)))
 	public("POST /v1/auth/refresh", refreshLimited(refresh(d.Auth)))
 	public("POST /v1/auth/logout", limited(logout(d.Auth)))

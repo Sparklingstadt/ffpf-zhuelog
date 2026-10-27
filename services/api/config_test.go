@@ -354,3 +354,88 @@ func TestLoadConfigChatModelDefaultAndOverride(t *testing.T) {
 		t.Errorf("OpenAIChatModel = %q, err %v", cfg.OpenAIChatModel, err)
 	}
 }
+
+func ffpfEnv() map[string]string {
+	return map[string]string{
+		"FFPF_ID_ISSUER":        "https://portal.ffpf.example",
+		"FFPF_ID_CLIENT_ID":     "zhuelog",
+		"FFPF_ID_CLIENT_SECRET": "ffpf-secret-value",
+		"FFPF_ID_REDIRECT_URI":  "https://zhuelog.example/api/auth/callback/ffpf",
+	}
+}
+
+func TestLoadConfigFFPFAllOrNone(t *testing.T) {
+	cfg, err := LoadConfig(getenvFrom(validEnv()))
+	if err != nil {
+		t.Fatalf("none set: %v", err)
+	}
+	if cfg.FFPFEnabled() || cfg.FFPFIssuer != "" || cfg.FFPFClientID != "" || cfg.FFPFClientSecret != "" || cfg.FFPFRedirectURI != "" {
+		t.Errorf("ffpf fields should be empty: %+v", cfg)
+	}
+
+	env := validEnv()
+	for k, v := range ffpfEnv() {
+		env[k] = v
+	}
+	cfg, err = LoadConfig(getenvFrom(env))
+	if err != nil {
+		t.Fatalf("all set: %v", err)
+	}
+	if !cfg.FFPFEnabled() || cfg.FFPFIssuer != "https://portal.ffpf.example" || cfg.FFPFClientID != "zhuelog" ||
+		cfg.FFPFClientSecret != "ffpf-secret-value" || cfg.FFPFRedirectURI != "https://zhuelog.example/api/auth/callback/ffpf" {
+		t.Errorf("unexpected ffpf config: %+v", cfg)
+	}
+
+	for missing := range ffpfEnv() {
+		env := validEnv()
+		for k, v := range ffpfEnv() {
+			if k != missing {
+				env[k] = v
+			}
+		}
+		_, err := LoadConfig(getenvFrom(env))
+		want := "FFPF_ID_ISSUER, FFPF_ID_CLIENT_ID, FFPF_ID_CLIENT_SECRET and FFPF_ID_REDIRECT_URI must be set together"
+		if err == nil || err.Error() != want {
+			t.Errorf("missing %s: err = %v, want %q", missing, err, want)
+		}
+	}
+}
+
+func TestLoadConfigFFPFIssuer(t *testing.T) {
+	for issuer, ok := range map[string]bool{
+		"https://portal.ffpf.example": true,
+		"http://localhost:3000":       true,
+		"http://127.0.0.1:3000":       true,
+		"http://evil":                 false,
+		"http://localhost.evil":       false,
+		"ftp://portal.ffpf.example":   false,
+		"https://":                    false,
+		"https://u:p@portal.example":  false,
+		"portal.ffpf.example":         false,
+		"https://portal.example/?x=1": false,
+		"https://portal.example?":     false,
+		"https://portal.example/#f":   false,
+		"https://portal.example#":     false,
+		"https://portal.example/id":   true,
+	} {
+		t.Run(issuer, func(t *testing.T) {
+			env := validEnv()
+			for k, v := range ffpfEnv() {
+				env[k] = v
+			}
+			env["FFPF_ID_ISSUER"] = issuer
+			_, err := LoadConfig(getenvFrom(env))
+			if ok && err != nil {
+				t.Fatalf("err = %v, want nil", err)
+			}
+			if !ok {
+				if err == nil || !strings.HasPrefix(err.Error(), "FFPF_ID_ISSUER must be") {
+					t.Fatalf("err = %v, want an FFPF_ID_ISSUER error", err)
+				}
+				if strings.Contains(err.Error(), "ffpf-secret-value") {
+					t.Errorf("error contains the secret: %v", err)
+				}
+			}
+		})
+	}
+}

@@ -89,6 +89,7 @@ func TestPublicRouteSetIsExactlyTheKnownRoutes(t *testing.T) {
 		"GET /healthz",
 		"GET /ping",
 		"POST /v1/auth/github",
+		"POST /v1/auth/ffpf",
 		"POST /v1/auth/password",
 		"POST /v1/auth/refresh",
 		"POST /v1/auth/logout",

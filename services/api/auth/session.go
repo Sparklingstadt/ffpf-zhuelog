@@ -120,8 +120,8 @@ func (s *Service) Logout(ctx context.Context, refreshToken string) error {
 
 // Authenticate verifies an access token and checks that its holder is still
 // allowed: guests always are; admins' GitHub user ID must still be
-// allowlisted (else ErrForbidden) and members' session version must still
-// match (else ErrUnauthorized).
+// allowlisted (else ErrForbidden) and members' session version (of their
+// password or FFPF ID account) must still match (else ErrUnauthorized).
 func (s *Service) Authenticate(ctx context.Context, accessToken string) (Principal, error) {
 	p, err := s.Signer.Verify(accessToken)
 	if err != nil {
@@ -143,11 +143,16 @@ func (s *Service) checkCurrent(ctx context.Context, p Principal) error {
 		}
 		return nil
 	case RoleMember:
-		accountID, ok := memberAccountID(p)
-		if !ok {
+		// Each kind of member has its own account table and session version.
+		var current int
+		var err error
+		if accountID, ok := memberAccountID(p); ok {
+			current, err = s.Store.SessionVersion(ctx, accountID)
+		} else if sub, ok := ffpfAccountID(p); ok {
+			current, err = s.Store.FfpfSessionVersion(ctx, sub)
+		} else {
 			return ErrUnauthorized
 		}
-		current, err := s.Store.SessionVersion(ctx, accountID)
 		if errors.Is(err, store.ErrNotFound) {
 			return ErrUnauthorized
 		}

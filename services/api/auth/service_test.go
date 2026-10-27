@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -53,6 +54,9 @@ type fakeStore struct {
 	throttleErr    error
 	setPasswordErr error
 	setPasswordAt  []time.Time // now passed to each SetPassword
+
+	ffpf          map[string]*store.FfpfAccount // by sub; see ffpfAccounts
+	upsertFfpfErr error
 }
 
 // throttleEntry is one fixed window, as in the SignInThrottle table.
@@ -1853,5 +1857,300 @@ func TestActAs(t *testing.T) {
 	}
 	if _, err := f.svc.Me(ctx, Principal{OwnerID: "password:gone", Role: RoleAdmin, ActorID: "42"}); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("Me for a vanished member err = %v, want store.ErrNotFound", err)
+	}
+}
+
+// --- FFPF ID -------------------------------------------------------------
+
+// ffpfAccounts returns the fake store's FFPF ID accounts by sub, creating
+// the map on first use.
+func (f *fakeStore) ffpfAccounts() map[string]*store.FfpfAccount {
+	if f.ffpf == nil {
+		f.ffpf = map[string]*store.FfpfAccount{}
+	}
+	return f.ffpf
+}
+
+// UpsertFfpfAccount mirrors the store: it creates the account with session
+// version 0 or updates its email and display name, keeping the version.
+func (f *fakeStore) UpsertFfpfAccount(_ context.Context, a store.FfpfAccount, _ time.Time) (store.FfpfAccount, error) {
+	f.log.add("UpsertFfpfAccount")
+	if f.upsertFfpfErr != nil {
+		return store.FfpfAccount{}, f.upsertFfpfErr
+	}
+	accounts := f.ffpfAccounts()
+	cur, ok := accounts[a.ID]
+	if !ok {
+		cur = &store.FfpfAccount{ID: a.ID}
+		accounts[a.ID] = cur
+	}
+	cur.Email, cur.DisplayName = a.Email, a.DisplayName
+	return *cur, nil
+}
+
+func (f *fakeStore) FindFfpfAccount(_ context.Context, id string) (store.FfpfAccount, error) {
+	f.log.add("FindFfpfAccount")
+	if f.findAccountErr != nil {
+		return store.FfpfAccount{}, f.findAccountErr
+	}
+	a, ok := f.ffpfAccounts()[id]
+	if !ok {
+		return store.FfpfAccount{}, store.ErrNotFound
+	}
+	return *a, nil
+}
+
+func (f *fakeStore) FfpfSessionVersion(_ context.Context, id string) (int, error) {
+	f.log.add("FfpfSessionVersion")
+	if f.sessionErr != nil {
+		return 0, f.sessionErr
+	}
+	a, ok := f.ffpfAccounts()[id]
+	if !ok {
+		return 0, store.ErrNotFound
+	}
+	return a.SessionVersion, nil
+}
+
+type stubFFPF struct {
+	user                               FFPFUser
+	err                                error
+	code, verifier, redirectURI, nonce string
+}
+
+func (s *stubFFPF) Exchange(_ context.Context, code, verifier, redirectURI, nonce string) (FFPFUser, error) {
+	s.code, s.verifier, s.redirectURI, s.nonce = code, verifier, redirectURI, nonce
+	return s.user, s.err
+}
+
+func ffpfFixture() (*fixture, *stubFFPF) {
+	f := newFixture()
+	stub := &stubFFPF{user: FFPFUser{Sub: "cabc", Email: "alice@example.com", Name: "Alice"}}
+	f.svc.FFPF = stub
+	return f, stub
+}
+
+func (f *fixture) loginFFPF(t *testing.T) TokenPair {
+	t.Helper()
+	pair, err := f.svc.LoginFFPF(context.Background(), "code", "verifier", "https://zl.example/cb", "nonce1")
+	if err != nil {
+		t.Fatalf("LoginFFPF: %v", err)
+	}
+	return pair
+}
+
+func TestLoginFFPF(t *testing.T) {
+	f, stub := ffpfFixture()
+	ctx := context.Background()
+	pair := f.loginFFPF(t)
+	if stub.code != "code" || stub.verifier != "verifier" || stub.redirectURI != "https://zl.example/cb" || stub.nonce != "nonce1" {
+		t.Fatalf("Exchange got (%q, %q, %q, %q)", stub.code, stub.verifier, stub.redirectURI, stub.nonce)
+	}
+	checkRefreshTokenShape(t, pair.RefreshToken)
+	if pair.ExpiresIn != int(AccessTTL/time.Second) || pair.RefreshExpiresIn != int(RefreshTTL/time.Second) {
+		t.Fatalf("lifetimes = %d, %d", pair.ExpiresIn, pair.RefreshExpiresIn)
+	}
+
+	p, err := f.svc.Authenticate(ctx, pair.AccessToken)
+	if err != nil || p.OwnerID != "ffpf:cabc" || p.Role != "member" || p.SessionVersion != 0 {
+		t.Fatalf("Authenticate = %+v, %v", p, err)
+	}
+	row := f.store.row(t, pair.RefreshToken)
+	if row.OwnerID != "ffpf:cabc" || row.Role != RoleMember || row.SessionVersion == nil || *row.SessionVersion != 0 {
+		t.Fatalf("refresh row = %+v", row)
+	}
+	if !slices.Contains(f.store.pruned, "ffpf:cabc") {
+		t.Fatalf("pruned = %v, want ffpf:cabc", f.store.pruned)
+	}
+
+	me, err := f.svc.Me(ctx, p)
+	want := Me{OwnerID: "ffpf:cabc", Role: RoleMember, Login: "alice@example.com", DisplayName: "Alice"}
+	if err != nil || me != want {
+		t.Fatalf("Me = %+v, %v; want %+v", me, err, want)
+	}
+}
+
+func TestLoginFFPFSecondLoginUpdatesProfile(t *testing.T) {
+	f, stub := ffpfFixture()
+	ctx := context.Background()
+	f.loginFFPF(t)
+	stub.user = FFPFUser{Sub: "cabc", Email: "alice@new.example", Name: "Alice B"}
+	pair := f.loginFFPF(t)
+	if n := len(f.store.ffpf); n != 1 {
+		t.Fatalf("%d accounts, want 1", n)
+	}
+	p, err := f.svc.Authenticate(ctx, pair.AccessToken)
+	if err != nil {
+		t.Fatalf("Authenticate: %v", err)
+	}
+	me, err := f.svc.Me(ctx, p)
+	want := Me{OwnerID: "ffpf:cabc", Role: RoleMember, Login: "alice@new.example", DisplayName: "Alice B"}
+	if err != nil || me != want {
+		t.Fatalf("Me = %+v, %v; want %+v", me, err, want)
+	}
+}
+
+func TestLoginFFPFDisplayName(t *testing.T) {
+	cases := []struct{ name, email, want string }{
+		{"  Alice  ", "a@example.com", "Alice"},
+		{"", "local.part@example.com", "local.part"},
+		{"   ", "bob@example.com", "bob"},
+		{strings.Repeat("あ", 51), "c@example.com", strings.Repeat("あ", 50)},
+		{strings.Repeat("x", 50), "d@example.com", strings.Repeat("x", 50)},
+	}
+	for _, tc := range cases {
+		f, stub := ffpfFixture()
+		stub.user = FFPFUser{Sub: "cabc", Email: tc.email, Name: tc.name}
+		f.loginFFPF(t)
+		if got := f.store.ffpf["cabc"].DisplayName; got != tc.want {
+			t.Errorf("name %q, email %q: display name = %q, want %q", tc.name, tc.email, got, tc.want)
+		}
+		if got := f.store.ffpf["cabc"].Email; got != tc.email {
+			t.Errorf("email = %q, want %q", got, tc.email)
+		}
+	}
+}
+
+func TestLoginFFPFErrors(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("disabled", func(t *testing.T) {
+		f := newFixture()
+		if _, err := f.svc.LoginFFPF(ctx, "c", "v", "r", "n"); !errors.Is(err, ErrFFPFDisabled) {
+			t.Fatalf("err = %v, want ErrFFPFDisabled", err)
+		}
+		if len(f.store.tokens) != 0 {
+			t.Fatal("a token was stored")
+		}
+	})
+	for _, want := range []error{ErrUnauthorized, ErrFFPFUnavailable} {
+		t.Run(want.Error(), func(t *testing.T) {
+			f, stub := ffpfFixture()
+			stub.err = want
+			if _, err := f.svc.LoginFFPF(ctx, "c", "v", "r", "n"); !errors.Is(err, want) {
+				t.Fatalf("err = %v, want %v", err, want)
+			}
+			if f.log.has("UpsertFfpfAccount") || len(f.store.tokens) != 0 {
+				t.Fatal("the account or a token was written after a failed exchange")
+			}
+		})
+	}
+	// Defence in depth: whatever the FFPF client returns, a sub that cannot
+	// form an ffpf:<sub> owner ID never reaches the store.
+	for _, sub := range []string{"", "ABC", "a:b", "a/b", "ffpf:x", strings.Repeat("a", 65)} {
+		t.Run("malformed sub "+strconv.Quote(sub), func(t *testing.T) {
+			f, stub := ffpfFixture()
+			stub.user.Sub = sub
+			if _, err := f.svc.LoginFFPF(ctx, "c", "v", "r", "n"); !errors.Is(err, ErrUnauthorized) {
+				t.Fatalf("err = %v, want ErrUnauthorized", err)
+			}
+			if f.log.has("UpsertFfpfAccount") || len(f.store.tokens) != 0 {
+				t.Fatal("the account or a token was written for a malformed sub")
+			}
+		})
+	}
+	t.Run("upsert error", func(t *testing.T) {
+		f, _ := ffpfFixture()
+		f.store.upsertFfpfErr = errors.New("connection reset")
+		_, err := f.svc.LoginFFPF(ctx, "c", "v", "r", "n")
+		if err == nil || errors.Is(err, ErrUnauthorized) || len(f.store.tokens) != 0 {
+			t.Fatalf("err = %v, tokens %d; want a non-sentinel error and no token", err, len(f.store.tokens))
+		}
+	})
+}
+
+func TestFFPFRevocation(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("refresh succeeds while the version matches", func(t *testing.T) {
+		f, _ := ffpfFixture()
+		pair := f.loginFFPF(t)
+		next, err := f.svc.Refresh(ctx, pair.RefreshToken)
+		if err != nil {
+			t.Fatalf("Refresh: %v", err)
+		}
+		p, err := f.svc.Authenticate(ctx, next.AccessToken)
+		if err != nil || p.OwnerID != "ffpf:cabc" || p.Role != RoleMember {
+			t.Fatalf("Authenticate = %+v, %v", p, err)
+		}
+		me, err := f.svc.Me(ctx, p)
+		if err != nil || me.Login != "alice@example.com" || me.DisplayName != "Alice" {
+			t.Fatalf("Me after refresh = %+v, %v", me, err)
+		}
+	})
+	t.Run("bumped version revokes access and refresh", func(t *testing.T) {
+		f, _ := ffpfFixture()
+		pair := f.loginFFPF(t)
+		f.store.ffpf["cabc"].SessionVersion = 1
+		if _, err := f.svc.Authenticate(ctx, pair.AccessToken); err != ErrUnauthorized {
+			t.Fatalf("Authenticate err = %v, want ErrUnauthorized", err)
+		}
+		if _, err := f.svc.Refresh(ctx, pair.RefreshToken); err != ErrUnauthorized {
+			t.Fatalf("Refresh err = %v, want ErrUnauthorized", err)
+		}
+		if !f.store.familyRevoked(f.store.row(t, pair.RefreshToken).FamilyID) {
+			t.Fatal("family not revoked")
+		}
+	})
+	t.Run("deleted account", func(t *testing.T) {
+		f, _ := ffpfFixture()
+		pair := f.loginFFPF(t)
+		delete(f.store.ffpf, "cabc")
+		if _, err := f.svc.Authenticate(ctx, pair.AccessToken); err != ErrUnauthorized {
+			t.Fatalf("Authenticate err = %v, want ErrUnauthorized", err)
+		}
+		if _, err := f.svc.Me(ctx, Principal{OwnerID: "ffpf:cabc", Role: RoleMember}); !errors.Is(err, ErrUnauthorized) {
+			t.Fatalf("Me err = %v, want ErrUnauthorized", err)
+		}
+	})
+	t.Run("store error propagates", func(t *testing.T) {
+		f, _ := ffpfFixture()
+		pair := f.loginFFPF(t)
+		f.store.sessionErr = errors.New("connection reset")
+		_, err := f.svc.Authenticate(ctx, pair.AccessToken)
+		if err == nil || errors.Is(err, ErrUnauthorized) || errors.Is(err, ErrForbidden) {
+			t.Fatalf("err = %v, want a non-sentinel error", err)
+		}
+	})
+	t.Run("the version is read from the FFPF table only", func(t *testing.T) {
+		f, _ := ffpfFixture()
+		pair := f.loginFFPF(t)
+		// A password account whose id equals the sub must not matter.
+		f.store.addAccount("cabc", "cabc", "pw", 7)
+		if _, err := f.svc.Authenticate(ctx, pair.AccessToken); err != nil {
+			t.Fatalf("Authenticate: %v", err)
+		}
+		if f.log.has("SessionVersion") {
+			t.Fatal("the password session version was read for an ffpf: principal")
+		}
+	})
+	t.Run("member owner with another prefix or an empty sub", func(t *testing.T) {
+		f, _ := ffpfFixture()
+		for _, owner := range []string{"ffpf:", "github:cabc", "cabc"} {
+			tok, err := f.svc.Signer.Issue(Principal{OwnerID: owner, Role: RoleMember})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := f.svc.Authenticate(ctx, tok); err != ErrUnauthorized {
+				t.Fatalf("%s: err = %v, want ErrUnauthorized", owner, err)
+			}
+		}
+	})
+}
+
+func TestFFPFMemberCannotUsePasswordFeatures(t *testing.T) {
+	f, _ := ffpfFixture()
+	ctx := context.Background()
+	f.loginFFPF(t)
+	p := Principal{OwnerID: "ffpf:cabc", Role: RoleMember}
+	if err := f.svc.ChangePassword(ctx, p, "whatever", newPassword12, newPassword12); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("ChangePassword err = %v, want ErrForbidden", err)
+	}
+	if f.hasher.count != 0 || f.log.has("ConsumeThrottle") {
+		t.Fatal("ChangePassword did password work for an ffpf: member")
+	}
+	admin := Principal{OwnerID: "42", Role: RoleAdmin, Login: "Alice"}
+	if _, err := f.svc.ActAs(ctx, admin, "ffpf:cabc"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("ActAs err = %v, want store.ErrNotFound", err)
 	}
 }

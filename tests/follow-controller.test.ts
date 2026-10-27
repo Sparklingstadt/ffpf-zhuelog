@@ -62,6 +62,27 @@ test("follow uses the signed-in follower, never one from the form", async () => 
   assert.deepEqual(calls, [["219588180", "password:ckb1"]]);
 });
 
+test("follow and unfollow accept an FFPF ID member", async () => {
+  const followed = recorder<FollowResult>("followed");
+  assert.deepEqual(
+    await handleFollow(form({ followeeId: "ffpf:cabc" }), {
+      getMember: member,
+      run: followed.run,
+    }),
+    success,
+  );
+  assert.deepEqual(followed.calls, [["password:ckm", "ffpf:cabc"]]);
+  const unfollowed = recorder<void>(undefined);
+  assert.deepEqual(
+    await handleUnfollow(form({ followeeId: "ffpf:cabc" }), {
+      getMember: async () => ({ githubId: "ffpf:cme", role: "member" }),
+      run: unfollowed.run,
+    }),
+    success,
+  );
+  assert.deepEqual(unfollowed.calls, [["ffpf:cme", "ffpf:cabc"]]);
+});
+
 test("follow maps self and not-found to their messages", async () => {
   for (const [result, expected] of [
     ["self", selfFollow],
@@ -79,7 +100,15 @@ test("follow maps self and not-found to their messages", async () => {
 });
 
 test("follow rejects a malformed followee without calling run", async () => {
-  for (const followeeId of ["219588180", "password:../x", "password:", ""]) {
+  for (const followeeId of [
+    "219588180",
+    "password:../x",
+    "password:",
+    "",
+    "ffpf:",
+    "ffpf:ABC",
+    "gitlab:1",
+  ]) {
     const { calls, run } = recorder<FollowResult>("followed");
     assert.deepEqual(
       await handleFollow(form({ followeeId }), { getMember: member, run }),

@@ -5,13 +5,18 @@ import {
   Languages,
   LockKeyhole,
   ShieldCheck,
+  UserRoundCheck,
 } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import { getCurrentViewerUser } from "@/composition/identity-container";
-import { isAuthConfigured } from "@/infrastructure/config/environment";
+import {
+  ffpfIdConfig,
+  isAuthConfigured,
+} from "@/infrastructure/config/environment";
 import {
   signInAsGuestAction,
+  signInWithFfpfAction,
   signInWithGitHubAction,
   signInWithPasswordAction,
 } from "@/presentation/actions/auth-actions";
@@ -41,7 +46,7 @@ const errorMessages: Record<string, string> = {
     "このGitHubアカウントには利用権限がありません。管理者に確認してください。",
   Configuration: "認証設定が完了していません。管理者に確認してください。",
   OAuthCallbackError:
-    "GitHubからの認証結果を確認できませんでした。もう一度お試しください。",
+    "認証サービスからの結果を確認できませんでした。もう一度お試しください。",
 };
 
 type SignInPageProps = {
@@ -59,6 +64,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   const params = await searchParams;
   const callbackPath = getSafeCallbackPath(params.callbackUrl);
   const isConfigured = isAuthConfigured();
+  const showFfpfId = Boolean(ffpfIdConfig());
   const errorMessage = params.error
     ? (errorMessages[params.error] ??
       "認証中にエラーが発生しました。もう一度お試しください。")
@@ -148,6 +154,13 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
               <span className="text-xs text-muted-foreground">または</span>
               <Separator className="flex-1" />
             </div>
+            {showFfpfId ? (
+              <form action={signInWithFfpfAction.bind(null, callbackPath)}>
+                <Button type="submit" className="w-full">
+                  <UserRoundCheck /> FFPF IDでログイン
+                </Button>
+              </form>
+            ) : null}
             <form action={signInWithGitHubAction.bind(null, callbackPath)}>
               <Button type="submit" className="w-full" disabled={!isConfigured}>
                 <CircleUserRound /> GitHubでログイン
@@ -165,6 +178,9 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
             </form>
             <p className="text-center text-xs leading-5 text-muted-foreground">
               ゲストは学習ノート・CSVインポートを利用できません。
+              {showFfpfId
+                ? "FFPF IDではメールアドレスと表示名が利用されます。"
+                : null}
               GitHub認証ではユーザー名・表示名・メールアドレス・プロフィール画像が利用されます。
               IDとパスワードのアカウントは管理者が発行します。
             </p>

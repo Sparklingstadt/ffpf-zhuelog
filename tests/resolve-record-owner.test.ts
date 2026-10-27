@@ -52,6 +52,10 @@ test("admin sees self by default and may view well-formed other owners", () => {
     kind: "other",
     ownerId: "42",
   });
+  assert.deepEqual(resolveRecordOwner(admin, "ffpf:cabc"), {
+    kind: "other",
+    ownerId: "ffpf:cabc",
+  });
 });
 
 test("admin with a malformed owner id is sent back to self", () => {
@@ -75,12 +79,24 @@ test("member sees self and never anyone else", () => {
   assert.deepEqual(resolveRecordOwner(member, ADMIN_ID), {
     kind: "redirect-self",
   });
+  assert.deepEqual(resolveRecordOwner(member, "ffpf:cabc"), {
+    kind: "redirect-self",
+  });
 });
 
-test("isOwnerId accepts GitHub ids and password owner ids only", () => {
+test("isOwnerId accepts GitHub, password and FFPF ID owner ids only", () => {
   assert.equal(isOwnerId(ADMIN_ID), true);
   assert.equal(isOwnerId(MEMBER_ID), true);
-  for (const bad of ["password:", "219588180\n", "abc"])
+  assert.equal(isOwnerId("ffpf:cabc"), true);
+  for (const bad of [
+    "password:",
+    "219588180\n",
+    "abc",
+    "ffpf:",
+    "ffpf:ABC",
+    `ffpf:${"a".repeat(65)}`,
+    "gitlab:1",
+  ])
     assert.equal(isOwnerId(bad), false, JSON.stringify(bad));
 });
 

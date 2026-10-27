@@ -26,6 +26,7 @@ const (
 	msgTooLarge          = "リクエストが大きすぎます。"
 	msgRateLimited       = "しばらくしてから再度お試しください。"
 	msgGitHubUnavailable = "GitHub に接続できませんでした。"
+	msgFFPFUnavailable   = "FFPF ID に接続できませんでした。"
 	msgInternal          = "サーバーでエラーが発生しました。"
 	msgUnavailable       = "サービスを利用できません。"
 	msgWebOnly           = "この操作は Web からだけ利用できます。"
@@ -66,6 +67,7 @@ const (
 	codeUnavailable            = "unavailable"
 	codeInternal               = "internal"
 	codeGitHubUnavailable      = "github_unavailable"
+	codeFFPFUnavailable        = "ffpf_unavailable"
 	codePasswordMismatch       = "password_mismatch"
 	codeInvalidCurrentPassword = "invalid_current_password"
 	codeSelfFollow             = "self_follow"
@@ -124,6 +126,10 @@ func writeServiceError(w http.ResponseWriter, r *http.Request, err error) {
 		writeError(w, http.StatusNotFound, codeNotFound, msgNotFound)
 	case errors.Is(err, auth.ErrGitHubUnavailable):
 		writeError(w, http.StatusBadGateway, codeGitHubUnavailable, msgGitHubUnavailable)
+	case errors.Is(err, auth.ErrFFPFUnavailable):
+		writeError(w, http.StatusBadGateway, codeFFPFUnavailable, msgFFPFUnavailable)
+	case errors.Is(err, auth.ErrFFPFDisabled):
+		writeError(w, http.StatusServiceUnavailable, codeUnavailable, msgUnavailable)
 	case errors.As(err, &tooLarge):
 		writeError(w, http.StatusRequestEntityTooLarge, codeTooLarge, msgTooLarge)
 	default:

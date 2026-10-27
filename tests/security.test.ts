@@ -72,6 +72,17 @@ test("CSP permits only nonce scripts and same-origin connections in production",
   );
 });
 
+test("CSP lets sign-in forms go to GitHub, and to the FFPF ID issuer when configured", () => {
+  assert.match(
+    contentSecurityPolicy("x", false, true),
+    /form-action 'self' https:\/\/github\.com;/,
+  );
+  assert.match(
+    contentSecurityPolicy("x", false, true, ["https://portal.example"]),
+    /form-action 'self' https:\/\/github\.com https:\/\/portal\.example;/,
+  );
+});
+
 test("log numbers outside the safe range are rejected", () => {
   assert.equal(parseLogNumber("9007199254740991"), null);
   assert.equal(parseLogNumber("2147483648"), null);
