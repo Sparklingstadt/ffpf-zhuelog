@@ -29,6 +29,12 @@ type Config struct {
 	GitHubWebClientID     string
 	GitHubWebClientSecret string
 	GitHubWebRedirectURI  string
+	// FFPF ID (the portal's OpenID Connect provider) is optional: all four
+	// values are set, or none.
+	FFPFIssuer       string
+	FFPFClientID     string
+	FFPFClientSecret string
+	FFPFRedirectURI  string
 	// WebProxySecret is optional: the secret the Next.js web server presents
 	// so the API trusts the end-user IP it forwards.
 	WebProxySecret   []byte
@@ -50,6 +56,11 @@ type Config struct {
 // LineEnabled reports whether the LINE webhook routes should be registered.
 func (c Config) LineEnabled() bool {
 	return len(c.LineChannelSecret) > 0
+}
+
+// FFPFEnabled reports whether FFPF ID logins are configured.
+func (c Config) FFPFEnabled() bool {
+	return c.FFPFIssuer != ""
 }
 
 // ChatEnabled reports whether the admin chat routes should be registered.
@@ -113,6 +124,22 @@ func LoadConfig(getenv func(string) string) (Config, error) {
 	if cfg.GitHubWebRedirectURI != "" && cfg.GitHubWebRedirectURI == cfg.GitHubRedirectURI {
 		return Config{}, errors.New("GITHUB_WEB_REDIRECT_URI must differ from GITHUB_MOBILE_REDIRECT_URI")
 	}
+	cfg.FFPFIssuer = get("FFPF_ID_ISSUER")
+	cfg.FFPFClientID = get("FFPF_ID_CLIENT_ID")
+	cfg.FFPFClientSecret = get("FFPF_ID_CLIENT_SECRET")
+	cfg.FFPFRedirectURI = get("FFPF_ID_REDIRECT_URI")
+	ffpfSet := 0
+	for _, v := range []string{cfg.FFPFIssuer, cfg.FFPFClientID, cfg.FFPFClientSecret, cfg.FFPFRedirectURI} {
+		if v != "" {
+			ffpfSet++
+		}
+	}
+	if ffpfSet != 0 && ffpfSet != 4 {
+		return Config{}, errors.New("FFPF_ID_ISSUER, FFPF_ID_CLIENT_ID, FFPF_ID_CLIENT_SECRET and FFPF_ID_REDIRECT_URI must be set together")
+	}
+	if cfg.FFPFIssuer != "" && !validFFPFIssuer(cfg.FFPFIssuer) {
+		return Config{}, errors.New("FFPF_ID_ISSUER must be an https URL (http only for localhost or 127.0.0.1)")
+	}
 	if proxySecret := get("API_WEB_PROXY_SECRET"); proxySecret != "" {
 		if len(proxySecret) < minJWTSecretBytes {
 			return Config{}, fmt.Errorf("API_WEB_PROXY_SECRET must be at least %d bytes", minJWTSecretBytes)
@@ -146,6 +173,24 @@ func LoadConfig(getenv func(string) string) (Config, error) {
 		return Config{}, err
 	}
 	return cfg, nil
+}
+
+// validFFPFIssuer reports whether issuer may be FFPF ID's issuer: an https URL
+// with a host and no credentials, or an http one on localhost or 127.0.0.1 for
+// local development. The client secret is sent there.
+func validFFPFIssuer(issuer string) bool {
+	u, err := url.Parse(issuer)
+	if err != nil || u.Host == "" || u.User != nil {
+		return false
+	}
+	switch u.Scheme {
+	case "https":
+		return true
+	case "http":
+		host := u.Hostname()
+		return host == "localhost" || host == "127.0.0.1"
+	}
+	return false
 }
 
 // baseURL returns the named override, or def when unset. An override must be a
