@@ -33,9 +33,10 @@ func (s *Service) LoginGitHub(ctx context.Context, code, verifier, redirectURI s
 // LoginFFPF signs in an FFPF ID user as a member: it exchanges the code (see
 // FFPFClient.Exchange for the arguments and its errors), records the account
 // with the current email and display name, and starts a session for the owner
-// ID ffpf:<sub>. Anyone with a verified FFPF ID account may sign in; there is
-// no allowlist. The email is recorded for display only. It returns
-// ErrFFPFDisabled when FFPF ID is not configured.
+// ID ffpf:<sub> (ErrUnauthorized when the sub cannot form one). Anyone with a
+// verified FFPF ID account may sign in; there is no allowlist. The email is
+// recorded for display only. It returns ErrFFPFDisabled when FFPF ID is not
+// configured.
 func (s *Service) LoginFFPF(ctx context.Context, code, verifier, redirectURI, nonce string) (TokenPair, error) {
 	if s.FFPF == nil {
 		return TokenPair{}, ErrFFPFDisabled
@@ -43,6 +44,11 @@ func (s *Service) LoginFFPF(ctx context.Context, code, verifier, redirectURI, no
 	user, err := s.FFPF.Exchange(ctx, code, verifier, redirectURI, nonce)
 	if err != nil {
 		return TokenPair{}, err
+	}
+	// FFPFClient already checks the sub; check again so no FFPF implementation
+	// can make a malformed owner ID.
+	if !ffpfSub.MatchString(user.Sub) {
+		return TokenPair{}, ErrUnauthorized
 	}
 	name := truncateRunes(strings.TrimSpace(user.Name), maxDisplayNameRunes)
 	if name == "" {

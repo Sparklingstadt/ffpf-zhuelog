@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -2031,6 +2032,20 @@ func TestLoginFFPFErrors(t *testing.T) {
 			}
 			if f.log.has("UpsertFfpfAccount") || len(f.store.tokens) != 0 {
 				t.Fatal("the account or a token was written after a failed exchange")
+			}
+		})
+	}
+	// Defence in depth: whatever the FFPF client returns, a sub that cannot
+	// form an ffpf:<sub> owner ID never reaches the store.
+	for _, sub := range []string{"", "ABC", "a:b", "a/b", "ffpf:x", strings.Repeat("a", 65)} {
+		t.Run("malformed sub "+strconv.Quote(sub), func(t *testing.T) {
+			f, stub := ffpfFixture()
+			stub.user.Sub = sub
+			if _, err := f.svc.LoginFFPF(ctx, "c", "v", "r", "n"); !errors.Is(err, ErrUnauthorized) {
+				t.Fatalf("err = %v, want ErrUnauthorized", err)
+			}
+			if f.log.has("UpsertFfpfAccount") || len(f.store.tokens) != 0 {
+				t.Fatal("the account or a token was written for a malformed sub")
 			}
 		})
 	}

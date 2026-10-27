@@ -165,6 +165,29 @@ func TestFollowHandler(t *testing.T) {
 			t.Fatalf("status=%d follower=%q followee=%q now=%v", w.Code, gotFollower, gotFollowee, gotNow)
 		}
 	})
+	t.Run("ffpf member gets 204 and Follow", func(t *testing.T) {
+		var gotFollowee string
+		h, _ := followsRouter(t, &fakeFollows{
+			memberExists: func(_ context.Context, id string) (bool, error) { return id == "ffpf:cabc", nil },
+			follow: func(_ context.Context, _, b string, _ time.Time) error {
+				gotFollowee = b
+				return nil
+			},
+		}, auth.RoleMember)
+		w := do(h, http.MethodPut, "/v1/follows/ffpf:cabc", "", authHeader)
+		if w.Code != http.StatusNoContent || gotFollowee != "ffpf:cabc" {
+			t.Fatalf("status=%d followee=%q", w.Code, gotFollowee)
+		}
+	})
+	// A malformed path value is answered like any other path: 404.
+	t.Run("malformed owner IDs are 404 without store calls", func(t *testing.T) {
+		h, _ := followsRouter(t, &fakeFollows{}, auth.RoleMember)
+		for _, id := range []string{"ffpf:", "ffpf:ABC", "gitlab:1", "12345", "ffpf:" + strings.Repeat("a", 65)} {
+			for _, method := range []string{http.MethodPut, http.MethodDelete} {
+				wantError(t, do(h, method, "/v1/follows/"+id, "", authHeader), http.StatusNotFound, "not_found")
+			}
+		}
+	})
 	t.Run("unknown member is 404", func(t *testing.T) {
 		h, _ := followsRouter(t, &fakeFollows{memberExists: func(context.Context, string) (bool, error) { return false, nil }}, auth.RoleMember)
 		wantError(t, do(h, http.MethodPut, "/v1/follows/password:ghost", "", authHeader), http.StatusNotFound, "not_found")
@@ -192,6 +215,9 @@ func TestUnfollowHandler(t *testing.T) {
 	w := do(h, http.MethodDelete, "/v1/follows/password:other", "", authHeader)
 	if w.Code != http.StatusNoContent || gotA != testOwner || gotB != "password:other" {
 		t.Fatalf("status=%d %q %q", w.Code, gotA, gotB)
+	}
+	if w := do(h, http.MethodDelete, "/v1/follows/ffpf:cabc", "", authHeader); w.Code != http.StatusNoContent || gotB != "ffpf:cabc" {
+		t.Fatalf("ffpf unfollow = %d %q", w.Code, gotB)
 	}
 	if w := do(h, http.MethodDelete, "/v1/follows/"+testOwner, "", authHeader); w.Code != http.StatusNoContent {
 		t.Fatalf("self unfollow = %d", w.Code)

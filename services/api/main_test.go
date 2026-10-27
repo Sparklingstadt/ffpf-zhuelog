@@ -96,7 +96,7 @@ func (f *fakeMembers) MemberExists(_ context.Context, ownerID string) (bool, err
 
 func TestOwnerValid(t *testing.T) {
 	allow := auth.ParseAllowlist("111, 222")
-	members := &fakeMembers{exists: map[string]bool{"password:m1": true}}
+	members := &fakeMembers{exists: map[string]bool{"password:m1": true, "ffpf:cabc": true}}
 	check := ownerValid(allow, members)
 	ctx := context.Background()
 
@@ -109,6 +109,8 @@ func TestOwnerValid(t *testing.T) {
 		{"admin removed from the allowlist", "999", auth.RoleAdmin, false, false},
 		{"member that exists", "password:m1", auth.RoleMember, true, true},
 		{"member that is gone", "password:m2", auth.RoleMember, false, true},
+		{"ffpf member that exists", "ffpf:cabc", auth.RoleMember, true, true},
+		{"ffpf member that is gone", "ffpf:cgone", auth.RoleMember, false, true},
 		{"guest", auth.GuestOwnerID, auth.RoleGuest, false, false},
 		{"unknown role", "111", "owner", false, false},
 		{"no role", "111", "", false, false},

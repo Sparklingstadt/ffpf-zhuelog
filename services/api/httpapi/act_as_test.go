@@ -66,6 +66,7 @@ func TestActAsRejections(t *testing.T) {
 		{"empty", auth.RoleAdmin, "", 400, "invalid_request"},
 		{"admin owner id", auth.RoleAdmin, "12345", 400, "invalid_request"},
 		{"guest owner id", auth.RoleAdmin, "guest", 400, "invalid_request"},
+		{"ffpf member owner id", auth.RoleAdmin, "ffpf:cabc", 400, "invalid_request"},
 		{"no such member", auth.RoleAdmin, "password:gone", 404, "not_found"},
 	}
 	for _, tc := range cases {
