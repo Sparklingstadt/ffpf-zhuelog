@@ -20,6 +20,10 @@ const MemberOwnerPrefix = "password:"
 // MemberOwnerID is the ownerId of the member with the given account id.
 func MemberOwnerID(accountID string) string { return MemberOwnerPrefix + accountID }
 
+// FfpfOwnerPrefix starts the ownerId of a member who signs in with FFPF ID:
+// "ffpf:" + the portal's sub. See ffpf_accounts.go.
+const FfpfOwnerPrefix = "ffpf:"
+
 // PasswordAccount is a member account that signs in with loginId and password.
 type PasswordAccount struct {
 	ID             string

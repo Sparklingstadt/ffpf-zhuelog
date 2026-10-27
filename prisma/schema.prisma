@@ -64,6 +64,19 @@ model PasswordAccount {
   updatedAt      DateTime  @updatedAt
 }
 
+// A member who signs in with FFPF ID (issued by ffpf-portal). id is the
+// portal's sub; the ownerId is "ffpf:" + id. email is for display only and is
+// never used for authorization.
+model FfpfAccount {
+  id             String   @id
+  email          String
+  displayName    String
+  sessionVersion Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  lastLoginAt    DateTime
+}
+
 // Fixed-window sign-in attempt counters, shared by the web app and the Go API.
 // Keys always include the client address ("client:<ip>",
 // "login:<ip>:<loginId>"), so nobody can lock another person out from
