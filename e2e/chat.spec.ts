@@ -15,7 +15,7 @@ test("admin chats, the conversation is saved and can be continued and deleted", 
   await asAdmin(context);
   await page.goto("/");
   await page
-    .getByRole("main")
+    .getByRole("navigation", { name: "アカウント" })
     .getByRole("link", { name: "ChatGPT と話す" })
     .click();
   await expect(page).toHaveURL((url) => url.pathname === "/chat");
@@ -64,7 +64,7 @@ test("a member chats and keeps their own conversation notes; guests have no way 
   const accountId = await createMember(db, "taro", "太郎", "member-password-1");
   await asMember(page, "taro", "member-password-1");
   await page
-    .getByRole("main")
+    .getByRole("navigation", { name: "アカウント" })
     .getByRole("link", { name: "ChatGPT と話す" })
     .click();
   await expect(page).toHaveURL((url) => url.pathname === "/chat");

@@ -1,22 +1,8 @@
-import {
-  BookOpenText,
-  CalendarDays,
-  Database,
-  Download,
-  FileUp,
-  Languages,
-  MessageCircle,
-  MessagesSquare,
-} from "lucide-react";
+import { BookOpenText, Database, Languages } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import {
-  showsRecords,
-  type RecordOwner,
-} from "@/application/identity/use-cases/resolve-record-owner";
 import { learningNotes } from "@/composition/learning-container";
-import { isMemberRole } from "@/domain/identity/entities/authenticated-user";
 import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
 import { GoApiError } from "@/infrastructure/go-api/client";
 import type { ViewedOwner } from "@/infrastructure/go-api/learning-gateway";
@@ -27,15 +13,11 @@ import { LearningEntryCard } from "@/presentation/components/learning/learning-e
 import { RecordOwnerControls } from "@/presentation/components/records/record-owner-controls";
 import { Alert, AlertDescription } from "@/presentation/components/ui/alert";
 import { Badge } from "@/presentation/components/ui/badge";
-import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
 import { requireSignedInOwner } from "@/presentation/guards/record-owner-guard";
 import { genericErrorMessage } from "@/presentation/presenters/generic-error-message";
 import { getLogDateHref } from "@/presentation/presenters/log-date-presenter";
-import {
-  recentEntriesTotal,
-  recentEntryNumberLabel,
-} from "@/presentation/presenters/recent-entry-number";
+import { recentEntryNumberLabel } from "@/presentation/presenters/recent-entry-number";
 import {
   requestedRecordOwner,
   withRecordOwner,
@@ -64,18 +46,7 @@ type HomeProps = {
   searchParams: Promise<{ user?: string | string[] }>;
 };
 
-function HomeHeader({
-  owner,
-  total,
-  canChat,
-}: {
-  owner: RecordOwner;
-  // Number of entries for the viewed owner; null when no notes are shown.
-  total: number | null;
-  // Members and admins also get the ChatGPT chat and its conversation notes.
-  canChat: boolean;
-}) {
-  const hasNotes = showsRecords(owner);
+function HomeHeader() {
   return (
     <header className="flex flex-col gap-5 border-b pb-8 sm:flex-row sm:items-end sm:justify-between">
       <div className="space-y-3">
@@ -90,55 +61,6 @@ function HomeHeader({
             自分が書いた文と添削後の文を、ピン音や覚えるべきヒントと一緒に蓄積します。
           </p>
         </div>
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        {total === null ? null : (
-          <div className="flex h-9 items-center gap-2 rounded-lg border bg-card px-3 text-sm shadow-xs">
-            <Database className="size-4 text-muted-foreground" />
-            <span className="text-muted-foreground">登録済み</span>
-            <strong className="font-mono text-base">{total}</strong>
-            <span className="text-muted-foreground">文</span>
-          </div>
-        )}
-        {hasNotes ? (
-          <Button asChild variant="outline" size="lg">
-            <Link href={withRecordOwner("/logs", owner)}>
-              <CalendarDays /> 日付から見る
-            </Link>
-          </Button>
-        ) : null}
-        {canChat ? (
-          <>
-            <Button asChild variant="outline" size="lg">
-              <Link href="/chat">
-                <MessageCircle /> ChatGPT と話す
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="lg">
-              <Link href="/quick-question">クイック質問</Link>
-            </Button>
-            <Button asChild variant="outline" size="lg">
-              <Link href="/conversations">
-                <MessagesSquare /> 会話ノート
-              </Link>
-            </Button>
-          </>
-        ) : null}
-        {/* Import and export act on the signed-in user's own notes only. */}
-        {owner.kind === "self" ? (
-          <>
-            <Button asChild variant="outline" size="lg">
-              <Link href="/import">
-                <FileUp /> CSVをインポート
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="lg">
-              <Link href="/export">
-                <Download /> CSVでエクスポート
-              </Link>
-            </Button>
-          </>
-        ) : null}
       </div>
     </header>
   );
@@ -155,11 +77,7 @@ export default async function Home({ searchParams }: HomeProps) {
   if (owner.kind === "denied" && owner.reason === "guest") {
     return (
       <PageShell user={user} width="6xl" spacious>
-        <HomeHeader
-          owner={owner}
-          total={null}
-          canChat={isMemberRole(user.role)}
-        />
+        <HomeHeader />
         <Card className="border-dashed py-14 text-center shadow-none">
           <CardContent className="flex flex-col items-center gap-4">
             <div className="rounded-full bg-muted p-3">
@@ -177,11 +95,7 @@ export default async function Home({ searchParams }: HomeProps) {
   if (owner.kind === "denied") {
     return (
       <PageShell user={user} width="6xl" spacious>
-        <HomeHeader
-          owner={owner}
-          total={null}
-          canChat={isMemberRole(user.role)}
-        />
+        <HomeHeader />
         <ReauthNotice subject="学習ノート" />
       </PageShell>
     );
@@ -195,11 +109,7 @@ export default async function Home({ searchParams }: HomeProps) {
 
   return (
     <PageShell user={user} width="6xl" spacious>
-      <HomeHeader
-        owner={owner}
-        total={recentEntriesTotal(total, entries.length)}
-        canChat={isMemberRole(user.role)}
-      />
+      <HomeHeader />
 
       <RecordOwnerControls owner={owner} view={view} path="/" />
 
