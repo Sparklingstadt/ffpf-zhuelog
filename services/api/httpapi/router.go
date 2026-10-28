@@ -105,6 +105,8 @@ type Deps struct {
 	Chat          ChatStreamer
 	Conversations Conversations
 	ChatModel     string
+	QuickChat     ChatStreamer
+	Questions     Questions
 	// PrepositionRecords keeps finished rounds of preposition practice.
 	PrepositionRecords PrepositionRecords
 }
@@ -258,6 +260,13 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 		private("GET /v1/conversations/{id}", authed(getConversation(d.Conversations)))
 		private("PUT /v1/conversations/{id}", authed(putConversation(d.Conversations, d.Now)))
 		private("DELETE /v1/conversations/{id}", authed(deleteConversation(d.Conversations)))
+	}
+
+	if d.QuickChat != nil && d.Questions != nil {
+		private("POST /v1/quick-question", authed(streamMessages(d.QuickChat, true)))
+		private("GET /v1/questions", authed(listQuestions(d.Questions, d.ChatModel)))
+		private("GET /v1/questions/{id}", authed(getQuestion(d.Questions)))
+		private("PUT /v1/questions/{id}", authed(putQuestion(d.Questions, d.ChatModel, d.Now)))
 	}
 
 	return mux, routes

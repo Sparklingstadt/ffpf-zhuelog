@@ -181,6 +181,11 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 			APIKey:  cfg.OpenAIAPIKey,
 			Model:   cfg.OpenAIChatModel,
 		}
+		deps.QuickChat = &chat.Streamer{
+			HTTP: newNoRedirectHTTPClient(65 * time.Second), BaseURL: cfg.OpenAIBaseURL,
+			APIKey: cfg.OpenAIAPIKey, Model: cfg.OpenAIChatModel, Instructions: chat.QuickQuestionPrompt, RequireComplete: true,
+		}
+		deps.Questions = db
 		deps.Conversations = db
 		deps.ChatModel = cfg.OpenAIChatModel
 	}

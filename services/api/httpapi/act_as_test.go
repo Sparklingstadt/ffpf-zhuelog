@@ -94,7 +94,7 @@ func TestActAsRejections(t *testing.T) {
 
 	t.Run("member is refused on every authed route", func(t *testing.T) {
 		d := Deps{Auth: actingAuth(auth.RoleMember), Line: &fakeLine{}, LineChannelSecret: testLineSecret,
-			CronSecret: testCronSecret, Chat: &fakeChat{}, Conversations: &fakeConversations{}, PrepositionRecords: &fakePrepositionRecords{}}
+			CronSecret: testCronSecret, QuickChat: &fakeChat{}, Questions: &fakeQuestions{}, Chat: &fakeChat{}, Conversations: &fakeConversations{}, PrepositionRecords: &fakePrepositionRecords{}}
 		d = d.withDefaults()
 		mux, routes := newMux(d)
 		h := wrap(d, jsonMuxErrors(mux))

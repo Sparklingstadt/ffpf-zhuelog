@@ -115,6 +115,9 @@ function HomeHeader({
               </Link>
             </Button>
             <Button asChild variant="outline" size="lg">
+              <Link href="/quick-question">クイック質問</Link>
+            </Button>
+            <Button asChild variant="outline" size="lg">
               <Link href="/conversations">
                 <MessagesSquare /> 会話ノート
               </Link>

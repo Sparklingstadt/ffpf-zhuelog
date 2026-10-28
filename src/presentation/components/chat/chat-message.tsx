@@ -40,7 +40,7 @@ export function ChatMessage({
       </div>
       <div
         className={cn(
-          "max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-7 sm:max-w-[75%]",
+          "min-w-0 max-w-[85%] [overflow-wrap:anywhere] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-7 sm:max-w-[75%]",
           isUser
             ? "rounded-tr-sm bg-primary text-primary-foreground"
             : "rounded-tl-sm border bg-card text-card-foreground shadow-xs",
