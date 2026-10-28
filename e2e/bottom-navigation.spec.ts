@@ -7,6 +7,9 @@ test("bottom menu fits phones and tablets and follows navigation", async ({
   await asAdmin(context);
   await page.goto("/");
   const menu = page.getByRole("navigation", { name: "メインメニュー" });
+  await expect(
+    page.getByRole("banner").getByRole("link", { name: "学习録", exact: true }),
+  ).toHaveAttribute("href", "/chat");
 
   for (const width of [320, 390, 768, 1024, 1279]) {
     await page.setViewportSize({ width, height: 900 });
@@ -14,11 +17,16 @@ test("bottom menu fits phones and tablets and follows navigation", async ({
     await expect(menu.locator("a, button")).toHaveText([
       "学習ノート",
       "介詞練習",
+      "LINE連携",
       "クイック質問",
       "会話ノート",
     ]);
     const bounds = await menu.boundingBox();
     expect(bounds!.y + bounds!.height).toBe(900);
+    const lineTab = await menu
+      .getByRole("link", { name: "LINE連携" })
+      .boundingBox();
+    expect(lineTab!.x + lineTab!.width / 2).toBeCloseTo(width / 2, 0);
     expect(
       await menu.evaluate((element) => {
         const body = document.body;
@@ -39,6 +47,12 @@ test("bottom menu fits phones and tablets and follows navigation", async ({
     }
   }
 
+  await menu.getByRole("link", { name: "LINE連携" }).click();
+  await expect(page).toHaveURL(/\/account\/line$/);
+  await expect(menu.getByRole("link", { name: "LINE連携" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
   await menu.getByRole("link", { name: "クイック質問" }).click();
   await expect(page).toHaveURL(/\/quick-question$/);
   await expect(
@@ -76,7 +90,7 @@ test("bottom menu fits phones and tablets and follows navigation", async ({
   ).toBe("0px");
 });
 
-test("guest menu keeps four tabs without linking to restricted conversations", async ({
+test("guest menu keeps five tabs without linking to restricted features", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -85,7 +99,8 @@ test("guest menu keeps four tabs without linking to restricted conversations", a
   await expect(menu).toHaveCount(0);
   await asGuest(page);
   await expect(menu).toBeVisible();
-  await expect(menu.locator("a, button")).toHaveCount(4);
+  await expect(menu.locator("a, button")).toHaveCount(5);
+  await expect(menu.getByRole("button", { name: /LINE連携/ })).toBeDisabled();
   await expect(menu.getByRole("button", { name: /会話ノート/ })).toBeDisabled();
   await expect(menu.getByRole("link", { name: "会話ノート" })).toHaveCount(0);
   await page.getByRole("button", { name: "ログアウト" }).click();

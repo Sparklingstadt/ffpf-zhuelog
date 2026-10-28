@@ -1,6 +1,12 @@
 "use client";
 
-import { BookOpen, CircleHelp, MessagesSquare, Shuffle } from "lucide-react";
+import {
+  BookOpen,
+  CircleHelp,
+  MessageCircle,
+  MessagesSquare,
+  Shuffle,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -30,6 +36,13 @@ export function BottomNavigation({ role }: { role: AppRole }) {
       active: pathname.startsWith("/practice/prepositions"),
     },
     {
+      label: "LINE連携",
+      href: isMemberRole(role) ? "/account/line" : undefined,
+      icon: MessageCircle,
+      active: pathname.startsWith("/account/line"),
+      unavailable: "メンバー向け",
+    },
+    {
       label: "クイック質問",
       href: isMemberRole(role) ? "/quick-question" : undefined,
       icon: CircleHelp,
@@ -51,10 +64,10 @@ export function BottomNavigation({ role }: { role: AppRole }) {
       aria-label="メインメニュー"
       className="fixed inset-x-0 bottom-0 z-50 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] backdrop-blur-md xl:hidden"
     >
-      <div className="mx-auto grid h-20 w-full max-w-6xl grid-cols-4 px-2">
+      <div className="mx-auto grid h-20 w-full max-w-6xl grid-cols-5 px-2">
         {tabs.map(({ label, href, icon: Icon, active, unavailable }) => {
           const className = cn(
-            "my-1 flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[11px] font-medium whitespace-nowrap sm:text-sm",
+            "my-1 flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 text-center text-[11px] leading-tight font-medium whitespace-normal sm:text-sm",
             href
               ? "outline-none transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50"
               : "cursor-not-allowed text-muted-foreground",
@@ -64,7 +77,7 @@ export function BottomNavigation({ role }: { role: AppRole }) {
           const content = (
             <>
               <Icon className="size-5 shrink-0" aria-hidden="true" />
-              <span>{label}</span>
+              <span className="max-w-full">{label}</span>
             </>
           );
 
@@ -87,7 +100,9 @@ export function BottomNavigation({ role }: { role: AppRole }) {
               aria-label={`${label}（${unavailable}）`}
             >
               {content}
-              <span className="text-[10px] leading-none">{unavailable}</span>
+              <span className="max-w-full text-[9px] leading-tight sm:text-[10px]">
+                {unavailable}
+              </span>
             </button>
           );
         })}

@@ -141,7 +141,7 @@ export function AppHeader({ user }: { user?: AuthenticatedUser | null }) {
     <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur-md">
       <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 sm:px-6 md:flex-nowrap lg:px-8">
         <Link
-          href="/"
+          href="/chat"
           className="flex shrink-0 items-center gap-2 rounded-lg font-semibold tracking-tight outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
