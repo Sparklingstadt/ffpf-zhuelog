@@ -1,3 +1,5 @@
+import { normalizeLineOfficialAccountId } from "@/domain/line/official-account";
+
 // Base URL of the Go API, without surrounding spaces or a trailing slash.
 export function goApiUrl(): string | undefined {
   const url = process.env.GO_API_URL?.trim().replace(/\/+$/, "");
@@ -53,4 +55,12 @@ export function ffpfIdConfig():
 export function lineAddFriendUrl(): string | undefined {
   const url = process.env.LINE_ADD_FRIEND_URL?.trim();
   return url?.startsWith("https://") ? url : undefined;
+}
+
+export function lineOfficialAccountId(): string | undefined {
+  return normalizeLineOfficialAccountId(process.env.LINE_OFFICIAL_ACCOUNT_ID);
+}
+
+export function isLineLinkPreview(): boolean {
+  return process.env.LINE_LINK_PREVIEW_MODE === "true";
 }

@@ -34,6 +34,8 @@ async function main() {
     API_WEB_PROXY_SECRET: goProxySecret(),
     // Only shows the GitHub button; the e2e never completes a GitHub login.
     AUTH_GITHUB_ID: "e2e-client",
+    LINE_OFFICIAL_ACCOUNT_ID: "@393bohaw",
+    LINE_LINK_PREVIEW_MODE: "false",
     // Shows the FFPF ID button; sign-in completes against the local stub.
     FFPF_ID_ISSUER: ffpf.issuer,
     FFPF_ID_CLIENT_ID: ffpf.clientId,
