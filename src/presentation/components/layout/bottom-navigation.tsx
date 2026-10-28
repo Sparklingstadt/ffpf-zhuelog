@@ -52,9 +52,9 @@ export function BottomNavigation({ role }: { role: AppRole }) {
     },
     {
       label: "会話ノート",
-      href: isMemberRole(role) ? "/conversations" : undefined,
+      href: isMemberRole(role) ? "/chat" : undefined,
       icon: MessagesSquare,
-      active: pathname.startsWith("/conversations"),
+      active: pathname === "/chat" || pathname.startsWith("/conversations"),
       unavailable: "メンバー向け",
     },
   ];

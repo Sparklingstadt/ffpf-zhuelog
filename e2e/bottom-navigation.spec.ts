@@ -70,7 +70,7 @@ test("bottom menu fits phones and tablets and follows navigation", async ({
     "page",
   );
   await menu.getByRole("link", { name: "会話ノート" }).click();
-  await expect(page).toHaveURL(/\/conversations$/);
+  await expect(page).toHaveURL(/\/chat$/);
   await expect(menu.getByRole("link", { name: "会話ノート" })).toHaveAttribute(
     "aria-current",
     "page",
