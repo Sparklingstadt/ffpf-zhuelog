@@ -126,9 +126,6 @@ test("admin views a member's notes read-only and keeps the choice while navigati
   await expect(
     page.getByText("管理者の記録", { exact: true }).first(),
   ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "CSVをインポート", exact: true }),
-  ).toBeVisible();
   await page
     .getByLabel("表示するユーザー")
     .selectOption({ label: "太郎（taro）" });

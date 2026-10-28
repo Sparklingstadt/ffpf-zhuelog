@@ -71,7 +71,7 @@ function UserControls({ user }: { user: AuthenticatedUser }) {
 
   return (
     <div className="flex min-w-0 items-center justify-between gap-2 md:justify-end">
-      <div className="flex min-w-0 items-center gap-1.5 text-sm">
+      <div className="flex max-w-40 min-w-0 shrink-0 items-center gap-1.5 text-sm">
         {isGuest ? (
           <Eye className="size-4 shrink-0 text-muted-foreground" />
         ) : (
@@ -88,7 +88,7 @@ function UserControls({ user }: { user: AuthenticatedUser }) {
       </div>
       <nav
         aria-label="アカウント"
-        className="flex shrink-0 items-center gap-0.5"
+        className="flex min-w-0 flex-wrap items-center justify-end gap-0.5"
       >
         <NavLink label={label} href="/practice/prepositions" icon={Shuffle}>
           介詞練習
