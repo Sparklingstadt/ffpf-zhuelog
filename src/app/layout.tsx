@@ -5,6 +5,7 @@ import { GeistSans } from "geist/font/sans";
 import { getCurrentViewerUser } from "@/composition/identity-container";
 import { THEME_BOOTSTRAP_SCRIPT } from "@/infrastructure/theme/theme-bootstrap";
 import { ActingBanner } from "@/presentation/components/layout/acting-banner";
+import { BottomNavigation } from "@/presentation/components/layout/bottom-navigation";
 import "./globals.css";
 
 // Request-specific CSP nonces cannot be used in a statically cached document.
@@ -27,6 +28,7 @@ async function bannerUser() {
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const nonce = (await headers()).get("x-nonce") ?? undefined;
+  const user = await bannerUser();
   return (
     <html
       lang="ja"
@@ -40,9 +42,12 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }}
         />
       </head>
-      <body className="flex min-h-full flex-col">
-        <ActingBanner user={await bannerUser()} />
+      <body
+        className={`flex min-h-full flex-col ${user ? "pb-[calc(5rem+1px+env(safe-area-inset-bottom))] xl:pb-0" : ""}`}
+      >
+        <ActingBanner user={user} />
         {children}
+        {user ? <BottomNavigation role={user.role} /> : null}
       </body>
     </html>
   );

@@ -216,3 +216,23 @@ func TestStreamTimesOut(t *testing.T) {
 		t.Fatalf("err = %v, want OPENAI_TIMEOUT", err)
 	}
 }
+
+func TestQuickQuestionPromptAndIncompleteAnswer(t *testing.T) {
+	var body map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		sse(w, delta("途中"))
+		sse(w, `{"type":"response.incomplete"}`)
+	}))
+	defer srv.Close()
+	s := streamer(srv.URL)
+	s.Instructions = QuickQuestionPrompt
+	s.RequireComplete = true
+	_, err := collect(t, s, context.Background(), []Message{{Role: "user", Text: "了？"}})
+	if code(err) != "OPENAI_INCOMPLETE_RESPONSE" {
+		t.Fatalf("error = %v", err)
+	}
+	if body["instructions"] != QuickQuestionPrompt {
+		t.Fatalf("instructions = %v", body["instructions"])
+	}
+}

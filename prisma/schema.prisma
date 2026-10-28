@@ -200,3 +200,15 @@ model PrepositionPracticeRecord {
   @@unique([id, ownerId])
   @@index([ownerId, createdAt])
 }
+
+// One question and one complete answer, independent of chat conversations.
+model QuickQuestion {
+  id        String   @id
+  ownerId   String
+  question  String
+  answer    String
+  modelName String
+  createdAt DateTime @default(now())
+
+  @@index([ownerId, createdAt])
+}

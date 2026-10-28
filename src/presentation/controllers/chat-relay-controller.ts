@@ -9,6 +9,7 @@ export type ChatRelayDeps = {
   // Calls the Go API at path; the route passes request.signal along so a
   // stopped answer stops Go and OpenAI too.
   fetchGo: (path: string, init: RequestInit) => Promise<Response>;
+  upstreamPath?: "/v1/chat" | "/v1/quick-question";
 };
 
 const json = (error: string, status: number) =>
@@ -75,7 +76,7 @@ export async function handleChatRelay(
 
   let upstream: Response;
   try {
-    upstream = await deps.fetchGo("/v1/chat", {
+    upstream = await deps.fetchGo(deps.upstreamPath ?? "/v1/chat", {
       method: "POST",
       headers: {
         authorization: `Bearer ${deps.accessToken}`,

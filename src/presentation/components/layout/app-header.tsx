@@ -1,5 +1,6 @@
 import {
   CircleUserRound,
+  CircleHelp,
   Eye,
   KeyRound,
   Languages,
@@ -110,6 +111,11 @@ function UserControls({ user }: { user: AuthenticatedUser }) {
         {isMember || isAdmin ? (
           <NavLink label={label} href="/chat" icon={MessagesSquare}>
             ChatGPT と話す
+          </NavLink>
+        ) : null}
+        {isMember || isAdmin ? (
+          <NavLink label={label} href="/quick-question" icon={CircleHelp}>
+            クイック質問
           </NavLink>
         ) : null}
         {isAdmin ? (
