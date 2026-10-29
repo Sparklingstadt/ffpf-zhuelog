@@ -109,6 +109,7 @@ type Deps struct {
 	Questions     Questions
 	// PrepositionRecords keeps finished rounds of preposition practice.
 	PrepositionRecords PrepositionRecords
+	ComplementRecords  ComplementRecords
 }
 
 const (
@@ -238,6 +239,10 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	private("GET /v1/preposition-records", authed(listPrepositionRecords(d.PrepositionRecords)))
 	private("GET /v1/preposition-records/{id}", authed(getPrepositionRecord(d.PrepositionRecords)))
 	private("PUT /v1/preposition-records/{id}", authed(putPrepositionRecord(d.PrepositionRecords, d.Now)))
+
+	private("GET /v1/complement-records", authed(listComplementRecords(d.ComplementRecords)))
+	private("GET /v1/complement-records/{id}", authed(getComplementRecord(d.ComplementRecords)))
+	private("PUT /v1/complement-records/{id}", authed(putComplementRecord(d.ComplementRecords, d.Now)))
 
 	// The LINE routes exist only when the bot is configured. The webhook and
 	// the drain are public but check their own credential (the LINE signature,

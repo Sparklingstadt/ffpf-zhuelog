@@ -347,3 +347,11 @@ GitHub OAuthの外部ログインは、このE2Eの対象外です。
 
 `pnpm install --frozen-lockfile` 後、`pnpm run test:regression` で既存機能の検証を実行します。GitHub Actions では同じ内容を CI ワークフローが並列で実行します（`verify` と `e2e` を、本番の Vercel と同じ Node 24 で実行）。`package.json` の `engines` は `24.x` です（Vercel はまだ Node 26 に対応していないため）。
 ブラウザーテストの前に `pnpm exec playwright install chromium` を実行してください。Webの回帰テストは本番ビルドを使い、既存サーバーを再利用しません。
+
+## 補語の練習
+
+トップバーの「補語練習」から、結果補語・可能補語・程度補語を選べます（`/practice/complements`）。各モード25問の4択で、正解まで選び直します。正答率・ミス数・経過時間、解答後の中国語例文・補語のピンイン・日本語訳を表示します。問題データは `src/domain/practice/complement-data.ts` にあります。
+
+会員・管理者の結果は Go API 経由で保存し、補語の種類を付けて履歴から見返せます。ゲストも練習できますが、記録は保存されません。API の仕様は [練習の記録](docs-site/reference/practice.md) を参照してください。
+
+本番反映時は追加マイグレーション `20261030090000_add_complement_practice_records`（`ComplementPracticeRecord` テーブルの新設）が必要です。Web の本番ビルドで適用し、補語記録の新ルートを含む Go API もデプロイしてください。既存の介詞練習の記録は別テーブルに保持されます。

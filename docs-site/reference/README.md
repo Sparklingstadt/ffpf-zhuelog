@@ -48,6 +48,9 @@
 | GET      | [`/v1/preposition-records`](./practice.md#get-v1-preposition-records)                          | 全員                  | ×        | 200  | 介詞の練習記録の一覧                 |
 | GET      | [`/v1/preposition-records/{id}`](./practice.md#get-v1-preposition-records-id)                  | 全員                  | ×        | 200  | 介詞の練習記録 1 件                  |
 | PUT      | [`/v1/preposition-records/{id}`](./practice.md#put-v1-preposition-records-id)                  | 全員                  | ×        | 200  | 介詞の練習記録を保存                 |
+| GET      | [`/v1/complement-records`](./practice.md#補語の記録-api)                                       | 会員・admin           | ×        | 200  | 補語の練習記録の一覧                 |
+| GET      | [`/v1/complement-records/{id}`](./practice.md#補語の記録-api)                                  | 会員・admin           | ×        | 200  | 補語の練習記録 1 件                  |
+| PUT      | [`/v1/complement-records/{id}`](./practice.md#補語の記録-api)                                  | 会員・admin           | ×        | 200  | 補語の練習記録を保存                 |
 | GET      | [`/v1/admin/accounts`](./admin.md#get-v1-admin-accounts)                                       | admin                 | ×        | 200  | 会員の一覧（管理用）                 |
 | POST     | [`/v1/admin/accounts`](./admin.md#post-v1-admin-accounts)                                      | admin                 | ×        | 201  | 会員の作成                           |
 | POST     | [`/v1/admin/accounts/{id}/password`](./admin.md#post-v1-admin-accounts-id-password)            | admin                 | ×        | 200  | 会員のパスワードのリセット           |
