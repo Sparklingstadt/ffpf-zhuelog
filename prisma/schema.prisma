@@ -212,3 +212,21 @@ model QuickQuestion {
 
   @@index([ownerId, createdAt])
 }
+
+
+// Complement rounds, isolated from preposition history. mode: result/potential/degree.
+model ComplementPracticeRecord {
+  id            String   @id
+  ownerId       String
+  mode          String
+  questionCount Int
+  firstTryCount Int
+  missCount     Int
+  elapsedMs     Int
+  questions     Json
+  startedAt     DateTime
+  createdAt     DateTime @default(now())
+
+  @@unique([id, ownerId])
+  @@index([ownerId, createdAt])
+}

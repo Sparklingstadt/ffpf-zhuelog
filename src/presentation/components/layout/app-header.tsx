@@ -4,6 +4,7 @@ import {
   Eye,
   KeyRound,
   Languages,
+  ListChecks,
   LogOut,
   MessageCircle,
   MessagesSquare,
@@ -92,6 +93,9 @@ function UserControls({ user }: { user: AuthenticatedUser }) {
       >
         <NavLink label={label} href="/practice/prepositions" icon={Shuffle}>
           介詞練習
+        </NavLink>
+        <NavLink label={label} href="/practice/complements" icon={ListChecks}>
+          補語練習
         </NavLink>
         {isMember || isAdmin ? (
           <NavLink label={label} href="/follow" icon={UsersRound}>
