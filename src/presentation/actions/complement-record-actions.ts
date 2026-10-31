@@ -12,7 +12,15 @@ import { accountForbiddenMessage } from "@/presentation/presenters/account-actio
 // The shape only; Go checks the limits.
 const roundInput = z.object({
   id: z.uuid(),
-  mode: z.enum(["result", "potential", "degree"]),
+  mode: z.enum([
+    "result",
+    "potential",
+    "degree",
+    "direction-simple",
+    "direction-compound",
+    "direction-simple-extended",
+    "direction-compound-extended",
+  ]),
   startedAt: z.iso.datetime(),
   elapsedMs: z.number().int(),
   questions: z.array(

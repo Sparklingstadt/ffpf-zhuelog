@@ -350,8 +350,8 @@ GitHub OAuthの外部ログインは、このE2Eの対象外です。
 
 ## 補語の練習
 
-トップバーの「補語練習」から、結果補語・可能補語・程度補語を選べます（`/practice/complements`）。各モード25問の4択で、正解まで選び直します。正答率・ミス数・経過時間、解答後の中国語例文・補語のピンイン・日本語訳を表示します。問題データは `src/domain/practice/complement-data.ts` にあります。
+トップバーの「補語練習」から、結果補語・可能補語・程度補語と、方向補語の4種類（単純方向補語・複合方向補語・単純方向補語の派生義・複合方向補語の派生義）を選べます（`/practice/complements`）。各モード25問の4択で、正解まで選び直します。正答率・ミス数・経過時間、解答後の中国語例文・補語のピンイン・日本語訳を表示します。問題データは `src/domain/practice/complement-data.ts` にあります。
 
 会員・管理者の結果は Go API 経由で保存し、補語の種類を付けて履歴から見返せます。ゲストも練習できますが、記録は保存されません。API の仕様は [練習の記録](docs-site/reference/practice.md) を参照してください。
 
-本番反映時は追加マイグレーション `20261030090000_add_complement_practice_records`（`ComplementPracticeRecord` テーブルの新設）が必要です。Web の本番ビルドで適用し、補語記録の新ルートを含む Go API もデプロイしてください。既存の介詞練習の記録は別テーブルに保持されます。
+本番反映時は追加マイグレーション `20261030090000_add_complement_practice_records`（`ComplementPracticeRecord` テーブルの新設）が必要です。方向補語のモードには、続くマイグレーション `20261101090000_add_direction_complement_modes`（`mode` の CHECK 制約に4種類を追加）も必要です。Web の本番ビルドで適用し、補語記録の新ルートを含む Go API もデプロイしてください。既存の介詞練習の記録は別テーブルに保持されます。
