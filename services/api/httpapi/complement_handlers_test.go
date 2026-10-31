@@ -163,3 +163,18 @@ func TestComplementRecordPutRejectsInvalidRounds(t *testing.T) {
 		t.Errorf("three misses at 0 ms = %d %s", w.Code, w.Body.String())
 	}
 }
+
+func TestComplementRecordPutAcceptsEveryMode(t *testing.T) {
+	for _, mode := range []string{
+		"result", "potential", "degree",
+		"direction-simple", "direction-compound", "direction-simple-extended", "direction-compound-extended",
+	} {
+		rs := &fakeComplementRecords{}
+		h, _ := complementRouter(t, auth.RoleAdmin, rs)
+		body := strings.Replace(complementBody(t, 1000, complementQuestion("来")), `"mode":"result"`, `"mode":"`+mode+`"`, 1)
+		if w := do(h, "PUT", "/v1/complement-records/"+testConversationID, body, jsonAuth); w.Code != http.StatusOK ||
+			rs.saved[testConversationID].Mode != mode {
+			t.Errorf("%s = %d %s", mode, w.Code, w.Body.String())
+		}
+	}
+}

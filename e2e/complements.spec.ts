@@ -29,6 +29,10 @@ for (const [mode, label] of [
   ["result", "結果補語"],
   ["potential", "可能補語"],
   ["degree", "程度補語"],
+  ["direction-simple", "単純方向補語"],
+  ["direction-compound", "複合方向補語"],
+  ["direction-simple-extended", "単純方向補語の派生義"],
+  ["direction-compound-extended", "複合方向補語の派生義"],
 ]) {
   test(`${label}: 25 questions save their mode and can be reviewed`, async ({
     page,
@@ -103,7 +107,16 @@ test("mode selection and all quiz modes fit the viewport", async ({
   page,
 }, testInfo) => {
   await asGuest(page, "/practice/complements");
-  for (const mode of ["", "/result", "/potential", "/degree"]) {
+  for (const mode of [
+    "",
+    "/result",
+    "/potential",
+    "/degree",
+    "/direction-simple",
+    "/direction-compound",
+    "/direction-simple-extended",
+    "/direction-compound-extended",
+  ]) {
     await page.goto(`/practice/complements${mode}`);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     expect(
