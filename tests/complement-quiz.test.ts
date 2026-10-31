@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { COMPLEMENT_USAGES } from "../src/domain/practice/complement-data";
 import {
   buildComplementQuiz,
   COMPLEMENT_MODES,
@@ -36,4 +37,19 @@ test("retrying shuffles questions and choices without mutating the source", () =
   a[0].choices.length = 0;
   assert.equal(buildComplementQuiz("result", 25)[0].choices.length, 4);
   assert.equal(buildComplementQuiz("degree", 0).length, 0);
+});
+
+test("the four directional-complement modes each hold 25 questions", () => {
+  assert.equal(Object.keys(COMPLEMENT_MODES).length, 7);
+  assert.equal(new Set(COMPLEMENT_USAGES.map((q) => q.id)).size, 175);
+  for (const mode of [
+    "direction-simple",
+    "direction-compound",
+    "direction-simple-extended",
+    "direction-compound-extended",
+  ] as const) {
+    const pool = COMPLEMENT_USAGES.filter((q) => q.mode === mode);
+    assert.equal(pool.length, 25);
+    assert.ok(pool.every((q) => q.id.startsWith(`${mode}-`)));
+  }
 });

@@ -167,6 +167,12 @@ func validComplementRecord(elapsedMs int, questions []store.ComplementQuestion) 
 	return true
 }
 
+var complementModes = map[string]bool{
+	"result": true, "potential": true, "degree": true,
+	"direction-simple": true, "direction-compound": true,
+	"direction-simple-extended": true, "direction-compound-extended": true,
+}
+
 func validComplementMode(mode string) bool {
-	return mode == "result" || mode == "potential" || mode == "degree"
+	return complementModes[mode]
 }
