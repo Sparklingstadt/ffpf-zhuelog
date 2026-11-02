@@ -40,17 +40,18 @@ test("retrying shuffles questions and choices without mutating the source", () =
   assert.equal(buildComplementQuiz("degree", 0).length, 0);
 });
 
-test("the four directional-complement modes each hold 25 questions", () => {
+test("every complement mode holds 100 questions", () => {
   assert.equal(Object.keys(COMPLEMENT_MODES).length, 7);
-  assert.equal(new Set(COMPLEMENT_USAGES.map((q) => q.id)).size, 175);
-  for (const mode of [
-    "direction-simple",
-    "direction-compound",
-    "direction-simple-extended",
-    "direction-compound-extended",
-  ] as const) {
+  assert.equal(new Set(COMPLEMENT_USAGES.map((q) => q.id)).size, 700);
+  assert.equal(
+    new Set(COMPLEMENT_USAGES.map((q) => q.prompt)).size,
+    COMPLEMENT_USAGES.length,
+  );
+  for (const mode of Object.keys(
+    COMPLEMENT_MODES,
+  ) as (keyof typeof COMPLEMENT_MODES)[]) {
     const pool = COMPLEMENT_USAGES.filter((q) => q.mode === mode);
-    assert.equal(pool.length, 25);
+    assert.equal(pool.length, 100);
     assert.ok(pool.every((q) => q.id.startsWith(`${mode}-`)));
   }
 });
@@ -64,5 +65,5 @@ test("counts the questions available for each complement mode", () => {
       COMPLEMENT_USAGES.filter((q) => q.mode === mode).length,
     );
   }
-  assert.equal(countComplementQuestions("result"), 25);
+  assert.equal(countComplementQuestions("result"), 100);
 });

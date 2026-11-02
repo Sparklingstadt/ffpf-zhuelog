@@ -24,7 +24,7 @@ export default async function ComplementModesPage() {
         icon={ListChecks}
         eyebrow="Complement practice"
         title="補語の練習"
-        description="練習する補語を選んでください。各25問の4択で、正答率・ミス数・経過時間を確認できます。"
+        description="練習する補語を選んでください。各100問から毎回25問を4択で出題します。正答率・ミス数・経過時間を確認できます。"
         actions={
           isMemberRole(user.role) ? (
             <Button asChild variant="outline" size="sm">
