@@ -134,7 +134,7 @@
 
 ## 補語の練習の記録
 
-Web の `/practice/complements` で、結果補語（`result`）・可能補語（`potential`）・程度補語（`degree`）と、方向補語の4種類（単純方向補語 `direction-simple`・複合方向補語 `direction-compound`・単純方向補語の派生義 `direction-simple-extended`・複合方向補語の派生義 `direction-compound-extended`）を選んで練習します。各モード25問の4択で、間違えた選択肢は再度選べず、正解まで選び直せます。出題順・選択肢の順番は練習ごとに変わります。
+Web の `/practice/complements` で、結果補語（`result`）・可能補語（`potential`）・程度補語（`degree`）と、方向補語の4種類（単純方向補語 `direction-simple`・複合方向補語 `direction-compound`・単純方向補語の派生義 `direction-simple-extended`・複合方向補語の派生義 `direction-compound-extended`）を選んで練習します。各モード100問の中から1回25問を4択で出題し、間違えた選択肢は再度選べず、正解まで選び直せます。出題順・選択肢の順番は練習ごとに変わります。
 
 ### 補語の記録 API
 
