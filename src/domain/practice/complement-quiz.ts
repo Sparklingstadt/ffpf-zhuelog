@@ -53,6 +53,10 @@ export function isComplementMode(value: string): value is ComplementMode {
   return Object.hasOwn(COMPLEMENT_MODES, value);
 }
 
+export function countComplementQuestions(mode: ComplementMode): number {
+  return COMPLEMENT_USAGES.filter((q) => q.mode === mode).length;
+}
+
 function shuffled<T>(values: readonly T[], random: Random): T[] {
   const out = [...values];
   for (let i = out.length - 1; i > 0; i--) {
