@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { COMPLEMENT_USAGES } from "../src/domain/practice/complement-data";
 import {
   buildComplementQuiz,
+  countComplementQuestions,
   COMPLEMENT_MODES,
 } from "../src/domain/practice/complement-quiz";
 
@@ -52,4 +53,16 @@ test("the four directional-complement modes each hold 25 questions", () => {
     assert.equal(pool.length, 25);
     assert.ok(pool.every((q) => q.id.startsWith(`${mode}-`)));
   }
+});
+
+test("counts the questions available for each complement mode", () => {
+  for (const mode of Object.keys(
+    COMPLEMENT_MODES,
+  ) as (keyof typeof COMPLEMENT_MODES)[]) {
+    assert.equal(
+      countComplementQuestions(mode),
+      COMPLEMENT_USAGES.filter((q) => q.mode === mode).length,
+    );
+  }
+  assert.equal(countComplementQuestions("result"), 25);
 });

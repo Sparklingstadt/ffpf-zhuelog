@@ -3,9 +3,14 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentViewerUser } from "@/composition/identity-container";
 import { isMemberRole } from "@/domain/identity/entities/authenticated-user";
-import { COMPLEMENT_MODES } from "@/domain/practice/complement-quiz";
+import {
+  COMPLEMENT_MODES,
+  type ComplementMode,
+  countComplementQuestions,
+} from "@/domain/practice/complement-quiz";
 import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
+import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
 
@@ -35,7 +40,12 @@ export default async function ComplementModesPage() {
         {Object.entries(COMPLEMENT_MODES).map(([mode, info]) => (
           <Card key={mode}>
             <CardContent className="flex h-full flex-col gap-4">
-              <h2 className="text-xl font-semibold">{info.label}</h2>
+              <div className="flex items-start justify-between gap-2">
+                <h2 className="text-xl font-semibold">{info.label}</h2>
+                <Badge variant="secondary" className="shrink-0">
+                  全{countComplementQuestions(mode as ComplementMode)}問
+                </Badge>
+              </div>
               <p className="flex-1 text-sm leading-6 text-muted-foreground">
                 {info.description}
               </p>

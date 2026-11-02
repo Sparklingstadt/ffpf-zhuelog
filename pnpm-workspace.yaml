@@ -20,3 +20,7 @@ auditConfig:
     # js-yaml@3 > argparse 経由の開発時のみの依存で、argparse は js-yaml の CLI
     # でしか使われず、ドキュメントのビルドでも呼ばれない。修正版が出たら削除する。
     - GHSA-hp3w-g68c-fv3c
+    # minimatch <11.0.1: 修正版は v11 のみで、v3／v10 系には出ていない。eslint と
+    # typescript-eslint 経由の開発時のみの依存で、アプリの実行時には読み込まれない。
+    # 依存元が v11 に対応したら削除する。
+    - GHSA-g3hv-75wg-m249
