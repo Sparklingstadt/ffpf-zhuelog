@@ -10,6 +10,8 @@ import {
 } from "./fixtures";
 
 const QUESTION_COUNT = 25;
+// How many due items /review shows at once (SESSION_SIZE in its page).
+const REVIEW_SESSION_SIZE = 20;
 
 // Picks the choices in order until the right one, so most rounds miss some.
 async function pickUntilRight(page: Page, groupName: string) {
@@ -80,15 +82,16 @@ test("missed practice questions come back on the review page and an answer resch
   );
   await page.getByRole("link", { name: "復習する" }).click();
   await expect(page).toHaveURL((url) => url.pathname === "/review");
-  await expect(page.getByText(`1 / ${missed.length}`)).toBeVisible();
+  // A round with many misses shows only the first session's worth.
+  const shown = Math.min(missed.length, REVIEW_SESSION_SIZE);
+  await expect(page.getByText(`1 / ${shown}`)).toBeVisible();
 
   await pickUntilRight(page, "選択肢");
   await page
     .getByRole("group", { name: "思い出せた度合い" })
     .getByRole("button", { name: "簡単" })
     .click();
-  if (missed.length > 1)
-    await expect(page.getByText(`2 / ${missed.length}`)).toBeVisible();
+  if (shown > 1) await expect(page.getByText(`2 / ${shown}`)).toBeVisible();
   else await expect(page.getByText("1問 復習しました")).toBeVisible();
 
   const { rows: logs } = await db.query(
