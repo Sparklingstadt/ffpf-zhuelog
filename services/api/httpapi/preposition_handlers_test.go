@@ -149,6 +149,9 @@ func TestPrepositionRecordPutRejectsInvalidRounds(t *testing.T) {
 		"long prompt": prepositionBody(t, 1000, map[string]any{
 			"answer": "在", "noun": "学校", "prompt": strings.Repeat("字", maxPrepositionPrompt+1),
 		}),
+		"long id": prepositionBody(t, 1000, map[string]any{
+			"id": strings.Repeat("a", maxPrepositionID+1), "answer": "在", "noun": "学校", "prompt": "p",
+		}),
 		"bad startedAt": `{"startedAt":"yesterday","elapsedMs":1,"questions":[{"answer":"在","noun":"学校","prompt":"p"}]}`,
 		"not JSON":      `{`,
 	} {
@@ -160,5 +163,45 @@ func TestPrepositionRecordPutRejectsInvalidRounds(t *testing.T) {
 		http.StatusNotFound, "not_found")
 	if w := do(h, "PUT", path, prepositionBody(t, 0, question("在", "把", "被", "对")), jsonAuth); w.Code != http.StatusOK {
 		t.Errorf("three misses at 0 ms = %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestPrepositionRecordPutKeepsTheQuestionID(t *testing.T) {
+	rs := &fakePrepositionRecords{}
+	h, _ := prepositionRouter(t, auth.RoleMember, rs)
+	withID := question("在")
+	withID["id"] = strings.Repeat("a", maxPrepositionID)
+
+	w := do(h, "PUT", "/v1/preposition-records/"+testConversationID, prepositionBody(t, 1000, withID), jsonAuth)
+	if w.Code != http.StatusOK {
+		t.Fatalf("put = %d %s", w.Code, w.Body.String())
+	}
+	if got := rs.saved[testConversationID].Questions[0].ID; got != withID["id"] {
+		t.Errorf("saved id = %q", got)
+	}
+	var res struct {
+		Questions []map[string]any `json:"questions"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &res)
+	if res.Questions[0]["id"] != withID["id"] {
+		t.Errorf("response = %s", w.Body.String())
+	}
+}
+
+func TestPrepositionRecordQuestionsWithoutAnIDStayWithoutOne(t *testing.T) {
+	rs := &fakePrepositionRecords{}
+	h, _ := prepositionRouter(t, auth.RoleMember, rs)
+	path := "/v1/preposition-records/" + testConversationID
+
+	if w := do(h, "PUT", path, prepositionBody(t, 1000, question("在")), jsonAuth); w.Code != http.StatusOK {
+		t.Fatalf("put = %d %s", w.Code, w.Body.String())
+	}
+	w := do(h, "GET", path, "", jsonAuth)
+	var res struct {
+		Questions []map[string]any `json:"questions"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &res)
+	if _, ok := res.Questions[0]["id"]; w.Code != http.StatusOK || ok {
+		t.Errorf("get = %d %s", w.Code, w.Body.String())
 	}
 }
