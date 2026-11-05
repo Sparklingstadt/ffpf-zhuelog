@@ -55,6 +55,9 @@ const (
 	msgComplementRecordNotFound  = "練習の記録が見つかりません。"
 	msgPrepositionRecordInvalid  = "練習の記録の形式が不正です。"
 	msgPrepositionRecordNotFound = "練習の記録が見つかりません。"
+
+	msgReviewInvalid  = "復習の回答の形式が不正です。"
+	msgReviewNotFound = "復習する問題が見つかりません。"
 )
 
 // Error codes in the {"error":{"code":...}} body.

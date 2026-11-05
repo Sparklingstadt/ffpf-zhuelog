@@ -78,16 +78,24 @@ export function buildComplementQuiz(
     random,
   )
     .slice(0, Math.max(0, Math.floor(count)))
-    .map((q) => ({
-      id: q.id,
-      noun: COMPLEMENT_MODES[mode].label,
-      meaning: q.translation,
-      prompt: q.prompt,
-      phrase: q.prompt.replace("（　）", q.answer),
-      answer: q.answer,
-      pinyin: q.pinyin,
-      example: q.prompt.replace("（　）", q.answer),
-      translation: q.translation,
-      choices: shuffled(q.choices, random),
-    }));
+    .map((q) => complementQuestion(q, random));
+}
+
+// One question of the complement data, its choices shuffled.
+export function complementQuestion(
+  q: ComplementUsage,
+  random: Random = Math.random,
+): PrepositionQuestion {
+  return {
+    id: q.id,
+    noun: COMPLEMENT_MODES[q.mode].label,
+    meaning: q.translation,
+    prompt: q.prompt,
+    phrase: q.prompt.replace("（　）", q.answer),
+    answer: q.answer,
+    pinyin: q.pinyin,
+    example: q.prompt.replace("（　）", q.answer),
+    translation: q.translation,
+    choices: shuffled(q.choices, random),
+  };
 }

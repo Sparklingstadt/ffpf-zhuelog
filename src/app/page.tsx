@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { learningNotes } from "@/composition/learning-container";
+import { reviews } from "@/composition/review-container";
 import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
 import { GoApiError } from "@/infrastructure/go-api/client";
 import type { ViewedOwner } from "@/infrastructure/go-api/learning-gateway";
@@ -11,6 +12,7 @@ import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { PageShell } from "@/presentation/components/layout/page-shell";
 import { LearningEntryCard } from "@/presentation/components/learning/learning-entry-card";
 import { RecordOwnerControls } from "@/presentation/components/records/record-owner-controls";
+import { ReviewDueCard } from "@/presentation/components/review/review-due-card";
 import { Alert, AlertDescription } from "@/presentation/components/ui/alert";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Card, CardContent } from "@/presentation/components/ui/card";
@@ -39,6 +41,18 @@ async function loadEntries(owner: ViewedOwner): Promise<{
     if (!(error instanceof GoApiError)) throw error;
     console.error("LEARNING_ENTRIES_UNAVAILABLE", error.status, error.code);
     return { entries: [], total: 0, loadFailed: true };
+  }
+}
+
+// How many reviews are due, or null when Go cannot say: the home then just
+// leaves the card out.
+async function loadDueReviewCount(): Promise<number | null> {
+  try {
+    return (await reviews.listDue(1)).count;
+  } catch (error) {
+    if (!(error instanceof GoApiError)) throw error;
+    console.error("REVIEW_COUNT_UNAVAILABLE", error.status, error.code);
+    return null;
   }
 }
 
@@ -101,17 +115,21 @@ export default async function Home({ searchParams }: HomeProps) {
     );
   }
 
-  const [{ entries, total, loadFailed }, view] = await Promise.all([
+  const ownNotes = owner.kind === "self";
+  const [{ entries, total, loadFailed }, view, dueReviews] = await Promise.all([
     loadEntries(owner),
     loadRecordOwnerView(user, owner),
+    // Only the user's own queue; an admin viewing a member sees no card.
+    ownNotes ? loadDueReviewCount() : Promise.resolve(null),
   ]);
-  const ownNotes = owner.kind === "self";
 
   return (
     <PageShell user={user} width="6xl" spacious>
       <HomeHeader />
 
       <RecordOwnerControls owner={owner} view={view} path="/" />
+
+      {dueReviews === null ? null : <ReviewDueCard count={dueReviews} />}
 
       {loadFailed ? (
         <Alert variant="destructive">

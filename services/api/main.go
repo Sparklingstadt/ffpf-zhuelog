@@ -165,6 +165,7 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 
 		PrepositionRecords: db,
 		ComplementRecords:  db,
+		Reviews:            db,
 		WebProxySecret:     cfg.WebProxySecret,
 	}
 	// Without the LINE settings the routes stay unregistered (404). Line is
