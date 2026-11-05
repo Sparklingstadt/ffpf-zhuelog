@@ -113,6 +113,10 @@ type Deps struct {
 	// Reviews is the spaced-repetition queue. Saved practice rounds add their
 	// missed questions to it; nil leaves the review routes out.
 	Reviews Reviews
+	// Vocabulary keeps the words owners pick out; VocabularyDrafter (OpenAI)
+	// drafts their pinyin and meaning, and is nil without OpenAI.
+	Vocabulary        Vocabulary
+	VocabularyDrafter VocabularyDrafter
 }
 
 const (
@@ -251,6 +255,16 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	if d.Reviews != nil {
 		private("GET /v1/reviews/due", authed(listDueReviews(d.Reviews, d.Now)))
 		private("POST /v1/reviews/{itemId}", authed(answerReview(d.Reviews, d.Now)))
+	}
+
+	// The vocabulary book, for members and admins.
+	if d.Vocabulary != nil {
+		private("GET /v1/vocabulary", authed(listVocabulary(d.Vocabulary)))
+		private("PUT /v1/vocabulary/{id}", authed(putVocabulary(d.Vocabulary, d.Now)))
+		private("DELETE /v1/vocabulary/{id}", authed(deleteVocabulary(d.Vocabulary)))
+	}
+	if d.VocabularyDrafter != nil {
+		private("POST /v1/vocabulary/draft", authed(draftVocabulary(d.VocabularyDrafter)))
 	}
 
 	// The LINE routes exist only when the bot is configured. The webhook and

@@ -79,6 +79,8 @@ type reviewItemJSON struct {
 	Reps       int     `json:"reps"`
 	Lapses     int     `json:"lapses"`
 	LastReview *string `json:"lastReview"`
+	// Vocabulary is the word a "vocabulary" item names; absent otherwise.
+	Vocabulary *vocabularyJSON `json:"vocabulary,omitempty"`
 }
 
 func toReviewItemJSON(it store.ReviewItem) reviewItemJSON {
@@ -89,6 +91,10 @@ func toReviewItemJSON(it store.ReviewItem) reviewItemJSON {
 	if !it.LastReview.IsZero() {
 		last := formatTime(it.LastReview)
 		out.LastReview = &last
+	}
+	if it.Vocabulary != nil {
+		v := toVocabularyJSON(*it.Vocabulary)
+		out.Vocabulary = &v
 	}
 	return out
 }

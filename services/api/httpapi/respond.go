@@ -58,6 +58,11 @@ const (
 
 	msgReviewInvalid  = "復習の回答の形式が不正です。"
 	msgReviewNotFound = "復習する問題が見つかりません。"
+
+	msgVocabularyInvalid  = "単語の形式が不正です。語句は1〜20文字、意味は1〜200文字、ピン音は100文字以内にしてください。"
+	msgVocabularyNotFound = "単語が見つかりません。"
+	msgVocabularyExists   = "この語句はすでに単語帳にあります。"
+	msgVocabularyDraft    = "ピン音と意味の下書きを作れませんでした。自分で入力するか、もう一度お試しください。"
 )
 
 // Error codes in the {"error":{"code":...}} body.
@@ -79,6 +84,8 @@ const (
 	codeLoginIDTaken           = "login_id_taken"
 	codeInvalidCSV             = "invalid_csv"
 	codeChatFailed             = "chat_failed"
+	codeVocabularyExists       = "vocabulary_exists"
+	codeDraftFailed            = "draft_failed"
 )
 
 type errorEnvelope struct {

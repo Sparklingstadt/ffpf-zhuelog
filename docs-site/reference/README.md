@@ -53,6 +53,10 @@
 | PUT      | [`/v1/complement-records/{id}`](./practice.md#補語の記録-api)                                  | 会員・admin           | ×        | 200  | 補語の練習記録を保存                 |
 | GET      | [`/v1/reviews/due`](./reviews.md#get-v1-reviews-due)                                           | 会員・admin           | ×        | 200  | 期日が来た復習の問題                 |
 | POST     | [`/v1/reviews/{itemId}`](./reviews.md#post-v1-reviews-itemid)                                  | 会員・admin           | ×        | 200  | 復習の問題に答える                   |
+| GET      | [`/v1/vocabulary`](./vocabulary.md#get-v1-vocabulary)                                          | 会員・admin           | ×        | 200  | 単語帳の一覧                         |
+| PUT      | [`/v1/vocabulary/{id}`](./vocabulary.md#put-v1-vocabulary-id)                                  | 会員・admin           | ×        | 200  | 単語を足す・直す                     |
+| DELETE   | [`/v1/vocabulary/{id}`](./vocabulary.md#delete-v1-vocabulary-id)                               | 会員・admin           | ×        | 204  | 単語を消す                           |
+| POST     | [`/v1/vocabulary/draft`](./vocabulary.md#post-v1-vocabulary-draft)                             | 会員・admin           | ×        | 200  | ピン音と意味の下書き（AI）           |
 | GET      | [`/v1/admin/accounts`](./admin.md#get-v1-admin-accounts)                                       | admin                 | ×        | 200  | 会員の一覧（管理用）                 |
 | POST     | [`/v1/admin/accounts`](./admin.md#post-v1-admin-accounts)                                      | admin                 | ×        | 201  | 会員の作成                           |
 | POST     | [`/v1/admin/accounts/{id}/password`](./admin.md#post-v1-admin-accounts-id-password)            | admin                 | ×        | 200  | 会員のパスワードのリセット           |

@@ -166,6 +166,7 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 		PrepositionRecords: db,
 		ComplementRecords:  db,
 		Reviews:            db,
+		Vocabulary:         db,
 		WebProxySecret:     cfg.WebProxySecret,
 	}
 	// Without the LINE settings the routes stay unregistered (404). Line is
@@ -189,6 +190,12 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 		}
 		deps.Questions = db
 		deps.Conversations = db
+		// OpenAI's own 20 s limit applies per draft.
+		deps.VocabularyDrafter = &learning.OpenAI{
+			HTTP:    newNoRedirectHTTPClient(20 * time.Second),
+			BaseURL: cfg.OpenAIBaseURL,
+			APIKey:  cfg.OpenAIAPIKey,
+		}
 		deps.ChatModel = cfg.OpenAIChatModel
 	}
 	handler := httpapi.NewRouter(deps)

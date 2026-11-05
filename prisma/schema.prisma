@@ -282,3 +282,24 @@ model ReviewLog {
   @@index([itemId, reviewedAt])
   @@index([ownerId, reviewedAt])
 }
+
+// A word or phrase an owner picked out to learn, with its reading and
+// meaning (drafted by AI, edited by the owner). Each one is also a
+// ReviewItem of kind "vocabulary" whose targetId is this id; deleting the
+// entry deletes that item too (the Go API does both in one transaction).
+// sourceEntryId is the learning note it was picked from, kept as a plain
+// reference: the note may later go to the trash or be deleted.
+model VocabularyEntry {
+  id            String   @id
+  ownerId       String
+  language      String
+  word          String
+  pinyin        String
+  meaning       String
+  sourceEntryId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([ownerId, language, word])
+  @@index([ownerId, createdAt])
+}

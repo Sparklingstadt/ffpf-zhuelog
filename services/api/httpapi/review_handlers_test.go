@@ -148,6 +148,9 @@ func TestListDueReviews(t *testing.T) {
 		first["lastReview"] != "2026-10-19T12:00:00.000Z" {
 		t.Errorf("first = %v", first)
 	}
+	if _, ok := first["vocabulary"]; ok {
+		t.Errorf("a preposition item carries vocabulary: %v", first)
+	}
 	if got.Items[1]["lastReview"] != nil {
 		t.Errorf("never reviewed = %v", got.Items[1])
 	}
