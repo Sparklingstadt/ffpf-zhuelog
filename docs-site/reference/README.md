@@ -57,6 +57,7 @@
 | PUT      | [`/v1/vocabulary/{id}`](./vocabulary.md#put-v1-vocabulary-id)                                  | 会員・admin           | ×        | 200  | 単語を足す・直す                     |
 | DELETE   | [`/v1/vocabulary/{id}`](./vocabulary.md#delete-v1-vocabulary-id)                               | 会員・admin           | ×        | 204  | 単語を消す                           |
 | POST     | [`/v1/vocabulary/draft`](./vocabulary.md#post-v1-vocabulary-draft)                             | 会員・admin           | ×        | 200  | ピン音と意味の下書き（AI）           |
+| GET      | [`/v1/study-log`](./study-log.md#get-v1-study-log)                                             | 会員・admin           | ×        | 200  | 日ごとの学習量                       |
 | GET      | [`/v1/admin/accounts`](./admin.md#get-v1-admin-accounts)                                       | admin                 | ×        | 200  | 会員の一覧（管理用）                 |
 | POST     | [`/v1/admin/accounts`](./admin.md#post-v1-admin-accounts)                                      | admin                 | ×        | 201  | 会員の作成                           |
 | POST     | [`/v1/admin/accounts/{id}/password`](./admin.md#post-v1-admin-accounts-id-password)            | admin                 | ×        | 200  | 会員のパスワードのリセット           |

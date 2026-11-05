@@ -1,4 +1,4 @@
-import { ArrowRight, BookA, Flame, Repeat } from "lucide-react";
+import { ArrowRight, BookA, CalendarDays, Flame, Repeat } from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/presentation/components/ui/button";
@@ -50,6 +50,11 @@ export function ReviewDueCard({
             </span>
             日
           </p>
+          <Button asChild variant="outline">
+            <Link href="/study-log">
+              <CalendarDays /> 学習ログ
+            </Link>
+          </Button>
           <Button asChild variant="outline">
             <Link href="/vocabulary">
               <BookA /> 単語帳

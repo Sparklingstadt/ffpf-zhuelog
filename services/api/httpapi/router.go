@@ -117,6 +117,8 @@ type Deps struct {
 	// drafts their pinyin and meaning, and is nil without OpenAI.
 	Vocabulary        Vocabulary
 	VocabularyDrafter VocabularyDrafter
+	// StudyLog counts what owners did each day.
+	StudyLog StudyLog
 }
 
 const (
@@ -262,6 +264,10 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 		private("GET /v1/vocabulary", authed(listVocabulary(d.Vocabulary)))
 		private("PUT /v1/vocabulary/{id}", authed(putVocabulary(d.Vocabulary, d.Now)))
 		private("DELETE /v1/vocabulary/{id}", authed(deleteVocabulary(d.Vocabulary)))
+	}
+	// The study log, for members and admins.
+	if d.StudyLog != nil {
+		private("GET /v1/study-log", authed(listStudyLog(d.StudyLog)))
 	}
 	if d.VocabularyDrafter != nil {
 		private("POST /v1/vocabulary/draft", authed(draftVocabulary(d.VocabularyDrafter)))
