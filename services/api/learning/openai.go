@@ -64,25 +64,39 @@ func (o *OpenAI) Generate(ctx context.Context, kind, text string) (Result, error
 	if !ok {
 		return Result{}, newError("OPENAI_REQUEST_FAILED", false)
 	}
+	out, err := o.respond(ctx, spec.instructions, spec.schemaName, spec.jsonSchema(), text)
+	if err != nil {
+		return Result{}, err
+	}
+	res, err := spec.parse(out)
+	if err != nil {
+		return Result{}, newError("OPENAI_INVALID_RESPONSE", false)
+	}
+	return res, nil
+}
+
+// respond sends input with instructions and a strict JSON schema, and returns
+// the model's JSON text. Failures are *Error.
+func (o *OpenAI) respond(ctx context.Context, instructions, schemaName string, schema map[string]any, input string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
 	payload, err := json.Marshal(map[string]any{
 		"model":             model,
-		"instructions":      spec.instructions,
-		"input":             text,
+		"instructions":      instructions,
+		"input":             input,
 		"store":             false,
 		"max_output_tokens": 4000,
 		"reasoning":         map[string]any{"effort": "minimal"},
 		"text": map[string]any{"format": map[string]any{
 			"type":   "json_schema",
-			"name":   spec.schemaName,
+			"name":   schemaName,
 			"strict": true,
-			"schema": spec.jsonSchema(),
+			"schema": schema,
 		}},
 	})
 	if err != nil {
-		return Result{}, newError("OPENAI_REQUEST_FAILED", false)
+		return "", newError("OPENAI_REQUEST_FAILED", false)
 	}
 	base := o.BaseURL
 	if base == "" {
@@ -90,42 +104,38 @@ func (o *OpenAI) Generate(ctx context.Context, kind, text string) (Result, error
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(base, "/")+"/v1/responses", bytes.NewReader(payload))
 	if err != nil {
-		return Result{}, newError("OPENAI_REQUEST_FAILED", false)
+		return "", newError("OPENAI_REQUEST_FAILED", false)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+o.APIKey)
 
 	resp, err := o.client().Do(req)
 	if err != nil {
-		return Result{}, transportError(ctx, err)
+		return "", transportError(ctx, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		switch resp.StatusCode {
 		case http.StatusUnauthorized, http.StatusForbidden:
-			return Result{}, newError("OPENAI_AUTH_FAILED", false)
+			return "", newError("OPENAI_AUTH_FAILED", false)
 		case http.StatusTooManyRequests:
-			return Result{}, newError("OPENAI_RATE_LIMITED", false)
+			return "", newError("OPENAI_RATE_LIMITED", false)
 		}
 		// Only 5xx may succeed on a later attempt; other 4xx are our fault.
-		return Result{}, newError("OPENAI_REQUEST_FAILED", resp.StatusCode >= 500)
+		return "", newError("OPENAI_REQUEST_FAILED", resp.StatusCode >= 500)
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxRespBody+1))
 	if err != nil {
-		return Result{}, transportError(ctx, err)
+		return "", transportError(ctx, err)
 	}
 	if len(body) > maxRespBody {
-		return Result{}, newError("OPENAI_INVALID_RESPONSE", false)
+		return "", newError("OPENAI_INVALID_RESPONSE", false)
 	}
 	out, ok := outputText(body)
 	if !ok {
-		return Result{}, newError("OPENAI_INVALID_RESPONSE", false)
+		return "", newError("OPENAI_INVALID_RESPONSE", false)
 	}
-	res, err := spec.parse(out)
-	if err != nil {
-		return Result{}, newError("OPENAI_INVALID_RESPONSE", false)
-	}
-	return res, nil
+	return out, nil
 }
 
 // client returns the caller's client with redirects disabled (the request

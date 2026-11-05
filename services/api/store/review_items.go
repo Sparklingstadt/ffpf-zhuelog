@@ -20,13 +20,16 @@ type ReviewTarget struct {
 	TargetID string
 }
 
-// ReviewItem is one of an owner's targets with its FSRS card.
+// ReviewItem is one of an owner's targets with its FSRS card. Vocabulary is
+// the entry a "vocabulary" item names, filled in by ListDueReviewItems (nil
+// for other kinds).
 type ReviewItem struct {
 	ID string
 	ReviewTarget
 	review.Card
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+	Vocabulary *VocabularyEntry
 }
 
 const reviewItemColumns = `"id", "language", "kind", "targetId", "due", "stability", "difficulty",
@@ -92,6 +95,21 @@ func (s *Store) ListDueReviewItems(ctx context.Context, ownerID string, now time
 	}
 	if out == nil {
 		out = []ReviewItem{}
+	}
+	var ids []string
+	for _, it := range out {
+		if it.Kind == ReviewKindVocabulary {
+			ids = append(ids, it.TargetID)
+		}
+	}
+	words, err := s.vocabularyByID(ctx, ownerID, ids)
+	if err != nil {
+		return nil, fmt.Errorf("store: list due review items: %w", err)
+	}
+	for i := range out {
+		if v, ok := words[out[i].TargetID]; ok && out[i].Kind == ReviewKindVocabulary {
+			out[i].Vocabulary = &v
+		}
 	}
 	return out, nil
 }
