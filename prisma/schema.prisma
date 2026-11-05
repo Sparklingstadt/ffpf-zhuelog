@@ -183,9 +183,10 @@ model ChatConversation {
 
 // One finished round of preposition practice by a member or admin, written by
 // the Go API. id is a UUID made by the browser, so a retried save keeps one
-// row. questions is [{answer, noun, prompt, misses}] in the order asked, with
-// the wrong prepositions picked in misses; the counts are derived from it by
-// Go. ownerId has no foreign key: admins have no row in the database.
+// row. questions is [{id?, answer, noun, prompt, misses}] in the order asked,
+// with the wrong prepositions picked in misses; id is the question's id in the
+// Web's practice data and older rounds have none. The counts are derived from
+// it by Go. ownerId has no foreign key: admins have no row in the database.
 model PrepositionPracticeRecord {
   id            String   @id
   ownerId       String

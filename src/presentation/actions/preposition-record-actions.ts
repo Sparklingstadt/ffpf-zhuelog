@@ -9,19 +9,14 @@ import { GoApiError } from "@/infrastructure/go-api/client";
 import { goFailureMessage } from "@/presentation/controllers/action-state";
 import { accountForbiddenMessage } from "@/presentation/presenters/account-action-errors";
 
+import { practiceAnswerInput } from "./practice-round-input";
+
 // The shape only; Go checks the limits.
 const roundInput = z.object({
   id: z.uuid(),
   startedAt: z.iso.datetime(),
   elapsedMs: z.number().int(),
-  questions: z.array(
-    z.object({
-      answer: z.string(),
-      noun: z.string(),
-      prompt: z.string(),
-      misses: z.array(z.string()),
-    }),
-  ),
+  questions: z.array(practiceAnswerInput),
 });
 
 export type SavePrepositionRoundInput = z.infer<typeof roundInput>;

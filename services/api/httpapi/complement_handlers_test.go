@@ -150,6 +150,9 @@ func TestComplementRecordPutRejectsInvalidRounds(t *testing.T) {
 		"long prompt": complementBody(t, 1000, map[string]any{
 			"answer": "在", "noun": "学校", "prompt": strings.Repeat("字", maxComplementPrompt+1),
 		}),
+		"long id": complementBody(t, 1000, map[string]any{
+			"id": strings.Repeat("a", maxComplementID+1), "answer": "在", "noun": "学校", "prompt": "p",
+		}),
 		"bad startedAt": `{"startedAt":"yesterday","elapsedMs":1,"questions":[{"answer":"在","noun":"学校","prompt":"p"}]}`,
 		"not JSON":      `{`,
 	} {
@@ -176,5 +179,45 @@ func TestComplementRecordPutAcceptsEveryMode(t *testing.T) {
 			rs.saved[testConversationID].Mode != mode {
 			t.Errorf("%s = %d %s", mode, w.Code, w.Body.String())
 		}
+	}
+}
+
+func TestComplementRecordPutKeepsTheQuestionID(t *testing.T) {
+	rs := &fakeComplementRecords{}
+	h, _ := complementRouter(t, auth.RoleMember, rs)
+	withID := complementQuestion("在")
+	withID["id"] = strings.Repeat("a", maxComplementID)
+
+	w := do(h, "PUT", "/v1/complement-records/"+testConversationID, complementBody(t, 1000, withID), jsonAuth)
+	if w.Code != http.StatusOK {
+		t.Fatalf("put = %d %s", w.Code, w.Body.String())
+	}
+	if got := rs.saved[testConversationID].Questions[0].ID; got != withID["id"] {
+		t.Errorf("saved id = %q", got)
+	}
+	var res struct {
+		Questions []map[string]any `json:"questions"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &res)
+	if res.Questions[0]["id"] != withID["id"] {
+		t.Errorf("response = %s", w.Body.String())
+	}
+}
+
+func TestComplementRecordQuestionsWithoutAnIDStayWithoutOne(t *testing.T) {
+	rs := &fakeComplementRecords{}
+	h, _ := complementRouter(t, auth.RoleMember, rs)
+	path := "/v1/complement-records/" + testConversationID
+
+	if w := do(h, "PUT", path, complementBody(t, 1000, complementQuestion("在")), jsonAuth); w.Code != http.StatusOK {
+		t.Fatalf("put = %d %s", w.Code, w.Body.String())
+	}
+	w := do(h, "GET", path, "", jsonAuth)
+	var res struct {
+		Questions []map[string]any `json:"questions"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &res)
+	if _, ok := res.Questions[0]["id"]; w.Code != http.StatusOK || ok {
+		t.Errorf("get = %d %s", w.Code, w.Body.String())
 	}
 }

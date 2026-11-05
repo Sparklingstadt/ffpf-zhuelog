@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import {
   accuracyPercent,
+  answerOf,
   scoreRound,
   type PrepositionAnswer,
 } from "@/domain/practice/preposition-record";
@@ -196,15 +197,7 @@ export function ChoicePractice({
       return;
     }
     setSolved(true);
-    const answered = [
-      ...answers,
-      {
-        answer: question.answer,
-        noun: question.noun,
-        prompt: question.prompt,
-        misses: wrong,
-      },
-    ];
+    const answered = [...answers, answerOf(question, wrong)];
     setAnswers(answered);
     if (index + 1 < total) return;
     const finishedRound = finishRound(startedAt, answered);

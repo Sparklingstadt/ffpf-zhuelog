@@ -27,6 +27,7 @@ const (
 	maxPrepositionQuestions = 50
 	// A question has four choices, so at most three wrong picks.
 	maxPrepositionMisses  = 3
+	maxPrepositionID      = 40
 	maxPrepositionAnswer  = 10
 	maxPrepositionNoun    = 40
 	maxPrepositionPrompt  = 100
@@ -141,8 +142,8 @@ func putPrepositionRecord(rs PrepositionRecords, now func() time.Time) http.Hand
 }
 
 // validPrepositionRecord checks a round's time and questions: each has an
-// answer, a noun and a prompt, and at most three distinct misses, none of
-// them the answer.
+// answer, a noun and a prompt, at most three distinct misses, none of them
+// the answer, and an id that is short enough when it has one.
 func validPrepositionRecord(elapsedMs int, questions []store.PrepositionQuestion) bool {
 	if elapsedMs < 0 || time.Duration(elapsedMs)*time.Millisecond > maxPrepositionElapsed {
 		return false
@@ -151,7 +152,7 @@ func validPrepositionRecord(elapsedMs int, questions []store.PrepositionQuestion
 		return false
 	}
 	for _, q := range questions {
-		if !boundedText(q.Answer, maxPrepositionAnswer) || !boundedText(q.Noun, maxPrepositionNoun) ||
+		if utf8.RuneCountInString(q.ID) > maxPrepositionID || !boundedText(q.Answer, maxPrepositionAnswer) || !boundedText(q.Noun, maxPrepositionNoun) ||
 			!boundedText(q.Prompt, maxPrepositionPrompt) || len(q.Misses) > maxPrepositionMisses {
 			return false
 		}

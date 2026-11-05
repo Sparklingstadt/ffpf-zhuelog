@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
@@ -26,6 +27,7 @@ const (
 	maxComplementQuestions = 50
 	// A question has four choices, so at most three wrong picks.
 	maxComplementMisses  = 3
+	maxComplementID      = 40
 	maxComplementAnswer  = 40
 	maxComplementNoun    = 40
 	maxComplementPrompt  = 100
@@ -142,8 +144,8 @@ func putComplementRecord(rs ComplementRecords, now func() time.Time) http.Handle
 }
 
 // validComplementRecord checks a round's time and questions: each has an
-// answer, a noun and a prompt, and at most three distinct misses, none of
-// them the answer.
+// answer, a noun and a prompt, at most three distinct misses, none of them
+// the answer, and an id that is short enough when it has one.
 func validComplementRecord(elapsedMs int, questions []store.ComplementQuestion) bool {
 	if elapsedMs < 0 || elapsedMs > int(maxComplementElapsed/time.Millisecond) {
 		return false
@@ -152,7 +154,7 @@ func validComplementRecord(elapsedMs int, questions []store.ComplementQuestion) 
 		return false
 	}
 	for _, q := range questions {
-		if !boundedText(q.Answer, maxComplementAnswer) || !boundedText(q.Noun, maxComplementNoun) ||
+		if utf8.RuneCountInString(q.ID) > maxComplementID || !boundedText(q.Answer, maxComplementAnswer) || !boundedText(q.Noun, maxComplementNoun) ||
 			!boundedText(q.Prompt, maxComplementPrompt) || len(q.Misses) > maxComplementMisses {
 			return false
 		}

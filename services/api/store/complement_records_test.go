@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -124,5 +125,57 @@ func TestListComplementRecordsIsNewestFirstAndOwnersOnly(t *testing.T) {
 	empty, err := s.ListComplementRecords(ctx, newOwner(t, s), 10)
 	if err != nil || empty == nil || len(empty) != 0 {
 		t.Errorf("empty list = %#v, %v", empty, err)
+	}
+}
+
+func TestAddComplementRecordKeepsTheQuestionID(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	owner := newOwner(t, s)
+	cleanComplementRecords(t, s, owner)
+
+	r := complementRecord(fixedNow().Add(-time.Minute), nil, nil)
+	r.Questions[0].ID = "q-1"
+	if _, err := s.AddComplementRecord(ctx, owner, r, fixedNow()); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetComplementRecord(ctx, owner, r.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Questions[0].ID != "q-1" || got.Questions[1].ID != "" {
+		t.Errorf("ids = %q, %q", got.Questions[0].ID, got.Questions[1].ID)
+	}
+	var raw string
+	if err := s.pool.QueryRow(ctx, `SELECT "questions"::text FROM "ComplementPracticeRecord" WHERE "id" = $1`, r.ID).Scan(&raw); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(raw, `"id"`) != 1 {
+		t.Errorf("questions = %s, want one id", raw)
+	}
+}
+
+// A row saved before questions had ids, written as those saves wrote it.
+func TestGetComplementRecordReadsAQuestionWithoutAnID(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	owner := newOwner(t, s)
+	cleanComplementRecords(t, s, owner)
+
+	id := newUUID()
+	if _, err := s.pool.Exec(ctx,
+		`INSERT INTO "ComplementPracticeRecord"
+		   ("id", "ownerId", "mode", "questionCount", "firstTryCount", "missCount", "elapsedMs", "questions", "startedAt", "createdAt")
+		 VALUES ($1, $2, 'result', 1, 0, 1, 1000, $3::jsonb, $4, $4)`,
+		id, owner, `[{"answer":"在","noun":"学校","prompt":"（　）学校学习","misses":["把"]}]`, dbTime(fixedNow())); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetComplementRecord(ctx, owner, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Questions) != 1 || got.Questions[0].ID != "" || got.Questions[0].Answer != "在" ||
+		!reflect.DeepEqual(got.Questions[0].Misses, []string{"把"}) {
+		t.Errorf("questions = %+v", got.Questions)
 	}
 }

@@ -2,8 +2,10 @@
 // members and admins.
 
 // One question of the round and the wrong prepositions picked before the
-// answer, in the order they were picked.
+// answer, in the order they were picked. id is the question's id in the
+// practice data; rounds saved before it was kept have none.
 export type PrepositionAnswer = {
+  id?: string;
   answer: string;
   noun: string;
   prompt: string;
@@ -28,6 +30,20 @@ export type PrepositionRecordSummary = PrepositionScore & {
 export type PrepositionRecord = PrepositionRecordSummary & {
   questions: PrepositionAnswer[];
 };
+
+// What a round keeps of a question once it is answered.
+export function answerOf(
+  question: Pick<PrepositionAnswer, "id" | "answer" | "noun" | "prompt">,
+  misses: string[],
+): PrepositionAnswer {
+  return {
+    id: question.id,
+    answer: question.answer,
+    noun: question.noun,
+    prompt: question.prompt,
+    misses,
+  };
+}
 
 // Counted as Go counts them when it saves the round.
 export function scoreRound(
