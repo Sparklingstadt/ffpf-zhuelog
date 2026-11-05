@@ -1,4 +1,4 @@
-import { ArrowRight, Flame, Repeat } from "lucide-react";
+import { ArrowRight, BookA, Flame, Repeat } from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/presentation/components/ui/button";
@@ -30,12 +30,12 @@ export function ReviewDueCard({
             </p>
             <p className="text-sm text-muted-foreground">
               {count > 0
-                ? "練習で間違えた問題の期日が来ています。"
-                : "期日が来ている問題はありません。練習で間違えた問題がここに入ります。"}
+                ? "練習で間違えた問題や単語帳の語句の期日が来ています。"
+                : "期日が来ている問題はありません。練習で間違えた問題と単語帳の語句がここに入ります。"}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-4 sm:justify-end">
+        <div className="flex flex-wrap items-center gap-3 sm:justify-end">
           <p
             className="flex items-center gap-1.5 text-sm text-muted-foreground"
             title="1問以上復習した日が続いている日数"
@@ -50,6 +50,11 @@ export function ReviewDueCard({
             </span>
             日
           </p>
+          <Button asChild variant="outline">
+            <Link href="/vocabulary">
+              <BookA /> 単語帳
+            </Link>
+          </Button>
           {count > 0 ? (
             <Button asChild>
               <Link href="/review">

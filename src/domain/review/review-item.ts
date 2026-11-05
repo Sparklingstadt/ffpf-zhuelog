@@ -1,6 +1,9 @@
+import type { VocabularyCard } from "@/domain/vocabulary/vocabulary-entry";
+
 // An item of the signed-in user's spaced-repetition queue, as the Go API
 // keeps it. kind says what targetId names ("preposition": "P001:学校",
-// "complement": "result-01").
+// "complement": "result-01", "vocabulary": the word's id, with the word in
+// vocabulary).
 export type ReviewItem = {
   id: string;
   language: string;
@@ -12,6 +15,7 @@ export type ReviewItem = {
   reps: number;
   lapses: number;
   lastReview: Date | null;
+  vocabulary: VocabularyCard | null;
 };
 
 export type DueReviews = {
