@@ -74,6 +74,12 @@ func question(answer string, misses ...string) map[string]any {
 	return map[string]any{"answer": answer, "noun": "学校", "prompt": "（　）学校学习", "misses": misses}
 }
 
+// withQuestionID sets q's questionId, as the Web sends it.
+func withQuestionID(q map[string]any, id string) map[string]any {
+	q["questionId"] = id
+	return q
+}
+
 func TestPrepositionRecordRoutesRejectGuests(t *testing.T) {
 	h, _ := prepositionRouter(t, auth.RoleGuest, &fakePrepositionRecords{})
 	for _, rt := range []struct{ method, path, body string }{
@@ -149,8 +155,10 @@ func TestPrepositionRecordPutRejectsInvalidRounds(t *testing.T) {
 		"long prompt": prepositionBody(t, 1000, map[string]any{
 			"answer": "在", "noun": "学校", "prompt": strings.Repeat("字", maxPrepositionPrompt+1),
 		}),
-		"bad startedAt": `{"startedAt":"yesterday","elapsedMs":1,"questions":[{"answer":"在","noun":"学校","prompt":"p"}]}`,
-		"not JSON":      `{`,
+		"question id with a space": prepositionBody(t, 1000, withQuestionID(question("在"), "P 001")),
+		"long question id":         prepositionBody(t, 1000, withQuestionID(question("在"), strings.Repeat("a", maxQuestionID+1))),
+		"bad startedAt":            `{"startedAt":"yesterday","elapsedMs":1,"questions":[{"answer":"在","noun":"学校","prompt":"p"}]}`,
+		"not JSON":                 `{`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			wantError(t, do(h, "PUT", path, body, jsonAuth), http.StatusBadRequest, "invalid_request")
@@ -160,5 +168,32 @@ func TestPrepositionRecordPutRejectsInvalidRounds(t *testing.T) {
 		http.StatusNotFound, "not_found")
 	if w := do(h, "PUT", path, prepositionBody(t, 0, question("在", "把", "被", "对")), jsonAuth); w.Code != http.StatusOK {
 		t.Errorf("three misses at 0 ms = %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestPrepositionRecordKeepsQuestionIDs(t *testing.T) {
+	rs := &fakePrepositionRecords{}
+	h, _ := prepositionRouter(t, auth.RoleMember, rs)
+	path := "/v1/preposition-records/" + testConversationID
+	// A round from a client that sends no ids still saves.
+	body := prepositionBody(t, 1000, withQuestionID(question("在"), "P001"), question("把"))
+	if w := do(h, "PUT", path, body, jsonAuth); w.Code != http.StatusOK {
+		t.Fatalf("put = %d %s", w.Code, w.Body.String())
+	}
+	saved := rs.saved[testConversationID]
+	if saved.Questions[0].QuestionID != "P001" || saved.Questions[1].QuestionID != "" {
+		t.Errorf("saved ids = %q, %q", saved.Questions[0].QuestionID, saved.Questions[1].QuestionID)
+	}
+
+	w := do(h, "GET", path, "", jsonAuth)
+	var got struct {
+		Questions []map[string]any `json:"questions"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &got)
+	if w.Code != http.StatusOK || len(got.Questions) != 2 || got.Questions[0]["questionId"] != "P001" {
+		t.Fatalf("get = %d %s", w.Code, w.Body.String())
+	}
+	if _, ok := got.Questions[1]["questionId"]; ok {
+		t.Errorf("a question saved without an id returns one: %s", w.Body.String())
 	}
 }

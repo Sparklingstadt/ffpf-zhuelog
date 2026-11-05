@@ -26,7 +26,7 @@ func complementRecord(startedAt time.Time, misses ...[]string) ComplementRecord 
 		StartedAt: startedAt,
 	}}
 	for _, m := range misses {
-		r.Questions = append(r.Questions, ComplementQuestion{Answer: "在", Noun: "学校", Prompt: "（　）学校学习", Misses: m})
+		r.Questions = append(r.Questions, ComplementQuestion{QuestionID: "result-01", Answer: "在", Noun: "学校", Prompt: "（　）学校学习", Misses: m})
 	}
 	return r
 }

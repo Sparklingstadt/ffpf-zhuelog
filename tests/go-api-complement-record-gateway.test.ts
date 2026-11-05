@@ -28,8 +28,16 @@ const summaryJson = {
   startedAt: "2026-10-24T01:00:00.000Z",
   createdAt: "2026-10-24T01:01:35.000Z",
 };
+// The second question is from a round saved before ids were kept.
 const questions = [
-  { answer: "在", noun: "学校", prompt: "（　）学校学习", misses: ["把"] },
+  {
+    questionId: "result-01",
+    answer: "在",
+    noun: "学校",
+    prompt: "（　）学校学习",
+    misses: ["把"],
+  },
+  { answer: "把", noun: "门", prompt: "（　）门关上", misses: [] },
 ];
 
 test("list maps Go JSON to dates", async () => {

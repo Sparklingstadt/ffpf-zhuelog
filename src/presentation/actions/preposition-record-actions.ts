@@ -16,6 +16,7 @@ const roundInput = z.object({
   elapsedMs: z.number().int(),
   questions: z.array(
     z.object({
+      questionId: z.string().optional(),
       answer: z.string(),
       noun: z.string(),
       prompt: z.string(),

@@ -4,6 +4,10 @@
 // One question of the round and the wrong prepositions picked before the
 // answer, in the order they were picked.
 export type PrepositionAnswer = {
+  // The question's id in the practice data ("P001", "result-01"); for
+  // prepositions, with the noun it picks the phrase asked. Absent in rounds
+  // saved before it was kept.
+  questionId?: string;
   answer: string;
   noun: string;
   prompt: string;

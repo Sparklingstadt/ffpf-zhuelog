@@ -152,7 +152,8 @@ func validComplementRecord(elapsedMs int, questions []store.ComplementQuestion) 
 		return false
 	}
 	for _, q := range questions {
-		if !boundedText(q.Answer, maxComplementAnswer) || !boundedText(q.Noun, maxComplementNoun) ||
+		if !validQuestionID(q.QuestionID) ||
+			!boundedText(q.Answer, maxComplementAnswer) || !boundedText(q.Noun, maxComplementNoun) ||
 			!boundedText(q.Prompt, maxComplementPrompt) || len(q.Misses) > maxComplementMisses {
 			return false
 		}

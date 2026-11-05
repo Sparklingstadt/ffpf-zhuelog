@@ -150,8 +150,10 @@ func TestComplementRecordPutRejectsInvalidRounds(t *testing.T) {
 		"long prompt": complementBody(t, 1000, map[string]any{
 			"answer": "在", "noun": "学校", "prompt": strings.Repeat("字", maxComplementPrompt+1),
 		}),
-		"bad startedAt": `{"startedAt":"yesterday","elapsedMs":1,"questions":[{"answer":"在","noun":"学校","prompt":"p"}]}`,
-		"not JSON":      `{`,
+		"question id with a space": complementBody(t, 1000, withQuestionID(complementQuestion("在"), "P 001")),
+		"long question id":         complementBody(t, 1000, withQuestionID(complementQuestion("在"), strings.Repeat("a", maxQuestionID+1))),
+		"bad startedAt":            `{"startedAt":"yesterday","elapsedMs":1,"questions":[{"answer":"在","noun":"学校","prompt":"p"}]}`,
+		"not JSON":                 `{`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			wantError(t, do(h, "PUT", path, body, jsonAuth), http.StatusBadRequest, "invalid_request")
@@ -176,5 +178,32 @@ func TestComplementRecordPutAcceptsEveryMode(t *testing.T) {
 			rs.saved[testConversationID].Mode != mode {
 			t.Errorf("%s = %d %s", mode, w.Code, w.Body.String())
 		}
+	}
+}
+
+func TestComplementRecordKeepsQuestionIDs(t *testing.T) {
+	rs := &fakeComplementRecords{}
+	h, _ := complementRouter(t, auth.RoleMember, rs)
+	path := "/v1/complement-records/" + testConversationID
+	// A round from a client that sends no ids still saves.
+	body := complementBody(t, 1000, withQuestionID(complementQuestion("在"), "result-01"), complementQuestion("把"))
+	if w := do(h, "PUT", path, body, jsonAuth); w.Code != http.StatusOK {
+		t.Fatalf("put = %d %s", w.Code, w.Body.String())
+	}
+	saved := rs.saved[testConversationID]
+	if saved.Questions[0].QuestionID != "result-01" || saved.Questions[1].QuestionID != "" {
+		t.Errorf("saved ids = %q, %q", saved.Questions[0].QuestionID, saved.Questions[1].QuestionID)
+	}
+
+	w := do(h, "GET", path, "", jsonAuth)
+	var got struct {
+		Questions []map[string]any `json:"questions"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &got)
+	if w.Code != http.StatusOK || len(got.Questions) != 2 || got.Questions[0]["questionId"] != "result-01" {
+		t.Fatalf("get = %d %s", w.Code, w.Body.String())
+	}
+	if _, ok := got.Questions[1]["questionId"]; ok {
+		t.Errorf("a question saved without an id returns one: %s", w.Body.String())
 	}
 }

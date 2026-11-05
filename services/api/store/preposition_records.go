@@ -14,10 +14,13 @@ import (
 // answer, the noun and the phrase with the blank, and the wrong prepositions
 // picked before the answer, in the order they were picked.
 type PrepositionQuestion struct {
-	Answer string   `json:"answer"`
-	Noun   string   `json:"noun"`
-	Prompt string   `json:"prompt"`
-	Misses []string `json:"misses"`
+	// QuestionID names the use in the preposition data ("P001"); with Noun it
+	// picks the phrase asked. Empty in rounds saved before it was kept.
+	QuestionID string   `json:"questionId,omitempty"`
+	Answer     string   `json:"answer"`
+	Noun       string   `json:"noun"`
+	Prompt     string   `json:"prompt"`
+	Misses     []string `json:"misses"`
 }
 
 // PrepositionRecordSummary is a saved round without its questions.

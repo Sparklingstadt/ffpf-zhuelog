@@ -199,6 +199,7 @@ export function ChoicePractice({
     const answered = [
       ...answers,
       {
+        questionId: question.id,
         answer: question.answer,
         noun: question.noun,
         prompt: question.prompt,

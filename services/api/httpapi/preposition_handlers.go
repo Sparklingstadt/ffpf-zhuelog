@@ -151,7 +151,8 @@ func validPrepositionRecord(elapsedMs int, questions []store.PrepositionQuestion
 		return false
 	}
 	for _, q := range questions {
-		if !boundedText(q.Answer, maxPrepositionAnswer) || !boundedText(q.Noun, maxPrepositionNoun) ||
+		if !validQuestionID(q.QuestionID) ||
+			!boundedText(q.Answer, maxPrepositionAnswer) || !boundedText(q.Noun, maxPrepositionNoun) ||
 			!boundedText(q.Prompt, maxPrepositionPrompt) || len(q.Misses) > maxPrepositionMisses {
 			return false
 		}
@@ -161,6 +162,24 @@ func validPrepositionRecord(elapsedMs int, questions []store.PrepositionQuestion
 				return false
 			}
 			seen[m] = true
+		}
+	}
+	return true
+}
+
+// maxQuestionID is the longest question id a round may name.
+const maxQuestionID = 64
+
+// validQuestionID is an empty id (a client that does not send one) or up to
+// maxQuestionID ASCII letters, digits, "-" and "_", as the practice data's
+// ids are ("P001", "result-01").
+func validQuestionID(id string) bool {
+	if len(id) > maxQuestionID {
+		return false
+	}
+	for _, c := range id {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_') {
+			return false
 		}
 	}
 	return true

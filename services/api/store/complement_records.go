@@ -14,10 +14,13 @@ import (
 // answer, the noun and the phrase with the blank, and the wrong complements
 // picked before the answer, in the order they were picked.
 type ComplementQuestion struct {
-	Answer string   `json:"answer"`
-	Noun   string   `json:"noun"`
-	Prompt string   `json:"prompt"`
-	Misses []string `json:"misses"`
+	// QuestionID names the question in the complement data ("result-01").
+	// Empty in rounds saved before it was kept.
+	QuestionID string   `json:"questionId,omitempty"`
+	Answer     string   `json:"answer"`
+	Noun       string   `json:"noun"`
+	Prompt     string   `json:"prompt"`
+	Misses     []string `json:"misses"`
 }
 
 // ComplementRecordSummary is a saved round without its questions.

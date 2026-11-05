@@ -25,7 +25,7 @@ func prepositionRecord(startedAt time.Time, misses ...[]string) PrepositionRecor
 		StartedAt: startedAt,
 	}}
 	for _, m := range misses {
-		r.Questions = append(r.Questions, PrepositionQuestion{Answer: "在", Noun: "学校", Prompt: "（　）学校学习", Misses: m})
+		r.Questions = append(r.Questions, PrepositionQuestion{QuestionID: "P001", Answer: "在", Noun: "学校", Prompt: "（　）学校学习", Misses: m})
 	}
 	return r
 }
