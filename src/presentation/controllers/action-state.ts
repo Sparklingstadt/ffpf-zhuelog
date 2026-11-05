@@ -27,6 +27,7 @@ const userFacingCodes = new Set([
   "password_mismatch",
   "invalid_current_password",
   "login_id_taken",
+  "vocabulary_exists",
   "too_large",
 ]);
 

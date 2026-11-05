@@ -1,4 +1,5 @@
 import {
+  BookA,
   CircleUserRound,
   CircleHelp,
   Eye,
@@ -97,6 +98,11 @@ function UserControls({ user }: { user: AuthenticatedUser }) {
         <NavLink label={label} href="/practice/complements" icon={ListChecks}>
           補語練習
         </NavLink>
+        {isMember || isAdmin ? (
+          <NavLink label={label} href="/vocabulary" icon={BookA}>
+            単語帳
+          </NavLink>
+        ) : null}
         {isMember || isAdmin ? (
           <NavLink label={label} href="/follow" icon={UsersRound}>
             フォロー

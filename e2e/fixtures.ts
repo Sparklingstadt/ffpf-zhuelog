@@ -34,7 +34,7 @@ export const test = base.extend<{ db: Client }>({
         if (rows[0].name !== "zhuelog_e2e")
           throw new Error("Refusing to reset a non-E2E database");
         await db.query(
-          'TRUNCATE "PasswordAccount", "FfpfAccount", "Follow", "SignInThrottle", "ChatConversation", "QuickQuestion", "PrepositionPracticeRecord", "ComplementPracticeRecord", "ReviewLog", "ReviewItem"',
+          'TRUNCATE "PasswordAccount", "FfpfAccount", "Follow", "SignInThrottle", "ChatConversation", "QuickQuestion", "PrepositionPracticeRecord", "ComplementPracticeRecord", "ReviewLog", "ReviewItem", "VocabularyEntry"',
         );
         await db.query(
           'TRUNCATE "Hint", "LearningEntry", "ImportBatch" CASCADE',

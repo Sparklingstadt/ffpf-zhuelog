@@ -48,6 +48,34 @@ test("listDue asks for a limit and maps dates", async () => {
   );
   assert.equal(due.items[0].targetId, "P001:学校");
   assert.equal(due.items[1].lastReview, null);
+  assert.equal(due.items[0].vocabulary, null);
+});
+
+test("a vocabulary item carries its word", async () => {
+  const word = {
+    id: "0b0c6f4e-5d2a-4c1b-9e3f-7a8b9c0d1e2f",
+    language: "zh",
+    word: "认真",
+    pinyin: "rènzhēn",
+    meaning: "まじめに",
+    sourceEntryId: null,
+    createdAt: "2026-11-05T12:00:00.000Z",
+    updatedAt: "2026-11-05T12:00:00.000Z",
+  };
+  const { call } = fakeCall({
+    count: 1,
+    streakDays: 0,
+    items: [
+      { ...itemJson, kind: "vocabulary", targetId: word.id, vocabulary: word },
+    ],
+  });
+  const due = await createReviewGateway(call).listDue(20);
+  assert.deepEqual(due.items[0].vocabulary, {
+    id: word.id,
+    word: "认真",
+    pinyin: "rènzhēn",
+    meaning: "まじめに",
+  });
 });
 
 test("answer POSTs the rating under the item, with the client's log id", async () => {

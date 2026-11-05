@@ -6,9 +6,10 @@ import type {
 
 import { goApiAuthed, type GoApiCall } from "./authed";
 
-type ItemJson = Omit<ReviewItem, "due" | "lastReview"> & {
+type ItemJson = Omit<ReviewItem, "due" | "lastReview" | "vocabulary"> & {
   due: string;
   lastReview: string | null;
+  vocabulary?: { id: string; word: string; pinyin: string; meaning: string };
 };
 
 const toItem = (json: ItemJson): ReviewItem => ({
@@ -21,6 +22,14 @@ const toItem = (json: ItemJson): ReviewItem => ({
   reps: json.reps,
   lapses: json.lapses,
   lastReview: json.lastReview ? new Date(json.lastReview) : null,
+  vocabulary: json.vocabulary
+    ? {
+        id: json.vocabulary.id,
+        word: json.vocabulary.word,
+        pinyin: json.vocabulary.pinyin,
+        meaning: json.vocabulary.meaning,
+      }
+    : null,
 });
 
 // The review queue is always the signed-in user's own (the token's owner in
