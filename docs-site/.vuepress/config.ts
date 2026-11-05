@@ -39,6 +39,7 @@ export default defineUserConfig({
           "/reference/practice.md",
           "/reference/reviews.md",
           "/reference/vocabulary.md",
+          "/reference/study-log.md",
           "/reference/admin.md",
           "/reference/health.md",
         ],

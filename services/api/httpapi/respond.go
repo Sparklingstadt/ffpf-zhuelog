@@ -62,6 +62,7 @@ const (
 	msgVocabularyInvalid  = "単語の形式が不正です。語句は1〜20文字、意味は1〜200文字、ピン音は100文字以内にしてください。"
 	msgVocabularyNotFound = "単語が見つかりません。"
 	msgVocabularyExists   = "この語句はすでに単語帳にあります。"
+	msgStudyLogInvalid    = "学習ログの期間が不正です。YYYY-MM-DD で、93日以内にしてください。"
 	msgVocabularyDraft    = "ピン音と意味の下書きを作れませんでした。自分で入力するか、もう一度お試しください。"
 )
 
