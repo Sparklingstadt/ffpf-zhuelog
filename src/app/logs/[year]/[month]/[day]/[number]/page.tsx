@@ -17,6 +17,10 @@ import {
 import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { shareLearningEntryAction } from "@/presentation/actions/follow-actions";
 import { trashLearningEntryAction } from "@/presentation/actions/note-trash-actions";
+import {
+  draftVocabularyAction,
+  saveVocabularyAction,
+} from "@/presentation/actions/vocabulary-actions";
 import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
 import { LearningEntryCard } from "@/presentation/components/learning/learning-entry-card";
@@ -24,6 +28,14 @@ import { NoteActionForm } from "@/presentation/components/records/note-action-fo
 import { RecordOwnerControls } from "@/presentation/components/records/record-owner-controls";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/presentation/components/ui/card";
+import { VocabularyAddForm } from "@/presentation/components/vocabulary/vocabulary-add-form";
 import { requireNonGuestOwner } from "@/presentation/guards/record-owner-guard";
 import {
   formatLogDate,
@@ -110,6 +122,26 @@ export default async function LogDetailPage({
         numberLabel={`#${entryNumber}`}
         defaultOpen
       />
+
+      {/* Words go into the user's own book, so only from their own notes. */}
+      {owner.kind === "self" ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">単語帳に入れる</CardTitle>
+            <CardDescription>
+              添削後の文から覚えたい語句を選んで「選んだ語句を入れる」を押すか、語句を入力してください。
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <VocabularyAddForm
+              sentence={entry.correctedText}
+              sourceEntryId={entry.id}
+              draftVocabulary={draftVocabularyAction}
+              saveVocabulary={saveVocabularyAction}
+            />
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* Only your own notes: an admin viewing someone else reads only. */}
       {owner.kind === "self" ? (
