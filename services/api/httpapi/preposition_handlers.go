@@ -104,7 +104,7 @@ func getPrepositionRecord(rs PrepositionRecords) http.Handler {
 // putPrepositionRecord saves the round the browser sends when its last
 // question is answered. The id in the path names it, so a retry keeps one
 // row; Go counts the misses and sets createdAt itself.
-func putPrepositionRecord(rs PrepositionRecords, now func() time.Time) http.Handler {
+func putPrepositionRecord(rs PrepositionRecords, rv Reviews, now func() time.Time) http.Handler {
 	type request struct {
 		StartedAt string                      `json:"startedAt"`
 		ElapsedMs int                         `json:"elapsedMs"`
@@ -134,6 +134,13 @@ func putPrepositionRecord(rs PrepositionRecords, now func() time.Time) http.Hand
 			return
 		}
 		if err != nil {
+			writeServiceError(w, r, err)
+			return
+		}
+		// Missed questions go to the review queue. The saved round's questions
+		// are used, so a retry queues what the first save did; a failure here
+		// fails the save, and the retry queues them then.
+		if err := queueReviews(r.Context(), rv, principalFrom(r.Context()).OwnerID, prepositionReviewTargets(saved.Questions), now()); err != nil {
 			writeServiceError(w, r, err)
 			return
 		}

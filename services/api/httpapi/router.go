@@ -110,6 +110,9 @@ type Deps struct {
 	// PrepositionRecords keeps finished rounds of preposition practice.
 	PrepositionRecords PrepositionRecords
 	ComplementRecords  ComplementRecords
+	// Reviews is the spaced-repetition queue. Saved practice rounds add their
+	// missed questions to it; nil leaves the review routes out.
+	Reviews Reviews
 }
 
 const (
@@ -238,11 +241,17 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	// Guests may practice in the web, but nothing of theirs is saved.
 	private("GET /v1/preposition-records", authed(listPrepositionRecords(d.PrepositionRecords)))
 	private("GET /v1/preposition-records/{id}", authed(getPrepositionRecord(d.PrepositionRecords)))
-	private("PUT /v1/preposition-records/{id}", authed(putPrepositionRecord(d.PrepositionRecords, d.Now)))
+	private("PUT /v1/preposition-records/{id}", authed(putPrepositionRecord(d.PrepositionRecords, d.Reviews, d.Now)))
 
 	private("GET /v1/complement-records", authed(listComplementRecords(d.ComplementRecords)))
 	private("GET /v1/complement-records/{id}", authed(getComplementRecord(d.ComplementRecords)))
-	private("PUT /v1/complement-records/{id}", authed(putComplementRecord(d.ComplementRecords, d.Now)))
+	private("PUT /v1/complement-records/{id}", authed(putComplementRecord(d.ComplementRecords, d.Reviews, d.Now)))
+
+	// Today's reviews, for members and admins.
+	if d.Reviews != nil {
+		private("GET /v1/reviews/due", authed(listDueReviews(d.Reviews, d.Now)))
+		private("POST /v1/reviews/{itemId}", authed(answerReview(d.Reviews, d.Now)))
+	}
 
 	// The LINE routes exist only when the bot is configured. The webhook and
 	// the drain are public but check their own credential (the LINE signature,

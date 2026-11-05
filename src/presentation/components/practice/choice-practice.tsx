@@ -26,7 +26,7 @@ import { cn } from "@/presentation/lib/utils";
 
 // Moves focus to the button that just appeared. Unlike autoFocus it keeps
 // the scroll position, so the progress bar stays in view.
-function focusInPlace(button: HTMLButtonElement | null) {
+export function focusInPlace(button: HTMLButtonElement | null) {
   button?.focus({ preventScroll: true });
 }
 
@@ -53,7 +53,7 @@ function ProgressBar({ done, total }: { done: number; total: number }) {
   );
 }
 
-function Choice({
+export function Choice({
   preposition,
   compact,
   state,
