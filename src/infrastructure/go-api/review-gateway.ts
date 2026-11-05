@@ -30,11 +30,18 @@ export function createReviewGateway(call: GoApiCall = goApiAuthed) {
     // How many items are due now and the first `limit` of them, the longest
     // overdue first.
     async listDue(limit: number): Promise<DueReviews> {
-      const json = await call<{ count: number; items: ItemJson[] }>(
-        `/v1/reviews/due?limit=${encodeURIComponent(String(limit))}`,
-        { method: "GET" },
-      );
-      return { count: json.count, items: json.items.map(toItem) };
+      const json = await call<{
+        count: number;
+        streakDays: number;
+        items: ItemJson[];
+      }>(`/v1/reviews/due?limit=${encodeURIComponent(String(limit))}`, {
+        method: "GET",
+      });
+      return {
+        count: json.count,
+        streakDays: json.streakDays,
+        items: json.items.map(toItem),
+      };
     },
 
     // Go applies the answer once per logId, so a retry is safe.

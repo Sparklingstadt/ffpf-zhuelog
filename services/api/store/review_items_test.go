@@ -117,3 +117,93 @@ func TestRecordReviewReschedulesLogsAndIsRetryable(t *testing.T) {
 		t.Errorf("log kept after its item was deleted")
 	}
 }
+
+func TestEnqueueBringsAMissedItemForward(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	a := reviewOwner(t, s)
+	now := fixedNow()
+	tgt := []ReviewTarget{target("complement", "result-01")}
+	if _, err := s.EnqueueReviewItems(ctx, a, tgt, now); err != nil {
+		t.Fatal(err)
+	}
+	due, _ := s.ListDueReviewItems(ctx, a, now, 10)
+	answered, err := s.RecordReview(ctx, a, due[0].ID, newUUID(), review.Easy, now)
+	if err != nil || !answered.Due.After(now.Add(24*time.Hour)) {
+		t.Fatalf("answered = %+v, %v", answered, err)
+	}
+
+	// Missed again in practice an hour later: due then, its memory kept.
+	later := now.Add(time.Hour)
+	if n, err := s.EnqueueReviewItems(ctx, a, tgt, later); err != nil || n != 1 {
+		t.Fatalf("enqueue again = %d, %v", n, err)
+	}
+	again, _ := s.ListDueReviewItems(ctx, a, later, 10)
+	if len(again) != 1 || !again[0].Due.Equal(dbTime(later)) || again[0].Reps != answered.Reps ||
+		again[0].Stability != answered.Stability || again[0].State != answered.State {
+		t.Fatalf("brought forward = %+v, was %+v", again, answered)
+	}
+	// Already due, it stays where it is.
+	if n, err := s.EnqueueReviewItems(ctx, a, tgt, later.Add(time.Hour)); err != nil || n != 0 {
+		t.Fatalf("enqueue while due = %d, %v", n, err)
+	}
+}
+
+func TestReviewStreakCountsDaysInJapanTime(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	a := reviewOwner(t, s)
+	// 2026-10-20 23:30 JST.
+	now := time.Date(2026, 10, 20, 14, 30, 0, 0, time.UTC)
+	if n, err := s.ReviewStreak(ctx, a, now); err != nil || n != 0 {
+		t.Fatalf("no reviews = %d, %v", n, err)
+	}
+	if _, err := s.EnqueueReviewItems(ctx, a, []ReviewTarget{target("complement", "result-01")}, now.AddDate(0, 0, -5)); err != nil {
+		t.Fatal(err)
+	}
+	due, _ := s.ListDueReviewItems(ctx, a, now, 10)
+	// Answers on Oct 18, 19 (00:10 JST, still Oct 18 in UTC) and 20, JST.
+	for _, at := range []time.Time{
+		time.Date(2026, 10, 18, 3, 0, 0, 0, time.UTC),
+		time.Date(2026, 10, 18, 15, 10, 0, 0, time.UTC),
+		time.Date(2026, 10, 20, 1, 0, 0, 0, time.UTC),
+	} {
+		if _, err := s.pool.Exec(ctx, `INSERT INTO "ReviewLog"
+ ("id", "ownerId", "itemId", "rating", "state", "due", "stability", "difficulty", "scheduledDays", "reviewedAt")
+ VALUES ($1, $2, $3, 3, 0, $4, 0, 0, 0, $4)`, newUUID(), a, due[0].ID, dbTime(at)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n, err := s.ReviewStreak(ctx, a, now); err != nil || n != 3 {
+		t.Errorf("streak on Oct 20 = %d, %v", n, err)
+	}
+	// Oct 21 JST without a review yet: the streak still stands.
+	if n, _ := s.ReviewStreak(ctx, a, now.Add(2*time.Hour)); n != 3 {
+		t.Errorf("streak on Oct 21 = %d", n)
+	}
+	// Oct 22 JST: a whole day missed.
+	if n, _ := s.ReviewStreak(ctx, a, now.Add(26*time.Hour)); n != 0 {
+		t.Errorf("streak on Oct 22 = %d", n)
+	}
+}
+
+func TestStreakFrom(t *testing.T) {
+	day := func(m time.Month, d int) time.Time { return time.Date(2026, m, d, 0, 0, 0, 0, time.UTC) }
+	today := time.Date(2026, 11, 1, 0, 0, 0, 0, jst)
+	for name, tc := range map[string]struct {
+		days []time.Time
+		want int
+	}{
+		"none":              {nil, 0},
+		"today only":        {[]time.Time{day(11, 1)}, 1},
+		"yesterday only":    {[]time.Time{day(10, 31)}, 1},
+		"across the month":  {[]time.Time{day(11, 1), day(10, 31), day(10, 30)}, 3},
+		"a gap":             {[]time.Time{day(11, 1), day(10, 30)}, 1},
+		"two days ago":      {[]time.Time{day(10, 30), day(10, 29)}, 0},
+		"from yesterday on": {[]time.Time{day(10, 31), day(10, 30), day(10, 28)}, 2},
+	} {
+		if got := streakFrom(today, tc.days); got != tc.want {
+			t.Errorf("%s: streak = %d, want %d", name, got, tc.want)
+		}
+	}
+}

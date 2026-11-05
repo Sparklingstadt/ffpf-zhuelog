@@ -17,6 +17,7 @@ type Reviews interface {
 	EnqueueReviewItems(ctx context.Context, ownerID string, targets []store.ReviewTarget, now time.Time) (int, error)
 	ListDueReviewItems(ctx context.Context, ownerID string, now time.Time, limit int) ([]store.ReviewItem, error)
 	CountDueReviewItems(ctx context.Context, ownerID string, now time.Time) (int, error)
+	ReviewStreak(ctx context.Context, ownerID string, now time.Time) (int, error)
 	RecordReview(ctx context.Context, ownerID, itemID, logID string, rating review.Rating, now time.Time) (store.ReviewItem, error)
 }
 
@@ -92,12 +93,14 @@ func toReviewItemJSON(it store.ReviewItem) reviewItemJSON {
 	return out
 }
 
-// listDueReviews returns how many of the owner's items are due now and the
-// first of them (?limit=, 1 to 100, default 20), the longest overdue first.
+// listDueReviews returns how many of the owner's items are due now, the
+// first of them (?limit=, 1 to 100, default 20) with the longest overdue
+// first, and how many days in a row (Japan time) the owner has reviewed.
 func listDueReviews(rv Reviews, now func() time.Time) http.Handler {
 	type response struct {
-		Count int              `json:"count"`
-		Items []reviewItemJSON `json:"items"`
+		Count      int              `json:"count"`
+		StreakDays int              `json:"streakDays"`
+		Items      []reviewItemJSON `json:"items"`
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		limit := reviewDueDefaultLimit
@@ -120,7 +123,12 @@ func listDueReviews(rv Reviews, now func() time.Time) http.Handler {
 			writeServiceError(w, r, err)
 			return
 		}
-		out := response{Count: count, Items: make([]reviewItemJSON, len(items))}
+		streak, err := rv.ReviewStreak(r.Context(), owner, at)
+		if err != nil {
+			writeServiceError(w, r, err)
+			return
+		}
+		out := response{Count: count, StreakDays: streak, Items: make([]reviewItemJSON, len(items))}
 		for i, it := range items {
 			out.Items[i] = toReviewItemJSON(it)
 		}

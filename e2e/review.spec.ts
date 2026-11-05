@@ -47,6 +47,7 @@ test("missed practice questions come back on the review page and an answer resch
 
   await page.goto("/");
   await expect(page.getByTestId("review-due-count")).toHaveText("0");
+  await expect(page.getByTestId("review-streak-days")).toHaveText("0");
 
   await practiceOneRound(page);
   const {
@@ -101,6 +102,7 @@ test("missed practice questions come back on the review page and an answer resch
   await expect(page.getByTestId("review-due-count")).toHaveText(
     String(missed.length - 1),
   );
+  await expect(page.getByTestId("review-streak-days")).toHaveText("1");
 });
 
 test("guests have no review queue", async ({ page }) => {

@@ -31,6 +31,7 @@ const itemJson = {
 test("listDue asks for a limit and maps dates", async () => {
   const { call, calls } = fakeCall({
     count: 7,
+    streakDays: 3,
     items: [itemJson, { ...itemJson, id: "c2", lastReview: null }],
   });
   const due = await createReviewGateway(call).listDue(20);
@@ -38,6 +39,7 @@ test("listDue asks for a limit and maps dates", async () => {
     { path: "/v1/reviews/due?limit=20", method: "GET", body: undefined },
   ]);
   assert.equal(due.count, 7);
+  assert.equal(due.streakDays, 3);
   assert.equal(due.items.length, 2);
   assert.deepEqual(due.items[0].due, new Date("2026-11-05T10:00:00.000Z"));
   assert.deepEqual(

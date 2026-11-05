@@ -1,11 +1,18 @@
-import { ArrowRight, Repeat } from "lucide-react";
+import { ArrowRight, Flame, Repeat } from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
 
-// The home's way into today's reviews: how many are due, and a link.
-export function ReviewDueCard({ count }: { count: number }) {
+// The home's way into today's reviews: how many are due, how many days in a
+// row the user has reviewed, and a link.
+export function ReviewDueCard({
+  count,
+  streakDays,
+}: {
+  count: number;
+  streakDays: number;
+}) {
   return (
     <Card className="py-5">
       <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -28,13 +35,29 @@ export function ReviewDueCard({ count }: { count: number }) {
             </p>
           </div>
         </div>
-        {count > 0 ? (
-          <Button asChild>
-            <Link href="/review">
-              復習する <ArrowRight />
-            </Link>
-          </Button>
-        ) : null}
+        <div className="flex items-center gap-4 sm:justify-end">
+          <p
+            className="flex items-center gap-1.5 text-sm text-muted-foreground"
+            title="1問以上復習した日が続いている日数"
+          >
+            <Flame className="size-4" />
+            連続{" "}
+            <span
+              className="font-mono text-base text-foreground"
+              data-testid="review-streak-days"
+            >
+              {streakDays}
+            </span>
+            日
+          </p>
+          {count > 0 ? (
+            <Button asChild>
+              <Link href="/review">
+                復習する <ArrowRight />
+              </Link>
+            </Button>
+          ) : null}
+        </div>
       </CardContent>
     </Card>
   );
