@@ -92,3 +92,24 @@ test("save PUTs the round under its id", async () => {
   ]);
   assert.equal(saved.missCount, 7);
 });
+
+test("save sends each question's id", async () => {
+  const withId = [{ id: "q-1", ...questions[0] }];
+  const { call, calls } = fakeCall({ ...summaryJson, questions: withId });
+  const saved = await createComplementRecordGateway(call).save({
+    id: summaryJson.id,
+    mode: "result",
+    startedAt: new Date(summaryJson.startedAt),
+    elapsedMs: 95_000,
+    questions: withId,
+  });
+  assert.deepEqual((calls[0].body as { questions: unknown }).questions, withId);
+  assert.deepEqual(saved.questions, withId);
+});
+
+test("a round saved before questions had ids reads without one", async () => {
+  const { call } = fakeCall({ ...summaryJson, questions });
+  const record = await createComplementRecordGateway(call).get(summaryJson.id);
+  assert.equal(record?.questions[0].id, undefined);
+  assert.deepEqual(record?.questions, questions);
+});

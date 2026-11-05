@@ -183,9 +183,10 @@ model ChatConversation {
 
 // One finished round of preposition practice by a member or admin, written by
 // the Go API. id is a UUID made by the browser, so a retried save keeps one
-// row. questions is [{answer, noun, prompt, misses}] in the order asked, with
-// the wrong prepositions picked in misses; the counts are derived from it by
-// Go. ownerId has no foreign key: admins have no row in the database.
+// row. questions is [{id?, answer, noun, prompt, misses}] in the order asked,
+// with the wrong prepositions picked in misses; id is the question's id in the
+// Web's practice data and older rounds have none. The counts are derived from
+// it by Go. ownerId has no foreign key: admins have no row in the database.
 model PrepositionPracticeRecord {
   id            String   @id
   ownerId       String
@@ -230,4 +231,54 @@ model ComplementPracticeRecord {
 
   @@unique([id, ownerId])
   @@index([ownerId, createdAt])
+}
+
+// Something a member or admin reviews on a spaced-repetition schedule (FSRS),
+// one row per owner and target. kind says what targetId names: "preposition"
+// (a use id and its noun) or "complement" (a question id); later kinds add
+// vocabulary. language is the language studied ("zh"). The FSRS card state
+// is kept as columns so the Go API can pick the due items with an index.
+// state: 0 new, 1 learning, 2 review, 3 relearning.
+model ReviewItem {
+  id             String      @id
+  ownerId        String
+  language       String
+  kind           String
+  targetId       String
+  due            DateTime
+  stability      Float       @default(0)
+  difficulty     Float       @default(0)
+  scheduledDays  Int         @default(0)
+  reps           Int         @default(0)
+  lapses         Int         @default(0)
+  state          Int         @default(0)
+  remainingSteps Int         @default(0)
+  lastReview     DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  logs           ReviewLog[]
+
+  @@unique([ownerId, language, kind, targetId])
+  @@index([ownerId, due])
+}
+
+// One answer to a review: the rating (1 again, 2 hard, 3 good, 4 easy) and
+// the card as it stood just before it, so the FSRS parameters can later be
+// fitted to the owner's history. The id comes from the client, so a retried
+// answer is applied once.
+model ReviewLog {
+  id            String     @id
+  ownerId       String
+  itemId        String
+  item          ReviewItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  rating        Int
+  state         Int
+  due           DateTime
+  stability     Float
+  difficulty    Float
+  scheduledDays Int
+  reviewedAt    DateTime
+
+  @@index([itemId, reviewedAt])
+  @@index([ownerId, reviewedAt])
 }

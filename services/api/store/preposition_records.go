@@ -12,8 +12,11 @@ import (
 
 // PrepositionQuestion is one question of a finished preposition round: the
 // answer, the noun and the phrase with the blank, and the wrong prepositions
-// picked before the answer, in the order they were picked.
+// picked before the answer, in the order they were picked. ID names the
+// question in the Web's practice data; rounds saved before it was kept have
+// none.
 type PrepositionQuestion struct {
+	ID     string   `json:"id,omitempty"`
 	Answer string   `json:"answer"`
 	Noun   string   `json:"noun"`
 	Prompt string   `json:"prompt"`

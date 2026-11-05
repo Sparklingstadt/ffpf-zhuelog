@@ -60,12 +60,14 @@
   "createdAt": "2026-10-24T01:01:35.000Z",
   "questions": [
     {
+      "id": "P001",
       "answer": "在",
       "noun": "学校",
       "prompt": "（　）学校学习",
       "misses": []
     },
     {
+      "id": "P146",
       "answer": "把",
       "noun": "门",
       "prompt": "（　）门关上",
@@ -95,12 +97,14 @@
   "elapsedMs": 95000,
   "questions": [
     {
+      "id": "P001",
       "answer": "在",
       "noun": "学校",
       "prompt": "（　）学校学习",
       "misses": []
     },
     {
+      "id": "P146",
       "answer": "把",
       "noun": "门",
       "prompt": "（　）门关上",
@@ -115,12 +119,15 @@
 | `startedAt`          | ISO 8601                                                          |
 | `elapsedMs`          | 0〜86,400,000（24 時間）                                          |
 | `questions`          | 1〜50 件。出した順                                                |
+| `questions[].id`     | 任意。問題データの ID。40 字まで                                  |
 | `questions[].answer` | 1〜10 字                                                          |
 | `questions[].noun`   | 1〜40 字                                                          |
 | `questions[].prompt` | 1〜100 字                                                         |
 | `questions[].misses` | 間違えて選んだ介詞を選んだ順に 0〜3 件。重ならず、`answer` でない |
 
 `questionCount`・`firstTryCount`・`missCount` は `questions` からサーバーが数え、`createdAt` もサーバーが付けます。
+
+`questions[].id` を残すようになる前の記録の問題には `id` がありません。その問題の応答にも `id` は含まれません。介詞の `id` は用法の ID で、同じ用法の別の名詞の問題は同じ `id` になります。
 
 **レスポンス** `200`：保存した記録（`GET /v1/preposition-records/{id}` と同じ形）。
 
@@ -144,6 +151,6 @@ Web の `/practice/complements` で、結果補語（`result`）・可能補語�
 - `GET /v1/complement-records/{id}`：自分の記録の詳細。
 - `PUT /v1/complement-records/{id}`：練習の結果を保存。
 
-保存リクエストには、介詞の記録の項目に加えて `mode`（`result` / `potential` / `degree` / `direction-simple` / `direction-compound` / `direction-simple-extended` / `direction-compound-extended`）が必要です。一覧・詳細にも `mode` を返します。`questions[].noun` は補語の種類名、`answer` と `misses` の各要素は1〜40字です。その他の長さや件数の制限は介詞と同じです。未知の `mode` は `400` です。
+保存リクエストには、介詞の記録の項目に加えて `mode`（`result` / `potential` / `degree` / `direction-simple` / `direction-compound` / `direction-simple-extended` / `direction-compound-extended`）が必要です。一覧・詳細にも `mode` を返します。`questions[].noun` は補語の種類名、`answer` と `misses` の各要素は1〜40字です。`questions[].id` は補語の問題の ID です。その他の長さや件数の制限は介詞と同じです。未知の `mode` は `400` です。
 
 Web の記録一覧は `/practice/complements/records`、詳細は `/practice/complements/records/{id}` です。会員・管理者だけが利用でき、ゲストは記録を保存しません。
