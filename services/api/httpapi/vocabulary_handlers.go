@@ -60,6 +60,20 @@ func toVocabularyJSON(v store.VocabularyEntry) vocabularyJSON {
 	return out
 }
 
+// validNoteID is a learning note id as the web accepts one: up to 64
+// lowercase letters and digits (store ids are cuids; seeded notes differ).
+func validNoteID(s string) bool {
+	if len(s) == 0 || len(s) > 64 {
+		return false
+	}
+	for _, c := range s {
+		if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9') {
+			return false
+		}
+	}
+	return true
+}
+
 // runesWithin is s trimmed, and whether it has min to max characters.
 func runesWithin(s string, min, max int) (string, bool) {
 	s = strings.TrimSpace(s)
@@ -110,7 +124,7 @@ func putVocabulary(vs Vocabulary, now func() time.Time) http.Handler {
 		pinyin, okPinyin := runesWithin(req.Pinyin, 0, maxVocabularyPinyin)
 		meaning, okMeaning := runesWithin(req.Meaning, 1, maxVocabularyMeaning)
 		source := strings.TrimSpace(req.SourceEntryID)
-		if !okWord || !okPinyin || !okMeaning || (source != "" && !validReviewItemID(source)) {
+		if !okWord || !okPinyin || !okMeaning || (source != "" && !validNoteID(source)) {
 			writeError(w, http.StatusBadRequest, codeInvalidRequest, msgVocabularyInvalid)
 			return
 		}
