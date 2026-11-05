@@ -85,6 +85,10 @@ func TestPutVocabulary(t *testing.T) {
 		!strings.Contains(w.Body.String(), `"sourceEntryId":null`) {
 		t.Errorf("without pinyin and source = %d %s", w.Code, w.Body.String())
 	}
+	// Any note id the web accepts, not only a cuid.
+	if w := do(h, "PUT", path, `{"word":"认真","meaning":"x","sourceEntryId":"seednote1"}`, jsonAuth); w.Code != http.StatusOK {
+		t.Errorf("a seeded note id = %d %s", w.Code, w.Body.String())
+	}
 
 	for name, body := range map[string]string{
 		"no word":     `{"word":" ","meaning":"x"}`,
@@ -92,6 +96,7 @@ func TestPutVocabulary(t *testing.T) {
 		"no meaning":  `{"word":"认真","meaning":""}`,
 		"long pinyin": `{"word":"认真","meaning":"x","pinyin":"` + strings.Repeat("a", maxVocabularyPinyin+1) + `"}`,
 		"bad source":  `{"word":"认真","meaning":"x","sourceEntryId":"../x"}`,
+		"long source": `{"word":"认真","meaning":"x","sourceEntryId":"` + strings.Repeat("a", 65) + `"}`,
 		"not JSON":    `{`,
 	} {
 		t.Run(name, func(t *testing.T) {
