@@ -21,6 +21,7 @@ type fakeReviews struct {
 	enqueueErr error
 	due        []store.ReviewItem
 	count      int
+	streak     int
 	listLimit  int
 	owner      string
 	now        time.Time
@@ -47,6 +48,10 @@ func (f *fakeReviews) ListDueReviewItems(_ context.Context, ownerID string, now 
 
 func (f *fakeReviews) CountDueReviewItems(_ context.Context, ownerID string, now time.Time) (int, error) {
 	return f.count, nil
+}
+
+func (f *fakeReviews) ReviewStreak(_ context.Context, ownerID string, now time.Time) (int, error) {
+	return f.streak, nil
 }
 
 func (f *fakeReviews) RecordReview(_ context.Context, ownerID, itemID, logID string, rating review.Rating, now time.Time) (store.ReviewItem, error) {
@@ -118,7 +123,7 @@ func TestReviewRoutesRejectGuests(t *testing.T) {
 
 func TestListDueReviews(t *testing.T) {
 	last := time.Date(2026, 10, 19, 12, 0, 0, 0, time.UTC)
-	rv := &fakeReviews{count: 3, due: []store.ReviewItem{
+	rv := &fakeReviews{count: 3, streak: 4, due: []store.ReviewItem{
 		{ID: testReviewItemID, ReviewTarget: store.ReviewTarget{Language: "zh", Kind: "preposition", TargetID: "P001:学校"},
 			Card: review.Card{Due: last.Add(time.Hour), State: review.Reviewing, Reps: 2, Lapses: 1, LastReview: last}},
 		{ID: "czzzzzzzzzzzzzzzzzzzzzzzz", ReviewTarget: store.ReviewTarget{Language: "zh", Kind: "complement", TargetID: "result-01"},
@@ -128,11 +133,12 @@ func TestListDueReviews(t *testing.T) {
 
 	w := do(h, "GET", "/v1/reviews/due", "", jsonAuth)
 	var got struct {
-		Count int              `json:"count"`
-		Items []map[string]any `json:"items"`
+		Count      int              `json:"count"`
+		StreakDays int              `json:"streakDays"`
+		Items      []map[string]any `json:"items"`
 	}
 	_ = json.Unmarshal(w.Body.Bytes(), &got)
-	if w.Code != http.StatusOK || got.Count != 3 || len(got.Items) != 2 || rv.listLimit != reviewDueDefaultLimit ||
+	if w.Code != http.StatusOK || got.Count != 3 || got.StreakDays != 4 || len(got.Items) != 2 || rv.listLimit != reviewDueDefaultLimit ||
 		rv.owner != testOwner || !rv.now.Equal(clk.Now()) {
 		t.Fatalf("due = %d %s (limit %d)", w.Code, w.Body.String(), rv.listLimit)
 	}

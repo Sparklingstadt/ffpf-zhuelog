@@ -44,11 +44,15 @@ async function loadEntries(owner: ViewedOwner): Promise<{
   }
 }
 
-// How many reviews are due, or null when Go cannot say: the home then just
-// leaves the card out.
-async function loadDueReviewCount(): Promise<number | null> {
+// How many reviews are due and the review streak, or null when Go cannot
+// say: the home then just leaves the card out.
+async function loadDueReviews(): Promise<{
+  count: number;
+  streakDays: number;
+} | null> {
   try {
-    return (await reviews.listDue(1)).count;
+    const { count, streakDays } = await reviews.listDue(1);
+    return { count, streakDays };
   } catch (error) {
     if (!(error instanceof GoApiError)) throw error;
     console.error("REVIEW_COUNT_UNAVAILABLE", error.status, error.code);
@@ -120,7 +124,7 @@ export default async function Home({ searchParams }: HomeProps) {
     loadEntries(owner),
     loadRecordOwnerView(user, owner),
     // Only the user's own queue; an admin viewing a member sees no card.
-    ownNotes ? loadDueReviewCount() : Promise.resolve(null),
+    ownNotes ? loadDueReviews() : Promise.resolve(null),
   ]);
 
   return (
@@ -129,7 +133,12 @@ export default async function Home({ searchParams }: HomeProps) {
 
       <RecordOwnerControls owner={owner} view={view} path="/" />
 
-      {dueReviews === null ? null : <ReviewDueCard count={dueReviews} />}
+      {dueReviews === null ? null : (
+        <ReviewDueCard
+          count={dueReviews.count}
+          streakDays={dueReviews.streakDays}
+        />
+      )}
 
       {loadFailed ? (
         <Alert variant="destructive">

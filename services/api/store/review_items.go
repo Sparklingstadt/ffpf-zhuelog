@@ -48,9 +48,11 @@ func scanReviewItem(row pgx.Row) (ReviewItem, error) {
 	return it, nil
 }
 
-// EnqueueReviewItems adds the targets the owner does not have yet as new
-// cards due at now. Targets already queued keep their schedule. It returns
-// how many were added.
+// EnqueueReviewItems puts the targets in the owner's queue, due at now: the
+// ones the owner does not have yet as new cards, and the ones already queued
+// for later brought forward to now (missed again, they should come back
+// soon), keeping their FSRS memory state. It returns how many were added or
+// brought forward.
 func (s *Store) EnqueueReviewItems(ctx context.Context, ownerID string, targets []ReviewTarget, now time.Time) (int, error) {
 	now = dbTime(now)
 	added := 0
@@ -59,7 +61,9 @@ func (s *Store) EnqueueReviewItems(ctx context.Context, ownerID string, targets 
 			tag, err := tx.Exec(ctx, `INSERT INTO "ReviewItem"
  ("id", "ownerId", "language", "kind", "targetId", "due", "state", "createdAt", "updatedAt")
  VALUES ($1, $2, $3, $4, $5, $6, $7, $6, $6)
- ON CONFLICT ("ownerId", "language", "kind", "targetId") DO NOTHING`,
+ ON CONFLICT ("ownerId", "language", "kind", "targetId") DO UPDATE
+ SET "due" = EXCLUDED."due", "updatedAt" = EXCLUDED."updatedAt"
+ WHERE "ReviewItem"."due" > EXCLUDED."due"`,
 				newID(), ownerID, t.Language, t.Kind, t.TargetID, now, int(review.New))
 			if err != nil {
 				return err
@@ -90,6 +94,60 @@ func (s *Store) ListDueReviewItems(ctx context.Context, ownerID string, now time
 		out = []ReviewItem{}
 	}
 	return out, nil
+}
+
+// ReviewStreak is how many days in a row, in Japan time, the owner has
+// answered at least one review, counting back from today. A streak whose
+// last day is yesterday still counts, so it does not drop to 0 until a whole
+// day goes by without a review.
+func (s *Store) ReviewStreak(ctx context.Context, ownerID string, now time.Time) (int, error) {
+	today := dateOnly(now.In(jst))
+	rows, err := s.pool.Query(ctx, `SELECT DISTINCT ("reviewedAt" + interval '9 hours')::date AS "day"
+ FROM "ReviewLog" WHERE "ownerId" = $1 AND "reviewedAt" > $2 ORDER BY "day" DESC`,
+		ownerID, dbTime(today.AddDate(-reviewStreakMaxDays, 0, 0)))
+	if err != nil {
+		return 0, fmt.Errorf("store: review streak: %w", err)
+	}
+	days, err := pgx.CollectRows(rows, pgx.RowTo[time.Time])
+	if err != nil {
+		return 0, fmt.Errorf("store: review streak: %w", err)
+	}
+	return streakFrom(today, days), nil
+}
+
+// reviewStreakMaxDays bounds how far back ReviewStreak reads.
+const reviewStreakMaxDays = 400
+
+// dateOnly is midnight of t's day, in t's location.
+func dateOnly(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+}
+
+// streakFrom counts the days that run back one by one from today or
+// yesterday. days are calendar dates, newest first.
+func streakFrom(today time.Time, days []time.Time) int {
+	sameDay := func(a, b time.Time) bool {
+		return a.Year() == b.Year() && a.Month() == b.Month() && a.Day() == b.Day()
+	}
+	if len(days) == 0 {
+		return 0
+	}
+	want := today
+	if !sameDay(days[0], want) {
+		want = today.AddDate(0, 0, -1)
+		if !sameDay(days[0], want) {
+			return 0
+		}
+	}
+	n := 0
+	for _, d := range days {
+		if !sameDay(d, want) {
+			break
+		}
+		n++
+		want = want.AddDate(0, 0, -1)
+	}
+	return n
 }
 
 // CountDueReviewItems is how many of the owner's items are due at or before now.

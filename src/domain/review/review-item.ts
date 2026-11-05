@@ -17,6 +17,9 @@ export type ReviewItem = {
 export type DueReviews = {
   // Every item due now, which may be more than items holds.
   count: number;
+  // Days in a row, Japan time, with at least one review, up to today or
+  // yesterday.
+  streakDays: number;
   items: ReviewItem[];
 };
 
