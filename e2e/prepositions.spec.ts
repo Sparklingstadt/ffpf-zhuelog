@@ -51,7 +51,7 @@ test("a member's round of 25 shows its result, is recorded and can be read again
   await expect(page.getByText(`${QUESTION_COUNT}問 終了！`)).toBeVisible();
   await expect(page.getByText("記録に保存しました。")).toBeVisible();
   const { rows } = await db.query(
-    `SELECT "ownerId", "questionCount", "firstTryCount", "missCount", "elapsedMs"
+    `SELECT "ownerId", "questionCount", "firstTryCount", "missCount", "elapsedMs", "questions"
      FROM "PrepositionPracticeRecord"`,
   );
   expect(rows).toHaveLength(1);
@@ -59,6 +59,8 @@ test("a member's round of 25 shows its result, is recorded and can be read again
   expect(record.ownerId).toBe(memberOwnerId(accountId));
   expect(record.questionCount).toBe(QUESTION_COUNT);
   expect(record.elapsedMs).toBeGreaterThan(0);
+  for (const question of record.questions)
+    expect(question.id).toMatch(/^P\d+$/);
   const accuracy = Math.round((record.firstTryCount / QUESTION_COUNT) * 100);
   const result = page.getByRole("main");
   await expect(result).toContainText(`正答率${accuracy}%`);

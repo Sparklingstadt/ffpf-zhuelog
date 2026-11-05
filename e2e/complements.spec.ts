@@ -59,6 +59,8 @@ for (const [mode, label] of [
     expect(rows[0].ownerId).toBe(memberOwnerId(id));
     expect(rows[0].questionCount).toBe(25);
     expect(rows[0].elapsedMs).toBeGreaterThan(0);
+    for (const question of rows[0].questions)
+      expect(question.id).toMatch(new RegExp(`^${mode}-\\d+$`));
     expect(rows[0].firstTryCount).toBe(
       rows[0].questions.filter(
         (q: { misses: string[] }) => q.misses.length === 0,
