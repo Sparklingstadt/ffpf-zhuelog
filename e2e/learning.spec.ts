@@ -114,8 +114,7 @@ test("exports the selected notes as a CSV the import reads back", async ({
   );
   await expect(page.getByText("3件の学習文を登録しました。")).toBeVisible();
 
-  await page.goto("/");
-  await page.getByRole("link", { name: "CSVでエクスポート" }).click();
+  await page.goto("/export");
   await expect(page).toHaveURL(/\/export$/);
   const download = page.getByRole("button", { name: "CSVをダウンロード" });
   await expect(download).toBeDisabled();

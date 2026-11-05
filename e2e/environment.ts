@@ -11,6 +11,8 @@ export const goApiURL = "http://127.0.0.1:3108";
 export const cookieName = "zl_access";
 // e2e/openai-stub.ts, which the Go API calls instead of OpenAI.
 export const openAiStubURL = "http://127.0.0.1:3109";
+// e2e/fixtures/ffpf-oidc-stub.ts, the FFPF ID issuer for the e2e run.
+export const ffpfIssuerURL = "http://127.0.0.1:3110";
 
 // This run's random secret, from the Playwright config.
 function runSecret() {

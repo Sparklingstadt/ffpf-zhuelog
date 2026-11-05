@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"regexp"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -171,16 +172,21 @@ func requireAuth(a Auth, allowGuest bool, next http.Handler) http.Handler {
 	})
 }
 
+// actAsOwnerIDPattern matches the owner IDs an admin may act as: password
+// members only, never FFPF ID members.
+var actAsOwnerIDPattern = regexp.MustCompile(`^password:[a-z0-9]{1,64}$`)
+
 // actAs turns an admin's Principal into the admin acting as the member the
 // X-Zhuelog-Act-As header names: 403 for anyone but an admin, 400 for several
-// headers or a value that is not a member's owner ID, 404 for no such member.
+// headers or a value that is not a password member's owner ID, 404 for no such
+// member.
 // On failure it has already written the error and returns false.
 func actAs(w http.ResponseWriter, r *http.Request, a Auth, p auth.Principal, vals []string) (auth.Principal, bool) {
 	if p.Role != auth.RoleAdmin {
 		writeForbidden(w, msgActAsAdminOnly)
 		return auth.Principal{}, false
 	}
-	if len(vals) != 1 || !memberOwnerIDPattern.MatchString(vals[0]) {
+	if len(vals) != 1 || !actAsOwnerIDPattern.MatchString(vals[0]) {
 		writeBadRequest(w)
 		return auth.Principal{}, false
 	}

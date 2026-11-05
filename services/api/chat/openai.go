@@ -32,10 +32,12 @@ func (e *Error) Error() string { return e.Code }
 // set by main; nil uses a default client. BaseURL defaults to
 // https://api.openai.com and may end with a slash.
 type Streamer struct {
-	HTTP    *http.Client
-	BaseURL string
-	APIKey  string
-	Model   string
+	HTTP            *http.Client
+	BaseURL         string
+	APIKey          string
+	Model           string
+	Instructions    string
+	RequireComplete bool
 	// timeout replaces requestTimeout in tests.
 	timeout time.Duration
 }
@@ -56,9 +58,13 @@ func (s *Streamer) Stream(ctx context.Context, msgs []Message, emit func(text st
 	for i, m := range msgs {
 		input[i] = map[string]string{"role": m.Role, "content": m.Text}
 	}
+	instructions := s.Instructions
+	if instructions == "" {
+		instructions = SystemPrompt
+	}
 	payload, err := json.Marshal(map[string]any{
 		"model":             s.Model,
-		"instructions":      SystemPrompt,
+		"instructions":      instructions,
 		"input":             input,
 		"stream":            true,
 		"store":             false,
@@ -116,7 +122,12 @@ func (s *Streamer) Stream(ctx context.Context, msgs []Message, emit func(text st
 			if err := emit(ev.Delta); err != nil {
 				return err
 			}
-		case "response.completed", "response.incomplete":
+		case "response.completed":
+			return nil
+		case "response.incomplete":
+			if s.RequireComplete {
+				return &Error{"OPENAI_INCOMPLETE_RESPONSE"}
+			}
 			return nil
 		case "response.failed", "error":
 			return &Error{"OPENAI_INVALID_RESPONSE"}

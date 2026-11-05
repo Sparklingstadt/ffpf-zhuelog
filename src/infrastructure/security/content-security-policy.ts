@@ -2,6 +2,8 @@ export function contentSecurityPolicy(
   nonce: string,
   development: boolean,
   https: boolean,
+  // Sign-in forms redirect there (e.g. the FFPF ID issuer's origin).
+  formActionOrigins: string[] = [],
 ) {
   return [
     "default-src 'self'",
@@ -14,7 +16,7 @@ export function contentSecurityPolicy(
     "object-src 'none'",
     "base-uri 'self'",
     "frame-ancestors 'none'",
-    "form-action 'self' https://github.com",
+    ["form-action 'self' https://github.com", ...formActionOrigins].join(" "),
     ...(https ? ["upgrade-insecure-requests"] : []),
   ].join("; ");
 }

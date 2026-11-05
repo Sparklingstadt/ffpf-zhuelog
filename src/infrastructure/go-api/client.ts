@@ -192,6 +192,20 @@ export function loginGitHub(
   });
 }
 
+export function loginFFPF(
+  code: string,
+  codeVerifier: string,
+  redirectUri: string,
+  nonce: string,
+  clientIp: string,
+) {
+  return goApi<GoTokens>("/v1/auth/ffpf", {
+    method: "POST",
+    body: { code, codeVerifier, redirectUri, nonce },
+    clientIp,
+  });
+}
+
 export function refreshTokens(refreshToken: string, clientIp: string) {
   return goApi<GoTokens>("/v1/auth/refresh", {
     method: "POST",

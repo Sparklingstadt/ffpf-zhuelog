@@ -320,3 +320,148 @@ func TestListMembersOrderMatchesWeb(t *testing.T) {
 		}
 	}
 }
+
+// newFfpfMember inserts an FfpfAccount with the given display name and returns
+// its ownerId ("ffpf:<sub>"). The account and every follow row touching it are
+// removed when the test ends.
+func newFfpfMember(t *testing.T, s *Store, name string) string {
+	t.Helper()
+	sub := "t" + newID()
+	if _, err := s.UpsertFfpfAccount(context.Background(),
+		FfpfAccount{ID: sub, Email: sub + "@example.com", DisplayName: name}, fixedNow()); err != nil {
+		t.Fatalf("UpsertFfpfAccount: %v", err)
+	}
+	cleanupFfpfAccount(t, s, sub)
+	owner := FfpfOwnerID(sub)
+	t.Cleanup(func() {
+		_, _ = s.pool.Exec(context.Background(),
+			`DELETE FROM "Follow" WHERE "followerId" = $1 OR "followeeId" = $1`, owner)
+	})
+	return owner
+}
+
+// newNamedMember inserts a PasswordAccount with the given display name and
+// returns its ownerId.
+func newNamedMember(t *testing.T, s *Store, name string) string {
+	t.Helper()
+	owner := newMember(t, s)
+	if _, err := s.pool.Exec(context.Background(),
+		`UPDATE "PasswordAccount" SET "displayName" = $2 WHERE "id" = $1`,
+		owner[len(MemberOwnerPrefix):], name); err != nil {
+		t.Fatalf("rename account: %v", err)
+	}
+	return owner
+}
+
+func TestListMembersIncludesFfpfMembers(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	// Unique names that sort by the Japanese collation: アキラ < イチロー < ウメ.
+	pw := newNamedMember(t, s, "イチロー"+newID())
+	ffpfName := "アキラ" + newID()
+	ffpf := newFfpfMember(t, s, ffpfName)
+	pw2 := newNamedMember(t, s, "ウメ"+newID())
+	mustFollow(t, s, ffpf, pw)
+	mustFollow(t, s, pw, ffpf)
+
+	listed := func(viewer string) []Member {
+		t.Helper()
+		dir, err := s.ListMembers(ctx, viewer)
+		if err != nil {
+			t.Fatalf("ListMembers(%s): %v", viewer, err)
+		}
+		var got []Member
+		for _, m := range dir.Members {
+			if m.OwnerID == pw || m.OwnerID == ffpf || m.OwnerID == pw2 {
+				got = append(got, m)
+			}
+		}
+		return got
+	}
+
+	got := listed(pw)
+	if len(got) != 2 || got[0].OwnerID != ffpf || got[1].OwnerID != pw2 {
+		t.Fatalf("password viewer sees %+v, want [%s %s]", got, ffpf, pw2)
+	}
+	if !got[0].Following || !got[0].FollowsMe || got[0].DisplayName != ffpfName {
+		t.Errorf("ffpf member as seen by %s = %+v", pw, got[0])
+	}
+
+	got = listed(ffpf)
+	if len(got) != 2 || got[0].OwnerID != pw || got[1].OwnerID != pw2 {
+		t.Fatalf("ffpf viewer sees %+v, want [%s %s]", got, pw, pw2)
+	}
+	if !got[0].Following || !got[0].FollowsMe {
+		t.Errorf("password member as seen by %s = %+v", ffpf, got[0])
+	}
+
+	dir, err := s.ListMembers(ctx, ffpf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dir.FollowingCount != 1 || dir.FollowerCount != 1 {
+		t.Errorf("ffpf counts = %d following, %d followers; want 1, 1", dir.FollowingCount, dir.FollowerCount)
+	}
+}
+
+func TestMemberExistsFfpf(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	m := newFfpfMember(t, s, "F")
+	for id, want := range map[string]bool{
+		m:                   true,
+		"ffpf:nope123":      false,
+		"ffpf:":             false,
+		m[len("ffpf:"):]:    false, // no prefix
+		"password:" + m[5:]: false, // the sub is not a password account
+	} {
+		got, err := s.MemberExists(ctx, id)
+		if err != nil {
+			t.Fatalf("MemberExists(%q): %v", id, err)
+		}
+		if got != want {
+			t.Errorf("MemberExists(%q) = %v, want %v", id, got, want)
+		}
+	}
+}
+
+func TestTimelineIncludesFfpfMembers(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	pwViewer := newMember(t, s)
+	name := "FFPF " + newID()
+	ffpf := newFfpfMember(t, s, name)
+	pwFriend := newMember(t, s)
+	t.Cleanup(func() {
+		_, _ = s.pool.Exec(context.Background(), `DELETE FROM "ImportBatch" WHERE id IN (SELECT "batchId" FROM "LearningEntry" WHERE "ownerId" = $1)`, ffpf)
+	})
+	mustFollow(t, s, pwViewer, ffpf)
+	mustFollow(t, s, ffpf, pwFriend)
+
+	_, ffpfNotes, err := s.CreateBatch(ctx, ffpf, []EntryDraft{draft("ffpf note")}, fixedNow())
+	if err != nil {
+		t.Fatal(err)
+	}
+	shareAll(t, s, ffpf, ffpfNotes)
+	_, pwNotes, err := s.CreateBatch(ctx, pwFriend, []EntryDraft{draft("pw note")}, fixedNow())
+	if err != nil {
+		t.Fatal(err)
+	}
+	shareAll(t, s, pwFriend, pwNotes)
+
+	got, err := s.ListTimeline(ctx, pwViewer, nil, 10)
+	if err != nil {
+		t.Fatalf("ListTimeline: %v", err)
+	}
+	if len(got) != 1 || got[0].Entry.ID != ffpfNotes[0].ID || got[0].OwnerID != ffpf || got[0].OwnerName != name {
+		t.Fatalf("password viewer's timeline = %+v", got)
+	}
+
+	got, err = s.ListTimeline(ctx, ffpf, nil, 10)
+	if err != nil {
+		t.Fatalf("ListTimeline: %v", err)
+	}
+	if len(got) != 1 || got[0].Entry.ID != pwNotes[0].ID || got[0].OwnerID != pwFriend || got[0].OwnerName == "" {
+		t.Fatalf("ffpf viewer's timeline = %+v", got)
+	}
+}

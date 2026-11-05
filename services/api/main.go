@@ -140,6 +140,20 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 		Allowlist: allowlist,
 		Passwords: passwords,
 	}
+	// Without the FFPF ID settings POST /v1/auth/ffpf answers 503. FFPF is
+	// assigned only here so it is a nil interface, not a nil *auth.FFPFClient.
+	// The client refuses redirects itself (its token request carries the
+	// client secret).
+	if cfg.FFPFEnabled() {
+		service.FFPF = &auth.FFPFClient{
+			HTTP:         &http.Client{Timeout: 10 * time.Second},
+			Issuer:       cfg.FFPFIssuer,
+			ClientID:     cfg.FFPFClientID,
+			ClientSecret: cfg.FFPFClientSecret,
+			RedirectURI:  cfg.FFPFRedirectURI,
+			Logger:       logger,
+		}
+	}
 	deps := httpapi.Deps{
 		Auth:     service,
 		Entries:  db,
@@ -150,6 +164,7 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 		Logger:   logger,
 
 		PrepositionRecords: db,
+		ComplementRecords:  db,
 		WebProxySecret:     cfg.WebProxySecret,
 	}
 	// Without the LINE settings the routes stay unregistered (404). Line is
@@ -167,6 +182,11 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 			APIKey:  cfg.OpenAIAPIKey,
 			Model:   cfg.OpenAIChatModel,
 		}
+		deps.QuickChat = &chat.Streamer{
+			HTTP: newNoRedirectHTTPClient(65 * time.Second), BaseURL: cfg.OpenAIBaseURL,
+			APIKey: cfg.OpenAIAPIKey, Model: cfg.OpenAIChatModel, Instructions: chat.QuickQuestionPrompt, RequireComplete: true,
+		}
+		deps.Questions = db
 		deps.Conversations = db
 		deps.ChatModel = cfg.OpenAIChatModel
 	}

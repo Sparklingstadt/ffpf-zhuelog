@@ -126,9 +126,6 @@ test("admin views a member's notes read-only and keeps the choice while navigati
   await expect(
     page.getByText("管理者の記録", { exact: true }).first(),
   ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "CSVをインポート", exact: true }),
-  ).toBeVisible();
   await page
     .getByLabel("表示するユーザー")
     .selectOption({ label: "太郎（taro）" });
@@ -151,8 +148,8 @@ test("admin views a member's notes read-only and keeps the choice while navigati
   for (const name of ["CSVをインポート", "CSVでエクスポート"])
     await expect(page.getByRole("link", { name, exact: true })).toHaveCount(0);
 
-  // Following the links keeps showing the member's notes.
-  await page.getByRole("link", { name: "日付から見る" }).click();
+  // The date list and its links keep showing the member's notes.
+  await page.goto(`/logs?user=${encodeURIComponent(ownerId)}`);
   await expect(page).toHaveURL(
     (url) =>
       url.pathname === "/logs" && url.searchParams.get("user") === ownerId,

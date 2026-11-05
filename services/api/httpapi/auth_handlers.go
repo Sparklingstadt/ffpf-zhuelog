@@ -93,6 +93,34 @@ func loginGitHub(a Auth) http.Handler {
 	})
 }
 
+// loginFFPF signs in with FFPF ID. The fields are those of loginGitHub plus
+// the OpenID Connect nonce the authorization request carried.
+func loginFFPF(a Auth) http.Handler {
+	type request struct {
+		Code         jsonString `json:"code"`
+		CodeVerifier jsonString `json:"codeVerifier"`
+		RedirectURI  jsonString `json:"redirectUri"`
+		Nonce        jsonString `json:"nonce"`
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req request
+		if err := decodeBody(r, &req); err != nil {
+			writeBodyError(w, r, err)
+			return
+		}
+		if req.Code == "" || req.CodeVerifier == "" || req.RedirectURI == "" || req.Nonce == "" {
+			writeBadRequest(w)
+			return
+		}
+		pair, err := a.LoginFFPF(r.Context(), string(req.Code), string(req.CodeVerifier), string(req.RedirectURI), string(req.Nonce))
+		if err != nil {
+			writeServiceError(w, r, err)
+			return
+		}
+		writeTokens(w, pair)
+	})
+}
+
 func loginPassword(a Auth, clientKey func(*http.Request) string) http.Handler {
 	type request struct {
 		LoginID  jsonString `json:"loginId"`

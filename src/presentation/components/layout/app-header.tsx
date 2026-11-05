@@ -1,8 +1,10 @@
 import {
   CircleUserRound,
+  CircleHelp,
   Eye,
   KeyRound,
   Languages,
+  ListChecks,
   LogOut,
   MessageCircle,
   MessagesSquare,
@@ -70,7 +72,7 @@ function UserControls({ user }: { user: AuthenticatedUser }) {
 
   return (
     <div className="flex min-w-0 items-center justify-between gap-2 md:justify-end">
-      <div className="flex min-w-0 items-center gap-1.5 text-sm">
+      <div className="flex max-w-40 min-w-0 shrink-0 items-center gap-1.5 text-sm">
         {isGuest ? (
           <Eye className="size-4 shrink-0 text-muted-foreground" />
         ) : (
@@ -87,10 +89,13 @@ function UserControls({ user }: { user: AuthenticatedUser }) {
       </div>
       <nav
         aria-label="アカウント"
-        className="flex shrink-0 items-center gap-0.5"
+        className="flex min-w-0 flex-wrap items-center justify-end gap-0.5"
       >
         <NavLink label={label} href="/practice/prepositions" icon={Shuffle}>
           介詞練習
+        </NavLink>
+        <NavLink label={label} href="/practice/complements" icon={ListChecks}>
+          補語練習
         </NavLink>
         {isMember || isAdmin ? (
           <NavLink label={label} href="/follow" icon={UsersRound}>
@@ -110,6 +115,11 @@ function UserControls({ user }: { user: AuthenticatedUser }) {
         {isMember || isAdmin ? (
           <NavLink label={label} href="/chat" icon={MessagesSquare}>
             ChatGPT と話す
+          </NavLink>
+        ) : null}
+        {isMember || isAdmin ? (
+          <NavLink label={label} href="/quick-question" icon={CircleHelp}>
+            クイック質問
           </NavLink>
         ) : null}
         {isAdmin ? (
@@ -135,7 +145,7 @@ export function AppHeader({ user }: { user?: AuthenticatedUser | null }) {
     <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur-md">
       <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 sm:px-6 md:flex-nowrap lg:px-8">
         <Link
-          href="/"
+          href="/chat"
           className="flex shrink-0 items-center gap-2 rounded-lg font-semibold tracking-tight outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">

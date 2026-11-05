@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
@@ -23,7 +24,8 @@ var (
 // ChangePassword lets a member replace their own password, in the web app's
 // ChangeOwnPassword order:
 //
-//  1. only members may (ErrForbidden), checked before anything else;
+//  1. only password members may (ErrForbidden), checked before anything
+//     else; FFPF ID members have no password here;
 //  2. next must be 12 to 128 UTF-16 units, spaces included
 //     (ErrInvalidNewPassword);
 //  3. confirm must equal next (ErrPasswordMismatch);
@@ -39,7 +41,7 @@ var (
 // is stored with SetPassword, which bumps the session version (revoking every
 // existing session, this one included), and the throttle key is reset.
 func (s *Service) ChangePassword(ctx context.Context, p Principal, current, next, confirm string) error {
-	if p.Role != RoleMember {
+	if p.Role != RoleMember || strings.HasPrefix(p.OwnerID, store.FfpfOwnerPrefix) {
 		return ErrForbidden
 	}
 	if !ValidNewPassword(next) {

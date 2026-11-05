@@ -21,7 +21,7 @@ func TestOnlyReadRoutesAcceptUserParam(t *testing.T) {
 	d := Deps{
 		Auth: a, Entries: &fakeEntries{}, Follows: &fakeFollows{},
 		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret,
-		Chat: &fakeChat{}, Conversations: &fakeConversations{}, PrepositionRecords: &fakePrepositionRecords{},
+		QuickChat: &fakeChat{}, Questions: &fakeQuestions{}, Chat: &fakeChat{}, Conversations: &fakeConversations{}, PrepositionRecords: &fakePrepositionRecords{},
 		Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
 	}.withDefaults()
 	mux, routes := newMux(d)
@@ -78,7 +78,7 @@ func TestPublicRouteSetIsExactlyTheKnownRoutes(t *testing.T) {
 	d := Deps{
 		Auth: &fakeAuth{}, Entries: &fakeEntries{}, Follows: &fakeFollows{},
 		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret,
-		Chat: &fakeChat{}, Conversations: &fakeConversations{}, PrepositionRecords: &fakePrepositionRecords{},
+		QuickChat: &fakeChat{}, Questions: &fakeQuestions{}, Chat: &fakeChat{}, Conversations: &fakeConversations{}, PrepositionRecords: &fakePrepositionRecords{},
 		Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
 	}.withDefaults()
 	mux, routes := newMux(d)
@@ -89,6 +89,7 @@ func TestPublicRouteSetIsExactlyTheKnownRoutes(t *testing.T) {
 		"GET /healthz",
 		"GET /ping",
 		"POST /v1/auth/github",
+		"POST /v1/auth/ffpf",
 		"POST /v1/auth/password",
 		"POST /v1/auth/refresh",
 		"POST /v1/auth/logout",
@@ -143,7 +144,7 @@ func TestRoutesRejectGuests(t *testing.T) {
 	d := Deps{
 		Auth: a, Entries: &fakeEntries{}, Follows: &fakeFollows{},
 		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret,
-		Chat: &fakeChat{}, Conversations: &fakeConversations{}, PrepositionRecords: &fakePrepositionRecords{},
+		QuickChat: &fakeChat{}, Questions: &fakeQuestions{}, Chat: &fakeChat{}, Conversations: &fakeConversations{}, PrepositionRecords: &fakePrepositionRecords{},
 		Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
 	}.withDefaults()
 	mux, routes := newMux(d)

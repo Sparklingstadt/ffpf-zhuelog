@@ -1,11 +1,12 @@
 # 認証
 
-API の利用者は 3 種類です。ログインに成功すると、どちらも同じ形のトークンの組（アクセストークンとリフレッシュトークン）を受け取ります。
+API の利用者は 3 種類です（会員はパスワードか FFPF ID でログインします）。ログインに成功すると、どちらも同じ形のトークンの組（アクセストークンとリフレッシュトークン）を受け取ります。
 
 | 役割（`role`） | ログイン方法                       | `ownerId`（ノートの所有者 ID）          |
 | -------------- | ---------------------------------- | --------------------------------------- |
 | `admin`        | GitHub（PKCE）。許可リストに載る人 | GitHub の数値 ID（例：`12345678`）      |
 | `member`       | ログイン ID とパスワード           | `password:` + `PasswordAccount` の `id` |
+| `member`       | FFPF ID（OpenID Connect、PKCE）    | `ffpf:` + FFPF ID の `sub`              |
 | `guest`        | `POST /v1/auth/guest`（認証なし）  | `guest`（固定）                         |
 
 `ownerId` はノートやフォローの所有者を表します（Web でも同じ値です）。ゲストはデータを持たず、使えるのは `GET /v1/me` だけです。
@@ -29,6 +30,26 @@ API    ──(4) code + code_verifier + client_secret を交換、GET /user─�
 `code`・`codeVerifier`・`redirectUri` を GitHub が拒否したとき（`bad_verification_code` など）や `redirectUri` が一致しないときは `401 unauthorized`、GitHub に届かない・応答が不正なときは `502 github_unavailable` です。
 
 Web の GitHub ログインには、Web 用の OAuth App を使います（`GITHUB_WEB_CLIENT_ID`・`GITHUB_WEB_CLIENT_SECRET`・`GITHUB_WEB_REDIRECT_URI` を 3 つそろえて設定したときだけ使えます）。以前から Web で使っている OAuth App をそのまま使えます。GitHub は登録した callback URL の下の階層を `redirect_uri` に使えるので、Web の callback は `https://<Web>/api/auth/callback/github/go`（登録済みの `/api/auth/callback/github` の下）にしてあり、OAuth App の設定を変える必要はありません。この場合、PKCE と state は Web（Next.js）が作り、API は `code` の交換だけを行います。
+
+## FFPF ID ログイン（会員）
+
+FFPF ID は、ffpf-portal が提供する OpenID Connect のプロバイダーです。メールアドレスを確認済みの FFPF ID なら誰でも会員としてログインできます（許可リストはありません）。
+
+```text
+Web    ──(1) 認可画面を開く（PKCE S256・state・nonce）──▶ portal /oauth/authorize
+Web    ◀─(2) /api/auth/callback/ffpf?code&state ── portal
+Web    ──(3) POST /v1/auth/ffpf {code, codeVerifier, redirectUri, nonce}──▶ API
+API    ──(4) code + code_verifier を交換（client_secret_basic）、JWKS を取得──▶ portal
+Web    ◀─(5) {accessToken, refreshToken, expiresIn} ── API
+```
+
+1. Web は PKCE（S256）の `code_verifier`・`state`・`nonce` を作って `zl_oauth` Cookie（10 分）に入れ、portal の `/oauth/authorize` を開きます（`scope=openid email profile`）。
+2. 戻り先の `/api/auth/callback/ffpf` で `state` を Cookie と比べます。一致しない・Cookie が無い・portal が `error` を返したときは、API を呼ばずにログイン画面へ戻します。
+3. `POST /v1/auth/ffpf` に `{code, codeVerifier, redirectUri, nonce}` を送ります。`redirectUri` は API の `FFPF_ID_REDIRECT_URI` と完全に一致していなければなりません。
+4. API は portal の `/oauth/token` で `code` を交換し（Client Secret は HTTP Basic で送ります。10 秒でタイムアウトし、リダイレクトには従いません）、ID トークンを検証します。署名は ES256 だけで、鍵は portal の `/oauth/jwks`（10 分キャッシュ。知らない `kid` なら 1 回だけ取り直す）から取ります。`iss` が `FFPF_ID_ISSUER`、`aud` が `FFPF_ID_CLIENT_ID`、`exp` が過ぎていない（60 秒の余裕）、`nonce` が一致、`email_verified` が `true`、`sub` が `^[a-z0-9]{1,64}$` であることを確かめます。discovery は使いません。
+5. `FfpfAccount`（`id` は `sub`）を最新のメールアドレスと表示名で作るか更新し、`ownerId` を `ffpf:<sub>`、`role` を `member` としてトークンを発行します。メールアドレスは表示用で、認可には使いません。
+
+入力・交換・検証の失敗は `401 unauthorized`、portal に届かない・応答が不正なときは `502 ffpf_unavailable`、API に設定が無いときは `503 unavailable` です。FFPF ID の会員にはこのサービスのパスワードが無いので、`POST /v1/account/password` は `403 forbidden` です（パスワードは portal で変えます）。
 
 ## ゲスト
 
@@ -89,11 +110,11 @@ HS256 で署名した JWT です。`expiresIn` はその有効期限（秒）で
 | `iat`    | 発行時刻                                                                                                           |
 | `exp`    | 有効期限（発行から 15 分）                                                                                         |
 | `login`  | admin だけ（ゲストにも付けない）。ログイン時の GitHub のログイン名（情報として残すだけで、許可の判定には使わない） |
-| `sv`     | member だけ。発行時の `PasswordAccount.sessionVersion`                                                             |
+| `sv`     | member だけ。発行時の `PasswordAccount.sessionVersion`（FFPF ID の会員は `FfpfAccount.sessionVersion`）            |
 
 認証が必要なエンドポイントには `Authorization: Bearer <accessToken>` を付けます。API は毎回、署名・`iss`・`aud`・`exp`・`iat` を確かめ、さらに次の **失効の確認** を行います。`aud` は Web とモバイルで同じです。
 
-`GET /v1/me` は、トークンの持ち主の `{ownerId, role, login, displayName?, accountId?}` を返します（[リファレンス](../reference/auth.md#get-v1-me)）。会員の `displayName` と `accountId` は DB から読みます。
+`GET /v1/me` は、トークンの持ち主の `{ownerId, role, login, displayName?, accountId?}` を返します（[リファレンス](../reference/auth.md#get-v1-me)）。会員の `displayName` と `accountId` は DB から読みます（`accountId` はパスワードの会員だけ）。
 
 ### リフレッシュトークン（30 日。ゲストは 24 時間）
 
@@ -133,10 +154,10 @@ DB の掃除は cron を使わず、ログインに成功したときにその `
 
 アクセストークンは 15 分で切れますが、それを待たずに使えなくする仕組みがあります。アクセストークンの検証（毎リクエスト）とリフレッシュのたびに、同じ確認を行います。
 
-| 役割     | 確認すること                                                                                  | 通らないとき |
-| -------- | --------------------------------------------------------------------------------------------- | ------------ |
-| `admin`  | トークンの `sub`（GitHub の数値 ID）が **今の** 許可リスト（`AUTH_ALLOWED_GITHUB_IDS`）にある | `403`        |
-| `member` | `PasswordAccount` が存在し、その `sessionVersion` がトークンの `sv` と一致する                | `401`        |
+| 役割     | 確認すること                                                                                                    | 通らないとき |
+| -------- | --------------------------------------------------------------------------------------------------------------- | ------------ |
+| `admin`  | トークンの `sub`（GitHub の数値 ID）が **今の** 許可リスト（`AUTH_ALLOWED_GITHUB_IDS`）にある                   | `403`        |
+| `member` | `PasswordAccount`（FFPF ID の会員は `FfpfAccount`）が存在し、その `sessionVersion` がトークンの `sv` と一致する | `401`        |
 
 `sessionVersion` は次の操作で 1 上がり、その会員の **Web と API の既存のログインがすべて** 無効になります。
 
@@ -147,9 +168,10 @@ admin を許可リストから外すと、その admin のトークンは期限�
 
 ## レート制限
 
-次のエンドポイントには、IP ごとに **1 分あたり 10 回** の制限があります。5 つは同じ枠を共有します。
+次のエンドポイントには、IP ごとに **1 分あたり 10 回** の制限があります。6 つは同じ枠を共有します。
 
 - `POST /v1/auth/github`
+- `POST /v1/auth/ffpf`
 - `POST /v1/auth/guest`
 - `POST /v1/auth/password`
 - `POST /v1/auth/logout`

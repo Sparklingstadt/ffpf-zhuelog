@@ -9,13 +9,13 @@ import (
 
 // Member is a registered member as seen by one viewer.
 type Member struct {
-	OwnerID     string // "password:<id>"
+	OwnerID     string // "password:<id>" or "ffpf:<sub>"
 	DisplayName string
 	Following   bool // the viewer follows this member
 	FollowsMe   bool // this member follows the viewer
 }
 
-// MemberDirectory lists every member except the viewer. Members are in display order: the DB's Japanese ICU collation of displayName, then createdAt, then id.
+// MemberDirectory lists every member except the viewer. Members are in display order: the DB's Japanese ICU collation of displayName, then createdAt, then owner ID.
 type MemberDirectory struct {
 	Members        []Member
 	FollowingCount int // listed members the viewer follows
@@ -29,16 +29,27 @@ type TimelineItem struct {
 	OwnerName string
 }
 
-// ListMembers returns all members other than the viewer with their follow
-// state. The viewer may be an admin id, which matches no member.
+// memberAccounts is a subquery of every member account, password and FFPF ID
+// alike, as ("ownerId", "displayName", "createdAt"). passwordPrefix and
+// ffpfPrefix are the placeholders bound to MemberOwnerPrefix and
+// FfpfOwnerPrefix.
+func memberAccounts(passwordPrefix, ffpfPrefix string) string {
+	return `(SELECT ` + passwordPrefix + ` || p."id" AS "ownerId", p."displayName", p."createdAt" FROM "PasswordAccount" p
+	 UNION ALL
+	 SELECT ` + ffpfPrefix + ` || f."id", f."displayName", f."createdAt" FROM "FfpfAccount" f)`
+}
+
+// ListMembers returns all members (password and FFPF ID accounts) other than
+// the viewer with their follow state. The viewer may be an admin id, which
+// matches no member.
 func (s *Store) ListMembers(ctx context.Context, viewerID string) (MemberDirectory, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT $2 || a."id", a."displayName",
-		        EXISTS (SELECT 1 FROM "Follow" f WHERE f."followerId" = $1 AND f."followeeId" = $2 || a."id"),
-		        EXISTS (SELECT 1 FROM "Follow" f WHERE f."followerId" = $2 || a."id" AND f."followeeId" = $1)
-		 FROM "PasswordAccount" a
-		 WHERE $2 || a."id" <> $1
-		 ORDER BY a."displayName" COLLATE "ja-x-icu", a."createdAt", a."id"`, viewerID, MemberOwnerPrefix)
+		`SELECT a."ownerId", a."displayName",
+		        EXISTS (SELECT 1 FROM "Follow" f WHERE f."followerId" = $1 AND f."followeeId" = a."ownerId"),
+		        EXISTS (SELECT 1 FROM "Follow" f WHERE f."followerId" = a."ownerId" AND f."followeeId" = $1)
+		 FROM `+memberAccounts("$2", "$3")+` a
+		 WHERE a."ownerId" <> $1
+		 ORDER BY a."displayName" COLLATE "ja-x-icu", a."createdAt", a."ownerId"`, viewerID, MemberOwnerPrefix, FfpfOwnerPrefix)
 	if err != nil {
 		return MemberDirectory{}, fmt.Errorf("store: list members: %w", err)
 	}
@@ -65,15 +76,20 @@ func (s *Store) ListMembers(ctx context.Context, viewerID string) (MemberDirecto
 	return dir, nil
 }
 
-// MemberExists reports whether ownerID ("password:<id>") is an existing member.
+// MemberExists reports whether ownerID ("password:<id>" or "ffpf:<sub>") is
+// an existing member.
 func (s *Store) MemberExists(ctx context.Context, ownerID string) (bool, error) {
+	table := `"PasswordAccount"`
 	id, ok := strings.CutPrefix(ownerID, MemberOwnerPrefix)
 	if !ok {
-		return false, nil
+		table = `"FfpfAccount"`
+		if id, ok = strings.CutPrefix(ownerID, FfpfOwnerPrefix); !ok {
+			return false, nil
+		}
 	}
 	var exists bool
 	if err := s.pool.QueryRow(ctx,
-		`SELECT EXISTS (SELECT 1 FROM "PasswordAccount" WHERE "id" = $1)`, id).Scan(&exists); err != nil {
+		`SELECT EXISTS (SELECT 1 FROM `+table+` WHERE "id" = $1)`, id).Scan(&exists); err != nil {
 		return false, fmt.Errorf("store: member exists: %w", err)
 	}
 	return exists, nil
@@ -100,7 +116,8 @@ func (s *Store) Unfollow(ctx context.Context, followerID, followeeID string) err
 
 // ListTimeline returns up to limit shared, non-trashed entries of the members
 // the viewer follows, ordered by (createdAt DESC, id DESC), starting after the
-// cursor. Followees without a member account are skipped.
+// cursor. Owner names come from the password or FFPF ID account; followees
+// without a member account are skipped.
 func (s *Store) ListTimeline(ctx context.Context, viewerID string, after *Cursor, limit int) ([]TimelineItem, error) {
 	afterAt, afterID := cursorArgs(after)
 	rows, err := s.pool.Query(ctx,
@@ -108,11 +125,11 @@ func (s *Store) ListTimeline(ctx context.Context, viewerID string, after *Cursor
 		        e."ownerId", a."displayName"
 		 FROM "LearningEntry" e
 		 JOIN "Follow" f ON f."followeeId" = e."ownerId" AND f."followerId" = $1
-		 JOIN "PasswordAccount" a ON e."ownerId" = $5 || a."id"
+		 JOIN `+memberAccounts("$5", "$6")+` a ON a."ownerId" = e."ownerId"
 		 WHERE e."sharedAt" IS NOT NULL AND e."deletedAt" IS NULL
 		   AND ($2::timestamp IS NULL OR (e."createdAt", e."id") < ($2::timestamp, $3::text))
 		 ORDER BY e."createdAt" DESC, e."id" DESC
-		 LIMIT $4`, viewerID, afterAt, afterID, limit, MemberOwnerPrefix)
+		 LIMIT $4`, viewerID, afterAt, afterID, limit, MemberOwnerPrefix, FfpfOwnerPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("store: list timeline: %w", err)
 	}

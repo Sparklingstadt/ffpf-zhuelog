@@ -11,10 +11,12 @@ export function PrepositionAnswerList({
   answers,
   onlyMissed = false,
   className,
+  choiceLabel = "介詞を選ぶ",
 }: {
   answers: readonly PrepositionAnswer[];
   onlyMissed?: boolean;
   className?: string;
+  choiceLabel?: string;
 }) {
   const numbered = answers.map((answer, index) => ({
     answer,
@@ -62,7 +64,7 @@ export function PrepositionAnswerList({
                 <span
                   lang="zh-CN"
                   className="flex shrink-0 gap-2 text-sm text-destructive"
-                  aria-label={`選んだ介詞: ${answer.misses.join("、")}`}
+                  aria-label={`${choiceLabel}: ${answer.misses.join("、")}`}
                 >
                   {answer.misses.map((miss) => (
                     <s key={miss}>{miss}</s>

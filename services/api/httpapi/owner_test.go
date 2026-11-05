@@ -38,6 +38,9 @@ func TestReadOwner(t *testing.T) {
 	if o, _, ok := run(auth.RoleAdmin, "user=12345"); !ok || o != "12345" {
 		t.Errorf("admin numeric: %q %v", o, ok)
 	}
+	if o, _, ok := run(auth.RoleAdmin, "user=ffpf:cabc"); !ok || o != "ffpf:cabc" {
+		t.Errorf("admin ffpf: %q %v", o, ok)
+	}
 	_, w, ok := run(auth.RoleMember, "user="+otherOwner)
 	if ok {
 		t.Fatal("member reading other should fail")
@@ -46,7 +49,8 @@ func TestReadOwner(t *testing.T) {
 	if decodeError(t, w).Error.Message != "他の人の記録は管理者だけが見られます。" {
 		t.Errorf("message = %q", decodeError(t, w).Error.Message)
 	}
-	for _, q := range []string{"user=abc", "user=password:short", "user=" + otherOwner + "&user=" + otherOwner, "user=", "user=password:" + strings.Repeat("a", 33)} {
+	for _, q := range []string{"user=abc", "user=password:short", "user=" + otherOwner + "&user=" + otherOwner, "user=", "user=password:" + strings.Repeat("a", 33),
+		"user=ffpf:", "user=ffpf:ABC", "user=gitlab:1", "user=ffpf:" + strings.Repeat("a", 65)} {
 		for _, role := range []string{auth.RoleAdmin, auth.RoleMember} {
 			_, w, ok := run(role, q)
 			if ok {

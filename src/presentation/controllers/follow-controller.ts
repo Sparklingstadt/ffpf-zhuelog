@@ -21,8 +21,8 @@ const selfFollow: ActionState = {
   message: "自分はフォローできません。",
 };
 
-// Members are password accounts.
-const followeeIdSchema = z.string().regex(/^password:[a-z0-9]{1,64}$/);
+// Members are password accounts and FFPF ID accounts.
+const followeeIdSchema = z.string().regex(/^(password|ffpf):[a-z0-9]{1,64}$/);
 const sharedSchema = z.enum(["true", "false"]);
 
 // The follower is always the signed-in user; the form never names one.

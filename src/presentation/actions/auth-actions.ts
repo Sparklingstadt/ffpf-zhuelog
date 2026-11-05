@@ -2,6 +2,7 @@
 
 import {
   signInAsGuest,
+  signInWithFfpf,
   signInWithGitHub,
   signInWithPassword,
   signOutCurrentUser,
@@ -10,6 +11,10 @@ import { getSafeCallbackPath } from "@/presentation/http/safe-callback-path";
 
 export async function signInWithGitHubAction(callbackPath: string) {
   await signInWithGitHub(getSafeCallbackPath(callbackPath));
+}
+
+export async function signInWithFfpfAction(callbackPath: string) {
+  await signInWithFfpf(getSafeCallbackPath(callbackPath));
 }
 
 export async function signInAsGuestAction(callbackPath: string) {

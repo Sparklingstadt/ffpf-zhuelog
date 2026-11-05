@@ -66,6 +66,7 @@ func TestActAsRejections(t *testing.T) {
 		{"empty", auth.RoleAdmin, "", 400, "invalid_request"},
 		{"admin owner id", auth.RoleAdmin, "12345", 400, "invalid_request"},
 		{"guest owner id", auth.RoleAdmin, "guest", 400, "invalid_request"},
+		{"ffpf member owner id", auth.RoleAdmin, "ffpf:cabc", 400, "invalid_request"},
 		{"no such member", auth.RoleAdmin, "password:gone", 404, "not_found"},
 	}
 	for _, tc := range cases {
@@ -93,7 +94,7 @@ func TestActAsRejections(t *testing.T) {
 
 	t.Run("member is refused on every authed route", func(t *testing.T) {
 		d := Deps{Auth: actingAuth(auth.RoleMember), Line: &fakeLine{}, LineChannelSecret: testLineSecret,
-			CronSecret: testCronSecret, Chat: &fakeChat{}, Conversations: &fakeConversations{}, PrepositionRecords: &fakePrepositionRecords{}}
+			CronSecret: testCronSecret, QuickChat: &fakeChat{}, Questions: &fakeQuestions{}, Chat: &fakeChat{}, Conversations: &fakeConversations{}, PrepositionRecords: &fakePrepositionRecords{}}
 		d = d.withDefaults()
 		mux, routes := newMux(d)
 		h := wrap(d, jsonMuxErrors(mux))

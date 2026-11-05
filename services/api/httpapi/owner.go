@@ -8,7 +8,9 @@ import (
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
 )
 
-var ownerIDPattern = regexp.MustCompile(`^(\d+|password:[a-z0-9]{20,32})$`)
+// ownerIDPattern matches an owner ID: an admin's GitHub id, a password
+// member's "password:<cuid>" or an FFPF ID member's "ffpf:<sub>".
+var ownerIDPattern = regexp.MustCompile(`^(\d+|password:[a-z0-9]{20,32}|ffpf:[a-z0-9]{1,64})$`)
 
 // readOwner returns the owner whose entries a read request should show. With
 // no ?user= (or the caller's own ID) that is the caller. Only an admin may name

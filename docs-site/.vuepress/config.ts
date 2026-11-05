@@ -35,6 +35,7 @@ export default defineUserConfig({
           "/reference/log-dates.md",
           "/reference/line.md",
           "/reference/chat.md",
+          "/reference/quick-questions.md",
           "/reference/practice.md",
           "/reference/admin.md",
           "/reference/health.md",

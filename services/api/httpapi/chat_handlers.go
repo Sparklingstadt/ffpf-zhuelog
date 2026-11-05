@@ -68,7 +68,9 @@ func extendChatDeadlines(w http.ResponseWriter) {
 // as NDJSON, flushing every line. A failure before anything is written is a
 // 502; after that it is an "error" line. Only the failure code is logged,
 // never the messages.
-func streamChat(c ChatStreamer) http.Handler {
+func streamChat(c ChatStreamer) http.Handler { return streamMessages(c, false) }
+
+func streamMessages(c ChatStreamer, quick bool) http.Handler {
 	type request struct {
 		Messages []chat.Message `json:"messages"`
 	}
@@ -84,7 +86,7 @@ func streamChat(c ChatStreamer) http.Handler {
 			writeError(w, http.StatusBadRequest, codeInvalidRequest, msgChatInvalid)
 			return
 		}
-		if chat.Validate(req.Messages) != nil {
+		if chat.Validate(req.Messages) != nil || (quick && (len(req.Messages) != 1 || utf8.RuneCountInString(req.Messages[0].Text) > 4000)) {
 			writeError(w, http.StatusBadRequest, codeInvalidRequest, msgChatInvalid)
 			return
 		}

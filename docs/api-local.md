@@ -43,6 +43,8 @@ GitHub ログイン（`POST /v1/auth/github`）は本物の OAuth App が必要�
 
 LINE 連携も、ローカルでは使えません。本物の LINE のチャネルと OpenAI の API キーが要るためです。`scripts/api-local-env.sh` は LINE の環境変数を設定しないので、`/v1/line/*` のルート（5 つ）は `404` になります。Web の「LINE 連携」画面（`/account/line`）には、「LINE 連携は今は使えません。」と出ます。
 
+ダミーの LINE 設定でコード発行画面を確認する場合は、Web の `.env.local` に `LINE_LINK_PREVIEW_MODE="true"` を設定してください。本番ボットへ送る QR とボタンを隠し、表示確認用であることを明示します。ローカル DB で発行したコードは本番の LINE ボットには登録されないため、本番での連携には本番画面で発行したコードを使います。
+
 ## curl で試す例
 
 ```bash

@@ -32,23 +32,27 @@ Web 用とは別の OAuth App を新しく作ります。GitHub の **Settings �
 
 ビルドのために `GOFLAGS` に `-buildvcs=false` を入れます（Production と Preview）。Vercel のビルド環境には `.git` が無く、`go build` がコミットの情報を埋め込めずに失敗するためです。
 
-| 名前                          | 内容                                                                                                    |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                | Neon の pooled 接続文字列（ホスト名に `-pooler` を含むもの）。`?schema=` は付けない（下の注を参照）     |
-| `API_JWT_SECRET`              | アクセス JWT の HS256 鍵。`openssl rand -base64 48` で作る（32 バイト以上）                             |
-| `GITHUB_MOBILE_CLIENT_ID`     | モバイル用 GitHub OAuth App の Client ID                                                                |
-| `GITHUB_MOBILE_CLIENT_SECRET` | モバイル用 GitHub OAuth App の Client Secret                                                            |
-| `GITHUB_MOBILE_REDIRECT_URI`  | アプリのカスタム URL スキーム                                                                           |
-| `AUTH_ALLOWED_GITHUB_IDS`     | admin の許可リスト。GitHub の数値 ID をカンマ区切りで（Go API だけに設定します）                        |
-| `GITHUB_WEB_CLIENT_ID`        | Web 用 GitHub OAuth App の Client ID（Web の GitHub ログインに必要。下の注を参照）                      |
-| `GITHUB_WEB_CLIENT_SECRET`    | Web 用 GitHub OAuth App の Client Secret                                                                |
-| `GITHUB_WEB_REDIRECT_URI`     | `https://<Web のホスト>/api/auth/callback/github/go`                                                    |
-| `API_WEB_PROXY_SECRET`        | Web サーバーと共有する秘密。32 バイト以上（`openssl rand -base64 48`）。Web から使うときは必要          |
-| `LINE_CHANNEL_SECRET`         | LINE の Messaging API のチャネルシークレット（LINE 連携を使うときだけ。下の注と「7. LINE 連携」を参照） |
-| `LINE_CHANNEL_ACCESS_TOKEN`   | LINE の長期のチャネルアクセストークン                                                                   |
-| `OPENAI_API_KEY`              | OpenAI の API キー                                                                                      |
-| `OPENAI_CHAT_MODEL`           | 会話練習のモデル（任意。無ければ `gpt-6.1-sol`）。「8. 会話練習」を参照                                 |
-| `CRON_SECRET`                 | 拾い直しの Cron の認証用の秘密。Vercel が Cron の呼び出しに `Authorization: Bearer <値>` を付けます     |
+| 名前                          | 内容                                                                                                                               |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                | Neon の pooled 接続文字列（ホスト名に `-pooler` を含むもの）。`?schema=` は付けない（下の注を参照）                                |
+| `API_JWT_SECRET`              | アクセス JWT の HS256 鍵。`openssl rand -base64 48` で作る（32 バイト以上）                                                        |
+| `GITHUB_MOBILE_CLIENT_ID`     | モバイル用 GitHub OAuth App の Client ID                                                                                           |
+| `GITHUB_MOBILE_CLIENT_SECRET` | モバイル用 GitHub OAuth App の Client Secret                                                                                       |
+| `GITHUB_MOBILE_REDIRECT_URI`  | アプリのカスタム URL スキーム                                                                                                      |
+| `AUTH_ALLOWED_GITHUB_IDS`     | admin の許可リスト。GitHub の数値 ID をカンマ区切りで（Go API だけに設定します）                                                   |
+| `GITHUB_WEB_CLIENT_ID`        | Web 用 GitHub OAuth App の Client ID（Web の GitHub ログインに必要。下の注を参照）                                                 |
+| `GITHUB_WEB_CLIENT_SECRET`    | Web 用 GitHub OAuth App の Client Secret                                                                                           |
+| `GITHUB_WEB_REDIRECT_URI`     | `https://<Web のホスト>/api/auth/callback/github/go`                                                                               |
+| `API_WEB_PROXY_SECRET`        | Web サーバーと共有する秘密。32 バイト以上（`openssl rand -base64 48`）。Web から使うときは必要                                     |
+| `LINE_CHANNEL_SECRET`         | LINE の Messaging API のチャネルシークレット（LINE 連携を使うときだけ。下の注と「7. LINE 連携」を参照）                            |
+| `LINE_CHANNEL_ACCESS_TOKEN`   | LINE の長期のチャネルアクセストークン                                                                                              |
+| `OPENAI_API_KEY`              | OpenAI の API キー                                                                                                                 |
+| `OPENAI_CHAT_MODEL`           | 会話練習のモデル（任意。無ければ `gpt-6.1-sol`）。「8. 会話練習」を参照                                                            |
+| `CRON_SECRET`                 | 拾い直しの Cron の認証用の秘密。Vercel が Cron の呼び出しに `Authorization: Bearer <値>` を付けます                                |
+| `FFPF_ID_ISSUER`              | FFPF ID（ffpf-portal）の issuer（例: `https://ffpf-portal.vercel.app`）。FFPF ID を使うときだけ。「9. FFPF ID でのログイン」を参照 |
+| `FFPF_ID_CLIENT_ID`           | portal に登録した zhuelog のクライアント ID（例: `zhuelog`）                                                                       |
+| `FFPF_ID_CLIENT_SECRET`       | `pnpm run oidc:client zhuelog`（ffpf-portal）で作ったシークレット                                                                  |
+| `FFPF_ID_REDIRECT_URI`        | `https://<Web のホスト>/api/auth/callback/ffpf`                                                                                    |
 
 - `DATABASE_URL` は、手で入れなくても、チームの **Storage** タブで Web が使っている Neon のストアを開き、**Connect Project** から Go API のプロジェクトをつなぐと入ります（pooled の接続文字列です。`channel_binding=require` が付いていても Go API はそのまま使えます）。
 - `GITHUB_WEB_CLIENT_SECRET` は、Vercel に入れた値を読み戻せないので、GitHub の OAuth App の画面で **Generate a new client secret** を押して新しく作ります。段階3をマージするまでは、本番の Web（Auth.js）のログインが古い Secret を使うので、古い Secret を消さないでください。
@@ -66,13 +70,18 @@ Web 用とは別の OAuth App を新しく作ります。GitHub の **Settings �
 - `API_WEB_PROXY_SECRET` も `API_JWT_SECRET` と同じく、Production と Preview で **別の値** にします。同じだと、プレビューの Web が本番の Go API に任意の IP を名乗れてしまいます。
 - LINE の 2 つ（`LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`）は、**両方設定するか、両方空** にします。LINE を使うときは `OPENAI_API_KEY` も要ります。足りないと起動時に止まります。LINE の 2 つが空のときは Go API は普通に起動し、`/v1/line/*` の 5 つのルートが `404` になります（LINE 連携が無い状態です）。`OPENAI_API_KEY` だけを設定すると、会話練習だけが有効になります（「8. 会話練習」）。
 - `CRON_SECRET` が空のときは、`GET /v1/line/drain` は常に `401` です（拾い直しが動きません）。LINE 連携を使うときは設定します。
+- `FFPF_ID_*` の 4 つは **すべて設定するか、すべて空** にします（一部だけだと起動時に止まります）。`FFPF_ID_ISSUER` は `https://` の URL で、`?` や `#` を含めません（`http://` は `localhost` と `127.0.0.1` だけ）。違うと起動時に止まります。4 つが空のときは、`POST /v1/auth/ffpf` が `503` を返します（FFPF ID のログインが無い状態です）。
 - `OPENAI_API_BASE_URL` と `LINE_API_BASE_URL` は、テストが偽のサーバーへつなぐための設定です。`127.0.0.1` などのループバックの URL だけを受け付け、それ以外は起動時に止まります。**本番と Preview には設定しません。**
 
 DB への接続は、TLS で証明書まで検証します。ホストが `localhost`・`127.0.0.1`・`::1` 以外のとき（または `sslmode` が `prefer`・`require`・`verify-ca` のとき）、Go API は `sslmode` を `verify-full` に置き換えます。Neon の接続文字列の `sslmode=require` はそのままで構いません。`?schema=public` は無視しますが、それ以外のスキーマは `search_path` の起動パラメータになり、プーラーに拒否されることがあるので付けないでください。
 
 ## 4. 本番の DB の確認
 
-Go API が使うテーブルは、Prisma のマイグレーションで本番の Neon に適用済みです（`ApiRefreshToken`、`SignInThrottle` など）。今後スキーマを変えるときは、main へマージする前に本番へ適用します（main は Web と Go API の両方の本番へ自動でデプロイされるため）。
+Go API が使うテーブルは、Prisma のマイグレーションで本番の Neon に適用済みです（`ApiRefreshToken`、`SignInThrottle` など）。マイグレーションは、Web の **本番ビルド** が自動で適用します。`vercel.json` の `buildCommand` が `scripts/vercel-build.sh` を動かし、`VERCEL_ENV=production` のときだけ `prisma migrate deploy` を実行してから `next build` します（Preview のビルドは本番と同じ DB を使うので、マイグレーションは当てません）。そのため、Web の Production には `DATABASE_URL` が必要です。無い・つながらない・DDL が失敗すると、本番の Web のデプロイが失敗します（失敗したビルドの本番は、前のバージョンのままです）。
+
+**マイグレーションの制約**: Web のデプロイで自動的に当たる一方、Go API は別のプロジェクトで、あとから手で（main をマージした後に）デプロイします。この間、DB のスキーマは新しく、動いている Go API は古いままです。そのため、マイグレーションは今動いている Go API とそのまま両立する形にします。足してよいのは、表の追加と、null を許す列（または既定値のある列）の追加だけです。列・表の削除や名前の変更、型の変更、NOT NULL の追加のような壊す変更は、2 段階に分けます（1 回目で新しい形を足して Go API を切り替え、2 回目のリリースで古い形を削除します）。
+
+マイグレーションが当たったことの確認と、自動で当たらなかったときの手動の適用は、次のとおりです。`migrate status` で未適用が無いこと（「Database schema is up to date!」）を確かめます。
 
 ```bash
 vercel env pull .env.production.local --environment=production --yes
@@ -116,15 +125,25 @@ Go API の Vercel プロジェクトには、`GITHUB_WEB_CLIENT_ID`・`GITHUB_WE
 - `AUTH_URL` は必ず設定し、利用者が開く Web の origin と同じにします。GitHub ログインの `redirect_uri` は、この origin から作ります。
 - Go API の `GITHUB_WEB_REDIRECT_URI` は、`<AUTH_URL の origin>/api/auth/callback/github/go` と **1 文字も違わず** 同じにします。違うと Go API が `401` を返し、GitHub ログインができません。そのため、URL が合わないプレビューのデプロイでは GitHub ログインは使えません（パスワードとゲストのログインは使えます）。
 - `AUTH_GITHUB_ID` と `GITHUB_WEB_CLIENT_ID` が別の OAuth App だと、GitHub が発行した `code` を Go API が交換できず、GitHub ログインが失敗します。
-- `AUTH_SECRET`・`AUTH_GITHUB_SECRET`・`AUTH_ALLOWED_GITHUB_IDS` は、Web では使いません。`DATABASE_URL` も Web の実行とビルドには要りません。ただし、マイグレーションの手順（`vercel env pull`）で本番の `DATABASE_URL` を取るのに使うので、Web のプロジェクトに残しておいて構いません。
+- `AUTH_SECRET`・`AUTH_GITHUB_SECRET`・`AUTH_ALLOWED_GITHUB_IDS` は、Web では使いません。`DATABASE_URL` は、Web の実行には要りませんが、**本番のビルド**が `prisma migrate deploy` に使うので、Web の Production には必ず残してください（「4. 本番の DB の確認」）。消すと本番の Web のデプロイが失敗します。
 
 LINE 連携を使うときは、Web の Vercel プロジェクトに、もう 1 つ次の値を入れます（無くても Web は動きます）。
 
-| 名前                  | 内容                                                                                                                       |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `LINE_ADD_FRIEND_URL` | LINE 公式アカウントの友だち追加のリンク（例: `https://line.me/R/ti/p/@your-account`）。`https://` で始まるものだけ使います |
+| 名前                       | 内容                                                                                                                         |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `LINE_ADD_FRIEND_URL`      | LINE 公式アカウントの友だち追加のリンク（例: `https://line.me/R/ti/p/@your-account`）。`https://` で始まるものだけ使います   |
+| `LINE_OFFICIAL_ACCOUNT_ID` | 連携 QR と「LINEで開く」の送信先となる公式アカウントの公開 ID（`@393bohaw`）。コードは入力欄に入るだけで、自動送信はしません |
 
 `LINE_ADD_FRIEND_URL` が無い・`https://` で始まらないときは、「LINE 連携」画面（`/account/line`）に友だち追加のリンクを出しません（連携コードの発行と解除はできます）。
+
+FFPF ID でのログインを使うときは、Web の Vercel プロジェクトに、次の 2 つも入れます（「9. FFPF ID でのログイン」）。Client Secret は Go API だけが持ちます。
+
+| 名前                | 内容                                        |
+| ------------------- | ------------------------------------------- |
+| `FFPF_ID_ISSUER`    | Go API の `FFPF_ID_ISSUER` と **同じ値**    |
+| `FFPF_ID_CLIENT_ID` | Go API の `FFPF_ID_CLIENT_ID` と **同じ値** |
+
+2 つのどちらかが無い・`FFPF_ID_ISSUER` が `https://` でない（`localhost`・`127.0.0.1` を除く）ときは、ログイン画面に「FFPF IDでログイン」を出しません。
 
 ### Web のプレビュー（Preview）
 
@@ -161,7 +180,7 @@ PR ごとの Web のプレビューも、ログインとデータの読み書き
 
 ### e2e
 
-`pnpm run test:e2e` は、いつも Go API を使います（Go が必要です）。`services/api` をビルドして `127.0.0.1:3108` で起動し、e2e の DB をそのまま使います。
+`pnpm run test:e2e` は、いつも Go API を使います（Go が必要です）。`services/api` をビルドして `127.0.0.1:3108` で起動し、e2e の DB をそのまま使います。FFPF ID は、`e2e/fixtures/ffpf-oidc-stub.ts` の小さな OIDC スタブ（`127.0.0.1:3110`）を issuer にして、Web と Go API に `FFPF_ID_*` を渡します。スタブは実行ごとに P-256 の鍵を作り、`/oauth/authorize` は画面を出さずにすぐ `redirect_uri?code=stub&state=…` へ戻し、`/oauth/token` は ES256 の ID トークンを、`/oauth/jwks` はその公開鍵を返します。本物の portal には接続しません。
 
 ## 7. LINE 連携
 
@@ -188,7 +207,7 @@ LINE 連携を本番で使い始めるときは、次の順で行います。
 
 1. LINE Developers で、Messaging API のチャネルを用意します（以前のチャネルが残っていれば使えます）。**Webhook URL** を `https://ffpf-zhuelog-api.vercel.app/v1/line/webhook` にして、Webhook の利用をオンにします。「**応答メッセージ**」は **オフ** にします（オンのままだと、LINE の自動応答とこの API の返信が二重に届きます）。LINE の「検証」ボタンは、手順 5 で Go API をデプロイするまでは `404` で失敗します（まだ押さないでください）。
 2. Go API の Vercel プロジェクトの Production に、`LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`OPENAI_API_KEY`・`CRON_SECRET` を入れます。Web の Vercel プロジェクトには `LINE_ADD_FRIEND_URL` を入れます。
-3. **main にマージする前に**、本番の Neon にマイグレーション `20261023090000_add_line_link` を適用します（マージすると Web が自動でデプロイされ、Go API もそのすぐ後に手順 5 でデプロイするため、先に表がないと動きません。手順は「4. 本番の DB の確認」の `vercel env pull` と `migrate deploy`）。
+3. マイグレーション `20261023090000_add_line_link` は、main へのマージで Web の本番ビルドが自動で適用します（「4. 本番の DB の確認」）。マージの後、手順 5 で Go API をデプロイするまでに `migrate status` で適用済みを確かめます。自動で当たらなかったときだけ、`vercel env pull` と `migrate deploy` で手で当てます。
 4. main にマージします。
 5. Go API に main をデプロイします。今の Go API の Vercel プロジェクトは、Git からの自動デプロイが切れている（`createDeployments: disabled`）ので、マージしてもデプロイされません。**Deployments → Redeploy** は使いません（古いデプロイを作り直すだけで、マージ前のコードが出てしまいます）。次のどちらかで、main を明示して出します。
    - **Settings → Git** で Git からのデプロイを入れ直し、main をデプロイする。
@@ -211,10 +230,29 @@ LINE 連携を本番で使い始めるときは、次の順で行います。
 
 ### 切り替えの手順
 
-1. **マージの前に**、本番の Neon にマイグレーション `20261024090000_add_chat_conversations`（`ChatConversation` の追加）を当てます。
+1. マイグレーション `20261024090000_add_chat_conversations`（`ChatConversation` の追加）は、main へのマージで Web の本番ビルドが自動で当てます（「4. 本番の DB の確認」）。Go API をデプロイする前に `migrate status` で適用済みを確かめ、当たっていなければ手で当てます。
 2. **マージの前に**、Go API のプレビューのデプロイで `/chat` を開き、回答が少しずつ表示されること（最後にまとめて表示されないこと）を確かめます。Go は回答を 1 行ずつ `Flush` しますが、Vercel の Go の関数で途中の書き込みがそのまま届くかは、まだ本番で確かめていません。
 3. Go API の Vercel プロジェクトの Production に `OPENAI_API_KEY`（と、変えるなら `OPENAI_CHAT_MODEL`）を入れます。
 4. マージの後に、Go API のプロジェクトへ main を手でデプロイします（Git の自動デプロイは切っています）。Web は main への push で自動でデプロイされます。
+
+## 9. FFPF ID でのログイン
+
+FFPF ID（ffpf-portal が提供する OpenID Connect のプロバイダー）のアカウントで、会員（`member`）としてログインする機能です。ログイン画面の「FFPF IDでログイン」から使います。仕様は ffpf-portal の `docs/superpowers/specs/2026-10-27-ffpf-id-design.md` の「4. zhuelog」にあります。
+
+- 流れ：Web が PKCE・`state`・`nonce` を作って `zl_oauth` Cookie に入れ、portal の `/oauth/authorize` へ送ります。戻り先 `/api/auth/callback/ffpf` で `state` を確かめてから、Go API の `POST /v1/auth/ffpf` に `{code, codeVerifier, redirectUri, nonce}` を渡します。Go API は portal の `/oauth/token` で `code` を交換し（client_secret_basic、10 秒、リダイレクトには従いません）、ID トークンを `/oauth/jwks`（10 分キャッシュ）で検証します（ES256・`iss`・`aud`・`exp`・`nonce`・`email_verified`）。discovery は使わず、エンドポイントは `FFPF_ID_ISSUER` から組み立てます。
+- 持ち主の ID は `ffpf:<sub>` です。`FfpfAccount` にメールアドレスと表示名を保存し、ログインのたびに最新の値で更新します。メールアドレスは表示用で、認可には使いません。許可リストは無く、メールアドレスを確認済みの FFPF ID なら誰でも会員になれます。
+- FFPF ID の会員は、パスワード会員と同じく学習ノート・共有・フォロー・タイムライン・LINE 連携を使えます。メンバー一覧にも出ます。パスワードはこのサービスに無いので、`/account/password` には portal のマイページ（`<FFPF_ID_ISSUER>/id`）へのリンクを出し、`POST /v1/account/password` は `403` です。
+- 誤りの扱い：入力・交換・ID トークンの検証の失敗は `401 unauthorized`、portal に届かない・5xx・JWKS が取れないときは `502 ffpf_unavailable`、設定が無いときは `503 unavailable` です。Web はどれも「認証サービスからの結果を確認できませんでした。」と出してログイン画面に戻します。
+- 使う表は `FfpfAccount` で、Prisma のマイグレーション `20261027120000_add_ffpf_accounts` で作ります。
+
+### 切り替えの手順
+
+1. ffpf-portal で `pnpm run oidc:client zhuelog` を実行し、シークレット（`secret=…`）とクライアントの JSON を作ります。JSON の `redirectUris` に `https://<Web のホスト>/api/auth/callback/ffpf` を入れて portal の `FFPF_OIDC_CLIENTS` に足し、portal を再デプロイします（詳しくは ffpf-portal の README）。
+2. マイグレーション `20261027120000_add_ffpf_accounts`（`FfpfAccount` の追加）は、main へのマージで Web の本番ビルドが自動で当てます（「4. 本番の DB の確認」）。Go API をデプロイする前に `migrate status` で適用済みを確かめ、当たっていなければ手で当てます。表を足すだけなので、今の Go API とも両立します。
+3. Go API の Vercel プロジェクトの Production に `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID`・`FFPF_ID_CLIENT_SECRET`・`FFPF_ID_REDIRECT_URI` を入れます。`FFPF_ID_REDIRECT_URI` は、portal に登録した redirect URI と、`<AUTH_URL の origin>/api/auth/callback/ffpf` の両方に **1 文字も違わず** 合わせます。
+4. Web の Vercel プロジェクトに `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID` を入れます。
+5. マージの後に、Go API のプロジェクトへ main を手でデプロイします（Git の自動デプロイは切っています）。Web は main への push で自動でデプロイされます。
+6. `curl -i -X POST https://ffpf-zhuelog-api.vercel.app/v1/auth/ffpf -H 'content-type: application/json' -d '{"code":"x","codeVerifier":"x","redirectUri":"x","nonce":"x"}'` が `401`（`503` ではない）を返すことを確かめてから、本番の Web で FFPF ID のログイン・ログアウトを試します。
 
 ## 運用上の注意
 

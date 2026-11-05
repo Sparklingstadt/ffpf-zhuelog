@@ -5,7 +5,11 @@ import {
   getCurrentViewerUser,
   memberAccounts,
 } from "@/composition/identity-container";
-import { lineAddFriendUrl } from "@/infrastructure/config/environment";
+import {
+  isLineLinkPreview,
+  lineAddFriendUrl,
+  lineOfficialAccountId,
+} from "@/infrastructure/config/environment";
 import { LineLinkPanel } from "@/presentation/components/account/line-link-panel";
 import { AppHeader } from "@/presentation/components/layout/app-header";
 import {
@@ -62,8 +66,11 @@ export default async function LineLinkPage() {
             <CardContent>
               {link.available ? (
                 <LineLinkPanel
+                  key={link.linked ? "linked" : "unlinked"}
                   linked={link.linked}
                   addFriendUrl={lineAddFriendUrl()}
+                  officialAccountId={lineOfficialAccountId()}
+                  preview={isLineLinkPreview()}
                 />
               ) : (
                 <p className="text-sm">LINE 連携は今は使えません。</p>

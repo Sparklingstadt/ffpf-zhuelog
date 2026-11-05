@@ -134,3 +134,22 @@ test("relay answers 502 when Go is unreachable", async () => {
     "ChatGPTから応答を受信できませんでした。",
   );
 });
+
+test("quick-question relay keeps authentication and targets its own route", async () => {
+  const { fetchGo, calls } = fakeGo(
+    new Response('{"type":"done"}\n', {
+      headers: { "content-type": "application/x-ndjson" },
+    }),
+  );
+  const response = await handleChatRelay(request(), {
+    accessToken: "tok",
+    fetchGo,
+    upstreamPath: "/v1/quick-question",
+  });
+  assert.equal(calls[0].path, "/v1/quick-question");
+  assert.equal(
+    new Headers(calls[0].init.headers).get("authorization"),
+    "Bearer tok",
+  );
+  assert.equal(response.status, 200);
+});

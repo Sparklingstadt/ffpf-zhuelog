@@ -23,6 +23,7 @@ var (
 // Auth is what the handlers need from *auth.Service.
 type Auth interface {
 	LoginGitHub(ctx context.Context, code, verifier, redirectURI string) (auth.TokenPair, error)
+	LoginFFPF(ctx context.Context, code, verifier, redirectURI, nonce string) (auth.TokenPair, error)
 	LoginPassword(ctx context.Context, client, loginID, password string) (auth.TokenPair, error)
 	Refresh(ctx context.Context, token string) (auth.TokenPair, error)
 	Logout(ctx context.Context, token string) error
@@ -104,8 +105,11 @@ type Deps struct {
 	Chat          ChatStreamer
 	Conversations Conversations
 	ChatModel     string
+	QuickChat     ChatStreamer
+	Questions     Questions
 	// PrepositionRecords keeps finished rounds of preposition practice.
 	PrepositionRecords PrepositionRecords
+	ComplementRecords  ComplementRecords
 }
 
 const (
@@ -185,6 +189,7 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	public("GET /ping", ping())
 
 	public("POST /v1/auth/github", limited(loginGitHub(d.Auth)))
+	public("POST /v1/auth/ffpf", limited(loginFFPF(d.Auth)))
 	public("POST /v1/auth/password", limited(loginPassword(d.Auth, clientKey)))
 	public("POST /v1/auth/refresh", refreshLimited(refresh(d.Auth)))
 	public("POST /v1/auth/logout", limited(logout(d.Auth)))
@@ -235,6 +240,10 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	private("GET /v1/preposition-records/{id}", authed(getPrepositionRecord(d.PrepositionRecords)))
 	private("PUT /v1/preposition-records/{id}", authed(putPrepositionRecord(d.PrepositionRecords, d.Now)))
 
+	private("GET /v1/complement-records", authed(listComplementRecords(d.ComplementRecords)))
+	private("GET /v1/complement-records/{id}", authed(getComplementRecord(d.ComplementRecords)))
+	private("PUT /v1/complement-records/{id}", authed(putComplementRecord(d.ComplementRecords, d.Now)))
+
 	// The LINE routes exist only when the bot is configured. The webhook and
 	// the drain are public but check their own credential (the LINE signature,
 	// the cron secret); the three link routes are for members and admins, and
@@ -256,6 +265,13 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 		private("GET /v1/conversations/{id}", authed(getConversation(d.Conversations)))
 		private("PUT /v1/conversations/{id}", authed(putConversation(d.Conversations, d.Now)))
 		private("DELETE /v1/conversations/{id}", authed(deleteConversation(d.Conversations)))
+	}
+
+	if d.QuickChat != nil && d.Questions != nil {
+		private("POST /v1/quick-question", authed(streamMessages(d.QuickChat, true)))
+		private("GET /v1/questions", authed(listQuestions(d.Questions, d.ChatModel)))
+		private("GET /v1/questions/{id}", authed(getQuestion(d.Questions)))
+		private("PUT /v1/questions/{id}", authed(putQuestion(d.Questions, d.ChatModel, d.Now)))
 	}
 
 	return mux, routes

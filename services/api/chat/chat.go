@@ -30,6 +30,15 @@ const SystemPrompt = `あなたは中国語学習アプリ「学习録」の会�
 - 確信がない内容を断定しない。
 - 回答は学習しやすい長さにまとめる。`
 
+// QuickQuestionPrompt answers one independent learning question without
+// prompting the user to continue a conversation.
+const QuickQuestionPrompt = `あなたは中国語学習アプリ「学习録」の質問アシスタントです。
+中国語学習についての1回だけの質問に、まず要点から簡潔に答えてください。
+- ユーザーが使った言語に合わせて答える。
+- 必要に応じて中国語の例文、ピン音、自然な日本語訳、短い理由を添える。
+- 会話の続きや追加の練習を促す質問で締めくくらない。
+- 不明点があれば前提を示し、確信がない内容は断定しない。`
+
 // Message is one turn sent to ChatGPT. Role is "user" or "assistant".
 type Message struct {
 	Role string `json:"role"`

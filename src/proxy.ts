@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { ffpfIdConfig } from "@/infrastructure/config/environment";
 import { refreshTokens } from "@/infrastructure/go-api/client";
 import { goProxy } from "@/infrastructure/go-api/go-proxy";
 import { contentSecurityPolicy } from "@/infrastructure/security/content-security-policy";
@@ -9,10 +10,13 @@ function passThrough(request: NextRequest, requestHeaders: Headers) {
   if (request.nextUrl.pathname.startsWith("/api/"))
     return NextResponse.next({ request: { headers: requestHeaders } });
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+  // The FFPF ID sign-in form redirects to the issuer.
+  const ffpf = ffpfIdConfig();
   const csp = contentSecurityPolicy(
     nonce,
     process.env.NODE_ENV === "development",
     request.nextUrl.protocol === "https:",
+    ffpf ? [new URL(ffpf.issuer).origin] : [],
   );
   const headers = new Headers(requestHeaders);
   headers.set("x-nonce", nonce);
