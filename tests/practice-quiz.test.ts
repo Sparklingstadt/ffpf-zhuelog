@@ -12,6 +12,7 @@ import {
   type QuizSource,
   wrongChoicesFor,
 } from "../src/domain/practice/practice-quiz";
+import { COMPLEMENT_USAGES } from "../src/domain/practice/complement-data";
 import { PREPOSITION_ALSO_IN } from "../src/domain/practice/preposition-also-in";
 import { PREPOSITION_USAGES } from "../src/domain/practice/preposition-data";
 
@@ -32,6 +33,8 @@ const PREPOSITION_SOURCE: QuizSource = {
 const pairs = PREPOSITION_USAGES.flatMap((usage) =>
   usage.pairs.map((pair) => ({ usage, pair })),
 );
+
+const COMPLEMENT_SOURCE: QuizSource = { usages: COMPLEMENT_USAGES };
 
 // A usage with only what the choice rules look at.
 function u(
@@ -192,4 +195,64 @@ test("progress grows with each question and stops at 100%", () => {
   assert.equal(progressPercent(12, 10), 100);
   assert.equal(progressPercent(-1, 10), 0);
   assert.equal(progressPercent(3, 0), 0);
+});
+
+test("every complement phrase holds its verb and, right after it, the complement", () => {
+  const pairs = COMPLEMENT_USAGES.flatMap((u) =>
+    u.pairs.map((pair) => ({ u, pair })),
+  );
+  assert.ok(pairs.length >= 200);
+  for (const { u, pair } of pairs) {
+    assert.ok(pair.phrase.includes(pair.headword), u.id);
+    assert.equal(
+      pair.phrase.slice(pair.at, pair.at + u.word.length),
+      u.word,
+      u.id,
+    );
+    assert.equal(
+      pair.at,
+      pair.phrase.indexOf(pair.headword) + pair.headword.length,
+      `${u.id}: ${pair.phrase}`,
+    );
+  }
+});
+
+test("complements come in the six categories and at least 30 words", () => {
+  const categories = new Set(COMPLEMENT_USAGES.map((u) => u.category));
+  assert.deepEqual(
+    [...categories].sort(),
+    [
+      "程度・様態補語",
+      "結果補語",
+      "方向補語（単純）",
+      "方向補語（派生）",
+      "方向補語（複合）",
+      "可能補語",
+    ].sort(),
+  );
+  assert.ok(new Set(COMPLEMENT_USAGES.map((u) => u.word)).size >= 30);
+});
+
+test("every complement question has three wrong choices that obey the rules", () => {
+  for (const u of COMPLEMENT_USAGES)
+    for (const pair of u.pairs) {
+      const wrong = wrongChoicesFor(u.word, pair.headword, COMPLEMENT_SOURCE);
+      assert.ok(wrong.length >= CHOICE_COUNT - 1, `${u.id} ${pair.headword}`);
+      for (const w of wrong) {
+        assert.ok(!w.includes(u.word) && !u.word.includes(w), `${u.id}: ${w}`);
+        assert.ok(
+          !COMPLEMENT_USAGES.some(
+            (o) =>
+              o.word === w && o.pairs.some((p) => p.headword === pair.headword),
+          ),
+          `${u.id}: ${w} pairs with ${pair.headword}`,
+        );
+      }
+    }
+});
+
+test("a complement quiz of 25 asks about different complements", () => {
+  const quiz = buildQuiz(COMPLEMENT_SOURCE, 25, seeded(5));
+  assert.equal(quiz.length, 25);
+  assert.equal(new Set(quiz.map((q) => q.answer)).size, 25);
 });

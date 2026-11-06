@@ -29,6 +29,9 @@ type KindSpec = {
   moved: Record<string, string>;
   // Categories a word has beyond its rows, for the wrong-choice check.
   alsoIn: Record<string, readonly string[]>;
+  // Which side of the headword the word sits on in a phrase: a preposition
+  // comes before its noun (在学校), a complement after its verb (看懂).
+  wordSide: "before" | "after";
   constName: string;
   output: URL;
 };
@@ -56,6 +59,7 @@ const KINDS: Record<PracticeKind, KindSpec> = {
       P202: "相手・対象・話題・比較", // 于 〜より
     },
     alsoIn: PREPOSITION_ALSO_IN,
+    wordSide: "before",
     constName: "PREPOSITION_USAGES",
     output: new URL(
       "../src/domain/practice/preposition-data.ts",
@@ -76,6 +80,7 @@ const KINDS: Record<PracticeKind, KindSpec> = {
     ],
     moved: {},
     alsoIn: {},
+    wordSide: "after",
     constName: "COMPLEMENT_USAGES",
     output: new URL(
       "../src/domain/practice/complement-data.ts",
@@ -171,13 +176,23 @@ const usages: PracticeUsage[] = records
     if (!kind.categories.includes(category))
       throw new Error(`${id}: unknown category ${category}`);
     const phrases = list(record[c.phrases]);
+    // The phrase of a headword is the first that holds it on the kind's side
+    // of the word (答对问题 for 答, not 猜对答案), or failing that the first
+    // that holds it at all.
     const pairs = list(record[c.headwords]).flatMap((headword) => {
-      for (const phrase of phrases) {
+      const found = phrases.flatMap((phrase) => {
         const at = wordAt(phrase, word, headword);
-        if (phrase.includes(headword) && at !== -1)
-          return [{ headword, phrase, at }];
-      }
-      return [];
+        return phrase.includes(headword) && at !== -1
+          ? [{ headword, phrase, at }]
+          : [];
+      });
+      const adjacent = found.find(({ phrase, at }) => {
+        const headwordAt = phrase.indexOf(headword);
+        return kind.wordSide === "after"
+          ? at === headwordAt + headword.length
+          : at + word.length === headwordAt;
+      });
+      return adjacent ? [adjacent] : found.slice(0, 1);
     });
     return {
       id,
