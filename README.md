@@ -217,14 +217,15 @@ LINE に中国語や日本語の文を送ると、OpenAI（ChatGPT）で添削�
 - **設定**: Go API に `OPENAI_API_KEY`（と任意で `OPENAI_CHAT_MODEL`）を入れます。空のときは画面に「ChatGPT が設定されていません」と出ます。
 - **本番への反映**: DBマイグレーション `20261024090000_add_chat_conversations`（`ChatConversation` の追加）を、**main へのマージの前に** 本番のNeonへ適用してください。手順は [docs/api-deployment.md](docs/api-deployment.md) の「8. 会話練習（ChatGPT）」にあります。
 
-## 介詞の練習
+## 介詞・補語の練習
 
-`/practice/prepositions`（ヘッダーの「介詞練習」）で、名詞と日本語の意味に合う介詞を 4 つから選ぶ練習が 25 問ずつできます。ゲストも練習できます。
+`/practice/prepositions`（ヘッダーの「介詞練習」）で名詞と日本語の意味に合う介詞を、`/practice/complements`（ヘッダーの「補語練習」）で動詞と日本語の意味に合う補語を、4 つから選ぶ練習が 25 問ずつできます。ゲストも練習できます。
 
 - **練習中**: 正答率（1 回目で正解した問題の割合）・ミス数（間違えて選んだ回数）・経過時間を問題の上に出します。
-- **結果**: 25 問を解き終えると、正答率・ミス数・経過時間と、ミスした問題（正解と、間違えて選んだ介詞）を出します。
-- **記録**: 会員と管理者の結果は、解き終えたときに Go API の `/v1/preposition-records` へ保存します。`/practice/prepositions/records`（練習画面の「過去の記録」）で新しい順に見返せ、1 件ずつ全問の結果も見られます。ゲストの練習は記録に残りません。
-- **本番への反映**: DBマイグレーション `20261024150000_add_preposition_practice_records`（`PrepositionPracticeRecord` の追加）を、**main へのマージの前に** 本番のNeonへ適用してください（`vercel env pull` → `migrate deploy` → `migrate status`）。
+- **結果**: 25 問を解き終えると、正答率・ミス数・経過時間と、ミスした問題（正解と、間違えて選んだ語）を出します。
+- **記録**: 会員と管理者の結果は、解き終えたときに Go API の `/v1/preposition-records`・`/v1/complement-records` へ保存します。`/practice/prepositions/records`・`/practice/complements/records`（練習画面の「過去の記録」）で新しい順に見返せ、1 件ずつ全問の結果も見られます。ゲストの練習は記録に残りません。
+- **問題データ**: `data/` の CSV（`中国語の介詞_名詞との組み合わせと例文.csv`、`中国語の補語_動詞との組み合わせと例文.csv`）から、`pnpm exec tsx scripts/generate-practice-data.ts <preposition|complement> <csv>` で `src/domain/practice/*-data.ts` を作ります。生成したファイルは手で直さず、CSV を直して作り直します。
+- **本番への反映**: DBマイグレーション `20261107120000_add_practice_records`（`PracticeRecord` の追加と、`PrepositionPracticeRecord` の行の複写）は、Web の本番ビルドが自動で本番の Neon に適用します（「FFPF ID でのログイン」の節と同じ。手での適用は要りません）。表を足すだけなので、今動いている Go API と両立します。マージの後に Go API へ main を手でデプロイしてください。古い `PrepositionPracticeRecord` は次のリリースで消します。
 
 ## LINE・チャットのテーブルの削除
 
