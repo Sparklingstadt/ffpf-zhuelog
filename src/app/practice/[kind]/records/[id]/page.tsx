@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { practiceRecords } from "@/composition/practice-container";
+import { kindFromSlug, PRACTICE_KINDS } from "@/domain/practice/practice-kind";
 import { accuracyPercent } from "@/domain/practice/practice-record";
 import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
@@ -17,29 +18,30 @@ export const dynamic = "force-dynamic";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-type PrepositionRecordPageProps = { params: Promise<{ id: string }> };
-
-export default async function PrepositionRecordPage({
+export default async function PracticeRecordPage({
   params,
-}: PrepositionRecordPageProps) {
+}: PageProps<"/practice/[kind]/records/[id]">) {
+  const { kind: slug, id } = await params;
+  const kind = kindFromSlug(slug);
+  if (!kind) notFound();
+  const config = PRACTICE_KINDS[kind];
   const user = await requirePracticeRecordUser(
-    "/signin?callbackUrl=/practice/prepositions/records",
+    `/signin?callbackUrl=${config.recordsPath}`,
   );
-  const { id } = await params;
   if (!UUID.test(id)) notFound();
-  const record = await practiceRecords("preposition").get(id);
+  const record = await practiceRecords(kind).get(id);
   if (!record) notFound();
 
   return (
     <PageShell user={user} width="4xl">
       <PageHeader
         icon={History}
-        eyebrow="Preposition record"
+        eyebrow={config.recordEyebrow}
         title={`${formatTokyoDateTime(record.createdAt)} の練習`}
         description={`${record.questionCount}問中 ${record.firstTryCount}問を1回目で正解`}
         actions={
           <Button asChild variant="outline" size="sm">
-            <Link href="/practice/prepositions/records">
+            <Link href={config.recordsPath}>
               <ArrowLeft /> 記録の一覧へ
             </Link>
           </Button>
@@ -56,7 +58,10 @@ export default async function PrepositionRecordPage({
             elapsedMs={record.elapsedMs}
             size="lg"
           />
-          <PracticeAnswerList answers={record.questions} wordLabel="介詞" />
+          <PracticeAnswerList
+            answers={record.questions}
+            wordLabel={config.wordLabel}
+          />
         </CardContent>
       </Card>
     </PageShell>

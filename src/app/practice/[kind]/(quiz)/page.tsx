@@ -1,39 +1,40 @@
-import { ArrowLeft, History, Shuffle } from "lucide-react";
+import { ArrowLeft, History } from "lucide-react";
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { getCurrentViewerUser } from "@/composition/identity-container";
 import { isMemberRole } from "@/domain/identity/entities/authenticated-user";
-import { buildQuiz, type QuizSource } from "@/domain/practice/practice-quiz";
-import { PREPOSITION_ALSO_IN } from "@/domain/practice/preposition-also-in";
-import { PREPOSITION_USAGES } from "@/domain/practice/preposition-data";
+import { kindFromSlug, PRACTICE_KINDS } from "@/domain/practice/practice-kind";
+import { buildQuiz } from "@/domain/practice/practice-quiz";
 import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
 import { Practice } from "@/presentation/components/practice/practice";
+import { practiceKindIcon } from "@/presentation/components/practice/practice-kind-icon";
 import { Button } from "@/presentation/components/ui/button";
 
 export const dynamic = "force-dynamic";
 
-const QUESTION_COUNT = 25;
-const PREPOSITION_SOURCE: QuizSource = {
-  usages: PREPOSITION_USAGES,
-  alsoIn: PREPOSITION_ALSO_IN,
-};
-
-// Uses no notes, so guests can practice too; only members' and admins'
-// rounds are recorded.
-export default async function PrepositionPracticePage() {
+// One kind of practice (/practice/prepositions, /practice/complements); any
+// other segment is a 404. Uses no notes, so guests can practice too; only
+// members' and admins' rounds are recorded.
+export default async function PracticePage({
+  params,
+}: PageProps<"/practice/[kind]">) {
+  const { kind: slug } = await params;
+  const kind = kindFromSlug(slug);
+  if (!kind) notFound();
+  const config = PRACTICE_KINDS[kind];
   const user = await getCurrentViewerUser();
-  if (!user) redirect("/signin?callbackUrl=/practice/prepositions");
+  if (!user) redirect(`/signin?callbackUrl=${config.path}`);
   const canSave = isMemberRole(user.role);
 
   return (
     <PageShell user={user} width="4xl">
       <PageHeader
-        icon={Shuffle}
-        eyebrow="Preposition practice"
-        title="介詞の練習"
-        description="名詞と日本語の意味に合う介詞を、4つの中から選んでください。"
+        icon={practiceKindIcon(kind)}
+        eyebrow={config.eyebrow}
+        title={config.title}
+        description={config.description}
         actions={
           <>
             <Button asChild variant="outline" size="sm">
@@ -43,7 +44,7 @@ export default async function PrepositionPracticePage() {
             </Button>
             {canSave ? (
               <Button asChild variant="outline" size="sm">
-                <Link href="/practice/prepositions/records">
+                <Link href={config.recordsPath}>
                   <History /> 過去の記録
                 </Link>
               </Button>
@@ -53,8 +54,8 @@ export default async function PrepositionPracticePage() {
       />
       {/* Shuffled here so the server and browser render the same quiz. */}
       <Practice
-        kind="preposition"
-        initialQuiz={buildQuiz(PREPOSITION_SOURCE, QUESTION_COUNT)}
+        kind={kind}
+        initialQuiz={buildQuiz(config.source, config.questionCount)}
         canSave={canSave}
       />
     </PageShell>

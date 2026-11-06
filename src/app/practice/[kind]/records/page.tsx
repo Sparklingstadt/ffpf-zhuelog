@@ -1,7 +1,9 @@
-import { ArrowLeft, ChevronRight, History, Shuffle } from "lucide-react";
+import { ArrowLeft, ChevronRight, History } from "lucide-react";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 
 import { practiceRecords } from "@/composition/practice-container";
+import { kindFromSlug, PRACTICE_KINDS } from "@/domain/practice/practice-kind";
 import {
   accuracyPercent,
   formatElapsed,
@@ -9,6 +11,7 @@ import {
 import { EmptyState } from "@/presentation/components/layout/empty-state";
 import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
+import { practiceKindIcon } from "@/presentation/components/practice/practice-kind-icon";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
 import { requirePracticeRecordUser } from "@/presentation/guards/practice-guard";
@@ -16,23 +19,29 @@ import { formatTokyoDateTime } from "@/presentation/presenters/log-date-presente
 
 export const dynamic = "force-dynamic";
 
-export default async function PrepositionRecordsPage() {
+export default async function PracticeRecordsPage({
+  params,
+}: PageProps<"/practice/[kind]/records">) {
+  const { kind: slug } = await params;
+  const kind = kindFromSlug(slug);
+  if (!kind) notFound();
+  const config = PRACTICE_KINDS[kind];
   const user = await requirePracticeRecordUser(
-    "/signin?callbackUrl=/practice/prepositions/records",
+    `/signin?callbackUrl=${config.recordsPath}`,
   );
-  const records = await practiceRecords("preposition").list();
+  const records = await practiceRecords(kind).list();
 
   return (
     <PageShell user={user} width="4xl">
       <PageHeader
         icon={History}
-        eyebrow="Preposition records"
-        title="介詞の練習記録"
+        eyebrow={config.recordsEyebrow}
+        title={`${config.wordLabel}の練習記録`}
         description="終えた練習の正答率・ミス数・経過時間を、新しい順に見返せます。"
         actions={
           <>
             <Button asChild variant="outline" size="sm">
-              <Link href="/practice/prepositions">
+              <Link href={config.path}>
                 <ArrowLeft /> 練習へ
               </Link>
             </Button>
@@ -42,16 +51,16 @@ export default async function PrepositionRecordsPage() {
 
       {records.length === 0 ? (
         <EmptyState
-          icon={Shuffle}
+          icon={practiceKindIcon(kind)}
           title="まだ練習の記録がありません"
-          description="介詞の練習を最後まで解くと、ここに記録が残ります。"
+          description={`${config.wordLabel}の練習を最後まで解くと、ここに記録が残ります。`}
         />
       ) : (
         <div className="grid gap-3">
           {records.map((record) => (
             <Link
               key={record.id}
-              href={`/practice/prepositions/records/${record.id}`}
+              href={`${config.recordsPath}/${record.id}`}
               className="group"
             >
               <Card className="transition-colors group-hover:bg-muted/40">

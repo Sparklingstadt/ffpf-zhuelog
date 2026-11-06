@@ -6,7 +6,6 @@ import {
   LogOut,
   MessageCircle,
   MessagesSquare,
-  Shuffle,
   UserCog,
   UsersRound,
   type LucideIcon,
@@ -14,7 +13,9 @@ import {
 import Link from "next/link";
 
 import type { AuthenticatedUser } from "@/domain/identity/entities/authenticated-user";
+import { PRACTICE_KIND_LIST } from "@/domain/practice/practice-kind";
 import { signOutAction } from "@/presentation/actions/auth-actions";
+import { practiceKindIcon } from "@/presentation/components/practice/practice-kind-icon";
 import { ThemeSwitcher } from "@/presentation/components/theme/theme-switcher";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
@@ -89,9 +90,16 @@ function UserControls({ user }: { user: AuthenticatedUser }) {
         aria-label="アカウント"
         className="flex shrink-0 items-center gap-0.5"
       >
-        <NavLink label={label} href="/practice/prepositions" icon={Shuffle}>
-          介詞練習
-        </NavLink>
+        {PRACTICE_KIND_LIST.map((practice) => (
+          <NavLink
+            key={practice.kind}
+            label={label}
+            href={practice.path}
+            icon={practiceKindIcon(practice.kind)}
+          >
+            {practice.navLabel}
+          </NavLink>
+        ))}
         {isMember || isAdmin ? (
           <NavLink label={label} href="/follow" icon={UsersRound}>
             フォロー
