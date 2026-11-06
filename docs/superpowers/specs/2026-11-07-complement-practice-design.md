@@ -18,17 +18,17 @@
 
 ## 2. 決定事項
 
-| 項目                 | 決定                                                                                                                                                                    |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 問題データの出どころ | 介詞 CSV と同じ列構成の補語 CSV を Claude が書き、リポジトリの `data/` に置く。介詞 CSV も同じ場所に入れる                                                              |
-| 問題の数             | 補語 120〜150 行、各行に動詞 2 つ前後。25 問が毎回ちがう補語になるよう、補語は 30 種以上                                                                                |
-| 出題の形             | 介詞と同じ。大きく動詞、上に日本語の意味、下に空欄つきの句、4 択。正解後に例文と和訳                                                                                    |
-| 誤答の選び方         | 介詞の「意味分類を共有しない語から」に加え、同じ動詞と組み合わさる補語と、正解を含む／正解に含まれる補語を除く                                                          |
-| 記録の表             | `PrepositionPracticeRecord` を `PracticeRecord` に改名し、`kind` 列を足す。questions の JSON のキー `noun` は `headword` に改め、既存行も書き換える                     |
-| Go のルート          | `/v1/preposition-records` はそのまま。`/v1/complement-records` を足す。ハンドラとストアは kind 付きで一本化                                                             |
-| Web のページ         | `src/app/practice/[kind]/…` の 1 系統。`prepositions` と `complements` 以外の kind は 404                                                                               |
-| 入口                 | ヘッダーに「補語練習」を足す                                                                                                                                            |
-| 本番への反映         | マイグレーションは Web の本番ビルドが当てる。表の改名のため、当たってから Go API を出すまでの間は記録の保存と閲覧だけが失敗する（練習はできる）。マージ後すぐ Go を出す |
+| 項目                 | 決定                                                                                                                                                                                                                 |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 問題データの出どころ | 介詞 CSV と同じ列構成の補語 CSV を Claude が書き、リポジトリの `data/` に置く。介詞 CSV も同じ場所に入れる                                                                                                           |
+| 問題の数             | 補語 120〜150 行、各行に動詞 2 つ前後。25 問が毎回ちがう補語になるよう、補語は 30 種以上                                                                                                                             |
+| 出題の形             | 介詞と同じ。大きく動詞、上に日本語の意味、下に空欄つきの句、4 択。正解後に例文と和訳                                                                                                                                 |
+| 誤答の選び方         | 介詞の「意味分類を共有しない語から」に加え、同じ動詞と組み合わさる補語と、正解を含む／正解に含まれる補語を除く                                                                                                       |
+| 記録の表             | `kind` 列を持つ `PracticeRecord` を新しく作り、`PrepositionPracticeRecord` の行を `kind = 'preposition'` で写す。questions の JSON のキー `noun` は写すときに `headword` に改める。古い表は次のリリースで消す        |
+| Go のルート          | `/v1/preposition-records` はそのまま。`/v1/complement-records` を足す。ハンドラとストアは kind 付きで一本化                                                                                                          |
+| Web のページ         | `src/app/practice/[kind]/…` の 1 系統。`prepositions` と `complements` 以外の kind は 404                                                                                                                            |
+| 入口                 | ヘッダーに「補語練習」を足す                                                                                                                                                                                         |
+| 本番への反映         | マイグレーションは Web の本番ビルドが当てる。表を足すだけなので、動いている Go API とそのまま両立する（`docs/api-deployment.md` の「マイグレーションの制約」）。古い表へ保存された記録は、次のリリースで消す前に写す |
 
 `noun` を `headword` にする理由：補語の見出しは動詞なので、`noun` のままだと保存した JSON と Go の型の名前が嘘になる。Web 以外に API の利用者は無く、既存行の書き換えはマイグレーション 1 回で済む。
 
@@ -165,24 +165,37 @@ export type PracticeQuestion = {
 
 ## 6. Go API
 
-### 6.1 DB（マイグレーション `20261107120000_add_practice_record_kind`）
+### 6.1 DB（マイグレーション `20261107120000_add_practice_records`）
+
+`docs/api-deployment.md` の「マイグレーションの制約」（動いている Go API と両立する変更だけ。改名は 2 段階に分ける）に従い、表を足して行を写す。古い `PrepositionPracticeRecord` は残し、次のリリースのマイグレーションで消す。
 
 ```sql
-ALTER TABLE "PrepositionPracticeRecord" RENAME TO "PracticeRecord";
-ALTER TABLE "PracticeRecord" RENAME CONSTRAINT "PrepositionPracticeRecord_pkey" TO "PracticeRecord_pkey";
-ALTER INDEX "PrepositionPracticeRecord_id_ownerId_key" RENAME TO "PracticeRecord_id_ownerId_key";
-DROP INDEX "PrepositionPracticeRecord_ownerId_createdAt_idx";
-ALTER TABLE "PracticeRecord" ADD COLUMN "kind" TEXT NOT NULL DEFAULT 'preposition';
-ALTER TABLE "PracticeRecord" ALTER COLUMN "kind" DROP DEFAULT;
+CREATE TABLE "PracticeRecord" (
+    "id" TEXT NOT NULL,
+    "ownerId" TEXT NOT NULL,
+    "kind" TEXT NOT NULL,
+    "questionCount" INTEGER NOT NULL,
+    "firstTryCount" INTEGER NOT NULL,
+    "missCount" INTEGER NOT NULL,
+    "elapsedMs" INTEGER NOT NULL,
+    "questions" JSONB NOT NULL,
+    "startedAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "PracticeRecord_pkey" PRIMARY KEY ("id")
+);
 CREATE INDEX "PracticeRecord_ownerId_kind_createdAt_idx" ON "PracticeRecord"("ownerId", "kind", "createdAt");
--- questions の各要素の "noun" を "headword" に
-UPDATE "PracticeRecord" SET "questions" = (
-  SELECT jsonb_agg((q - 'noun') || jsonb_build_object('headword', q->'noun') ORDER BY ord)
-  FROM jsonb_array_elements("questions") WITH ORDINALITY AS t(q, ord)
-) WHERE jsonb_typeof("questions") = 'array' AND jsonb_array_length("questions") > 0;
+CREATE UNIQUE INDEX "PracticeRecord_id_ownerId_key" ON "PracticeRecord"("id", "ownerId");
+-- 介詞の記録を写す。questions の各要素の "noun" は "headword" に。
+INSERT INTO "PracticeRecord"
+  ("id", "ownerId", "kind", "questionCount", "firstTryCount", "missCount", "elapsedMs", "questions", "startedAt", "createdAt")
+SELECT "id", "ownerId", 'preposition', "questionCount", "firstTryCount", "missCount", "elapsedMs",
+  (SELECT COALESCE(jsonb_agg((q - 'noun') || jsonb_build_object('headword', q->'noun') ORDER BY ord), '[]'::jsonb)
+   FROM jsonb_array_elements("questions") WITH ORDINALITY AS t(q, ord)),
+  "startedAt", "createdAt"
+FROM "PrepositionPracticeRecord";
 ```
 
-`prisma/schema.prisma` の `PrepositionPracticeRecord` を `PracticeRecord` に改名し、`kind String` を足し、索引を `(ownerId, kind, createdAt)` にする。Prisma のマイグレーションの SQL は手で書く（`migrate dev --create-only` の出力は表の作り直しになるため）。最後の状態が schema と一致していれば `migrate status` はずれを報告しない。
+`prisma/schema.prisma` に `PracticeRecord`（`kind String`、索引 `(ownerId, kind, createdAt)`、一意 `(id, ownerId)`）を足す。`PrepositionPracticeRecord` のモデルは「次のリリースで消す」と注記して残す（消すと `migrate status` がずれを報告する）。マイグレーションの SQL は手で書く。
 
 JSON のキーは Web の型と同じ `headword`（見出しの名詞・動詞）。選ぶ語（介詞・補語）は `answer` のまま。
 
@@ -264,7 +277,7 @@ func (s *Store) AddPracticeRecord(ctx, kind PracticeKind, ownerID string, r Prac
 
 - `README.md`：「介詞の練習」の節を「介詞・補語の練習」にし、補語の URL・ヘッダーの入口・`/v1/complement-records`・マイグレーション名と、本番ビルドが当てること（v0.21.0 と同じ書き方）を書く。
 - `docs-site/reference/practice.md`：「介詞・補語の練習の記録」とし、ルートの表に `/v1/complement-records` を足し、`noun` を `headword` にする。`docs-site/reference/README.md` の一覧にも 3 行足す。
-- `docs/api-deployment.md`：マイグレーションの節に、表の改名と Go を先に出せない理由（2 章の最後）を 1 行書く。
+- `docs/api-deployment.md`：触らない（表を足すだけで、「4. 本番の DB の確認」の制約どおり）。
 - `docs/releases/v0.22.0.md`：リリースノート。`package.json` の version を `0.22.0` にする。
 
 ## 9. テスト
@@ -287,6 +300,7 @@ func (s *Store) AddPracticeRecord(ctx, kind PracticeKind, ownerID string, r Prac
 
 ## 10. 本番に出す手順
 
-1. main にマージすると、Web の本番ビルドがマイグレーションを当てる（`scripts/vercel-build.sh`）。表が改名されるので、この時点から Go API を出すまで、練習の記録の保存と閲覧は失敗する（練習そのものと、他の機能は動く）。
-2. マージ後すぐ、Go API の Vercel プロジェクトへ main を手でデプロイする。
+1. main にマージすると、Web の本番ビルドがマイグレーションを当てる（`scripts/vercel-build.sh`）。表を足すだけなので、動いている Go API は今までどおり古い表に書く。
+2. マージ後、Go API の Vercel プロジェクトへ main を手でデプロイする。
 3. 本番で `/practice/complements` を 1 回解き、記録が残ることを確かめる。`/practice/prepositions/records` で以前の記録が見えることも確かめる。
+4. 手順 1 と 2 の間に古い表へ保存された記録があれば（`PrepositionPracticeRecord` の `createdAt` がマイグレーションの後の行）、次のリリースで古い表を消すマイグレーションの前に、同じ `INSERT … SELECT` で写す。
