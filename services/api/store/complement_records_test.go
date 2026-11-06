@@ -179,3 +179,22 @@ func TestGetComplementRecordReadsAQuestionWithoutAnID(t *testing.T) {
 		t.Errorf("questions = %+v", got.Questions)
 	}
 }
+
+// The verb mode (動詞から選ぶ) passes the table's CHECK on mode.
+func TestAddComplementRecordAcceptsTheVerbMode(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	owner := newOwner(t, s)
+	cleanComplementRecords(t, s, owner)
+
+	r := complementRecord(fixedNow(), []string{"完"})
+	r.Mode = "verb"
+	r.Questions[0] = ComplementQuestion{ID: "verb:C005:看", Answer: "懂", Noun: "看", Prompt: "看（　）这本书", Misses: []string{"完"}}
+	saved, err := s.AddComplementRecord(ctx, owner, r, fixedNow())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.Mode != "verb" || saved.Questions[0].ID != "verb:C005:看" || saved.Questions[0].Noun != "看" {
+		t.Errorf("saved = %+v", saved)
+	}
+}
