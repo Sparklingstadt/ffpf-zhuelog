@@ -105,8 +105,9 @@ type Deps struct {
 	Chat          ChatStreamer
 	Conversations Conversations
 	ChatModel     string
-	// PrepositionRecords keeps finished rounds of preposition practice.
-	PrepositionRecords PrepositionRecords
+	// PracticeRecords keeps finished rounds of practice (prepositions,
+	// complements).
+	PracticeRecords PracticeRecords
 }
 
 const (
@@ -231,11 +232,20 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	private("POST /v1/admin/accounts", adminOnly(createAccount(d.Accounts, d.Hasher, d.Now)))
 	private("POST /v1/admin/accounts/{id}/password", adminOnly(resetAccountPassword(d.Accounts, d.Hasher, d.Now)))
 
-	// Finished rounds of preposition practice, for members and admins.
-	// Guests may practice in the web, but nothing of theirs is saved.
-	private("GET /v1/preposition-records", authed(listPrepositionRecords(d.PrepositionRecords)))
-	private("GET /v1/preposition-records/{id}", authed(getPrepositionRecord(d.PrepositionRecords)))
-	private("PUT /v1/preposition-records/{id}", authed(putPrepositionRecord(d.PrepositionRecords, d.Now)))
+	// Finished rounds of practice, for members and admins; one set of routes
+	// per kind, served by the same handlers. Guests may practice in the web,
+	// but nothing of theirs is saved.
+	for _, pr := range []struct {
+		path string
+		kind store.PracticeKind
+	}{
+		{"/v1/preposition-records", store.PracticeKindPreposition},
+		{"/v1/complement-records", store.PracticeKindComplement},
+	} {
+		private("GET "+pr.path, authed(listPracticeRecords(d.PracticeRecords, pr.kind)))
+		private("GET "+pr.path+"/{id}", authed(getPracticeRecord(d.PracticeRecords, pr.kind)))
+		private("PUT "+pr.path+"/{id}", authed(putPracticeRecord(d.PracticeRecords, pr.kind, d.Now)))
+	}
 
 	// The LINE routes exist only when the bot is configured. The webhook and
 	// the drain are public but check their own credential (the LINE signature,

@@ -51,8 +51,8 @@ const (
 	msgChatFailed           = "ChatGPTから応答を受信できませんでした。"
 	msgConversationNotFound = "会話が見つかりません。"
 
-	msgPrepositionRecordInvalid  = "練習の記録の形式が不正です。"
-	msgPrepositionRecordNotFound = "練習の記録が見つかりません。"
+	msgPracticeRecordInvalid  = "練習の記録の形式が不正です。"
+	msgPracticeRecordNotFound = "練習の記録が見つかりません。"
 )
 
 // Error codes in the {"error":{"code":...}} body.
