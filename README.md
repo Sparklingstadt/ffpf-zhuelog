@@ -225,7 +225,7 @@ LINE に中国語や日本語の文を送ると、OpenAI（ChatGPT）で添削�
 - **結果**: 25 問を解き終えると、正答率・ミス数・経過時間と、ミスした問題（正解と、間違えて選んだ語）を出します。
 - **記録**: 会員と管理者の結果は、解き終えたときに Go API の `/v1/preposition-records`・`/v1/complement-records` へ保存します。`/practice/prepositions/records`・`/practice/complements/records`（練習画面の「過去の記録」）で新しい順に見返せ、1 件ずつ全問の結果も見られます。ゲストの練習は記録に残りません。
 - **問題データ**: `data/` の CSV（`中国語の介詞_名詞との組み合わせと例文.csv`、`中国語の補語_動詞との組み合わせと例文.csv`）から、`pnpm exec tsx scripts/generate-practice-data.ts <preposition|complement> <csv>` で `src/domain/practice/*-data.ts` を作ります。生成したファイルは手で直さず、CSV を直して作り直します。
-- **本番への反映**: DBマイグレーション `20261107120000_add_practice_records`（`PracticeRecord` の追加と、`PrepositionPracticeRecord` の行の複写）は、Web の本番ビルドが自動で本番の Neon に適用します（「FFPF ID でのログイン」の節と同じ。手での適用は要りません）。表を足すだけなので、今動いている Go API と両立します。マージの後に Go API へ main を手でデプロイしてください。古い `PrepositionPracticeRecord` は次のリリースで消します。
+- **本番への反映**: DBマイグレーション `20261107120000_add_practice_records`（`PracticeRecord` の追加と、`PrepositionPracticeRecord` の行の複写）は、Web の本番ビルドが自動で本番の Neon に適用します（「FFPF ID でのログイン」の節と同じ。手での適用は要りません）。表を足すだけなので、今動いている Go API と両立します。マージの後に Go API へ main を手でデプロイしてください。デプロイするまで、介詞・補語とも記録の保存は失敗します（練習はできます。古い Go API は新しい `questions[].headword` を受け付けません）。古い `PrepositionPracticeRecord` は次のリリースで消します。
 
 ## LINE・チャットのテーブルの削除
 

@@ -1,7 +1,7 @@
 # 補語の練習を、介詞の練習と同じ仕組みで足す
 
 - 作成日: 2026-11-07
-- 状態: 設計合意済み（この仕様書のレビュー待ち）
+- 状態: 実装済み（v0.22.0）
 
 ## 1. 目的
 
@@ -300,7 +300,7 @@ func (s *Store) AddPracticeRecord(ctx, kind PracticeKind, ownerID string, r Prac
 
 ## 10. 本番に出す手順
 
-1. main にマージすると、Web の本番ビルドがマイグレーションを当てる（`scripts/vercel-build.sh`）。表を足すだけなので、動いている Go API は今までどおり古い表に書く。
+1. main にマージすると、Web の本番ビルドがマイグレーションを当てる（`scripts/vercel-build.sh`）。表を足すだけなので、動いている Go API は今までどおり古い表に書く。新しい Web に切り替わってから Go API を出すまでは、介詞・補語とも記録の保存が失敗する（古い Go API は `questions[].headword` を受け付けず `400`。練習はできる）。
 2. マージ後、Go API の Vercel プロジェクトへ main を手でデプロイする。
 3. 本番で `/practice/complements` を 1 回解き、記録が残ることを確かめる。`/practice/prepositions/records` で以前の記録が見えることも確かめる。
-4. 手順 1 と 2 の間に古い表へ保存された記録があれば（`PrepositionPracticeRecord` の `createdAt` がマイグレーションの後の行）、次のリリースで古い表を消すマイグレーションの前に、同じ `INSERT … SELECT` で写す。
+4. マイグレーションが当たってから新しい Web に切り替わるまでに、古い Web が古い表へ保存した記録があれば（`PrepositionPracticeRecord` の `createdAt` がマイグレーションの後の行）、次のリリースで古い表を消すマイグレーションの前に、同じ `INSERT … SELECT` で写す。
