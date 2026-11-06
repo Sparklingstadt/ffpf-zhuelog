@@ -5,7 +5,7 @@ import { prepositionRecords } from "@/composition/practice-container";
 import {
   accuracyPercent,
   formatElapsed,
-} from "@/domain/practice/preposition-record";
+} from "@/domain/practice/practice-record";
 import { EmptyState } from "@/presentation/components/layout/empty-state";
 import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";

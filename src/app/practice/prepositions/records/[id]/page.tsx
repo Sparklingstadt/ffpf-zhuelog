@@ -3,10 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { prepositionRecords } from "@/composition/practice-container";
-import { accuracyPercent } from "@/domain/practice/preposition-record";
+import { accuracyPercent } from "@/domain/practice/practice-record";
 import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
-import { PrepositionAnswerList } from "@/presentation/components/practice/preposition-answer-list";
+import { PracticeAnswerList } from "@/presentation/components/practice/preposition-answer-list";
 import { PrepositionStats } from "@/presentation/components/practice/preposition-stats";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
@@ -56,7 +56,7 @@ export default async function PrepositionRecordPage({
             elapsedMs={record.elapsedMs}
             size="lg"
           />
-          <PrepositionAnswerList answers={record.questions} />
+          <PracticeAnswerList answers={record.questions} />
         </CardContent>
       </Card>
     </PageShell>

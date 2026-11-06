@@ -1,16 +1,16 @@
-// A finished round of preposition practice, as the Go API keeps it for
+// A finished round of practice, as the Go API keeps it for
 // members and admins.
 
-// One question of the round and the wrong prepositions picked before the
+// One question of the round and the wrong words picked before the
 // answer, in the order they were picked.
-export type PrepositionAnswer = {
+export type PracticeAnswer = {
   answer: string;
   headword: string;
   prompt: string;
   misses: string[];
 };
 
-export type PrepositionScore = {
+export type PracticeScore = {
   questionCount: number;
   // Questions answered without a miss.
   firstTryCount: number;
@@ -18,21 +18,21 @@ export type PrepositionScore = {
   missCount: number;
 };
 
-export type PrepositionRecordSummary = PrepositionScore & {
+export type PracticeRecordSummary = PracticeScore & {
   id: string;
   elapsedMs: number;
   startedAt: Date;
   createdAt: Date;
 };
 
-export type PrepositionRecord = PrepositionRecordSummary & {
-  questions: PrepositionAnswer[];
+export type PracticeRecord = PracticeRecordSummary & {
+  questions: PracticeAnswer[];
 };
 
 // Counted as Go counts them when it saves the round.
 export function scoreRound(
   answers: readonly { misses: readonly string[] }[],
-): PrepositionScore {
+): PracticeScore {
   return {
     questionCount: answers.length,
     firstTryCount: answers.filter((answer) => answer.misses.length === 0)

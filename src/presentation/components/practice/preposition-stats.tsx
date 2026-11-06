@@ -1,4 +1,4 @@
-import { formatElapsed } from "@/domain/practice/preposition-record";
+import { formatElapsed } from "@/domain/practice/practice-record";
 import { cn } from "@/presentation/lib/utils";
 
 // The accuracy, the misses and the time of a round, during it and after.

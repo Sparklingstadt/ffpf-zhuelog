@@ -7,8 +7,8 @@ import { useEffect, useState } from "react";
 import {
   accuracyPercent,
   scoreRound,
-  type PrepositionAnswer,
-} from "@/domain/practice/preposition-record";
+  type PracticeAnswer,
+} from "@/domain/practice/practice-record";
 import {
   buildQuiz,
   progressPercent,
@@ -18,7 +18,7 @@ import {
 import { PREPOSITION_ALSO_IN } from "@/domain/practice/preposition-also-in";
 import { PREPOSITION_USAGES } from "@/domain/practice/preposition-data";
 import { savePrepositionRoundAction } from "@/presentation/actions/preposition-record-actions";
-import { PrepositionAnswerList } from "@/presentation/components/practice/preposition-answer-list";
+import { PracticeAnswerList } from "@/presentation/components/practice/preposition-answer-list";
 import { PrepositionStats } from "@/presentation/components/practice/preposition-stats";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
@@ -103,7 +103,7 @@ type FinishedRound = {
   id: string;
   startedAt: Date;
   elapsedMs: number;
-  questions: PrepositionAnswer[];
+  questions: PracticeAnswer[];
 };
 
 const RECORDS_HREF = "/practice/prepositions/records";
@@ -116,7 +116,7 @@ const PREPOSITION_SOURCE: QuizSource = {
 // that a retried save reuses.
 function finishRound(
   startedAt: number,
-  questions: PrepositionAnswer[],
+  questions: PracticeAnswer[],
 ): FinishedRound {
   return {
     id: crypto.randomUUID(),
@@ -143,7 +143,7 @@ export function PrepositionPractice({
   const [wrong, setWrong] = useState<string[]>([]);
   const [solved, setSolved] = useState(false);
   // The questions answered so far, with their misses.
-  const [answers, setAnswers] = useState<PrepositionAnswer[]>([]);
+  const [answers, setAnswers] = useState<PracticeAnswer[]>([]);
   // Both start at the same moment, so the server and the browser show 0:00.
   const [startedAt, setStartedAt] = useState(() => Date.now());
   const [now, setNow] = useState(() => Date.now());
@@ -333,7 +333,7 @@ export function PrepositionPractice({
               </strong>{" "}
               / {total}
             </p>
-            <PrepositionAnswerList
+            <PracticeAnswerList
               answers={answers}
               onlyMissed
               className="max-w-md"

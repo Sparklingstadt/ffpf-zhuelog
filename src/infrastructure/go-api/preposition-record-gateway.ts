@@ -1,19 +1,19 @@
 import type {
-  PrepositionAnswer,
-  PrepositionRecord,
-  PrepositionRecordSummary,
-} from "@/domain/practice/preposition-record";
+  PracticeAnswer,
+  PracticeRecord,
+  PracticeRecordSummary,
+} from "@/domain/practice/practice-record";
 
 import { goApiAuthed, type GoApiCall } from "./authed";
 import { GoApiError } from "./client";
 
-type SummaryJson = Omit<PrepositionRecordSummary, "startedAt" | "createdAt"> & {
+type SummaryJson = Omit<PracticeRecordSummary, "startedAt" | "createdAt"> & {
   startedAt: string;
   createdAt: string;
 };
-type RecordJson = SummaryJson & { questions: PrepositionAnswer[] };
+type RecordJson = SummaryJson & { questions: PracticeAnswer[] };
 
-const toSummary = (json: SummaryJson): PrepositionRecordSummary => ({
+const toSummary = (json: SummaryJson): PracticeRecordSummary => ({
   id: json.id,
   questionCount: json.questionCount,
   firstTryCount: json.firstTryCount,
@@ -23,7 +23,7 @@ const toSummary = (json: SummaryJson): PrepositionRecordSummary => ({
   createdAt: new Date(json.createdAt),
 });
 
-const toRecord = (json: RecordJson): PrepositionRecord => ({
+const toRecord = (json: RecordJson): PracticeRecord => ({
   ...toSummary(json),
   questions: json.questions,
 });
@@ -35,7 +35,7 @@ export function createPrepositionRecordGateway(call: GoApiCall = goApiAuthed) {
     `/v1/preposition-records/${encodeURIComponent(id)}`;
 
   return {
-    async list(): Promise<PrepositionRecordSummary[]> {
+    async list(): Promise<PracticeRecordSummary[]> {
       const json = await call<{ records: SummaryJson[] }>(
         "/v1/preposition-records",
         { method: "GET" },
@@ -43,7 +43,7 @@ export function createPrepositionRecordGateway(call: GoApiCall = goApiAuthed) {
       return json.records.map(toSummary);
     },
 
-    async get(id: string): Promise<PrepositionRecord | null> {
+    async get(id: string): Promise<PracticeRecord | null> {
       try {
         return toRecord(await call<RecordJson>(path(id), { method: "GET" }));
       } catch (error) {
@@ -58,8 +58,8 @@ export function createPrepositionRecordGateway(call: GoApiCall = goApiAuthed) {
       id: string;
       startedAt: Date;
       elapsedMs: number;
-      questions: PrepositionAnswer[];
-    }): Promise<PrepositionRecord> {
+      questions: PracticeAnswer[];
+    }): Promise<PracticeRecord> {
       return toRecord(
         await call<RecordJson>(path(round.id), {
           method: "PUT",
