@@ -12,8 +12,11 @@ import {
 import {
   buildQuiz,
   progressPercent,
-  type PrepositionQuestion,
-} from "@/domain/practice/preposition-quiz";
+  type PracticeQuestion as PrepositionQuestion,
+  type QuizSource,
+} from "@/domain/practice/practice-quiz";
+import { PREPOSITION_ALSO_IN } from "@/domain/practice/preposition-also-in";
+import { PREPOSITION_USAGES } from "@/domain/practice/preposition-data";
 import { savePrepositionRoundAction } from "@/presentation/actions/preposition-record-actions";
 import { PrepositionAnswerList } from "@/presentation/components/practice/preposition-answer-list";
 import { PrepositionStats } from "@/presentation/components/practice/preposition-stats";
@@ -104,6 +107,10 @@ type FinishedRound = {
 };
 
 const RECORDS_HREF = "/practice/prepositions/records";
+const PREPOSITION_SOURCE: QuizSource = {
+  usages: PREPOSITION_USAGES,
+  alsoIn: PREPOSITION_ALSO_IN,
+};
 
 // The round as it stands when its last question is answered, under a new id
 // that a retried save reuses.
@@ -184,7 +191,7 @@ export function PrepositionPractice({
       ...answers,
       {
         answer: question.answer,
-        noun: question.noun,
+        headword: question.headword,
         prompt: question.prompt,
         misses: wrong,
       },
@@ -205,7 +212,7 @@ export function PrepositionPractice({
 
   function restart() {
     const startAt = Date.now();
-    setQuiz(buildQuiz(total));
+    setQuiz(buildQuiz(PREPOSITION_SOURCE, total));
     setIndex(0);
     setWrong([]);
     setSolved(false);
@@ -239,7 +246,7 @@ export function PrepositionPractice({
                 lang="zh-CN"
                 className="text-6xl font-semibold tracking-tight sm:text-7xl"
               >
-                {question.noun}
+                {question.headword}
               </p>
               <p lang="zh-CN" className="text-lg text-muted-foreground">
                 {question.prompt}

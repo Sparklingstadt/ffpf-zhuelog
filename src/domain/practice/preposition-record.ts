@@ -5,7 +5,7 @@
 // answer, in the order they were picked.
 export type PrepositionAnswer = {
   answer: string;
-  noun: string;
+  headword: string;
   prompt: string;
   misses: string[];
 };

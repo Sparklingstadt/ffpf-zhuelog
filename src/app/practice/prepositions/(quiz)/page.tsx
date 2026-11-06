@@ -4,7 +4,9 @@ import { redirect } from "next/navigation";
 
 import { getCurrentViewerUser } from "@/composition/identity-container";
 import { isMemberRole } from "@/domain/identity/entities/authenticated-user";
-import { buildQuiz } from "@/domain/practice/preposition-quiz";
+import { buildQuiz, type QuizSource } from "@/domain/practice/practice-quiz";
+import { PREPOSITION_ALSO_IN } from "@/domain/practice/preposition-also-in";
+import { PREPOSITION_USAGES } from "@/domain/practice/preposition-data";
 import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
 import { PrepositionPractice } from "@/presentation/components/practice/preposition-practice";
@@ -13,6 +15,10 @@ import { Button } from "@/presentation/components/ui/button";
 export const dynamic = "force-dynamic";
 
 const QUESTION_COUNT = 25;
+const PREPOSITION_SOURCE: QuizSource = {
+  usages: PREPOSITION_USAGES,
+  alsoIn: PREPOSITION_ALSO_IN,
+};
 
 // Uses no notes, so guests can practice too; only members' and admins'
 // rounds are recorded.
@@ -47,7 +53,7 @@ export default async function PrepositionPracticePage() {
       />
       {/* Shuffled here so the server and browser render the same quiz. */}
       <PrepositionPractice
-        initialQuiz={buildQuiz(QUESTION_COUNT)}
+        initialQuiz={buildQuiz(PREPOSITION_SOURCE, QUESTION_COUNT)}
         canSave={canSave}
       />
     </PageShell>

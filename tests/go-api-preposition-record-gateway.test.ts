@@ -28,7 +28,7 @@ const summaryJson = {
   createdAt: "2026-10-24T01:01:35.000Z",
 };
 const questions = [
-  { answer: "在", noun: "学校", prompt: "（　）学校学习", misses: ["把"] },
+  { answer: "在", headword: "学校", prompt: "（　）学校学习", misses: ["把"] },
 ];
 
 test("list maps Go JSON to dates", async () => {

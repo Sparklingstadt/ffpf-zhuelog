@@ -17,7 +17,7 @@ const roundInput = z.object({
   questions: z.array(
     z.object({
       answer: z.string(),
-      noun: z.string(),
+      headword: z.string(),
       prompt: z.string(),
       misses: z.array(z.string()),
     }),

@@ -1,7 +1,7 @@
 import { Check, X } from "lucide-react";
 
 import type { PrepositionAnswer } from "@/domain/practice/preposition-record";
-import { BLANK } from "@/domain/practice/preposition-quiz";
+import { BLANK } from "@/domain/practice/practice-quiz";
 import { cn } from "@/presentation/lib/utils";
 
 // A round's questions with the answer filled in and the wrong picks crossed
