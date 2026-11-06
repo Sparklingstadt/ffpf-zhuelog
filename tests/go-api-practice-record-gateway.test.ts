@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import type { GoApiCall } from "../src/infrastructure/go-api/authed";
 import { GoApiError } from "../src/infrastructure/go-api/client";
-import { createPrepositionRecordGateway } from "../src/infrastructure/go-api/preposition-record-gateway";
+import { createPracticeRecordGateway } from "../src/infrastructure/go-api/practice-record-gateway";
 
 function fakeCall(response: unknown) {
   const calls: { path: string; method: string; body?: unknown }[] = [];
@@ -33,7 +33,7 @@ const questions = [
 
 test("list maps Go JSON to dates", async () => {
   const { call, calls } = fakeCall({ records: [summaryJson] });
-  const records = await createPrepositionRecordGateway(call).list();
+  const records = await createPracticeRecordGateway("preposition", call).list();
   assert.deepEqual(calls, [
     { path: "/v1/preposition-records", method: "GET", body: undefined },
   ]);
@@ -46,31 +46,41 @@ test("list maps Go JSON to dates", async () => {
   ]);
 });
 
+test("the complement gateway talks to /v1/complement-records", async () => {
+  const { call, calls } = fakeCall({ records: [] });
+  await createPracticeRecordGateway("complement", call).list();
+  assert.equal(calls[0].path, "/v1/complement-records");
+  const missing = fakeCall(new GoApiError(404, "not_found"));
+  await createPracticeRecordGateway("complement", missing.call).get("x");
+  assert.equal(missing.calls[0].path, "/v1/complement-records/x");
+});
+
 test("get returns null on 404, encodes the id and rethrows other errors", async () => {
   const missing = fakeCall(new GoApiError(404, "not_found"));
   assert.equal(
-    await createPrepositionRecordGateway(missing.call).get("a/b"),
+    await createPracticeRecordGateway("preposition", missing.call).get("a/b"),
     null,
   );
   assert.equal(missing.calls[0].path, "/v1/preposition-records/a%2Fb");
 
   const found = fakeCall({ ...summaryJson, questions });
-  const record = await createPrepositionRecordGateway(found.call).get(
-    summaryJson.id,
-  );
+  const record = await createPracticeRecordGateway(
+    "preposition",
+    found.call,
+  ).get(summaryJson.id);
   assert.deepEqual(record?.questions, questions);
   assert.deepEqual(record?.createdAt, new Date(summaryJson.createdAt));
 
   const failing = fakeCall(new GoApiError(503, "unavailable"));
   await assert.rejects(
-    createPrepositionRecordGateway(failing.call).get("x"),
+    createPracticeRecordGateway("preposition", failing.call).get("x"),
     GoApiError,
   );
 });
 
 test("save PUTs the round under its id", async () => {
   const { call, calls } = fakeCall({ ...summaryJson, questions });
-  const saved = await createPrepositionRecordGateway(call).save({
+  const saved = await createPracticeRecordGateway("preposition", call).save({
     id: summaryJson.id,
     startedAt: new Date(summaryJson.startedAt),
     elapsedMs: 95_000,

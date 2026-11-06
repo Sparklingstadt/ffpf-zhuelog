@@ -17,7 +17,7 @@ import {
 } from "@/domain/practice/practice-quiz";
 import { PREPOSITION_ALSO_IN } from "@/domain/practice/preposition-also-in";
 import { PREPOSITION_USAGES } from "@/domain/practice/preposition-data";
-import { savePrepositionRoundAction } from "@/presentation/actions/preposition-record-actions";
+import { savePracticeRoundAction } from "@/presentation/actions/practice-record-actions";
 import { PracticeAnswerList } from "@/presentation/components/practice/preposition-answer-list";
 import { PrepositionStats } from "@/presentation/components/practice/preposition-stats";
 import { Button } from "@/presentation/components/ui/button";
@@ -167,7 +167,8 @@ export function PrepositionPractice({
   async function store(finishedRound: FinishedRound) {
     setSave({ status: "saving" });
     try {
-      const result = await savePrepositionRoundAction({
+      const result = await savePracticeRoundAction({
+        kind: "preposition",
         ...finishedRound,
         startedAt: finishedRound.startedAt.toISOString(),
       });

@@ -2,7 +2,7 @@ import { ArrowLeft, History } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { prepositionRecords } from "@/composition/practice-container";
+import { practiceRecords } from "@/composition/practice-container";
 import { accuracyPercent } from "@/domain/practice/practice-record";
 import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
@@ -27,7 +27,7 @@ export default async function PrepositionRecordPage({
   );
   const { id } = await params;
   if (!UUID.test(id)) notFound();
-  const record = await prepositionRecords.get(id);
+  const record = await practiceRecords("preposition").get(id);
   if (!record) notFound();
 
   return (

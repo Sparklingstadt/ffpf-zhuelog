@@ -1,7 +1,7 @@
 import { ArrowLeft, ChevronRight, History, Shuffle } from "lucide-react";
 import Link from "next/link";
 
-import { prepositionRecords } from "@/composition/practice-container";
+import { practiceRecords } from "@/composition/practice-container";
 import {
   accuracyPercent,
   formatElapsed,
@@ -20,7 +20,7 @@ export default async function PrepositionRecordsPage() {
   const user = await requirePracticeRecordUser(
     "/signin?callbackUrl=/practice/prepositions/records",
   );
-  const records = await prepositionRecords.list();
+  const records = await practiceRecords("preposition").list();
 
   return (
     <PageShell user={user} width="4xl">

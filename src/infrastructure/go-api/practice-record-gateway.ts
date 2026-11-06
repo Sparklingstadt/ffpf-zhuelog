@@ -1,3 +1,5 @@
+import { PRACTICE_KINDS } from "@/domain/practice/practice-kind";
+import type { PracticeKind } from "@/domain/practice/practice-quiz";
 import type {
   PracticeAnswer,
   PracticeRecord,
@@ -28,18 +30,20 @@ const toRecord = (json: RecordJson): PracticeRecord => ({
   questions: json.questions,
 });
 
-// Rounds are always the signed-in user's own (the token's owner in Go),
-// newest first.
-export function createPrepositionRecordGateway(call: GoApiCall = goApiAuthed) {
-  const path = (id: string) =>
-    `/v1/preposition-records/${encodeURIComponent(id)}`;
+// Rounds of one kind of practice, always the signed-in user's own (the
+// token's owner in Go), newest first. Each kind has its own routes in Go.
+export function createPracticeRecordGateway(
+  kind: PracticeKind,
+  call: GoApiCall = goApiAuthed,
+) {
+  const base = PRACTICE_KINDS[kind].apiPath;
+  const path = (id: string) => `${base}/${encodeURIComponent(id)}`;
 
   return {
     async list(): Promise<PracticeRecordSummary[]> {
-      const json = await call<{ records: SummaryJson[] }>(
-        "/v1/preposition-records",
-        { method: "GET" },
-      );
+      const json = await call<{ records: SummaryJson[] }>(base, {
+        method: "GET",
+      });
       return json.records.map(toSummary);
     },
 
@@ -74,6 +78,6 @@ export function createPrepositionRecordGateway(call: GoApiCall = goApiAuthed) {
   };
 }
 
-export type PrepositionRecordGateway = ReturnType<
-  typeof createPrepositionRecordGateway
+export type PracticeRecordGateway = ReturnType<
+  typeof createPracticeRecordGateway
 >;

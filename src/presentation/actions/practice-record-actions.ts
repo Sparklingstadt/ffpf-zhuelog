@@ -3,7 +3,7 @@
 import { z } from "zod";
 
 import { getCurrentViewerUser } from "@/composition/identity-container";
-import { prepositionRecords } from "@/composition/practice-container";
+import { practiceRecords } from "@/composition/practice-container";
 import { isMemberRole } from "@/domain/identity/entities/authenticated-user";
 import { GoApiError } from "@/infrastructure/go-api/client";
 import { goFailureMessage } from "@/presentation/controllers/action-state";
@@ -11,6 +11,7 @@ import { accountForbiddenMessage } from "@/presentation/presenters/account-actio
 
 // The shape only; Go checks the limits.
 const roundInput = z.object({
+  kind: z.enum(["preposition", "complement"]),
   id: z.uuid(),
   startedAt: z.iso.datetime(),
   elapsedMs: z.number().int(),
@@ -24,25 +25,26 @@ const roundInput = z.object({
   ),
 });
 
-export type SavePrepositionRoundInput = z.infer<typeof roundInput>;
-export type SavePrepositionRoundResult =
+export type SavePracticeRoundInput = z.infer<typeof roundInput>;
+export type SavePracticeRoundResult =
   { ok: true } | { ok: false; message: string };
 
-// Saves a finished round for members and admins; Go checks the role again.
-// A retry with the same id keeps one record.
-export async function savePrepositionRoundAction(
-  input: SavePrepositionRoundInput,
-): Promise<SavePrepositionRoundResult> {
+// Saves a finished round of one kind for members and admins; Go checks the
+// role again. A retry with the same id keeps one record.
+export async function savePracticeRoundAction(
+  input: SavePracticeRoundInput,
+): Promise<SavePracticeRoundResult> {
   const user = await getCurrentViewerUser();
   if (!user || !isMemberRole(user.role))
     return { ok: false, message: accountForbiddenMessage };
   const parsed = roundInput.safeParse(input);
   if (!parsed.success)
     return { ok: false, message: "練習の記録の形式が不正です。" };
+  const { kind, ...round } = parsed.data;
   try {
-    await prepositionRecords.save({
-      ...parsed.data,
-      startedAt: new Date(parsed.data.startedAt),
+    await practiceRecords(kind).save({
+      ...round,
+      startedAt: new Date(round.startedAt),
     });
     // No revalidatePath: the record pages are dynamic and read Go on every
     // visit, and it would re-render the open result.
@@ -54,7 +56,7 @@ export async function savePrepositionRoundAction(
       return { ok: false, message: accountForbiddenMessage };
     return {
       ok: false,
-      message: goFailureMessage("PREPOSITION_RECORD_SAVE_FAILED", error),
+      message: goFailureMessage("PRACTICE_RECORD_SAVE_FAILED", error),
     };
   }
 }
