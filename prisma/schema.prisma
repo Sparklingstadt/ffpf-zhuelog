@@ -181,11 +181,31 @@ model ChatConversation {
   @@index([ownerId, createdAt])
 }
 
-// One finished round of preposition practice by a member or admin, written by
-// the Go API. id is a UUID made by the browser, so a retried save keeps one
-// row. questions is [{answer, noun, prompt, misses}] in the order asked, with
-// the wrong prepositions picked in misses; the counts are derived from it by
-// Go. ownerId has no foreign key: admins have no row in the database.
+// One finished round of practice (kind "preposition" | "complement") by a
+// member or admin, written by the Go API. id is a UUID made by the browser,
+// so a retried save keeps one row. questions is [{answer, headword, prompt,
+// misses}] in the order asked, with the wrong words picked in misses; the
+// counts are derived from it by Go. ownerId has no foreign key: admins have
+// no row in the database.
+model PracticeRecord {
+  id            String   @id
+  ownerId       String
+  kind          String
+  questionCount Int
+  firstTryCount Int
+  missCount     Int
+  elapsedMs     Int
+  questions     Json
+  startedAt     DateTime
+  createdAt     DateTime @default(now())
+
+  @@unique([id, ownerId])
+  @@index([ownerId, kind, createdAt])
+}
+
+// The preposition rounds before PracticeRecord (v0.22.0). Its rows were
+// copied there; the Go API no longer reads or writes it. Kept so the Go API
+// deployed before the migration keeps working; drop it in a later migration.
 model PrepositionPracticeRecord {
   id            String   @id
   ownerId       String
