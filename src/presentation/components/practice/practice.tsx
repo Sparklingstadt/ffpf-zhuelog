@@ -4,22 +4,21 @@ import { ArrowRight, Check, History, RotateCcw, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import {
-  accuracyPercent,
-  scoreRound,
-  type PracticeAnswer,
-} from "@/domain/practice/practice-record";
+import { PRACTICE_KINDS } from "@/domain/practice/practice-kind";
 import {
   buildQuiz,
+  type PracticeKind,
+  type PracticeQuestion,
   progressPercent,
-  type PracticeQuestion as PrepositionQuestion,
-  type QuizSource,
 } from "@/domain/practice/practice-quiz";
-import { PREPOSITION_ALSO_IN } from "@/domain/practice/preposition-also-in";
-import { PREPOSITION_USAGES } from "@/domain/practice/preposition-data";
+import {
+  accuracyPercent,
+  type PracticeAnswer,
+  scoreRound,
+} from "@/domain/practice/practice-record";
 import { savePracticeRoundAction } from "@/presentation/actions/practice-record-actions";
-import { PracticeAnswerList } from "@/presentation/components/practice/preposition-answer-list";
-import { PrepositionStats } from "@/presentation/components/practice/preposition-stats";
+import { PracticeAnswerList } from "@/presentation/components/practice/practice-answer-list";
+import { PracticeStats } from "@/presentation/components/practice/practice-stats";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
 import { cn } from "@/presentation/lib/utils";
@@ -54,12 +53,12 @@ function ProgressBar({ done, total }: { done: number; total: number }) {
 }
 
 function Choice({
-  preposition,
+  word,
   state,
   disabled,
   onPick,
 }: {
-  preposition: string;
+  word: string;
   state: "idle" | "correct" | "wrong";
   disabled: boolean;
   onPick: () => void;
@@ -71,10 +70,10 @@ function Choice({
       disabled={disabled}
       aria-label={
         state === "correct"
-          ? `${preposition}（正解）`
+          ? `${word}（正解）`
           : state === "wrong"
-            ? `${preposition}（不正解）`
-            : preposition
+            ? `${word}（不正解）`
+            : word
       }
       onClick={onPick}
       className={cn(
@@ -85,7 +84,7 @@ function Choice({
           "border-destructive/50 bg-destructive/10 text-destructive line-through dark:border-destructive/50 dark:bg-destructive/20",
       )}
     >
-      {preposition}
+      {word}
       {state === "correct" ? (
         <Check className="absolute top-2 right-2 size-5" />
       ) : state === "wrong" ? (
@@ -106,12 +105,6 @@ type FinishedRound = {
   questions: PracticeAnswer[];
 };
 
-const RECORDS_HREF = "/practice/prepositions/records";
-const PREPOSITION_SOURCE: QuizSource = {
-  usages: PREPOSITION_USAGES,
-  alsoIn: PREPOSITION_ALSO_IN,
-};
-
 // The round as it stands when its last question is answered, under a new id
 // that a retried save reuses.
 function finishRound(
@@ -126,18 +119,22 @@ function finishRound(
   };
 }
 
-// One quiz round: a noun, the meaning and the phrase with a blank, and four
-// prepositions of which one fits. A wrong pick is crossed out and the
-// question stays until the right one is picked. The accuracy, misses and time
-// run above the question; when the last one is answered a member's or
-// admin's round is saved (`canSave`), and the result shows them again.
-export function PrepositionPractice({
+// One quiz round of a kind: a headword (noun, verb), the meaning and the
+// phrase with a blank, and four words of which one fits. A wrong pick is
+// crossed out and the question stays until the right one is picked. The
+// accuracy, misses and time run above the question; when the last one is
+// answered a member's or admin's round is saved (`canSave`), and the result
+// shows them again.
+export function Practice({
+  kind,
   initialQuiz,
   canSave,
 }: {
-  initialQuiz: PrepositionQuestion[];
+  kind: PracticeKind;
+  initialQuiz: PracticeQuestion[];
   canSave: boolean;
 }) {
+  const config = PRACTICE_KINDS[kind];
   const [quiz, setQuiz] = useState(initialQuiz);
   const [index, setIndex] = useState(0);
   const [wrong, setWrong] = useState<string[]>([]);
@@ -168,7 +165,7 @@ export function PrepositionPractice({
     setSave({ status: "saving" });
     try {
       const result = await savePracticeRoundAction({
-        kind: "preposition",
+        kind,
         ...finishedRound,
         startedAt: finishedRound.startedAt.toISOString(),
       });
@@ -181,10 +178,10 @@ export function PrepositionPractice({
     }
   }
 
-  function pick(preposition: string) {
+  function pick(word: string) {
     if (!question || solved) return;
-    if (preposition !== question.answer) {
-      setWrong((picked) => [...picked, preposition]);
+    if (word !== question.answer) {
+      setWrong((picked) => [...picked, word]);
       return;
     }
     setSolved(true);
@@ -213,7 +210,7 @@ export function PrepositionPractice({
 
   function restart() {
     const startAt = Date.now();
-    setQuiz(buildQuiz(PREPOSITION_SOURCE, total));
+    setQuiz(buildQuiz(config.source, total));
     setIndex(0);
     setWrong([]);
     setSolved(false);
@@ -229,7 +226,7 @@ export function PrepositionPractice({
       <ProgressBar done={done} total={total} />
       {/* The result shows them again, larger. */}
       {finished ? null : (
-        <PrepositionStats
+        <PracticeStats
           accuracy={accuracyPercent(score.firstTryCount, score.questionCount)}
           missCount={score.missCount + (solved ? 0 : wrong.length)}
           elapsedMs={elapsedMs}
@@ -256,23 +253,23 @@ export function PrepositionPractice({
 
             <div
               role="group"
-              aria-label="介詞を選ぶ"
+              aria-label={`${config.wordLabel}を選ぶ`}
               lang="zh-CN"
               className="grid w-full max-w-md grid-cols-2 gap-3"
             >
-              {question.choices.map((preposition) => (
+              {question.choices.map((word) => (
                 <Choice
-                  key={preposition}
-                  preposition={preposition}
+                  key={word}
+                  word={word}
                   state={
-                    solved && preposition === question.answer
+                    solved && word === question.answer
                       ? "correct"
-                      : wrong.includes(preposition)
+                      : wrong.includes(word)
                         ? "wrong"
                         : "idle"
                   }
-                  disabled={solved || wrong.includes(preposition)}
-                  onPick={() => pick(preposition)}
+                  disabled={solved || wrong.includes(word)}
+                  onPick={() => pick(word)}
                 />
               ))}
             </div>
@@ -318,7 +315,7 @@ export function PrepositionPractice({
             <p className="text-2xl font-semibold tracking-tight">
               {total}問 終了！
             </p>
-            <PrepositionStats
+            <PracticeStats
               accuracy={accuracyPercent(
                 score.firstTryCount,
                 score.questionCount,
@@ -336,6 +333,7 @@ export function PrepositionPractice({
             </p>
             <PracticeAnswerList
               answers={answers}
+              wordLabel={config.wordLabel}
               onlyMissed
               className="max-w-md"
             />
@@ -350,7 +348,7 @@ export function PrepositionPractice({
               </Button>
               {canSave ? (
                 <Button asChild size="lg" variant="outline">
-                  <Link href={RECORDS_HREF}>
+                  <Link href={config.recordsPath}>
                     <History /> 過去の記録
                   </Link>
                 </Button>

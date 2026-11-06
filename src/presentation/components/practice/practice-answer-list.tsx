@@ -1,18 +1,20 @@
 import { Check, X } from "lucide-react";
 
-import type { PracticeAnswer } from "@/domain/practice/practice-record";
 import { BLANK } from "@/domain/practice/practice-quiz";
+import type { PracticeAnswer } from "@/domain/practice/practice-record";
 import { cn } from "@/presentation/lib/utils";
 
 // A round's questions with the answer filled in and the wrong picks crossed
 // out: only those with a wrong pick (`onlyMissed`), or all of them in the
-// order asked.
+// order asked. `wordLabel` names the kind of word (介詞, 補語) in the copy.
 export function PracticeAnswerList({
   answers,
+  wordLabel,
   onlyMissed = false,
   className,
 }: {
   answers: readonly PracticeAnswer[];
+  wordLabel: string;
   onlyMissed?: boolean;
   className?: string;
 }) {
@@ -62,7 +64,7 @@ export function PracticeAnswerList({
                 <span
                   lang="zh-CN"
                   className="flex shrink-0 gap-2 text-sm text-destructive"
-                  aria-label={`選んだ介詞: ${answer.misses.join("、")}`}
+                  aria-label={`選んだ${wordLabel}: ${answer.misses.join("、")}`}
                 >
                   {answer.misses.map((miss) => (
                     <s key={miss}>{miss}</s>

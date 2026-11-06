@@ -6,8 +6,8 @@ import { practiceRecords } from "@/composition/practice-container";
 import { accuracyPercent } from "@/domain/practice/practice-record";
 import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
-import { PracticeAnswerList } from "@/presentation/components/practice/preposition-answer-list";
-import { PrepositionStats } from "@/presentation/components/practice/preposition-stats";
+import { PracticeAnswerList } from "@/presentation/components/practice/practice-answer-list";
+import { PracticeStats } from "@/presentation/components/practice/practice-stats";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
 import { requirePracticeRecordUser } from "@/presentation/guards/practice-guard";
@@ -47,7 +47,7 @@ export default async function PrepositionRecordPage({
       />
       <Card>
         <CardContent className="flex flex-col items-center gap-6">
-          <PrepositionStats
+          <PracticeStats
             accuracy={accuracyPercent(
               record.firstTryCount,
               record.questionCount,
@@ -56,7 +56,7 @@ export default async function PrepositionRecordPage({
             elapsedMs={record.elapsedMs}
             size="lg"
           />
-          <PracticeAnswerList answers={record.questions} />
+          <PracticeAnswerList answers={record.questions} wordLabel="介詞" />
         </CardContent>
       </Card>
     </PageShell>

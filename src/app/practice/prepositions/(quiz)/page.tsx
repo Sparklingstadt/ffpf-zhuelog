@@ -9,7 +9,7 @@ import { PREPOSITION_ALSO_IN } from "@/domain/practice/preposition-also-in";
 import { PREPOSITION_USAGES } from "@/domain/practice/preposition-data";
 import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
-import { PrepositionPractice } from "@/presentation/components/practice/preposition-practice";
+import { Practice } from "@/presentation/components/practice/practice";
 import { Button } from "@/presentation/components/ui/button";
 
 export const dynamic = "force-dynamic";
@@ -52,7 +52,8 @@ export default async function PrepositionPracticePage() {
         }
       />
       {/* Shuffled here so the server and browser render the same quiz. */}
-      <PrepositionPractice
+      <Practice
+        kind="preposition"
         initialQuiz={buildQuiz(PREPOSITION_SOURCE, QUESTION_COUNT)}
         canSave={canSave}
       />

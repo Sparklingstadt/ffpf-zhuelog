@@ -3,7 +3,7 @@ import { cn } from "@/presentation/lib/utils";
 
 // The accuracy, the misses and the time of a round, during it and after.
 // accuracy is null before the first answer.
-export function PrepositionStats({
+export function PracticeStats({
   accuracy,
   missCount,
   elapsedMs,
