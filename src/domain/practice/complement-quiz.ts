@@ -1,4 +1,8 @@
 import { COMPLEMENT_USAGES } from "./complement-data";
+import {
+  buildComplementVerbQuiz,
+  countComplementVerbQuestions,
+} from "./complement-verb-quiz";
 import type { PrepositionQuestion, Random } from "./preposition-quiz";
 
 export const COMPLEMENT_MODES = {
@@ -37,6 +41,14 @@ export const COMPLEMENT_MODES = {
     description:
       "起来／下去／下来／出来／过来／过去が、開始・継続・定着・識別・回復などを表します。例：笑起来、坚持下去、醒过来。",
   },
+  // Built from the complement CSV like the preposition practice: a verb and
+  // a meaning, the complement blanked out of a short phrase, and the wrong
+  // choices picked by rule (complement-verb-quiz.ts).
+  verb: {
+    label: "動詞から選ぶ",
+    description:
+      "動詞と日本語の意味から、その動詞に付く補語を選びます。結果・方向・可能・程度のすべての補語が混ざって出ます。例：看＋読んで理解する → 懂。",
+  },
 } as const;
 export type ComplementMode = keyof typeof COMPLEMENT_MODES;
 export type ComplementUsage = {
@@ -54,6 +66,7 @@ export function isComplementMode(value: string): value is ComplementMode {
 }
 
 export function countComplementQuestions(mode: ComplementMode): number {
+  if (mode === "verb") return countComplementVerbQuestions();
   return COMPLEMENT_USAGES.filter((q) => q.mode === mode).length;
 }
 
@@ -73,6 +86,8 @@ export function buildComplementQuiz(
   count = 25,
   random: Random = Math.random,
 ): PrepositionQuestion[] {
+  if (mode === "verb")
+    return buildComplementVerbQuiz(Math.max(0, Math.floor(count)), random);
   return shuffled(
     COMPLEMENT_USAGES.filter((q) => q.mode === mode),
     random,
