@@ -64,3 +64,22 @@ export function lineOfficialAccountId(): string | undefined {
 export function isLineLinkPreview(): boolean {
   return process.env.LINE_LINK_PREVIEW_MODE === "true";
 }
+
+// The site's public origin, for the absolute URLs that OGP, the sitemap and
+// robots.txt need. AUTH_URL already names it (its path is ignored); without
+// one, Vercel's production domain, then the local dev server.
+export function siteUrl(): string {
+  const configured = process.env.AUTH_URL?.trim();
+  if (configured) {
+    try {
+      const url = new URL(configured);
+      if (url.protocol === "https:" || url.protocol === "http:")
+        return url.origin;
+    } catch {
+      // A malformed AUTH_URL falls through to the defaults.
+    }
+  }
+  const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
+  if (vercel) return `https://${vercel}`;
+  return "http://localhost:3000";
+}
