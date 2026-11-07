@@ -33,6 +33,7 @@ for (const [mode, label] of [
   ["direction-compound", "複合方向補語"],
   ["direction-simple-extended", "単純方向補語の派生義"],
   ["direction-compound-extended", "複合方向補語の派生義"],
+  ["verb", "動詞から選ぶ"],
 ]) {
   test(`${label}: 25 questions save their mode and can be reviewed`, async ({
     page,
@@ -59,8 +60,12 @@ for (const [mode, label] of [
     expect(rows[0].ownerId).toBe(memberOwnerId(id));
     expect(rows[0].questionCount).toBe(25);
     expect(rows[0].elapsedMs).toBeGreaterThan(0);
+    // The verb mode names its questions by CSV row and verb, the others by
+    // mode and number.
     for (const question of rows[0].questions)
-      expect(question.id).toMatch(new RegExp(`^${mode}-\\d+$`));
+      expect(question.id).toMatch(
+        mode === "verb" ? /^verb:C\d{3}:.+$/ : new RegExp(`^${mode}-\\d+$`),
+      );
     expect(rows[0].firstTryCount).toBe(
       rows[0].questions.filter(
         (q: { misses: string[] }) => q.misses.length === 0,
@@ -118,6 +123,7 @@ test("mode selection and all quiz modes fit the viewport", async ({
     "/direction-compound",
     "/direction-simple-extended",
     "/direction-compound-extended",
+    "/verb",
   ]) {
     await page.goto(`/practice/complements${mode}`);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();

@@ -23,10 +23,13 @@ export type ReviewCard =
   | {
       type: "choice";
       itemId: string;
-      // "介詞" or the complement's kind, shown above the question.
+      // "介詞", "補語" (the verb mode) or the complement's kind, shown
+      // above the question.
       label: string;
       question: PrepositionQuestion;
-      // Complement prompts are whole sentences and use the smaller heading.
+      // The hand-written complement modes' prompts are whole sentences and
+      // use the smaller heading; prepositions and the verb mode show their
+      // noun or verb large.
       compact: boolean;
     }
   | {
