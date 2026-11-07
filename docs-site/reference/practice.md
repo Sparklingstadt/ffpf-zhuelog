@@ -142,7 +142,7 @@
 
 ## 補語の練習の記録
 
-Web の `/practice/complements` で、結果補語（`result`）・可能補語（`potential`）・程度補語（`degree`）と、方向補語の4種類（単純方向補語 `direction-simple`・複合方向補語 `direction-compound`・単純方向補語の派生義 `direction-simple-extended`・複合方向補語の派生義 `direction-compound-extended`）を選んで練習します。各モード100問の中から1回25問を4択で出題し、間違えた選択肢は再度選べず、正解まで選び直せます。出題順・選択肢の順番は練習ごとに変わります。
+Web の `/practice/complements` で、結果補語（`result`）・可能補語（`potential`）・程度補語（`degree`）と、方向補語の4種類（単純方向補語 `direction-simple`・複合方向補語 `direction-compound`・単純方向補語の派生義 `direction-simple-extended`・複合方向補語の派生義 `direction-compound-extended`）と、動詞から選ぶ（`verb`）を選んで練習します。各モード100問（`verb` は CSV から作った379問）の中から1回25問を4択で出題し、間違えた選択肢は再度選べず、正解まで選び直せます。出題順・選択肢の順番は練習ごとに変わります。
 
 ### 補語の記録 API
 
@@ -152,6 +152,6 @@ Web の `/practice/complements` で、結果補語（`result`）・可能補語�
 - `GET /v1/complement-records/{id}`：自分の記録の詳細。
 - `PUT /v1/complement-records/{id}`：練習の結果を保存。
 
-保存リクエストには、介詞の記録の項目に加えて `mode`（`result` / `potential` / `degree` / `direction-simple` / `direction-compound` / `direction-simple-extended` / `direction-compound-extended`）が必要です。一覧・詳細にも `mode` を返します。`questions[].noun` は補語の種類名、`answer` と `misses` の各要素は1〜40字です。`questions[].id` は補語の問題の ID です。その他の長さや件数の制限は介詞と同じです。未知の `mode` は `400` です。
+保存リクエストには、介詞の記録の項目に加えて `mode`（`result` / `potential` / `degree` / `direction-simple` / `direction-compound` / `direction-simple-extended` / `direction-compound-extended` / `verb`）が必要です。一覧・詳細にも `mode` を返します。`questions[].noun` は補語の種類名（`verb` では動詞）、`answer` と `misses` の各要素は1〜40字です。`questions[].id` は補語の問題の ID です（`verb` では `verb:<CSV の行 ID>:<動詞>`、例 `verb:C005:看`。復習はこの ID で同じ問題を出します）。その他の長さや件数の制限は介詞と同じです。未知の `mode` は `400` です。
 
 Web の記録一覧は `/practice/complements/records`、詳細は `/practice/complements/records/{id}` です。会員・管理者だけが利用でき、ゲストは記録を保存しません。

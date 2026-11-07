@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { getCurrentViewerUser } from "@/composition/identity-container";
 import { reviews } from "@/composition/review-container";
 import { isMemberRole } from "@/domain/identity/entities/authenticated-user";
-import { reviewQuestion } from "@/domain/practice/review-question";
+import { reviewChoice } from "@/domain/practice/review-question";
 import type { DueReviews } from "@/domain/review/review-item";
 import { GoApiError } from "@/infrastructure/go-api/client";
 import { answerReviewAction } from "@/presentation/actions/review-actions";
@@ -45,18 +45,9 @@ function toCards(due: DueReviews): ReviewCard[] {
       return item.vocabulary
         ? [{ type: "word", itemId: item.id, word: item.vocabulary }]
         : [];
-    const question = reviewQuestion(item.kind, item.targetId);
-    if (!question) return [];
-    const preposition = item.kind === "preposition";
-    return [
-      {
-        type: "choice",
-        itemId: item.id,
-        label: preposition ? "介詞" : question.noun,
-        question,
-        compact: !preposition,
-      },
-    ];
+    const choice = reviewChoice(item.kind, item.targetId);
+    if (!choice) return [];
+    return [{ type: "choice", itemId: item.id, ...choice }];
   });
 }
 

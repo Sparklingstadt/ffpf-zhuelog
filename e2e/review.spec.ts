@@ -108,6 +108,77 @@ test("missed practice questions come back on the review page and an answer resch
   await expect(page.getByTestId("review-streak-days")).toHaveText("1");
 });
 
+// The verb mode of the complement practice reviews like the prepositions:
+// each missed question comes back by its CSV row and verb, shown large.
+test("missed verb-mode complement questions come back on the review page like prepositions", async ({
+  page,
+  db,
+}) => {
+  test.setTimeout(60_000);
+  const accountId = await createMember(db, "taro", "太郎", "member-password-1");
+  const owner = memberOwnerId(accountId);
+  await asMember(page, "taro", "member-password-1");
+
+  await page.goto("/practice/complements/verb");
+  for (let i = 0; i < QUESTION_COUNT; i++) {
+    await expect(
+      page.getByRole("progressbar", { name: "進捗" }),
+    ).toHaveAttribute("aria-valuenow", String(i));
+    await pickUntilRight(page, "補語を選ぶ");
+    await page
+      .getByRole("button", {
+        name: i + 1 < QUESTION_COUNT ? "次へ" : "結果を見る",
+      })
+      .click();
+  }
+  await expect(page.getByText("記録に保存しました。")).toBeVisible();
+  const {
+    rows: [round],
+  } = await db.query(
+    `SELECT "questions" FROM "ComplementPracticeRecord" WHERE "ownerId" = $1`,
+    [owner],
+  );
+  const missed = (
+    round.questions as { id: string; noun: string; misses: string[] }[]
+  ).filter((q) => q.misses.length > 0);
+  test.skip(missed.length === 0, "the round happened to have no misses");
+
+  const { rows: items } = await db.query(
+    `SELECT "kind", "targetId" FROM "ReviewItem" WHERE "ownerId" = $1 ORDER BY "targetId"`,
+    [owner],
+  );
+  expect(items.map((it) => it.targetId)).toEqual(
+    missed.map((q) => q.id).sort(),
+  );
+  for (const it of items) expect(it.kind).toBe("complement");
+  for (const q of missed) expect(q.id).toMatch(/^verb:C\d{3}:.+$/);
+
+  await page.goto("/review");
+  const shown = Math.min(missed.length, REVIEW_SESSION_SIZE);
+  await expect(page.getByText(`1 / ${shown}`)).toBeVisible();
+  // The card looks like a preposition one: a 補語 badge and the verb large.
+  const card = page.getByRole("main");
+  await expect(card.getByText("補語", { exact: true })).toBeVisible();
+  const verbs = missed.map((q) => q.noun);
+  const heading = card.locator("p.text-6xl").first();
+  await expect(heading).toBeVisible();
+  expect(verbs).toContain(await heading.innerText());
+
+  await pickUntilRight(page, "選択肢");
+  await page
+    .getByRole("group", { name: "思い出せた度合い" })
+    .getByRole("button", { name: "簡単" })
+    .click();
+  // The next card (or the end) means the answer has been saved.
+  if (shown > 1) await expect(page.getByText(`2 / ${shown}`)).toBeVisible();
+  else await expect(page.getByText("1問 復習しました")).toBeVisible();
+  const { rows: logs } = await db.query(
+    `SELECT l."rating" FROM "ReviewLog" l WHERE l."ownerId" = $1`,
+    [owner],
+  );
+  expect(logs).toEqual([{ rating: 4 }]);
+});
+
 test("guests have no review queue", async ({ page }) => {
   await asGuest(page);
   await page.goto("/review");

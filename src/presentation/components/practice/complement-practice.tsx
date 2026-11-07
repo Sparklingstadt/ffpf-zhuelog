@@ -20,7 +20,9 @@ export function ComplementPractice({
     <ChoicePractice
       initialQuiz={initialQuiz}
       canSave={canSave}
-      compactHeading
+      // The verb mode shows its verb large, as the preposition practice
+      // shows its noun; the other modes' prompts are whole sentences.
+      compactHeading={mode !== "verb"}
       buildNextQuiz={() => buildComplementQuiz(mode, initialQuiz.length)}
       saveRound={(round) => saveComplementRoundAction({ ...round, mode })}
       recordsHref="/practice/complements/records"
