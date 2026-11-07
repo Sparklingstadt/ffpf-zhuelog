@@ -93,7 +93,22 @@ function cookieValue(headers: Headers, name: string): string | undefined {
 }
 
 function isPublicRoute(pathname: string): boolean {
-  return pathname === "/signin" || pathname.startsWith("/api/auth/");
+  return (
+    pathname === "/signin" ||
+    pathname.startsWith("/api/auth/") ||
+    isMetadataFile(pathname)
+  );
+}
+
+// The files Next.js serves for crawlers and link previews (the metadata
+// file conventions in src/app). They are public and are not pages, so they
+// get neither the sign-in gate nor the page-only CSP and no-store headers.
+export function isMetadataFile(pathname: string): boolean {
+  return (
+    pathname === "/robots.txt" ||
+    pathname === "/sitemap.xml" ||
+    /^\/(opengraph|twitter)-image(\.[a-z]+)?$/.test(pathname)
+  );
 }
 
 // Only checks that a session cookie exists; pages confirm it with
