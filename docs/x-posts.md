@@ -4,10 +4,10 @@
 
 ## 前提
 
-- 本番: <https://ffpf-zhuelog.vercel.app/>
+- 本番: <https://ffpf-zhuelog.sparklingstadt.com/>（`AUTH_URL` の origin。`https://ffpf-zhuelog.vercel.app/` も同じデプロイに付いていますが、canonical とサイトマップは `AUTH_URL` の方を指すので、投稿にもこちらを貼ります）
 - ログインが要るアプリです。使えるのは、管理者が発行した ID・パスワードのアカウントか、FFPF ID の人です。ゲストは案内だけが見られます。投稿では「誰でも登録できる」とは書かないでください。
 - X の文字数は、日本語（全角）1 文字が 2、半角が 1 で、合計 280 までです（日本語だけなら 140 文字）。URL は長さに関わらず 23 と数えます。下の草案は、すべてこの範囲に収めてあります。
-- リンクは `https://ffpf-zhuelog.vercel.app/` を貼ります。ログイン前は `/signin` に飛びますが、カードはどちらの URL でも同じものが出ます。
+- リンクは `https://ffpf-zhuelog.sparklingstadt.com/` を貼ります。ログイン前は `/signin` に飛びますが、カードはどちらの URL でも同じものが出ます。
 
 ## 草案 1: 公開のお知らせ（1 投稿）
 
@@ -16,7 +16,7 @@
 
 原文と添削後の文、ピン音、覚えるべきヒントを CSV で取り込み、復習・単語帳・練習問題までつなげます。
 
-https://ffpf-zhuelog.vercel.app/
+https://ffpf-zhuelog.sparklingstadt.com/
 #中国語学習 #個人開発
 ```
 
@@ -27,7 +27,7 @@ https://ffpf-zhuelog.vercel.app/
 ```text
 1/5
 「学习録」は、添削された中国語の文を蓄積するための学習ノートです。何ができるかを、順に紹介します。
-https://ffpf-zhuelog.vercel.app/
+https://ffpf-zhuelog.sparklingstadt.com/
 #中国語学習
 ```
 
@@ -56,7 +56,7 @@ FFPF ID があれば、そのままログインできます。
 
 ```text
 中国語の添削ノート「学习録」、復習の連続日数と学習ログのカレンダーを足しました。続けているのが見えると、少しだけ続けやすいです。
-https://ffpf-zhuelog.vercel.app/
+https://ffpf-zhuelog.sparklingstadt.com/
 #中国語学習 #Nextjs
 ```
 
@@ -70,7 +70,7 @@ https://ffpf-zhuelog.vercel.app/
 ・（変わったことを 1 行で）
 ・（変わったことを 1 行で）
 
-https://ffpf-zhuelog.vercel.app/
+https://ffpf-zhuelog.sparklingstadt.com/
 #中国語学習
 ```
 
@@ -82,7 +82,7 @@ https://ffpf-zhuelog.vercel.app/
 ・FFPF ID でログインできるようになりました
 ・FFPF ID の人も、ノートの共有・フォロー・LINE 連携まで同じように使えます
 
-https://ffpf-zhuelog.vercel.app/
+https://ffpf-zhuelog.sparklingstadt.com/
 #中国語学習
 ```
 
@@ -103,13 +103,13 @@ https://ffpf-zhuelog.vercel.app/
 確認のしかた:
 
 - X の投稿画面に URL を貼ると、投稿する前にカードのプレビューが出ます。
-- `curl -A Twitterbot https://ffpf-zhuelog.vercel.app/signin | grep -E 'og:|twitter:'` で、タグが出ているかを見られます。
+- `curl -A Twitterbot https://ffpf-zhuelog.sparklingstadt.com/signin | grep -E 'og:|twitter:'` で、タグが出ているかを見られます。
 - X は一度取ったカードをしばらく覚えています。画像を替えたのに古いままのときは、URL の末尾に `?v=2` のような印を付けて貼ると取り直します（画像の URL には Next.js がハッシュを付けるので、画像そのものは差し替わります）。
 
 ## サイトマップと robots.txt
 
-- `https://ffpf-zhuelog.vercel.app/sitemap.xml`（`src/app/sitemap.ts`）: 載せているのは `/signin` だけです。ほかのページはログインが要り、クローラーには `/signin` へのリダイレクトしか見えないので、載せると「リダイレクトする URL」として報告されます。公開ページを足したら、ここにも足します。
-- `https://ffpf-zhuelog.vercel.app/robots.txt`（`src/app/robots.ts`）: `/api/` だけを拒否し、サイトマップの場所を書いています。ログインが要るページは `robots.txt` では隠しません（隠すのはプロキシの役目で、クローラーは `/signin` に送られるだけです）。`/` を許したままにしているのは、X などのカード取得が `robots.txt` に従うためです。
+- `https://ffpf-zhuelog.sparklingstadt.com/sitemap.xml`（`src/app/sitemap.ts`）: 載せているのは `/signin` だけです。ほかのページはログインが要り、クローラーには `/signin` へのリダイレクトしか見えないので、載せると「リダイレクトする URL」として報告されます。公開ページを足したら、ここにも足します。
+- `https://ffpf-zhuelog.sparklingstadt.com/robots.txt`（`src/app/robots.ts`）: `/api/` だけを拒否し、サイトマップの場所を書いています。ログインが要るページは `robots.txt` では隠しません（隠すのはプロキシの役目で、クローラーは `/signin` に送られるだけです）。`/` を許したままにしているのは、X などのカード取得が `robots.txt` に従うためです。
 - ログイン画面には `canonical` として `/signin` を付けています。`/signin?callbackUrl=...` の形が検索結果でばらけないようにするためです。
 - これらのファイルと OGP 画像は、`src/infrastructure/go-api/go-proxy.ts` の `isMetadataFile` で、ログインなしで読める公開ルートにしています。
-- Google Search Console に登録するなら、「サイトマップ」に `https://ffpf-zhuelog.vercel.app/sitemap.xml` を送ります。
+- Google Search Console に登録するなら、「サイトマップ」に `https://ffpf-zhuelog.sparklingstadt.com/sitemap.xml` を送ります。
