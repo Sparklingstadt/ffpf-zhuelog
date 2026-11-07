@@ -7,6 +7,7 @@ import {
   ShieldCheck,
   UserRoundCheck,
 } from "lucide-react";
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { getCurrentViewerUser } from "@/composition/identity-container";
@@ -47,6 +48,13 @@ const errorMessages: Record<string, string> = {
   Configuration: "認証設定が完了していません。管理者に確認してください。",
   OAuthCallbackError:
     "認証サービスからの結果を確認できませんでした。もう一度お試しください。",
+};
+
+// The only page a crawler can read: every other page sends it here with a
+// callbackUrl, so the canonical folds those variants into one.
+export const metadata: Metadata = {
+  title: "ログイン",
+  alternates: { canonical: "/signin" },
 };
 
 type SignInPageProps = {

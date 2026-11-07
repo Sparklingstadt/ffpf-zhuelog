@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { NextRequest, NextResponse } from "next/server";
 import { GoApiError, type GoTokens } from "../src/infrastructure/go-api/client";
-import { goProxy } from "../src/infrastructure/go-api/go-proxy";
+import { goProxy, isMetadataFile } from "../src/infrastructure/go-api/go-proxy";
 
 const tokens: GoTokens = {
   accessToken: "new-access",
@@ -133,7 +133,13 @@ test("a rejected refresh token clears the session cookies and signs out", async 
 });
 
 test("public routes never refresh, and pass the cookies through untouched", async () => {
-  for (const path of ["/signin", "/api/auth/callback/github/go?code=x"]) {
+  for (const path of [
+    "/signin",
+    "/api/auth/callback/github/go?code=x",
+    "/robots.txt",
+    "/sitemap.xml",
+    "/opengraph-image.png?a1b2c3",
+  ]) {
     const h = harness(async () => tokens);
     const response = await goProxy(
       request(path, { cookie: "zl_refresh=old-refresh; theme=dark" }),
@@ -245,12 +251,45 @@ test("signed-out Server Actions pass through to their own authorization", async 
 });
 
 test("public routes pass while signed out", async () => {
-  for (const path of ["/signin", "/api/auth/callback/github/go?code=x"]) {
+  for (const path of [
+    "/signin",
+    "/api/auth/callback/github/go?code=x",
+    "/robots.txt",
+    "/sitemap.xml",
+    "/opengraph-image.png?a1b2c3",
+    "/opengraph-image",
+    "/twitter-image.png",
+  ]) {
     const h = harness(async () => tokens);
     const response = await goProxy(request(path), h.deps);
     assert.equal(response.headers.get("x-test-next"), "1", path);
   }
-  const h = harness(async () => tokens);
-  const response = await goProxy(request("/signin/other"), h.deps);
-  assert.equal(response.status, 302);
+  for (const path of ["/signin/other", "/robots.txt/x", "/opengraph-images"]) {
+    const h = harness(async () => tokens);
+    const response = await goProxy(request(path), h.deps);
+    assert.equal(response.status, 302, path);
+  }
+});
+
+test("only the metadata files Next.js serves for crawlers count as metadata files", () => {
+  for (const path of [
+    "/robots.txt",
+    "/sitemap.xml",
+    "/opengraph-image",
+    "/opengraph-image.png",
+    "/twitter-image.jpg",
+  ]) {
+    assert.equal(isMetadataFile(path), true, path);
+  }
+  for (const path of [
+    "/",
+    "/signin",
+    "/logs/robots.txt",
+    "/sitemap.xml.bak",
+    "/opengraph-image.png/x",
+    "/opengraph-images",
+    "/api/robots.txt",
+  ]) {
+    assert.equal(isMetadataFile(path), false, path);
+  }
 });

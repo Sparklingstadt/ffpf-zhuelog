@@ -14,6 +14,7 @@
     "typecheck": "next typegen && tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "og:render": "node scripts/render-og-image.mjs",
     "hooks:install": "node scripts/install-hooks.mjs",
     "prepare": "pnpm run hooks:install",
     "test:e2e": "docker compose -f compose.e2e.yaml up -d --wait && playwright test",

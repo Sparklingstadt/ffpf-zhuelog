@@ -120,6 +120,12 @@ rm .env.production.local
 
 ブラウザーの保存が制限されている場合でも、その画面での切り替えは利用できます。初期配色はCSP nonce付きの固定スクリプトで本文表示前に適用し、ライト画面が一瞬表示されるのを防ぎます。
 
+## OGP・サイトマップ・X 投稿
+
+リンクを X・LINE などに貼ったときのカード（OGP）は `src/app/layout.tsx` の `metadata` と `src/app/opengraph-image.png` で、検索エンジン向けの `sitemap.xml`・`robots.txt` は `src/app/sitemap.ts`・`src/app/robots.ts` で出しています。絶対 URL の元は `AUTH_URL` です（無ければ Vercel の本番ドメイン）。これらのファイルはログインなしで読める公開ルートです（`isMetadataFile`）。サイトマップに載せているのは、クローラーが読める唯一のページ `/signin` だけです。
+
+OGP 画像は `scripts/og-image/opengraph-image.html` から `pnpm run og:render` で作り直します。X に投稿する文の草案と、カードの確認のしかたは [docs/x-posts.md](docs/x-posts.md) にあります。
+
 ## 学習ノートの公開範囲
 
 学習ノートは、ユーザーごとの個人の記録です（本人が共有したノートだけ、フォロワーが読めます）。
