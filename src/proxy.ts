@@ -1,13 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { ffpfIdConfig } from "@/infrastructure/config/environment";
 import { refreshTokens } from "@/infrastructure/go-api/client";
-import { goProxy } from "@/infrastructure/go-api/go-proxy";
+import { goProxy, isMetadataFile } from "@/infrastructure/go-api/go-proxy";
 import { contentSecurityPolicy } from "@/infrastructure/security/content-security-policy";
 
 // Passes the request on, adding the CSP nonce and no-store to pages.
 // requestHeaders carries the cookie header as the Go session refresh left it.
 function passThrough(request: NextRequest, requestHeaders: Headers) {
-  if (request.nextUrl.pathname.startsWith("/api/"))
+  const pathname = request.nextUrl.pathname;
+  if (pathname.startsWith("/api/") || isMetadataFile(pathname))
     return NextResponse.next({ request: { headers: requestHeaders } });
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   // The FFPF ID sign-in form redirects to the issuer.
