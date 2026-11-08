@@ -20,6 +20,7 @@ import type {
 } from "@/presentation/actions/preposition-record-actions";
 import { PrepositionAnswerList } from "@/presentation/components/practice/preposition-answer-list";
 import { PrepositionStats } from "@/presentation/components/practice/preposition-stats";
+import { SpeakButton } from "@/presentation/components/speech/speak-button";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
 import { cn } from "@/presentation/lib/utils";
@@ -46,6 +47,7 @@ export function SolvedExample({
       ) : null}
       <p lang="zh-CN" className="text-sm">
         {question.example}
+        <SpeakButton text={question.example} className="ml-1 align-middle" />
       </p>
     </>
   );

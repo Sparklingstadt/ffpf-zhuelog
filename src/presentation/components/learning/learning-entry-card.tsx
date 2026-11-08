@@ -2,6 +2,7 @@ import { CalendarDays, ChevronDown, Clock3 } from "lucide-react";
 import Link from "next/link";
 
 import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
+import { SpeakButton } from "@/presentation/components/speech/speak-button";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
 import {
@@ -127,6 +128,7 @@ export function LearningEntryCard({
                 <p className="flex items-center gap-1.5 text-xs font-medium tracking-wider text-primary">
                   <span className="size-1.5 rounded-full bg-primary" />
                   {diff ? "添削後" : "中国語訳"}
+                  <SpeakButton text={entry.correctedText} />
                 </p>
                 <p
                   lang="zh-Hans"

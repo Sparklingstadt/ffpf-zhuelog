@@ -16,6 +16,7 @@ import {
   focusInPlace,
   SolvedExample,
 } from "@/presentation/components/practice/choice-practice";
+import { SpeakButton } from "@/presentation/components/speech/speak-button";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
@@ -186,8 +187,9 @@ export function ReviewSession({
               </p>
               {solved ? (
                 <div className="space-y-1" aria-live="polite">
-                  <p className="font-mono text-lg text-muted-foreground">
+                  <p className="flex items-center justify-center gap-1 font-mono text-lg text-muted-foreground">
                     {card.word.pinyin}
+                    <SpeakButton text={card.word.word} />
                   </p>
                   <p className="text-lg">{card.word.meaning}</p>
                 </div>
