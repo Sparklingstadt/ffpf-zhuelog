@@ -20,6 +20,7 @@ import type {
 } from "@/presentation/actions/preposition-record-actions";
 import { PrepositionAnswerList } from "@/presentation/components/practice/preposition-answer-list";
 import { PrepositionStats } from "@/presentation/components/practice/preposition-stats";
+import { SpeakButton } from "@/presentation/components/speech/speak-button";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
 import { cn } from "@/presentation/lib/utils";
@@ -28,6 +29,28 @@ import { cn } from "@/presentation/lib/utils";
 // the scroll position, so the progress bar stays in view.
 export function focusInPlace(button: HTMLButtonElement | null) {
   button?.focus({ preventScroll: true });
+}
+
+// The example sentence of a solved question, with the pinyin of the whole
+// sentence above it when there is one.
+export function SolvedExample({
+  question,
+}: {
+  question: Pick<PrepositionQuestion, "example" | "examplePinyin">;
+}) {
+  return (
+    <>
+      {question.examplePinyin ? (
+        <p lang="zh-Latn-pinyin" className="text-xs text-muted-foreground">
+          {question.examplePinyin}
+        </p>
+      ) : null}
+      <p lang="zh-CN" className="text-sm">
+        {question.example}
+        <SpeakButton text={question.example} className="ml-1 align-middle" />
+      </p>
+    </>
+  );
 }
 
 function ProgressBar({ done, total }: { done: number; total: number }) {
@@ -303,17 +326,7 @@ export function ChoicePractice({
                         {question.answer} {question.pinyin}
                       </span>
                     </p>
-                    {question.examplePinyin ? (
-                      <p
-                        lang="zh-Latn-pinyin"
-                        className="text-xs text-muted-foreground"
-                      >
-                        {question.examplePinyin}
-                      </p>
-                    ) : null}
-                    <p lang="zh-CN" className="text-sm">
-                      {question.example}
-                    </p>
+                    <SolvedExample question={question} />
                     <p className="text-sm text-muted-foreground">
                       {question.translation}
                     </p>

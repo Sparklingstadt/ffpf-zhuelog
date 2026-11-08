@@ -94,3 +94,32 @@ test("answer POSTs the rating under the item, with the client's log id", async (
   ]);
   assert.equal(item.reps, 4);
 });
+
+test("a learning note's item carries the note", async () => {
+  const entry = {
+    id: "cnote0000000000000000000",
+    kind: "correction",
+    originalText: "我昨天去了学校。",
+    correctedText: "我昨天去学校了。",
+    pinyin: "Wǒ zuótiān qù xuéxiào le.",
+    hints: [
+      { id: "h2", content: "二つ目", position: 1 },
+      { id: "h1", content: "了の位置", position: 0 },
+    ],
+    createdAt: "2026-11-05T12:00:00.000Z",
+    sharedAt: null,
+  };
+  const { call } = fakeCall({
+    count: 1,
+    streakDays: 0,
+    items: [{ ...itemJson, kind: "entry", targetId: entry.id, entry }],
+  });
+  const [item] = (await createReviewGateway(call).listDue(20)).items;
+  assert.equal(item.vocabulary, null);
+  assert.equal(item.entry?.correctedText, "我昨天去学校了。");
+  assert.deepEqual(item.entry?.createdAt, new Date("2026-11-05T12:00:00.000Z"));
+  assert.deepEqual(
+    item.entry?.hints.map((hint) => hint.content),
+    ["了の位置", "二つ目"],
+  );
+});

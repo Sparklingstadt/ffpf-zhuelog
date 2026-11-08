@@ -19,6 +19,9 @@ type Reviews interface {
 	CountDueReviewItems(ctx context.Context, ownerID string, now time.Time) (int, error)
 	ReviewStreak(ctx context.Context, ownerID string, now time.Time) (int, error)
 	RecordReview(ctx context.Context, ownerID, itemID, logID string, rating review.Rating, now time.Time) (store.ReviewItem, error)
+	EntryInReview(ctx context.Context, ownerID, entryID string) (bool, error)
+	AddEntryReview(ctx context.Context, ownerID, entryID string, now time.Time) error
+	RemoveEntryReview(ctx context.Context, ownerID, entryID string) error
 }
 
 var _ Reviews = (*store.Store)(nil)
@@ -81,6 +84,8 @@ type reviewItemJSON struct {
 	LastReview *string `json:"lastReview"`
 	// Vocabulary is the word a "vocabulary" item names; absent otherwise.
 	Vocabulary *vocabularyJSON `json:"vocabulary,omitempty"`
+	// Entry is the note an "entry" item names; absent otherwise.
+	Entry *entryJSON `json:"entry,omitempty"`
 }
 
 func toReviewItemJSON(it store.ReviewItem) reviewItemJSON {
@@ -95,6 +100,10 @@ func toReviewItemJSON(it store.ReviewItem) reviewItemJSON {
 	if it.Vocabulary != nil {
 		v := toVocabularyJSON(*it.Vocabulary)
 		out.Vocabulary = &v
+	}
+	if it.Entry != nil {
+		e := toEntryJSON(*it.Entry)
+		out.Entry = &e
 	}
 	return out
 }
@@ -174,6 +183,57 @@ func answerReview(rv Reviews, now func() time.Time) http.Handler {
 			return
 		}
 		writeJSON(w, http.StatusOK, toReviewItemJSON(it))
+	})
+}
+
+// entryReviewStatus says whether the owner's note is in their review queue.
+func entryReviewStatus(rv Reviews) http.Handler {
+	type response struct {
+		InReview bool `json:"inReview"`
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathValue(w, r, "id", validID)
+		if !ok {
+			return
+		}
+		in, err := rv.EntryInReview(r.Context(), principalFrom(r.Context()).OwnerID, id)
+		if err != nil {
+			writeServiceError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, response{InReview: in})
+	})
+}
+
+// addEntryReview puts the owner's note in their review queue, due now. A
+// note already there keeps its card.
+func addEntryReview(rv Reviews, now func() time.Time) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathValue(w, r, "id", validID)
+		if !ok {
+			return
+		}
+		if err := rv.AddEntryReview(r.Context(), principalFrom(r.Context()).OwnerID, id, now()); err != nil {
+			writeServiceError(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+}
+
+// removeEntryReview takes the owner's note out of their review queue, with
+// its answers. A note that was not in review succeeds too.
+func removeEntryReview(rv Reviews) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathValue(w, r, "id", validID)
+		if !ok {
+			return
+		}
+		if err := rv.RemoveEntryReview(r.Context(), principalFrom(r.Context()).OwnerID, id); err != nil {
+			writeServiceError(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	})
 }
 

@@ -95,29 +95,51 @@ func (s *Store) RestoreEntry(ctx context.Context, ownerID, id string) (Entry, er
 }
 
 // PurgeEntry permanently deletes one of the owner's trashed entries (its hints
-// go with it), or returns ErrNotFound when it is not in their trash.
+// go with it, and its review item with the item's log), or returns
+// ErrNotFound when it is not in their trash.
 func (s *Store) PurgeEntry(ctx context.Context, ownerID, id string) error {
-	tag, err := s.pool.Exec(ctx,
-		`DELETE FROM "LearningEntry"
-		 WHERE "id" = $1 AND "ownerId" = $2 AND "deletedAt" IS NOT NULL`, id, ownerID)
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx,
+			`DELETE FROM "LearningEntry"
+			 WHERE "id" = $1 AND "ownerId" = $2 AND "deletedAt" IS NOT NULL`, id, ownerID)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return ErrNotFound
+		}
+		return deleteEntryReviews(ctx, tx, ownerID, []string{id})
+	})
+	if errors.Is(err, ErrNotFound) {
+		return ErrNotFound
+	}
 	if err != nil {
 		return fmt.Errorf("store: purge entry: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
 	}
 	return nil
 }
 
-// EmptyTrash permanently deletes all of the owner's trashed entries and
-// returns how many there were.
+// EmptyTrash permanently deletes all of the owner's trashed entries, with
+// their review items as PurgeEntry does, and returns how many there were.
 func (s *Store) EmptyTrash(ctx context.Context, ownerID string) (int, error) {
-	tag, err := s.pool.Exec(ctx,
-		`DELETE FROM "LearningEntry" WHERE "ownerId" = $1 AND "deletedAt" IS NOT NULL`, ownerID)
+	var n int
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`DELETE FROM "LearningEntry" WHERE "ownerId" = $1 AND "deletedAt" IS NOT NULL RETURNING "id"`, ownerID)
+		if err != nil {
+			return err
+		}
+		ids, err := pgx.CollectRows(rows, pgx.RowTo[string])
+		if err != nil {
+			return err
+		}
+		n = len(ids)
+		return deleteEntryReviews(ctx, tx, ownerID, ids)
+	})
 	if err != nil {
 		return 0, fmt.Errorf("store: empty trash: %w", err)
 	}
-	return int(tag.RowsAffected()), nil
+	return n, nil
 }
 
 // SetShared shares or unshares one of the owner's entries that is not in the

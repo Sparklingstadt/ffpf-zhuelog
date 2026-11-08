@@ -253,10 +253,14 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	private("GET /v1/complement-records/{id}", authed(getComplementRecord(d.ComplementRecords)))
 	private("PUT /v1/complement-records/{id}", authed(putComplementRecord(d.ComplementRecords, d.Reviews, d.Now)))
 
-	// Today's reviews, for members and admins.
+	// Today's reviews, for members and admins, and the learning notes they
+	// put in them (always their own; a note in the trash is 404).
 	if d.Reviews != nil {
 		private("GET /v1/reviews/due", authed(listDueReviews(d.Reviews, d.Now)))
 		private("POST /v1/reviews/{itemId}", authed(answerReview(d.Reviews, d.Now)))
+		private("GET /v1/entries/{id}/review", authed(entryReviewStatus(d.Reviews)))
+		private("PUT /v1/entries/{id}/review", authed(addEntryReview(d.Reviews, d.Now)))
+		private("DELETE /v1/entries/{id}/review", authed(removeEntryReview(d.Reviews)))
 	}
 
 	// The vocabulary book, for members and admins.

@@ -214,7 +214,6 @@ model QuickQuestion {
   @@index([ownerId, createdAt])
 }
 
-
 // Complement rounds, isolated from preposition history. mode: result/potential/degree/
 // direction-simple/direction-compound/direction-simple-extended/direction-compound-extended.
 model ComplementPracticeRecord {
@@ -235,8 +234,10 @@ model ComplementPracticeRecord {
 
 // Something a member or admin reviews on a spaced-repetition schedule (FSRS),
 // one row per owner and target. kind says what targetId names: "preposition"
-// (a use id and its noun) or "complement" (a question id); later kinds add
-// vocabulary. language is the language studied ("zh"). The FSRS card state
+// (a use id and its noun), "complement" (a question id), "vocabulary" (a
+// word's id) or "entry" (a learning note the owner put in review; its item
+// is left out while the note is in the trash and deleted with the note).
+// language is the language studied ("zh"). The FSRS card state
 // is kept as columns so the Go API can pick the due items with an index.
 // state: 0 new, 1 learning, 2 review, 3 relearning.
 model ReviewItem {

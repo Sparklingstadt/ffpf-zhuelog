@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   CalendarDays,
   Languages,
+  Repeat,
   Share2,
   Trash2,
 } from "lucide-react";
@@ -14,8 +15,11 @@ import {
   parseLogDate,
   parseLogNumber,
 } from "@/domain/calendar/value-objects/log-date";
+import { isMemberRole } from "@/domain/identity/entities/authenticated-user";
+import { GoApiError } from "@/infrastructure/go-api/client";
 import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { shareLearningEntryAction } from "@/presentation/actions/follow-actions";
+import { setNoteReviewAction } from "@/presentation/actions/note-review-actions";
 import { trashLearningEntryAction } from "@/presentation/actions/note-trash-actions";
 import {
   draftVocabularyAction,
@@ -47,6 +51,18 @@ import {
 } from "@/presentation/presenters/record-owner-href";
 
 export const dynamic = "force-dynamic";
+
+// Whether the note is in the user's review queue. Go failing hides the
+// control rather than the note; any other error is rethrown.
+async function loadInReview(id: string): Promise<boolean | null> {
+  try {
+    return await learningNotes.isInReview(id);
+  } catch (error) {
+    if (!(error instanceof GoApiError)) throw error;
+    console.error("NOTE_REVIEW_UNAVAILABLE", error.status, error.code);
+    return null;
+  }
+}
 
 type LogDetailPageProps = {
   params: Promise<{ year: string; month: string; day: string; number: string }>;
@@ -97,6 +113,12 @@ export default async function LogDetailPage({
   ]);
   if (!result) notFound();
   const { entry, total } = result;
+  // Only your own notes go into your queue, and only members and admins
+  // have one.
+  const inReview =
+    owner.kind === "self" && isMemberRole(user.role)
+      ? await loadInReview(entry.id)
+      : null;
   // Only a member shares: an admin is never followed.
   const canShare = owner.kind === "self" && user.role === "member";
 
@@ -111,9 +133,14 @@ export default async function LogDetailPage({
           have fewer entries that day, so this number could be missing. */}
       <RecordOwnerControls owner={owner} view={view} path={dateHref} />
 
-      {canShare && entry.sharedAt ? (
-        <div>
-          <Badge variant="secondary">共有中（フォロワーが見られます）</Badge>
+      {(canShare && entry.sharedAt) || inReview ? (
+        <div className="flex flex-wrap gap-2">
+          {canShare && entry.sharedAt ? (
+            <Badge variant="secondary">共有中（フォロワーが見られます）</Badge>
+          ) : null}
+          {inReview ? (
+            <Badge variant="secondary">今日の復習に入っています</Badge>
+          ) : null}
         </div>
       ) : null}
 
@@ -146,6 +173,15 @@ export default async function LogDetailPage({
       {/* Only your own notes: an admin viewing someone else reads only. */}
       {owner.kind === "self" ? (
         <div className="flex flex-wrap items-start justify-end gap-2">
+          {inReview !== null ? (
+            <NoteActionForm
+              action={setNoteReviewAction}
+              fields={{ id: entry.id, inReview: String(!inReview) }}
+              label={inReview ? "復習から外す" : "復習に入れる"}
+              pendingLabel="変更中…"
+              icon={<Repeat />}
+            />
+          ) : null}
           {canShare ? (
             <NoteActionForm
               action={shareLearningEntryAction}

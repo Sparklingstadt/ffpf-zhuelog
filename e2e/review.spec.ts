@@ -87,6 +87,12 @@ test("missed practice questions come back on the review page and an answer resch
   await expect(page.getByText(`1 / ${shown}`)).toBeVisible();
 
   await pickUntilRight(page, "選択肢");
+  // As in the practice, the example comes with its pinyin above it.
+  const pinyin = page.locator('[lang="zh-Latn-pinyin"]');
+  await expect(pinyin).toHaveText(/^\p{Lu}\S*( \S+)*[.?!”]$/u);
+  expect(
+    await pinyin.evaluate((el) => el.nextElementSibling?.getAttribute("lang")),
+  ).toBe("zh-CN");
   await page
     .getByRole("group", { name: "思い出せた度合い" })
     .getByRole("button", { name: "簡単" })

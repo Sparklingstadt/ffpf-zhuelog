@@ -22,7 +22,7 @@ func TestOnlyReadRoutesAcceptUserParam(t *testing.T) {
 		Auth: a, Entries: &fakeEntries{}, Follows: &fakeFollows{},
 		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret,
 		QuickChat: &fakeChat{}, Questions: &fakeQuestions{}, Chat: &fakeChat{}, Conversations: &fakeConversations{}, PrepositionRecords: &fakePrepositionRecords{},
-		Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
+		Reviews: &fakeReviews{}, Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
 	}.withDefaults()
 	mux, routes := newMux(d)
 	h := wrap(d, jsonMuxErrors(mux))
@@ -79,7 +79,7 @@ func TestPublicRouteSetIsExactlyTheKnownRoutes(t *testing.T) {
 		Auth: &fakeAuth{}, Entries: &fakeEntries{}, Follows: &fakeFollows{},
 		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret,
 		QuickChat: &fakeChat{}, Questions: &fakeQuestions{}, Chat: &fakeChat{}, Conversations: &fakeConversations{}, PrepositionRecords: &fakePrepositionRecords{},
-		Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
+		Reviews: &fakeReviews{}, Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
 	}.withDefaults()
 	mux, routes := newMux(d)
 	h := wrap(d, jsonMuxErrors(mux))
@@ -145,7 +145,7 @@ func TestRoutesRejectGuests(t *testing.T) {
 		Auth: a, Entries: &fakeEntries{}, Follows: &fakeFollows{},
 		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret,
 		QuickChat: &fakeChat{}, Questions: &fakeQuestions{}, Chat: &fakeChat{}, Conversations: &fakeConversations{}, PrepositionRecords: &fakePrepositionRecords{},
-		Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
+		Reviews: &fakeReviews{}, Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
 	}.withDefaults()
 	mux, routes := newMux(d)
 	h := wrap(d, jsonMuxErrors(mux))

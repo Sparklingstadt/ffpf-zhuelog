@@ -15,6 +15,7 @@ import {
 import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
 import { NoteActionForm } from "@/presentation/components/records/note-action-form";
+import { SpeakButton } from "@/presentation/components/speech/speak-button";
 import { Alert, AlertDescription } from "@/presentation/components/ui/alert";
 import { Button } from "@/presentation/components/ui/button";
 import {
@@ -109,6 +110,7 @@ export default async function VocabularyPage() {
                     <span lang="zh-CN" className="text-xl font-semibold">
                       {entry.word}
                     </span>
+                    <SpeakButton text={entry.word} className="self-center" />
                     <span className="font-mono text-sm text-muted-foreground">
                       {entry.pinyin}
                     </span>

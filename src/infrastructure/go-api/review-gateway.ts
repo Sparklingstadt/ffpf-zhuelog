@@ -5,11 +5,16 @@ import type {
 } from "@/domain/review/review-item";
 
 import { goApiAuthed, type GoApiCall } from "./authed";
+import { toLearningEntry, type GoEntryJson } from "./learning-json";
 
-type ItemJson = Omit<ReviewItem, "due" | "lastReview" | "vocabulary"> & {
+type ItemJson = Omit<
+  ReviewItem,
+  "due" | "lastReview" | "vocabulary" | "entry"
+> & {
   due: string;
   lastReview: string | null;
   vocabulary?: { id: string; word: string; pinyin: string; meaning: string };
+  entry?: GoEntryJson;
 };
 
 const toItem = (json: ItemJson): ReviewItem => ({
@@ -30,6 +35,7 @@ const toItem = (json: ItemJson): ReviewItem => ({
         meaning: json.vocabulary.meaning,
       }
     : null,
+  entry: json.entry ? toLearningEntry(json.entry) : null,
 });
 
 // The review queue is always the signed-in user's own (the token's owner in
