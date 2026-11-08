@@ -151,3 +151,25 @@ test("mode selection and all quiz modes fit the viewport", async ({
     });
   }
 });
+
+test("a solved question shows the example's pinyin above it", async ({
+  page,
+}) => {
+  await asGuest(page);
+  for (const mode of ["result", "verb"]) {
+    await page.goto(`/practice/complements/${mode}`);
+    const choices = page.getByRole("group", { name: "補語を選ぶ" });
+    for (const button of await choices.getByRole("button").all()) {
+      await button.click();
+      if (await choices.getByRole("button", { name: /（正解）$/ }).count())
+        break;
+    }
+    const pinyin = page.locator('[lang="zh-Latn-pinyin"]');
+    await expect(pinyin).toHaveText(/^\p{Lu}\S*( \S+)*[.?!”]$/u);
+    expect(
+      await pinyin.evaluate((el) =>
+        el.nextElementSibling?.getAttribute("lang"),
+      ),
+    ).toBe("zh-CN");
+  }
+});
