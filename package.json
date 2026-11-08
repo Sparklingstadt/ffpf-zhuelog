@@ -35,14 +35,14 @@
     "test:regression": "pnpm run typecheck && pnpm run lint && pnpm run test:unit && pnpm run build && pnpm run test:e2e"
   },
   "dependencies": {
-    "@next/env": "16.4.2",
+    "@next/env": "16.4.5",
     "@prisma/adapter-pg": "^7.10.1",
     "@prisma/client": "^7.10.1",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.5.0",
-    "dotenv": "18.0.8",
-    "geist": "^1.8.1",
-    "lucide-react": "^1.58.0",
+    "dotenv": "18.0.9",
+    "geist": "^1.9.1",
+    "lucide-react": "^1.69.0",
     "next": "16.4.5",
     "pg": "^8.23.1",
     "qrcode.react": "4.2.0",
@@ -66,11 +66,11 @@
     "lefthook": "^2.2.2",
     "prettier": "^3.9.10",
     "prisma": "^7.10.1",
-    "sass-embedded": "1.105.2",
+    "sass-embedded": "1.107.1",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
     "typescript": "^6",
-    "vue": "3.5.44",
+    "vue": "3.5.45",
     "vuepress": "2.0.0-rc.31"
   },
   "packageManager": "pnpm@11.25.0"
