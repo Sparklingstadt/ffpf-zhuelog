@@ -170,6 +170,32 @@ export function createLearningGateway(
       );
     },
 
+    // Whether the signed-in user's note is in their review queue; null when
+    // the note is not theirs or is in the trash.
+    async isInReview(id: string): Promise<boolean | null> {
+      try {
+        const json = await call<{ inReview: boolean }>(
+          `/v1/entries/${encodeURIComponent(id)}/review`,
+          { method: "GET" },
+        );
+        return json.inReview;
+      } catch (error) {
+        if (error instanceof GoApiError && error.status === 404) return null;
+        throw error;
+      }
+    },
+
+    // Go keeps the note's card when it is put in again, and removes the card
+    // with its answers when it is taken out.
+    setInReview(id: string, inReview: boolean): Promise<boolean> {
+      return found(
+        write(
+          `/v1/entries/${encodeURIComponent(id)}/review`,
+          inReview ? "PUT" : "DELETE",
+        ),
+      );
+    },
+
     // Go checks and stores the CSV in the signed-in user's own notes and
     // answers how many notes it added.
     async importCsv(file: File): Promise<number> {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"testing"
 	"time"
 
@@ -30,6 +31,13 @@ type fakeReviews struct {
 		rating        review.Rating
 	}
 	answerErr error
+
+	// The note routes: inReview answers EntryInReview, entryErr fails all
+	// three, and entryID, added and removed record the last call.
+	inReview       bool
+	entryErr       error
+	entryID        string
+	added, removed bool
 }
 
 func (f *fakeReviews) EnqueueReviewItems(_ context.Context, ownerID string, targets []store.ReviewTarget, now time.Time) (int, error) {
@@ -65,6 +73,29 @@ func (f *fakeReviews) RecordReview(_ context.Context, ownerID, itemID, logID str
 		ReviewTarget: store.ReviewTarget{Language: "zh", Kind: "complement", TargetID: "result-01"},
 		Card:         review.Card{Due: now.Add(10 * time.Minute), State: review.Learning, Reps: 1, LastReview: now},
 	}, nil
+}
+
+func (f *fakeReviews) EntryInReview(_ context.Context, ownerID, entryID string) (bool, error) {
+	f.owner, f.entryID = ownerID, entryID
+	return f.inReview, f.entryErr
+}
+
+func (f *fakeReviews) AddEntryReview(_ context.Context, ownerID, entryID string, now time.Time) error {
+	f.owner, f.entryID, f.now = ownerID, entryID, now
+	if f.entryErr != nil {
+		return f.entryErr
+	}
+	f.added = true
+	return nil
+}
+
+func (f *fakeReviews) RemoveEntryReview(_ context.Context, ownerID, entryID string) error {
+	f.owner, f.entryID = ownerID, entryID
+	if f.entryErr != nil {
+		return f.entryErr
+	}
+	f.removed = true
+	return nil
 }
 
 func reviewRouter(t *testing.T, role string, d Deps) (http.Handler, *clock) {
@@ -119,6 +150,9 @@ func TestReviewRoutesRejectGuests(t *testing.T) {
 	wantError(t, do(h, "GET", "/v1/reviews/due", "", jsonAuth), http.StatusForbidden, "forbidden")
 	wantError(t, do(h, "POST", "/v1/reviews/"+testReviewItemID, `{"logId":"`+testConversationID+`","rating":3}`, jsonAuth),
 		http.StatusForbidden, "forbidden")
+	for _, method := range []string{"GET", "PUT", "DELETE"} {
+		wantError(t, do(h, method, "/v1/entries/"+testReviewItemID+"/review", "", jsonAuth), http.StatusForbidden, "forbidden")
+	}
 }
 
 func TestListDueReviews(t *testing.T) {
@@ -198,5 +232,91 @@ func TestReviewRoutesNeedTheQueue(t *testing.T) {
 	h, _ := reviewRouter(t, auth.RoleMember, Deps{})
 	if w := do(h, "GET", "/v1/reviews/due", "", jsonAuth); w.Code != http.StatusNotFound {
 		t.Errorf("without a queue = %d", w.Code)
+	}
+}
+
+func TestEntryReviewRoutes(t *testing.T) {
+	for _, role := range []string{auth.RoleMember, auth.RoleAdmin} {
+		t.Run(role, func(t *testing.T) {
+			rv := &fakeReviews{}
+			h, clk := reviewRouter(t, role, Deps{Reviews: rv})
+			path := "/v1/entries/" + testReviewItemID + "/review"
+
+			for _, in := range []bool{false, true} {
+				rv.inReview = in
+				w := do(h, "GET", path, "", authHeader)
+				want := `{"inReview":` + strconv.FormatBool(in) + `}`
+				if w.Code != http.StatusOK || w.Body.String() != want || rv.owner != testOwner || rv.entryID != testReviewItemID {
+					t.Fatalf("status = %d %s, want %s (owner %q, entry %q)", w.Code, w.Body.String(), want, rv.owner, rv.entryID)
+				}
+			}
+
+			w := do(h, "PUT", path, "", authHeader)
+			if w.Code != http.StatusNoContent || w.Body.Len() != 0 || !rv.added || rv.owner != testOwner ||
+				rv.entryID != testReviewItemID || !rv.now.Equal(clk.Now()) {
+				t.Fatalf("add = %d %q (added %v, owner %q, entry %q, at %v)", w.Code, w.Body.String(), rv.added, rv.owner, rv.entryID, rv.now)
+			}
+			w = do(h, "DELETE", path, "", authHeader)
+			if w.Code != http.StatusNoContent || w.Body.Len() != 0 || !rv.removed || rv.entryID != testReviewItemID {
+				t.Fatalf("remove = %d %q (removed %v)", w.Code, w.Body.String(), rv.removed)
+			}
+
+			// Another owner's note, an unknown one or one in the trash.
+			rv.entryErr = store.ErrNotFound
+			for _, method := range []string{"GET", "PUT", "DELETE"} {
+				wantError(t, do(h, method, path, "", authHeader), http.StatusNotFound, "not_found")
+			}
+			rv.entryErr = errors.New("db down")
+			for _, method := range []string{"GET", "PUT", "DELETE"} {
+				wantError(t, do(h, method, path, "", authHeader), http.StatusInternalServerError, "internal")
+			}
+			rv.entryErr = nil
+
+			// Always the token owner's own notes.
+			for _, method := range []string{"GET", "PUT", "DELETE"} {
+				wantError(t, do(h, method, path+"?user="+otherOwner, "", authHeader), http.StatusBadRequest, "invalid_request")
+			}
+		})
+	}
+}
+
+func TestEntryReviewRoutesNeedTheQueue(t *testing.T) {
+	h, _ := reviewRouter(t, auth.RoleMember, Deps{})
+	for _, method := range []string{"GET", "PUT", "DELETE"} {
+		wantError(t, do(h, method, "/v1/entries/"+testReviewItemID+"/review", "", authHeader), http.StatusNotFound, "not_found")
+	}
+}
+
+func TestDueEntryItemsCarryTheirNote(t *testing.T) {
+	at := time.Date(2026, 11, 5, 12, 0, 0, 0, time.UTC)
+	note := store.Entry{
+		ID: testReviewItemID, Kind: "correction", OriginalText: "我昨天去了学校。", CorrectedText: "我昨天去学校了。",
+		Pinyin: "Wǒ zuótiān qù xuéxiào le.", Hints: []store.Hint{{ID: "chint", Content: "了の位置", Position: 0}}, CreatedAt: at,
+	}
+	rv := &fakeReviews{count: 2, due: []store.ReviewItem{
+		{ID: "czzzzzzzzzzzzzzzzzzzzzzzz", ReviewTarget: store.ReviewTarget{Language: "zh", Kind: "entry", TargetID: note.ID},
+			Card: review.Card{Due: at}, Entry: &note},
+		{ID: "cyyyyyyyyyyyyyyyyyyyyyyyy", ReviewTarget: store.ReviewTarget{Language: "zh", Kind: "complement", TargetID: "result-01"},
+			Card: review.Card{Due: at}},
+	}}
+	h, _ := reviewRouter(t, auth.RoleMember, Deps{Reviews: rv})
+	w := do(h, "GET", "/v1/reviews/due", "", jsonAuth)
+	var got struct {
+		Items []map[string]json.RawMessage `json:"items"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil || w.Code != http.StatusOK || len(got.Items) != 2 {
+		t.Fatalf("due = %d %s (%v)", w.Code, w.Body.String(), err)
+	}
+	want := `{"id":"cabcdefghijklmnopqrstuvwx","kind":"correction","originalText":"我昨天去了学校。","correctedText":"我昨天去学校了。",` +
+		`"pinyin":"Wǒ zuótiān qù xuéxiào le.","hints":[{"id":"chint","content":"了の位置","position":0}],` +
+		`"createdAt":"2026-11-05T12:00:00.000Z","sharedAt":null}`
+	if string(got.Items[0]["entry"]) != want {
+		t.Errorf("entry = %s\nwant %s", got.Items[0]["entry"], want)
+	}
+	if _, ok := got.Items[0]["vocabulary"]; ok {
+		t.Errorf("an entry item carries vocabulary: %s", w.Body.String())
+	}
+	if _, ok := got.Items[1]["entry"]; ok {
+		t.Errorf("a complement item carries an entry: %s", w.Body.String())
 	}
 }

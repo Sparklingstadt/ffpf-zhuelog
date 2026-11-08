@@ -53,6 +53,9 @@
 | PUT      | [`/v1/complement-records/{id}`](./practice.md#補語の記録-api)                                  | 会員・admin           | ×        | 200  | 補語の練習記録を保存                 |
 | GET      | [`/v1/reviews/due`](./reviews.md#get-v1-reviews-due)                                           | 会員・admin           | ×        | 200  | 期日が来た復習の問題                 |
 | POST     | [`/v1/reviews/{itemId}`](./reviews.md#post-v1-reviews-itemid)                                  | 会員・admin           | ×        | 200  | 復習の問題に答える                   |
+| GET      | [`/v1/entries/{id}/review`](./reviews.md#get-v1-entries-id-review)                             | 会員・admin           | ×        | 200  | ノートが復習に入っているか           |
+| PUT      | [`/v1/entries/{id}/review`](./reviews.md#put-v1-entries-id-review)                             | 会員・admin           | ×        | 204  | ノートを復習に入れる                 |
+| DELETE   | [`/v1/entries/{id}/review`](./reviews.md#delete-v1-entries-id-review)                          | 会員・admin           | ×        | 204  | ノートを復習から外す                 |
 | GET      | [`/v1/vocabulary`](./vocabulary.md#get-v1-vocabulary)                                          | 会員・admin           | ×        | 200  | 単語帳の一覧                         |
 | PUT      | [`/v1/vocabulary/{id}`](./vocabulary.md#put-v1-vocabulary-id)                                  | 会員・admin           | ×        | 200  | 単語を足す・直す                     |
 | DELETE   | [`/v1/vocabulary/{id}`](./vocabulary.md#delete-v1-vocabulary-id)                               | 会員・admin           | ×        | 204  | 単語を消す                           |
@@ -139,4 +142,4 @@
 - `?user=` が無い、または自分の `ownerId` と同じなら、自分のノートです。
 - 自分以外を指定できるのは admin だけです。会員が自分以外を指定すると `403 forbidden`（「他の人の記録は管理者だけが見られます。」）です。
 - 値は Web の `isOwnerId` と同じ形式（`^\d+$`・`^password:[a-z0-9]{20,32}$`・`^ffpf:[a-z0-9]{1,64}$`）だけを受け付け、違えば `400 invalid_request`。2 回以上付けても `400` です。存在しない `ownerId` は空の結果（詳細は `404`）になります。
-- 上の 5 つ以外の認証つきルートは、`?user=` が **付いているだけで** `400 invalid_request` です（無視されたと誤解しないようにするため）。書き込みやゴミ箱・共有・フォロー・CSV は、常に自分が対象です。
+- 上の 5 つ以外の認証つきルートは、`?user=` が **付いているだけで** `400 invalid_request` です（無視されたと誤解しないようにするため）。書き込みやゴミ箱・共有・復習・フォロー・CSV は、常に自分が対象です。

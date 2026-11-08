@@ -37,13 +37,17 @@ async function loadDue(): Promise<DueReviews | null> {
 }
 
 // The questions are shuffled here, so the server and the browser render the
-// same choices. Words are flashcards. Items whose question is gone from the
-// data are skipped.
+// same choices. Words and learning notes are flashcards. Items whose
+// question is gone from the data are skipped.
 function toCards(due: DueReviews): ReviewCard[] {
   return due.items.flatMap((item): ReviewCard[] => {
     if (item.kind === "vocabulary")
       return item.vocabulary
         ? [{ type: "word", itemId: item.id, word: item.vocabulary }]
+        : [];
+    if (item.kind === "entry")
+      return item.entry
+        ? [{ type: "note", itemId: item.id, entry: item.entry }]
         : [];
     const choice = reviewChoice(item.kind, item.targetId);
     if (!choice) return [];
@@ -65,7 +69,7 @@ export default async function ReviewPage() {
         icon={Repeat}
         eyebrow="Review"
         title="今日の復習"
-        description="練習で間違えた問題と単語帳の語句を、忘れかけたころにもう一度出します。答えたら、どのくらい思い出せたかを選んでください。"
+        description="練習で間違えた問題、単語帳の語句、復習に入れた学習ノートを、忘れかけたころにもう一度出します。答えたら、どのくらい思い出せたかを選んでください。"
         actions={
           <Button asChild variant="outline" size="sm">
             <Link href="/">
