@@ -47,7 +47,11 @@ for (const [mode, label] of [
       "member-password-1",
     );
     await asMember(page, "complement-learner", "member-password-1");
-    await page.getByRole("link", { name: "補語練習", exact: true }).click();
+    // The header's link; on phones the bottom menu has one too.
+    await page
+      .getByRole("navigation", { name: "アカウント" })
+      .getByRole("link", { name: "補語練習", exact: true })
+      .click();
     await page
       .getByRole("link", { name: `${label}を練習`, exact: true })
       .click();
