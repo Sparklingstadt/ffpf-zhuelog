@@ -4,6 +4,8 @@
 
 添削前後の中国語、ピン音、可変個数の学習ヒントをCSVから取り込んで表示する、Next.js製の中国語学習アプリです。
 
+これから取り組むことは [docs/roadmap.md](docs/roadmap.md) にあります。
+
 ## 技術構成
 
 - Next.js 16（App Router / Server Actions）
