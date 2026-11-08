@@ -4,11 +4,15 @@ import { test } from "node:test";
 import {
   hskVocabulary,
   officialHardWords,
+  officialTextLevels,
   parseCsv,
   practiceTexts,
   segment,
 } from "../scripts/lib/hsk-words-official";
-import { HSK_OFFICIAL_HARD_WORDS } from "../src/domain/practice/hsk-words-official";
+import {
+  HSK_OFFICIAL_HARD_WORDS,
+  HSK_OFFICIAL_TEXT_LEVELS,
+} from "../src/domain/practice/hsk-words-official";
 
 const vocabulary = hskVocabulary();
 const texts = practiceTexts();
@@ -19,6 +23,19 @@ test("hsk-words-official.ts is what the generator writes now", () => {
     Object.entries(HSK_OFFICIAL_HARD_WORDS),
     Object.entries(expected),
     "run node --import tsx scripts/generate-hsk-words.ts",
+  );
+});
+
+test("the text levels are what the generator writes now", () => {
+  assert.deepEqual(
+    HSK_OFFICIAL_TEXT_LEVELS,
+    officialTextLevels(vocabulary, texts),
+    "run node --import tsx scripts/generate-hsk-words.ts",
+  );
+  // A text's level is its hardest segmented word: 已经 is level 1, not 经.
+  assert.equal(
+    officialTextLevels(vocabulary, ["他已经回家了。"])["他已经回家了。"],
+    undefined,
   );
 });
 

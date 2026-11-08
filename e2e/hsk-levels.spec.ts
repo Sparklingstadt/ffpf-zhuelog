@@ -47,3 +47,38 @@ test("preposition and complement practices can be narrowed to one HSK level", as
     "page",
   );
 });
+
+test("the HSK levels can be decided by the official word list, and the choice is kept", async ({
+  page,
+}) => {
+  await asGuest(page, "/practice/complements/result?hsk=6");
+  const levels = page.getByRole("navigation", { name: "HSK の級" });
+  const basis = page.getByRole("group", { name: "級の決め方" });
+  const sixCount = async () =>
+    Number(
+      (
+        await levels.getByRole("link", { name: /HSK 6級以上/ }).innerText()
+      ).match(/(\d+)問/)![1],
+    );
+
+  await expect(
+    basis.getByRole("button", { name: "手作りの表" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  const curated = await sixCount();
+
+  await basis.getByRole("button", { name: "公式の語彙表" }).click();
+  await expect(
+    basis.getByRole("button", { name: "公式の語彙表" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(page).toHaveURL(/\/practice\/complements\/result\?hsk=6$/);
+  const official = await sixCount();
+  expect(official).not.toBe(curated);
+
+  // The choice carries over to the other practices.
+  await page.goto("/practice/prepositions");
+  await expect(
+    page
+      .getByRole("group", { name: "級の決め方" })
+      .getByRole("button", { name: "公式の語彙表" }),
+  ).toHaveAttribute("aria-pressed", "true");
+});
