@@ -17,16 +17,19 @@ test("bottom menu fits phones and tablets and follows navigation", async ({
     await expect(menu.locator("a, button")).toHaveText([
       "学習ノート",
       "介詞練習",
-      "LINE連携",
+      "補語練習",
       "クイック質問",
       "会話ノート",
     ]);
     const bounds = await menu.boundingBox();
     expect(bounds!.y + bounds!.height).toBe(900);
-    const lineTab = await menu
-      .getByRole("link", { name: "LINE連携" })
+    const complementTab = await menu
+      .getByRole("link", { name: "補語練習" })
       .boundingBox();
-    expect(lineTab!.x + lineTab!.width / 2).toBeCloseTo(width / 2, 0);
+    expect(complementTab!.x + complementTab!.width / 2).toBeCloseTo(
+      width / 2,
+      0,
+    );
     expect(
       await menu.evaluate((element) => {
         const body = document.body;
@@ -47,9 +50,9 @@ test("bottom menu fits phones and tablets and follows navigation", async ({
     }
   }
 
-  await menu.getByRole("link", { name: "LINE連携" }).click();
-  await expect(page).toHaveURL(/\/account\/line$/);
-  await expect(menu.getByRole("link", { name: "LINE連携" })).toHaveAttribute(
+  await menu.getByRole("link", { name: "補語練習" }).click();
+  await expect(page).toHaveURL(/\/practice\/complements$/);
+  await expect(menu.getByRole("link", { name: "補語練習" })).toHaveAttribute(
     "aria-current",
     "page",
   );
@@ -100,7 +103,10 @@ test("guest menu keeps five tabs without linking to restricted features", async 
   await asGuest(page);
   await expect(menu).toBeVisible();
   await expect(menu.locator("a, button")).toHaveCount(5);
-  await expect(menu.getByRole("button", { name: /LINE連携/ })).toBeDisabled();
+  await expect(menu.getByRole("link", { name: "補語練習" })).toHaveAttribute(
+    "href",
+    "/practice/complements",
+  );
   await expect(menu.getByRole("button", { name: /会話ノート/ })).toBeDisabled();
   await expect(menu.getByRole("link", { name: "会話ノート" })).toHaveCount(0);
   await page.getByRole("button", { name: "ログアウト" }).click();
