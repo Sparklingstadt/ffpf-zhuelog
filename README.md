@@ -360,6 +360,8 @@ GitHub OAuthの外部ログインは、このE2Eの対象外です。
 
 「動詞から選ぶ」（`/practice/complements/verb`）は介詞の練習と同じ出し方です。大きく動詞と日本語の意味を見せ、短い句の空欄に入る補語を 4 つから選びます。結果・方向・可能・程度のすべての補語が混ざって出て、毎回ちがう補語が 25 問出ます。誤答は手書きではなく規則で選びます（正解と意味分類を共有しない補語のうち、その動詞と組み合わさる補語と、正解を含む・正解に含まれる補語を除く）。問題データは `data/中国語の補語_動詞との組み合わせと例文.csv`（131 行・379 問）から `pnpm exec tsx scripts/generate-complement-verb-data.ts <csv>` で `src/domain/practice/complement-verb-data.ts` に作ります。生成したファイルは手で直さず、CSV を直して作り直します。間違えた問題は介詞と同じく問題ごと（CSV の行と動詞）に「今日の復習」へ入り、復習でも動詞を大きく出します。
 
+正解すると、例文の上に例文全体のピンインを出します（補語と介詞の練習で共通）。ピンインは `pnpm exec tsx scripts/generate-example-pinyin.ts` で pinyin-pro から `src/domain/practice/example-pinyin.ts` に作ります。補語・介詞の問題データを変えたら作り直してください（作り直すまで `tests/example-pinyin.test.ts` が失敗します）。構造助詞の「得」は de、名詞の接尾辞の「子」は zi、「儿」は r 化として読み、pinyin-pro が誤る多音字（睡不着 の zháo、系上 の jì など）は `scripts/lib/example-pinyin.ts` の `READING_FIXES` で直します。生成したファイルは手で直しません。
+
 会員・管理者の結果は Go API 経由で保存し、補語の種類を付けて履歴から見返せます。ゲストも練習できますが、記録は保存されません。API の仕様は [練習の記録](docs-site/reference/practice.md) を参照してください。
 
 本番反映時は追加マイグレーション `20261030090000_add_complement_practice_records`（`ComplementPracticeRecord` テーブルの新設）が必要です。方向補語のモードには、続くマイグレーション `20261101090000_add_direction_complement_modes`（`mode` の CHECK 制約に4種類を追加）、「動詞から選ぶ」には `20261108090000_add_complement_verb_mode`（同じ制約に `verb` を追加）も必要です。Web の本番ビルドで適用し、補語記録の新ルートを含む Go API もデプロイしてください。既存の介詞練習の記録は別テーブルに保持されます。

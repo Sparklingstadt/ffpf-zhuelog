@@ -303,6 +303,14 @@ export function ChoicePractice({
                         {question.answer} {question.pinyin}
                       </span>
                     </p>
+                    {question.examplePinyin ? (
+                      <p
+                        lang="zh-Latn-pinyin"
+                        className="text-xs text-muted-foreground"
+                      >
+                        {question.examplePinyin}
+                      </p>
+                    ) : null}
                     <p lang="zh-CN" className="text-sm">
                       {question.example}
                     </p>
