@@ -109,3 +109,20 @@ test("an admin's rounds are their own; a guest practices without a record", asyn
   );
   expect(rows[0].n).toBe(0);
 });
+
+test("a solved question shows the example's pinyin above it", async ({
+  page,
+}) => {
+  await asGuest(page);
+  await page.goto("/practice/prepositions");
+  const choices = page.getByRole("group", { name: "介詞を選ぶ" });
+  for (const button of await choices.getByRole("button").all()) {
+    await button.click();
+    if (await choices.getByRole("button", { name: /（正解）$/ }).count()) break;
+  }
+  const pinyin = page.locator('[lang="zh-Latn-pinyin"]');
+  await expect(pinyin).toHaveText(/^\p{Lu}\S*( \S+)*[.?!”]$/u);
+  expect(
+    await pinyin.evaluate((el) => el.nextElementSibling?.getAttribute("lang")),
+  ).toBe("zh-CN");
+});

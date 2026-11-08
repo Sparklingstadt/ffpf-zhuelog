@@ -3,7 +3,11 @@ import {
   buildComplementVerbQuiz,
   countComplementVerbQuestions,
 } from "./complement-verb-quiz";
-import type { PrepositionQuestion, Random } from "./preposition-quiz";
+import {
+  examplePinyinOf,
+  type PrepositionQuestion,
+  type Random,
+} from "./preposition-quiz";
 
 export const COMPLEMENT_MODES = {
   result: {
@@ -101,15 +105,17 @@ export function complementQuestion(
   q: ComplementUsage,
   random: Random = Math.random,
 ): PrepositionQuestion {
+  const example = q.prompt.replace("（　）", q.answer);
   return {
     id: q.id,
     noun: COMPLEMENT_MODES[q.mode].label,
     meaning: q.translation,
     prompt: q.prompt,
-    phrase: q.prompt.replace("（　）", q.answer),
+    phrase: example,
     answer: q.answer,
     pinyin: q.pinyin,
-    example: q.prompt.replace("（　）", q.answer),
+    example,
+    examplePinyin: examplePinyinOf(example),
     translation: q.translation,
     choices: shuffled(q.choices, random),
   };

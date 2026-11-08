@@ -47,7 +47,11 @@ for (const [mode, label] of [
       "member-password-1",
     );
     await asMember(page, "complement-learner", "member-password-1");
-    await page.getByRole("link", { name: "補語練習", exact: true }).click();
+    // The header's link; on phones the bottom menu has one too.
+    await page
+      .getByRole("navigation", { name: "アカウント" })
+      .getByRole("link", { name: "補語練習", exact: true })
+      .click();
     await page
       .getByRole("link", { name: `${label}を練習`, exact: true })
       .click();
@@ -145,5 +149,27 @@ test("mode selection and all quiz modes fit the viewport", async ({
       path: testInfo.outputPath(`complements${mode.replace("/", "-")}.png`),
       fullPage: true,
     });
+  }
+});
+
+test("a solved question shows the example's pinyin above it", async ({
+  page,
+}) => {
+  await asGuest(page);
+  for (const mode of ["result", "verb"]) {
+    await page.goto(`/practice/complements/${mode}`);
+    const choices = page.getByRole("group", { name: "補語を選ぶ" });
+    for (const button of await choices.getByRole("button").all()) {
+      await button.click();
+      if (await choices.getByRole("button", { name: /（正解）$/ }).count())
+        break;
+    }
+    const pinyin = page.locator('[lang="zh-Latn-pinyin"]');
+    await expect(pinyin).toHaveText(/^\p{Lu}\S*( \S+)*[.?!”]$/u);
+    expect(
+      await pinyin.evaluate((el) =>
+        el.nextElementSibling?.getAttribute("lang"),
+      ),
+    ).toBe("zh-CN");
   }
 });

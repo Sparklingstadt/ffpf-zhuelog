@@ -3,7 +3,7 @@
 import {
   BookOpen,
   CircleHelp,
-  MessageCircle,
+  ListChecks,
   MessagesSquare,
   Shuffle,
 } from "lucide-react";
@@ -36,11 +36,10 @@ export function BottomNavigation({ role }: { role: AppRole }) {
       active: pathname.startsWith("/practice/prepositions"),
     },
     {
-      label: "LINE連携",
-      href: isMemberRole(role) ? "/account/line" : undefined,
-      icon: MessageCircle,
-      active: pathname.startsWith("/account/line"),
-      unavailable: "メンバー向け",
+      label: "補語練習",
+      href: "/practice/complements",
+      icon: ListChecks,
+      active: pathname.startsWith("/practice/complements"),
     },
     {
       label: "クイック質問",

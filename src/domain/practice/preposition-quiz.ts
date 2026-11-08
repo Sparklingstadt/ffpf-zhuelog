@@ -1,3 +1,4 @@
+import { EXAMPLE_PINYIN } from "./example-pinyin";
 import { PREPOSITION_USAGES } from "./preposition-data";
 
 export type PrepositionCategory =
@@ -37,6 +38,14 @@ const ALSO_IN: Record<string, readonly PrepositionCategory[]> = {
 };
 
 export const CHOICE_COUNT = 4;
+
+// The pinyin scripts/generate-example-pinyin.ts wrote for an example
+// sentence of the complement or preposition data.
+export function examplePinyinOf(sentence: string): string {
+  return Object.hasOwn(EXAMPLE_PINYIN, sentence)
+    ? EXAMPLE_PINYIN[sentence]
+    : "";
+}
 export const BLANK = "（　）";
 
 export type PrepositionQuestion = {
@@ -49,6 +58,8 @@ export type PrepositionQuestion = {
   answer: string;
   pinyin: string;
   example: string;
+  // Pinyin of the whole example; empty when the sentence has none yet.
+  examplePinyin: string;
   translation: string;
   // CHOICE_COUNT prepositions in display order; exactly one is the answer.
   choices: string[];
@@ -111,6 +122,7 @@ export function buildQuestion(
     answer,
     pinyin: usage.pinyin,
     example: usage.example,
+    examplePinyin: examplePinyinOf(usage.example),
     translation: usage.translation,
     choices: shuffled([answer, ...wrong.slice(0, CHOICE_COUNT - 1)], random),
   };

@@ -2,6 +2,7 @@ import { COMPLEMENT_VERB_USAGES } from "./complement-verb-data";
 import {
   BLANK,
   CHOICE_COUNT,
+  examplePinyinOf,
   type PrepositionQuestion,
   type Random,
 } from "./preposition-quiz";
@@ -107,6 +108,7 @@ export function complementVerbQuestion(
     answer,
     pinyin: usage.pinyin,
     example: usage.example,
+    examplePinyin: examplePinyinOf(usage.example),
     translation: usage.translation,
     choices: shuffled([answer, ...wrong.slice(0, CHOICE_COUNT - 1)], random),
   };
