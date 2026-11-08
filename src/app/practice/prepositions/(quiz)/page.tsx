@@ -11,6 +11,8 @@ import {
 } from "@/domain/practice/preposition-quiz";
 import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
+import { readHskBasis } from "@/infrastructure/preferences/hsk-basis-cookie";
+import { HskBasisSwitch } from "@/presentation/components/practice/hsk-basis-switch";
 import { HskLevelPicker } from "@/presentation/components/practice/hsk-level-picker";
 import { PrepositionPractice } from "@/presentation/components/practice/preposition-practice";
 import { Button } from "@/presentation/components/ui/button";
@@ -31,9 +33,11 @@ export default async function PrepositionPracticePage({
       `/signin?callbackUrl=${encodeURIComponent(`/practice/prepositions${level ? `?hsk=${level}` : ""}`)}`,
     );
   const canSave = isMemberRole(user.role);
-  const counts = countPrepositionQuestionsByLevel();
+  const basis = await readHskBasis();
+  const filter = level ? { level, basis } : null;
+  const counts = countPrepositionQuestionsByLevel(basis);
   // Shuffled here so the server and browser render the same quiz.
-  const quiz = buildQuiz(QUESTION_COUNT, Math.random, undefined, level);
+  const quiz = buildQuiz(QUESTION_COUNT, Math.random, undefined, filter);
 
   return (
     <PageShell user={user} width="4xl">
@@ -65,16 +69,20 @@ export default async function PrepositionPracticePage({
         counts={counts}
         total={counts[4] + counts[5] + counts[6]}
       />
+      <HskBasisSwitch
+        current={basis}
+        returnTo={`/practice/prepositions${level ? `?hsk=${level}` : ""}`}
+      />
       {quiz.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           この級の問題はまだありません。
         </p>
       ) : (
         <PrepositionPractice
-          key={level ?? "all"}
+          key={`${basis}:${level ?? "all"}`}
           initialQuiz={quiz}
           canSave={canSave}
-          level={level}
+          filter={filter}
         />
       )}
     </PageShell>
