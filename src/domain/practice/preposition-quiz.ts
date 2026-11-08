@@ -1,4 +1,5 @@
 import { EXAMPLE_PINYIN } from "./example-pinyin";
+import { hskLevelOf, type HskLevel } from "./hsk-level";
 import { PREPOSITION_USAGES } from "./preposition-data";
 
 export type PrepositionCategory =
@@ -128,22 +129,59 @@ export function buildQuestion(
   };
 }
 
-// `count` questions in random order, each on a different preposition.
+// The pairs of a use that are questions of the HSK level, or all of them
+// without a level.
+function pairsAt(usage: PrepositionUsage, level: HskLevel | null) {
+  return level === null
+    ? usage.pairs
+    : usage.pairs.filter(
+        (pair) => hskLevelOf(pair.phrase, usage.example) === level,
+      );
+}
+
+// `count` questions in random order, each on a different preposition, only
+// of the HSK level when one is given.
 export function buildQuiz(
   count: number,
   random: Random = Math.random,
   usages: readonly PrepositionUsage[] = PREPOSITION_USAGES,
+  level: HskLevel | null = null,
 ): PrepositionQuestion[] {
   const seen = new Set<string>();
   const questions: PrepositionQuestion[] = [];
   for (const usage of shuffled(usages, random)) {
     if (questions.length >= count) break;
     if (seen.has(usage.preposition)) continue;
+    const pairs = pairsAt(usage, level);
+    if (pairs.length === 0) continue;
     seen.add(usage.preposition);
-    const pair = usage.pairs[Math.floor(random() * usage.pairs.length)];
+    const pair = pairs[Math.floor(random() * pairs.length)];
     questions.push(buildQuestion(usage, pair, random, usages));
   }
   return questions;
+}
+
+// How many questions (a use with one of its nouns) there are at each level.
+export function countPrepositionQuestionsByLevel(
+  usages: readonly PrepositionUsage[] = PREPOSITION_USAGES,
+): Record<HskLevel, number> {
+  const counts: Record<HskLevel, number> = { 4: 0, 5: 0, 6: 0 };
+  for (const usage of usages)
+    for (const pair of usage.pairs)
+      counts[hskLevelOf(pair.phrase, usage.example)]++;
+  return counts;
+}
+
+// How many different prepositions a quiz of the level can ask, at most.
+export function countPrepositionsAt(
+  level: HskLevel | null,
+  usages: readonly PrepositionUsage[] = PREPOSITION_USAGES,
+): number {
+  return new Set(
+    usages
+      .filter((usage) => pairsAt(usage, level).length > 0)
+      .map((usage) => usage.preposition),
+  ).size;
 }
 
 // How far the progress bar reaches, 0 to 100.

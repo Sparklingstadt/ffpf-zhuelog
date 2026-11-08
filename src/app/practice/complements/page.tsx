@@ -58,6 +58,16 @@ export default async function ComplementModesPage() {
           </Card>
         ))}
       </div>
+      <p className="text-sm text-muted-foreground">
+        名詞を数える量詞は、
+        <Link
+          href="/practice/measure-words"
+          className="font-medium text-foreground underline underline-offset-4"
+        >
+          量詞の練習
+        </Link>
+        で練習できます。
+      </p>
     </PageShell>
   );
 }
