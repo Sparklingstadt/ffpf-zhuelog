@@ -214,3 +214,21 @@ export function officialHardWords(
     ),
   );
 }
+
+// Each text whose hardest segmented word is of level 5 or above, with that
+// level; texts of levels 1-4 are left out. A question's level is the highest
+// of its texts', so this is all the app needs to place a question.
+export function officialTextLevels(
+  vocabulary: HskVocabulary = hskVocabulary(),
+  texts: readonly string[] = practiceTexts(),
+): Record<string, HardLevel> {
+  const levels: [string, HardLevel][] = [];
+  for (const text of texts) {
+    const hardest = Math.max(
+      0,
+      ...segment(text, vocabulary).map((token) => token.level ?? 0),
+    );
+    if (hardest >= 5) levels.push([text, hardest as HardLevel]);
+  }
+  return Object.fromEntries(levels);
+}
