@@ -82,6 +82,11 @@ func ownerValid(allow auth.Allowlist, members memberChecker) linebot.OwnerCheck 
 // messages. Both clients refuse redirects because their requests carry keys.
 // OpenAI's own 20 s limit applies per generation.
 func newLineService(cfg Config, db *store.Store, allow auth.Allowlist, logger *slog.Logger) *linebot.Service {
+	messenger := &line.Client{
+		HTTP:        newNoRedirectHTTPClient(10 * time.Second),
+		BaseURL:     cfg.LineAPIBaseURL,
+		AccessToken: cfg.LineChannelAccessToken,
+	}
 	return &linebot.Service{
 		Store: db,
 		Generator: &learning.OpenAI{
@@ -89,12 +94,10 @@ func newLineService(cfg Config, db *store.Store, allow auth.Allowlist, logger *s
 			BaseURL: cfg.OpenAIBaseURL,
 			APIKey:  cfg.OpenAIAPIKey,
 		},
-		Messenger: &line.Client{
-			HTTP:        newNoRedirectHTTPClient(10 * time.Second),
-			BaseURL:     cfg.LineAPIBaseURL,
-			AccessToken: cfg.LineChannelAccessToken,
-		},
+		Messenger:  messenger,
+		Quota:      messenger,
 		OwnerValid: ownerValid(allow, db),
+		Usage:      db,
 		Logger:     logger,
 	}
 }
@@ -168,6 +171,7 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 		Reviews:            db,
 		Vocabulary:         db,
 		StudyLog:           db,
+		AIUsage:            db,
 		WebProxySecret:     cfg.WebProxySecret,
 	}
 	// Without the LINE settings the routes stay unregistered (404). Line is

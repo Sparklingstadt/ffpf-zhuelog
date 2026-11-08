@@ -124,11 +124,16 @@ model ApiRefreshToken {
 // Ties one LINE account to one Zhuelog owner (a PasswordAccount id prefixed
 // "password:", or an admin's GitHub numeric id). ownerId has no foreign key:
 // admins have no row in the database. role is "member" | "admin" (CHECK).
+// reviewNotify is the owner's choice to get a LINE message on mornings when
+// reviews are due (off until they turn it on); reviewNotifiedOn is the JST
+// date the last one was sent, so the daily run sends at most one a day.
 model LineLink {
-  lineUserId String   @id
-  ownerId    String   @unique
-  role       String
-  createdAt  DateTime @default(now())
+  lineUserId       String    @id
+  ownerId          String    @unique
+  role             String
+  createdAt        DateTime  @default(now())
+  reviewNotify     Boolean   @default(false)
+  reviewNotifiedOn DateTime? @db.Date
 }
 
 // One-time link codes shown on /account/line. Only the SHA-256 hex of the code
@@ -215,7 +220,8 @@ model QuickQuestion {
 }
 
 // Complement rounds, isolated from preposition history. mode: result/potential/degree/
-// direction-simple/direction-compound/direction-simple-extended/direction-compound-extended.
+// direction-simple/direction-compound/direction-simple-extended/direction-compound-extended/
+// verb, and measure for the measure-word practice, whose rounds are kept here.
 model ComplementPracticeRecord {
   id            String   @id
   ownerId       String
@@ -302,5 +308,20 @@ model VocabularyEntry {
   updatedAt     DateTime @updatedAt
 
   @@unique([ownerId, language, word])
+  @@index([ownerId, createdAt])
+}
+
+// One OpenAI call: who it was for, which feature, and the tokens it used.
+// Written only by the Go API; read by the admin's monthly summary.
+model AiUsage {
+  id           String   @id
+  ownerId      String
+  feature      String
+  model        String
+  inputTokens  Int
+  outputTokens Int
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
   @@index([ownerId, createdAt])
 }

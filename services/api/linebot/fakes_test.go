@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/aiusage"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/learning"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/line"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
@@ -58,6 +59,8 @@ type fakeStore struct {
 	listErr    error
 	findErr    error
 	nextID     int
+
+	notifyState *notifyState
 }
 
 func newFakeStore() *fakeStore {
@@ -254,8 +257,10 @@ type fakeGen struct {
 	after func()
 }
 
-func (g *fakeGen) Generate(_ context.Context, kind, text string) (learning.Result, error) {
+func (g *fakeGen) Generate(ctx context.Context, kind, text string) (learning.Result, error) {
 	g.calls = append(g.calls, genCall{kind, text})
+	// Like the OpenAI client, report what the call used.
+	aiusage.Report(ctx, aiusage.Usage{Model: "gpt-test", InputTokens: 11, OutputTokens: 22})
 	if g.after != nil {
 		g.after()
 	}
@@ -339,3 +344,85 @@ func (e *env) onlyReply(t *testing.T) string {
 }
 
 var errBoom = errors.New("boom")
+
+// fakeUsage collects recorded usage, failing when err is set.
+type fakeUsage struct {
+	rows []store.AIUsage
+	err  error
+}
+
+func (f *fakeUsage) RecordAIUsage(_ context.Context, u store.AIUsage, _ time.Time) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.rows = append(f.rows, u)
+	return nil
+}
+
+// notifyState is the review-message part of fakeStore.
+type notifyState struct {
+	on       map[string]bool // by owner
+	targets  []store.ReviewNotifyTarget
+	claimed  map[string]bool // by LINE user
+	claimErr error
+	listErr  error
+	listedAt []time.Time
+}
+
+func (f *fakeStore) notify() *notifyState {
+	if f.notifyState == nil {
+		f.notifyState = &notifyState{on: map[string]bool{}, claimed: map[string]bool{}}
+	}
+	return f.notifyState
+}
+
+func (f *fakeStore) LineReviewNotify(_ context.Context, ownerID string) (bool, bool, error) {
+	for _, l := range f.links {
+		if l.OwnerID == ownerID {
+			return true, f.notify().on[ownerID], nil
+		}
+	}
+	return false, false, nil
+}
+
+func (f *fakeStore) SetLineReviewNotify(_ context.Context, ownerID string, on bool) error {
+	for _, l := range f.links {
+		if l.OwnerID == ownerID {
+			f.notify().on[ownerID] = on
+			return nil
+		}
+	}
+	return store.ErrNotFound
+}
+
+func (f *fakeStore) ListReviewNotifyTargets(_ context.Context, now time.Time, limit int) ([]store.ReviewNotifyTarget, error) {
+	n := f.notify()
+	n.listedAt = append(n.listedAt, now)
+	if n.listErr != nil {
+		return nil, n.listErr
+	}
+	return n.targets[:min(limit, len(n.targets))], nil
+}
+
+func (f *fakeStore) ClaimReviewNotify(_ context.Context, lineUserID string, _ time.Time) (bool, error) {
+	n := f.notify()
+	if n.claimErr != nil {
+		return false, n.claimErr
+	}
+	if n.claimed[lineUserID] {
+		return false, nil
+	}
+	n.claimed[lineUserID] = true
+	return true, nil
+}
+
+type fakeQuota struct {
+	quota line.Quota
+	err   error
+	calls int
+}
+
+func (q *fakeQuota) PushQuota(context.Context) (line.Quota, error) {
+	q.calls++
+	return q.quota, q.err
+}

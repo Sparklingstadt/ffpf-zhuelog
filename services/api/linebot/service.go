@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/aiusage"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/learning"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/line"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
@@ -34,6 +35,7 @@ type Store interface {
 	PruneLine(ctx context.Context, now time.Time) error
 	ConsumeThrottle(ctx context.Context, key string, limit int, window time.Duration, now time.Time) (bool, error)
 	ResetThrottle(ctx context.Context, key string) error
+	storeReviewNotify
 }
 
 // Generator turns a text into a correction or translation.
@@ -47,6 +49,11 @@ type Messenger interface {
 	Push(ctx context.Context, to string, texts ...string) error
 }
 
+// UsageRecorder stores the tokens of one OpenAI call.
+type UsageRecorder interface {
+	RecordAIUsage(ctx context.Context, u store.AIUsage, now time.Time) error
+}
+
 // OwnerCheck reports whether the owner may still use the feature: a member
 // that still exists, or an admin that is still on the allowlist.
 type OwnerCheck func(ctx context.Context, ownerID, role string) (bool, error)
@@ -58,9 +65,14 @@ type Service struct {
 	Generator  Generator
 	Messenger  Messenger
 	OwnerValid OwnerCheck
-	Now        func() time.Time // default time.Now
-	Logger     *slog.Logger     // default slog.Default(); never given text, results, keys, LINE user IDs or codes
-	Random     io.Reader        // default crypto/rand.Reader
+	// Usage, when set, records the tokens of each generation for the owner.
+	Usage UsageRecorder
+	// Quota reads the month's push allowance; without it no review message
+	// is sent.
+	Quota  QuotaReader
+	Now    func() time.Time // default time.Now
+	Logger *slog.Logger     // default slog.Default(); never given text, results, keys, LINE user IDs or codes
+	Random io.Reader        // default crypto/rand.Reader
 }
 
 func (s *Service) now() time.Time {
@@ -219,7 +231,7 @@ func (s *Service) process(ctx context.Context, ev line.Event, link store.LineLin
 // pending for the caller to settle); a store failure comes back as err, with
 // store.ErrNotFound meaning the message was no longer pending.
 func (s *Service) generateAndSave(ctx context.Context, id, ownerID, kind, text string) (res learning.Result, fail *learning.Error, err error) {
-	res, err = s.Generator.Generate(ctx, kind, text)
+	res, err = s.Generator.Generate(s.withUsage(ctx, ownerID), kind, text)
 	if err != nil {
 		var le *learning.Error
 		if errors.As(err, &le) {
@@ -241,6 +253,25 @@ func (s *Service) generateAndSave(ctx context.Context, id, ownerID, kind, text s
 		return learning.Result{}, nil, fmt.Errorf("linebot: complete message: %w", err)
 	}
 	return res, nil, nil
+}
+
+// withUsage makes the generations under ctx record their tokens for ownerID.
+// A failed record is logged and does not stop the message.
+func (s *Service) withUsage(ctx context.Context, ownerID string) context.Context {
+	if s.Usage == nil {
+		return ctx
+	}
+	return aiusage.WithRecorder(ctx, func(ctx context.Context, u aiusage.Usage) {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		err := s.Usage.RecordAIUsage(ctx, store.AIUsage{
+			OwnerID: ownerID, Feature: aiusage.FeatureLine, Model: u.Model,
+			InputTokens: u.InputTokens, OutputTokens: u.OutputTokens,
+		}, s.now())
+		if err != nil {
+			s.logger().Warn("ai usage not recorded", "feature", aiusage.FeatureLine, "error", err.Error())
+		}
+	})
 }
 
 // failMessage marks a message failed and logs why (the code only).
