@@ -30,6 +30,27 @@ export function focusInPlace(button: HTMLButtonElement | null) {
   button?.focus({ preventScroll: true });
 }
 
+// The example sentence of a solved question, with the pinyin of the whole
+// sentence above it when there is one.
+export function SolvedExample({
+  question,
+}: {
+  question: Pick<PrepositionQuestion, "example" | "examplePinyin">;
+}) {
+  return (
+    <>
+      {question.examplePinyin ? (
+        <p lang="zh-Latn-pinyin" className="text-xs text-muted-foreground">
+          {question.examplePinyin}
+        </p>
+      ) : null}
+      <p lang="zh-CN" className="text-sm">
+        {question.example}
+      </p>
+    </>
+  );
+}
+
 function ProgressBar({ done, total }: { done: number; total: number }) {
   return (
     <div className="flex items-center gap-3">
@@ -303,17 +324,7 @@ export function ChoicePractice({
                         {question.answer} {question.pinyin}
                       </span>
                     </p>
-                    {question.examplePinyin ? (
-                      <p
-                        lang="zh-Latn-pinyin"
-                        className="text-xs text-muted-foreground"
-                      >
-                        {question.examplePinyin}
-                      </p>
-                    ) : null}
-                    <p lang="zh-CN" className="text-sm">
-                      {question.example}
-                    </p>
+                    <SolvedExample question={question} />
                     <p className="text-sm text-muted-foreground">
                       {question.translation}
                     </p>

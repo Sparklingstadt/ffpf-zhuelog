@@ -14,6 +14,7 @@ import type {
 import {
   Choice,
   focusInPlace,
+  SolvedExample,
 } from "@/presentation/components/practice/choice-practice";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
@@ -302,6 +303,7 @@ function ChoiceCard({
                   {question.answer} {question.pinyin}
                 </span>
               </p>
+              <SolvedExample question={question} />
               <p className="text-sm text-muted-foreground">
                 {question.translation}
               </p>
