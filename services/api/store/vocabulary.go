@@ -138,12 +138,13 @@ func (s *Store) DeleteVocabulary(ctx context.Context, ownerID, id string) error 
 }
 
 // vocabularyByID returns the owner's entries with the given ids, by id.
-func (s *Store) vocabularyByID(ctx context.Context, ownerID string, ids []string) (map[string]VocabularyEntry, error) {
+// Errors are returned unwrapped.
+func vocabularyByID(ctx context.Context, q dbtx, ownerID string, ids []string) (map[string]VocabularyEntry, error) {
 	out := map[string]VocabularyEntry{}
 	if len(ids) == 0 {
 		return out, nil
 	}
-	rows, err := s.pool.Query(ctx, `SELECT `+vocabularyColumns+` FROM "VocabularyEntry"
+	rows, err := q.Query(ctx, `SELECT `+vocabularyColumns+` FROM "VocabularyEntry"
  WHERE "ownerId" = $1 AND "id" = ANY($2)`, ownerID, ids)
 	if err != nil {
 		return nil, err

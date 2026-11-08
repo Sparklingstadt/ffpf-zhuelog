@@ -12,8 +12,8 @@ import (
 )
 
 // ReviewTarget names something an owner can review: the language studied
-// ("zh"), what kind of thing it is ("preposition", "complement") and its id
-// in that kind's data.
+// ("zh"), what kind of thing it is ("preposition", "complement",
+// "vocabulary", "entry") and its id in that kind's data.
 type ReviewTarget struct {
 	Language string
 	Kind     string
@@ -21,8 +21,8 @@ type ReviewTarget struct {
 }
 
 // ReviewItem is one of an owner's targets with its FSRS card. Vocabulary is
-// the entry a "vocabulary" item names, filled in by ListDueReviewItems (nil
-// for other kinds).
+// the entry a "vocabulary" item names and Entry the note an "entry" item
+// names, filled in by ListDueReviewItems (nil for other kinds).
 type ReviewItem struct {
 	ID string
 	ReviewTarget
@@ -30,6 +30,7 @@ type ReviewItem struct {
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 	Vocabulary *VocabularyEntry
+	Entry      *Entry
 }
 
 const reviewItemColumns = `"id", "language", "kind", "targetId", "due", "stability", "difficulty",
@@ -82,34 +83,60 @@ func (s *Store) EnqueueReviewItems(ctx context.Context, ownerID string, targets 
 }
 
 // ListDueReviewItems returns up to limit of the owner's items due at or
-// before now, the longest overdue first.
+// before now, the longest overdue first. Items of notes in the trash are left
+// out. A "vocabulary" item comes with its word and an "entry" item with its
+// note, unless that is gone.
 func (s *Store) ListDueReviewItems(ctx context.Context, ownerID string, now time.Time, limit int) ([]ReviewItem, error) {
-	rows, err := s.pool.Query(ctx, `SELECT `+reviewItemColumns+` FROM "ReviewItem"
- WHERE "ownerId" = $1 AND "due" <= $2 ORDER BY "due", "id" LIMIT $3`, ownerID, dbTime(now), limit)
-	if err != nil {
-		return nil, fmt.Errorf("store: list due review items: %w", err)
-	}
-	out, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (ReviewItem, error) { return scanReviewItem(row) })
+	var out []ReviewItem
+	// One snapshot for the items and what they name, so a note trashed
+	// meanwhile is either left out or comes with its note.
+	err := pgx.BeginTxFunc(ctx, s.pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT `+reviewItemColumns+` FROM "ReviewItem"
+ WHERE "ownerId" = $1 AND "due" <= $2 AND `+notTrashedEntry("$4")+`
+ ORDER BY "due", "id" LIMIT $3`, ownerID, dbTime(now), limit, ReviewKindEntry)
+		if err != nil {
+			return err
+		}
+		out, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (ReviewItem, error) { return scanReviewItem(row) })
+		if err != nil {
+			return err
+		}
+		var wordIDs, noteIDs []string
+		for _, it := range out {
+			switch it.Kind {
+			case ReviewKindVocabulary:
+				wordIDs = append(wordIDs, it.TargetID)
+			case ReviewKindEntry:
+				noteIDs = append(noteIDs, it.TargetID)
+			}
+		}
+		words, err := vocabularyByID(ctx, tx, ownerID, wordIDs)
+		if err != nil {
+			return err
+		}
+		notes, err := entriesByID(ctx, tx, ownerID, noteIDs)
+		if err != nil {
+			return err
+		}
+		for i := range out {
+			switch out[i].Kind {
+			case ReviewKindVocabulary:
+				if v, ok := words[out[i].TargetID]; ok {
+					out[i].Vocabulary = &v
+				}
+			case ReviewKindEntry:
+				if e, ok := notes[out[i].TargetID]; ok {
+					out[i].Entry = &e
+				}
+			}
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, fmt.Errorf("store: list due review items: %w", err)
 	}
 	if out == nil {
 		out = []ReviewItem{}
-	}
-	var ids []string
-	for _, it := range out {
-		if it.Kind == ReviewKindVocabulary {
-			ids = append(ids, it.TargetID)
-		}
-	}
-	words, err := s.vocabularyByID(ctx, ownerID, ids)
-	if err != nil {
-		return nil, fmt.Errorf("store: list due review items: %w", err)
-	}
-	for i := range out {
-		if v, ok := words[out[i].TargetID]; ok && out[i].Kind == ReviewKindVocabulary {
-			out[i].Vocabulary = &v
-		}
 	}
 	return out, nil
 }
@@ -168,11 +195,13 @@ func streakFrom(today time.Time, days []time.Time) int {
 	return n
 }
 
-// CountDueReviewItems is how many of the owner's items are due at or before now.
+// CountDueReviewItems is how many of the owner's items are due at or before
+// now, leaving out the items of notes in the trash.
 func (s *Store) CountDueReviewItems(ctx context.Context, ownerID string, now time.Time) (int, error) {
 	var n int
-	err := s.pool.QueryRow(ctx, `SELECT count(*) FROM "ReviewItem" WHERE "ownerId" = $1 AND "due" <= $2`,
-		ownerID, dbTime(now)).Scan(&n)
+	err := s.pool.QueryRow(ctx, `SELECT count(*) FROM "ReviewItem"
+ WHERE "ownerId" = $1 AND "due" <= $2 AND `+notTrashedEntry("$3"),
+		ownerID, dbTime(now), ReviewKindEntry).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("store: count due review items: %w", err)
 	}
