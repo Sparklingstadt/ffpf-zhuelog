@@ -9,7 +9,7 @@ test("bottom menu fits phones and tablets and follows navigation", async ({
   const menu = page.getByRole("navigation", { name: "メインメニュー" });
   await expect(
     page.getByRole("banner").getByRole("link", { name: "学习録", exact: true }),
-  ).toHaveAttribute("href", "/chat");
+  ).toHaveAttribute("href", "/");
 
   for (const width of [320, 390, 768, 1024, 1279]) {
     await page.setViewportSize({ width, height: 900 });
