@@ -4,6 +4,7 @@ import { Home, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
+import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
 import type { PrepositionQuestion } from "@/domain/practice/preposition-quiz";
 import { REVIEW_RATINGS, type ReviewRating } from "@/domain/review/review-item";
 import type { VocabularyCard } from "@/domain/vocabulary/vocabulary-entry";
@@ -39,7 +40,90 @@ export type ReviewCard =
       type: "word";
       itemId: string;
       word: VocabularyCard;
+    }
+  | {
+      // A learning note: the sentence as written (the Japanese for a
+      // translation) is shown, the corrected Chinese recalled, then turned
+      // over.
+      type: "note";
+      itemId: string;
+      entry: LearningEntry;
     };
+
+// The front and, once turned, the back of a learning note's card.
+function NoteCardContent({
+  entry,
+  turned,
+  onTurn,
+  ratings,
+}: {
+  entry: LearningEntry;
+  turned: boolean;
+  onTurn: () => void;
+  ratings: ReactNode;
+}) {
+  const translation = entry.kind === "translation";
+  return (
+    <CardContent className="flex flex-col items-center gap-10">
+      <div className="flex w-full max-w-xl flex-col items-center gap-4 text-center">
+        <Badge variant="secondary">学習ノート</Badge>
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground">
+            {translation ? "日本語" : "書いた文"}
+          </p>
+          <p
+            lang={translation ? "ja" : "zh-CN"}
+            className="text-xl leading-9 font-medium sm:text-2xl"
+          >
+            {entry.originalText}
+          </p>
+        </div>
+        {turned ? (
+          <div className="w-full space-y-3" aria-live="polite">
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-primary">
+                {translation ? "中国語訳" : "添削後"}
+              </p>
+              <p
+                lang="zh-CN"
+                className="text-xl leading-9 font-semibold sm:text-2xl"
+              >
+                {entry.correctedText}
+                <SpeakButton
+                  text={entry.correctedText}
+                  className="ml-1 align-middle"
+                />
+              </p>
+              <p className="text-sm text-muted-foreground">{entry.pinyin}</p>
+            </div>
+            {entry.hints.length > 0 ? (
+              <ol className="mx-auto max-w-md list-decimal space-y-1 pl-5 text-left text-sm">
+                {entry.hints.map((hint) => (
+                  <li key={hint.id}>{hint.content}</li>
+                ))}
+              </ol>
+            ) : null}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            {translation
+              ? "中国語でどう言うかを思い出してから、めくってください。"
+              : "添削後の文を思い出してから、めくってください。"}
+          </p>
+        )}
+      </div>
+      <div className="flex min-h-9 flex-col items-center gap-4 text-center">
+        {turned ? (
+          ratings
+        ) : (
+          <Button size="lg" onClick={onTurn} ref={focusInPlace}>
+            めくる
+          </Button>
+        )}
+      </div>
+    </CardContent>
+  );
+}
 
 type SendState =
   { status: "idle" | "sending" } | { status: "error"; message: string };
@@ -175,7 +259,14 @@ export function ReviewSession({
         {index + 1} / {cards.length}
       </p>
       <Card className="py-10 sm:py-14">
-        {card.type === "word" ? (
+        {card.type === "note" ? (
+          <NoteCardContent
+            entry={card.entry}
+            turned={solved}
+            onTurn={() => setSolved(true)}
+            ratings={ratings}
+          />
+        ) : card.type === "word" ? (
           <CardContent className="flex flex-col items-center gap-10">
             <div className="flex flex-col items-center gap-3 text-center">
               <Badge variant="secondary">単語</Badge>
