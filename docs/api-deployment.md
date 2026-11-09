@@ -47,7 +47,7 @@ Web 用とは別の OAuth App を新しく作ります。GitHub の **Settings �
 | `LINE_CHANNEL_SECRET`         | LINE の Messaging API のチャネルシークレット（LINE 連携を使うときだけ。下の注と「7. LINE 連携」を参照）                            |
 | `LINE_CHANNEL_ACCESS_TOKEN`   | LINE の長期のチャネルアクセストークン                                                                                              |
 | `OPENAI_API_KEY`              | OpenAI の API キー                                                                                                                 |
-| `OPENAI_CHAT_MODEL`           | 会話練習のモデル（任意。無ければ `gpt-6.1-sol`）。「8. 会話練習」を参照                                                            |
+| `OPENAI_CHAT_MODEL`           | 「ChatGPT と話す」のモデル（任意。無ければ `gpt-6.1-sol`）。「8. ChatGPT と話す」を参照                                            |
 | `CRON_SECRET`                 | 拾い直しの Cron の認証用の秘密。Vercel が Cron の呼び出しに `Authorization: Bearer <値>` を付けます                                |
 | `FFPF_ID_ISSUER`              | FFPF ID（ffpf-portal）の issuer（例: `https://ffpf-portal.vercel.app`）。FFPF ID を使うときだけ。「9. FFPF ID でのログイン」を参照 |
 | `FFPF_ID_CLIENT_ID`           | portal に登録した zhuelog のクライアント ID（例: `zhuelog`）                                                                       |
@@ -68,7 +68,7 @@ Web 用とは別の OAuth App を新しく作ります。GitHub の **Settings �
 - Web 用の OAuth App は、以前から Web で使っているものをそのまま使えます。GitHub は登録した callback URL の **下の階層** を `redirect_uri` に使えるので、Web の callback（`https://<Web>/api/auth/callback/github/go`）は登録済みの callback（`/api/auth/callback/github`）の下になり、OAuth App の設定を変える必要はありません。
 - `API_WEB_PROXY_SECRET` は、Web（Next.js）が利用者の IP を渡すための共有の秘密です。使い方は 下の「レート制限とクライアントの IP」 を見てください。空のときは `X-Zhuelog-Client-IP` を常に無視します。設定すると、`POST /v1/auth/guest` は `X-Zhuelog-Proxy-Secret` が一致する呼び出し（Web のサーバー）だけを受け付け、それ以外は `403` です（下の「ゲストのセッション」）。
 - `API_WEB_PROXY_SECRET` も `API_JWT_SECRET` と同じく、Production と Preview で **別の値** にします。同じだと、プレビューの Web が本番の Go API に任意の IP を名乗れてしまいます。
-- LINE の 2 つ（`LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`）は、**両方設定するか、両方空** にします。LINE を使うときは `OPENAI_API_KEY` も要ります。足りないと起動時に止まります。LINE の 2 つが空のときは Go API は普通に起動し、`/v1/line/*` の 5 つのルートが `404` になります（LINE 連携が無い状態です）。`OPENAI_API_KEY` だけを設定すると、会話練習だけが有効になります（「8. 会話練習」）。
+- LINE の 2 つ（`LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`）は、**両方設定するか、両方空** にします。LINE を使うときは `OPENAI_API_KEY` も要ります。足りないと起動時に止まります。LINE の 2 つが空のときは Go API は普通に起動し、`/v1/line/*` の 5 つのルートが `404` になります（LINE 連携が無い状態です）。`OPENAI_API_KEY` だけを設定すると、「ChatGPT と話す」だけが有効になります（「8. ChatGPT と話す」）。
 - `CRON_SECRET` が空のときは、`GET /v1/line/drain` は常に `401` です（拾い直しが動きません）。LINE 連携を使うときは設定します。
 - `FFPF_ID_*` の 4 つは **すべて設定するか、すべて空** にします（一部だけだと起動時に止まります）。`FFPF_ID_ISSUER` は `https://` の URL で、`?` や `#` を含めません（`http://` は `localhost` と `127.0.0.1` だけ）。違うと起動時に止まります。4 つが空のときは、`POST /v1/auth/ffpf` が `503` を返します（FFPF ID のログインが無い状態です）。
 - `OPENAI_API_BASE_URL` と `LINE_API_BASE_URL` は、テストが偽のサーバーへつなぐための設定です。`127.0.0.1` などのループバックの URL だけを受け付け、それ以外は起動時に止まります。**本番と Preview には設定しません。**
@@ -220,9 +220,9 @@ LINE 連携を本番で使い始めるときは、次の順で行います。
 
 関数の最大実行時間は `services/api/vercel.json` では指定しません。Go の Framework Preset では `functions` のキーが関数に合わず、ビルドが失敗するためです（`The pattern "main.go" defined in functions doesn't match any Serverless Functions`）。webhook と拾い直しは最大 60 秒かかるので、**60 秒以上** が必要です。今の Go API のプロジェクトは Fluid compute で、既定が 300 秒なので足ります。Fluid compute を切るなど設定を変えるときは、ダッシュボードの **Settings → Functions** で 60 秒以上にしてください。
 
-## 8. 会話練習（ChatGPT）
+## 8. ChatGPT と話す（会話ノート）
 
-管理者が Web の `/chat` で ChatGPT と中国語の会話練習をし、会話を会話ノート（`/conversations`）で見返すための設定です。Go API の `POST /v1/chat` と `/v1/conversations` で動きます。
+会員と管理者が Web の `/chat` で ChatGPT と中国語で話し、会話を会話ノート（`/conversations`）で見返すための設定です。Go API の `POST /v1/chat` と `/v1/conversations` で動きます。
 
 - Go API に `OPENAI_API_KEY` があれば有効になります（LINE の設定は要りません）。空のときは 5 つのルートが `404` で、Web の `/chat` には「ChatGPT が設定されていません」と出ます。
 - モデルは `OPENAI_CHAT_MODEL`（無ければ `gpt-6.1-sol`）です。

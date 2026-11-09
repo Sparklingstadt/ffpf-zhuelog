@@ -67,13 +67,14 @@ export async function draftVocabularyAction(
     )
       return {
         ok: false,
-        message: "AIの下書きは今は使えません。ピン音と意味を入力してください。",
+        message:
+          "AIの下書きは今は使えません。ピンインと意味を入力してください。",
       };
     if (error instanceof GoApiError && error.status === 502)
       return {
         ok: false,
         message:
-          "ピン音と意味の下書きを作れませんでした。自分で入力するか、もう一度お試しください。",
+          "ピンインと意味の下書きを作れませんでした。自分で入力するか、もう一度お試しください。",
       };
     return failure("VOCABULARY_DRAFT_FAILED", error);
   }
@@ -103,7 +104,7 @@ export async function saveVocabularyAction(
   if (!parsed.success)
     return {
       ok: false,
-      message: `語句は1〜${VOCABULARY_LIMITS.word}文字、意味は1〜${VOCABULARY_LIMITS.meaning}文字、ピン音は${VOCABULARY_LIMITS.pinyin}文字以内にしてください。`,
+      message: `語句は1〜${VOCABULARY_LIMITS.word}文字、意味は1〜${VOCABULARY_LIMITS.meaning}文字、ピンインは${VOCABULARY_LIMITS.pinyin}文字以内にしてください。`,
     };
   try {
     await vocabulary.save(parsed.data);

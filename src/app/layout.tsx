@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 
 const siteName = "学习録";
 const description =
-  "添削文・ピン音・学習ヒントをCSVから蓄積する中国語学習アプリ";
+  "添削文・ピンイン・学習ヒントをCSVから蓄積する中国語学習アプリ";
 
 // OGP and the X card: src/app/opengraph-image.png (rendered from
 // scripts/og-image/ by `pnpm run og:render`) is picked up by the file

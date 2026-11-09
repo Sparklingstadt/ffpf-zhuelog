@@ -98,6 +98,7 @@ export function menuSections(role: AppRole): MenuSection[] {
       title: "AI に聞く",
       links: [
         { label: "ChatGPT と話す", href: "/chat" },
+        { label: "会話ノート", href: "/conversations" },
         { label: "クイック質問", href: "/quick-question" },
       ],
     },

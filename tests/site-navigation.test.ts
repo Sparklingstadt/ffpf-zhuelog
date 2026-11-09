@@ -63,6 +63,7 @@ test("the menu reaches every page that is not a main tab", () => {
     "/practice/complements",
     "/practice/measure-words",
     "/chat",
+    "/conversations",
     "/quick-question",
     "/follow",
     "/account/line",

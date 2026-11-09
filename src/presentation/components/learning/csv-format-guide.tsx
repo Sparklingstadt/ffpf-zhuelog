@@ -1,4 +1,4 @@
-const csvExample = `最初の文,添削後の文,ピン音,ヒント1,ヒント2
+const csvExample = `最初の文,添削後の文,ピンイン,ヒント1,ヒント2
 "这个菜很好吃，我很喜欢。","这道菜很好吃，我很喜欢。","Zhè dào cài hěn hǎochī, wǒ hěn xǐhuan.","料理の量詞は「道」","很喜欢＝とても好き"`;
 
 export function CsvFormatGuide() {
@@ -22,7 +22,7 @@ export function CsvFormatGuide() {
         <dt className="text-muted-foreground">2列目</dt>
         <dd>添削後の文（必須）</dd>
         <dt className="text-muted-foreground">3列目</dt>
-        <dd>ピン音（必須）</dd>
+        <dd>ピンイン（必須）</dd>
         <dt className="text-muted-foreground">4列目以降</dt>
         <dd>覚えるべきヒント（任意・100個まで）</dd>
       </dl>

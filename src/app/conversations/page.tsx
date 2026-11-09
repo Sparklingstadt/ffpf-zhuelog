@@ -35,7 +35,7 @@ export default async function ConversationsPage() {
         icon={MessagesSquare}
         eyebrow="Conversation notes"
         title="会話ノート"
-        description="ChatGPTとの会話を、話した日から見返せます。"
+        description="「ChatGPT と話す」で話した会話を、話した日から見返せます。"
         actions={
           <>
             <Button asChild variant="outline" size="sm">
