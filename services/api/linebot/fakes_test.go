@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/aiusage"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/learning"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/line"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
@@ -254,8 +255,10 @@ type fakeGen struct {
 	after func()
 }
 
-func (g *fakeGen) Generate(_ context.Context, kind, text string) (learning.Result, error) {
+func (g *fakeGen) Generate(ctx context.Context, kind, text string) (learning.Result, error) {
 	g.calls = append(g.calls, genCall{kind, text})
+	// Like the OpenAI client, report what the call used.
+	aiusage.Report(ctx, aiusage.Usage{Model: "gpt-test", InputTokens: 11, OutputTokens: 22})
 	if g.after != nil {
 		g.after()
 	}
@@ -339,3 +342,17 @@ func (e *env) onlyReply(t *testing.T) string {
 }
 
 var errBoom = errors.New("boom")
+
+// fakeUsage collects recorded usage, failing when err is set.
+type fakeUsage struct {
+	rows []store.AIUsage
+	err  error
+}
+
+func (f *fakeUsage) RecordAIUsage(_ context.Context, u store.AIUsage, _ time.Time) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.rows = append(f.rows, u)
+	return nil
+}
