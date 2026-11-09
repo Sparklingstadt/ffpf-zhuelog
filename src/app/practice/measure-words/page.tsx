@@ -21,8 +21,9 @@ export default async function MeasureWordPracticePage() {
   if (!user) redirect("/signin?callbackUrl=/practice/measure-words");
   const canSave = isMemberRole(user.role);
   return (
-    <PageShell user={user} width="4xl">
+    <PageShell user={user} width="4xl" dense>
       <PageHeader
+        dense
         icon={Ruler}
         eyebrow="Measure word practice"
         title="量詞の練習"

@@ -40,8 +40,9 @@ export default async function PrepositionPracticePage({
   const quiz = buildQuiz(QUESTION_COUNT, Math.random, undefined, filter);
 
   return (
-    <PageShell user={user} width="4xl">
+    <PageShell user={user} width="4xl" dense>
       <PageHeader
+        dense
         icon={Shuffle}
         eyebrow="Preposition practice"
         title="介詞の練習"

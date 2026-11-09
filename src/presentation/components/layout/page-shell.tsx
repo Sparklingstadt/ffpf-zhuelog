@@ -15,12 +15,16 @@ export function PageShell({
   user,
   width,
   spacious = false,
+  dense = false,
   children,
 }: {
   user: AuthenticatedUser;
   width: keyof typeof widths;
   // A wider gap between sections, for the home page.
   spacious?: boolean;
+  // Less space above and between sections on phones, for the practice
+  // pages, whose question and choices must fit above the bottom tabs.
+  dense?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -29,9 +33,10 @@ export function PageShell({
       <main className="flex-1">
         <div
           className={cn(
-            "mx-auto flex w-full flex-col px-4 py-8 sm:px-6 sm:py-12 lg:px-8",
+            "mx-auto flex w-full flex-col px-4 sm:px-6 sm:py-12 lg:px-8",
             widths[width],
             spacious ? "gap-8" : "gap-6",
+            dense ? "pt-4 pb-8 max-sm:gap-4" : "py-8",
           )}
         >
           {children}
