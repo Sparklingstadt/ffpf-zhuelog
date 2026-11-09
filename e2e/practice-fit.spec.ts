@@ -82,3 +82,60 @@ for (const { path, choiceLabel } of [
     await expectInView(page, choices);
   });
 }
+
+// A wide but short window (a laptop with the browser not maximised) gets the
+// compact practice too, and the round scrolls into view when the page header
+// would push its choices out of sight.
+test("a wide but short window shows the question and the choices", async ({
+  page,
+  context,
+}) => {
+  await asAdmin(context);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  for (const size of [
+    { width: 1024, height: 600 },
+    { width: 1366, height: 640 },
+  ]) {
+    await page.setViewportSize(size);
+    await page.goto("/practice/prepositions");
+    const choices = page.getByRole("group", { name: "介詞を選ぶ" });
+    await expect(choices.getByRole("button")).toHaveCount(4);
+    // Measured in the page, so a failure shows the positions.
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const header = document
+            .querySelector("header.sticky")!
+            .getBoundingClientRect();
+          const tabs = document.querySelector(
+            'nav[aria-label="メインメニュー"]',
+          );
+          const limit =
+            tabs && tabs.getClientRects().length > 0
+              ? tabs.getBoundingClientRect().top
+              : window.innerHeight;
+          const progress = document
+            .querySelector('[role="progressbar"]')!
+            .getBoundingClientRect();
+          const group = document
+            .querySelector('[role="group"][aria-label="介詞を選ぶ"]')!
+            .getBoundingClientRect();
+          return {
+            inView: progress.top >= header.bottom - 1 && group.bottom <= limit,
+            progressTop: progress.top,
+            headerBottom: header.bottom,
+            choicesBottom: group.bottom,
+            limit,
+          };
+        }),
+      )
+      .toMatchObject({ inView: true });
+    // The large sizes are kept for wide and tall screens only.
+    expect(
+      await choices
+        .getByRole("button")
+        .first()
+        .evaluate((button) => button.getBoundingClientRect().height),
+    ).toBeLessThan(64);
+  }
+});
