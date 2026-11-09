@@ -13,10 +13,12 @@ const guestLogin = "guest"
 
 // Me describes the signed-in caller. DisplayName is set for members only and
 // AccountID for password members only; an FFPF ID member's Login is their
-// email address. ActingAs is set while an admin acts as a member.
+// email address. ActingAs is set while an admin acts as a member. Demo is
+// set for the demo account (see LoginDemo).
 type Me struct {
 	OwnerID, Role, Login, DisplayName, AccountID string
 	ActingAs                                     ActingAs
+	Demo                                         bool
 }
 
 // ActingAs is the member an admin acts as. The zero value means none.
@@ -95,7 +97,10 @@ func (s *Service) Me(ctx context.Context, p Principal) (Me, error) {
 		if err != nil {
 			return Me{}, fmt.Errorf("auth: find password account: %w", err)
 		}
-		return Me{OwnerID: p.OwnerID, Role: RoleMember, Login: a.LoginID, DisplayName: a.DisplayName, AccountID: a.ID}, nil
+		return Me{
+			OwnerID: p.OwnerID, Role: RoleMember, Login: a.LoginID, DisplayName: a.DisplayName, AccountID: a.ID,
+			Demo: s.isDemoAccount(a),
+		}, nil
 	default:
 		return Me{}, ErrUnauthorized
 	}

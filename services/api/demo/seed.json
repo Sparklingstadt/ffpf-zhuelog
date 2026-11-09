@@ -1,0 +1,395 @@
+{
+  "displayName": "デモ",
+  "notes": [
+    {
+      "day": 7,
+      "time": "09:15",
+      "kind": "correction",
+      "original": "我昨天去了图书馆看书三个小时。",
+      "corrected": "我昨天在图书馆看了三个小时书。",
+      "pinyin": "Wǒ zuótiān zài túshūguǎn kàn le sān gè xiǎoshí shū.",
+      "hints": [
+        "「場所で何かをする」は「在＋場所＋動詞」の順にする",
+        "時間の長さは動詞の後ろ、目的語の前に置く（看了三个小时书）"
+      ],
+      "review": {
+        "answers": [{ "day": 5, "time": "08:00", "rating": 3 }],
+        "due": "today"
+      }
+    },
+    {
+      "day": 7,
+      "time": "21:40",
+      "kind": "correction",
+      "original": "我买了一个新裤子。",
+      "corrected": "我买了一条新裤子。",
+      "pinyin": "Wǒ mǎi le yì tiáo xīn kùzi.",
+      "hints": ["ズボンやスカートなど細長いものの量詞は「条」"]
+    },
+    {
+      "day": 6,
+      "time": "08:30",
+      "kind": "correction",
+      "original": "我很感兴趣中国文化。",
+      "corrected": "我对中国文化很感兴趣。",
+      "pinyin": "Wǒ duì Zhōngguó wénhuà hěn gǎn xìngqù.",
+      "hints": [
+        "「〜に興味がある」は「对〜感兴趣」",
+        "「感兴趣」は目的語を直接とらない"
+      ]
+    },
+    {
+      "day": 5,
+      "time": "12:10",
+      "kind": "translation",
+      "original": "週末は友達と一緒に餃子を作りました。",
+      "corrected": "周末我和朋友一起包了饺子。",
+      "pinyin": "Zhōumò wǒ hé péngyou yìqǐ bāo le jiǎozi.",
+      "hints": ["餃子を「作る」は「包」", "「和〜一起」で「〜と一緒に」"]
+    },
+    {
+      "day": 5,
+      "time": "22:05",
+      "kind": "correction",
+      "original": "他跑得很快比我。",
+      "corrected": "他跑得比我快。",
+      "pinyin": "Tā pǎo de bǐ wǒ kuài.",
+      "hints": [
+        "比べるときは「動詞＋得＋比B＋形容詞」",
+        "「比」の文では形容詞に「很」を付けない"
+      ]
+    },
+    {
+      "day": 4,
+      "time": "19:20",
+      "kind": "correction",
+      "original": "我已经吃饭完了。",
+      "corrected": "我已经吃完饭了。",
+      "pinyin": "Wǒ yǐjīng chī wán fàn le.",
+      "hints": ["結果補語の「完」は動詞のすぐ後ろ。目的語はその後に置く"],
+      "review": { "answers": [], "due": "today" }
+    },
+    {
+      "day": 3,
+      "time": "07:50",
+      "kind": "correction",
+      "original": "我每天早上七点钟起床了。",
+      "corrected": "我每天早上七点起床。",
+      "pinyin": "Wǒ měitiān zǎoshang qī diǎn qǐchuáng.",
+      "hints": ["毎日の習慣には「了」を付けない"]
+    },
+    {
+      "day": 3,
+      "time": "20:30",
+      "kind": "translation",
+      "original": "この本は難しすぎて、半分しか分かりませんでした。",
+      "corrected": "这本书太难了，我只看懂了一半。",
+      "pinyin": "Zhè běn shū tài nán le, wǒ zhǐ kàn dǒng le yíbàn.",
+      "hints": [
+        "「太〜了」で「〜すぎる」",
+        "「看懂」は読んで分かる（結果補語）"
+      ]
+    },
+    {
+      "day": 2,
+      "time": "08:45",
+      "kind": "correction",
+      "original": "我没有去过上海过。",
+      "corrected": "我没去过上海。",
+      "pinyin": "Wǒ méi qù guo Shànghǎi.",
+      "hints": [
+        "経験の「过」は動詞のすぐ後ろに一度だけ",
+        "否定は「没（有）＋動詞＋过」"
+      ],
+      "review": {
+        "answers": [{ "day": 1, "time": "07:30", "rating": 2 }],
+        "due": "later"
+      }
+    },
+    {
+      "day": 2,
+      "time": "21:15",
+      "kind": "correction",
+      "original": "请你帮我一下拿这个箱子。",
+      "corrected": "请你帮我拿一下这个箱子。",
+      "pinyin": "Qǐng nǐ bāng wǒ ná yíxià zhège xiāngzi.",
+      "hints": ["「一下」は動詞の後ろに置く（拿一下）"]
+    },
+    {
+      "day": 1,
+      "time": "12:30",
+      "kind": "correction",
+      "original": "外面下雨着呢。",
+      "corrected": "外面下着雨呢。",
+      "pinyin": "Wàimiàn xià zhe yǔ ne.",
+      "hints": [
+        "持続の「着」は動詞のすぐ後ろ",
+        "「下雨」は離合詞なので「下着雨」になる"
+      ]
+    },
+    {
+      "day": 1,
+      "time": "22:00",
+      "kind": "translation",
+      "original": "明日の会議は午後三時からです。",
+      "corrected": "明天的会议下午三点开始。",
+      "pinyin": "Míngtiān de huìyì xiàwǔ sān diǎn kāishǐ.",
+      "hints": ["時刻は動詞の前に置く"]
+    }
+  ],
+  "words": [
+    {
+      "word": "图书馆",
+      "pinyin": "túshūguǎn",
+      "meaning": "図書館",
+      "note": 0,
+      "review": {
+        "answers": [
+          { "day": 6, "time": "08:10", "rating": 3 },
+          { "day": 2, "time": "08:00", "rating": 3 }
+        ],
+        "due": "later"
+      }
+    },
+    {
+      "word": "裤子",
+      "pinyin": "kùzi",
+      "meaning": "ズボン",
+      "note": 1,
+      "review": {
+        "answers": [
+          { "day": 6, "time": "08:12", "rating": 1 },
+          { "day": 5, "time": "08:05", "rating": 3 }
+        ],
+        "due": "today"
+      }
+    },
+    {
+      "word": "感兴趣",
+      "pinyin": "gǎn xìngqù",
+      "meaning": "興味がある（对〜感兴趣）",
+      "note": 2,
+      "review": {
+        "answers": [{ "day": 5, "time": "08:07", "rating": 3 }],
+        "due": "later"
+      }
+    },
+    {
+      "word": "包饺子",
+      "pinyin": "bāo jiǎozi",
+      "meaning": "餃子を作る（皮で包む）",
+      "note": 3,
+      "review": {
+        "answers": [{ "day": 4, "time": "07:55", "rating": 4 }],
+        "due": "later"
+      }
+    },
+    {
+      "word": "比",
+      "pinyin": "bǐ",
+      "meaning": "〜より（比較）",
+      "note": 4,
+      "review": {
+        "answers": [{ "day": 4, "time": "07:58", "rating": 2 }],
+        "due": "today"
+      }
+    },
+    {
+      "word": "已经",
+      "pinyin": "yǐjīng",
+      "meaning": "すでに、もう",
+      "note": 5
+    },
+    {
+      "word": "起床",
+      "pinyin": "qǐchuáng",
+      "meaning": "起きる、起床する",
+      "note": 6,
+      "review": {
+        "answers": [{ "day": 2, "time": "08:03", "rating": 3 }],
+        "due": "later"
+      }
+    },
+    { "word": "一半", "pinyin": "yíbàn", "meaning": "半分", "note": 7 },
+    {
+      "word": "箱子",
+      "pinyin": "xiāngzi",
+      "meaning": "箱、スーツケース",
+      "note": 9
+    },
+    { "word": "会议", "pinyin": "huìyì", "meaning": "会議", "note": 11 }
+  ],
+  "conversations": [
+    {
+      "title": "レストランで注文する",
+      "model": "gpt-6.1-sol",
+      "day": 3,
+      "time": "21:00",
+      "messages": [
+        { "role": "user", "text": "我想用中文练习在饭店点菜。你当服务员吧。" },
+        { "role": "assistant", "text": "好的！欢迎光临，请问几位？这是菜单。" },
+        { "role": "user", "text": "两位。我们想要一个宫保鸡丁和一碗米饭。" },
+        {
+          "role": "assistant",
+          "text": "好的，一份宫保鸡丁，一碗米饭。要喝点儿什么吗？\n\n料理を注文するときは「一个」より「一份」が自然です。"
+        },
+        { "role": "user", "text": "来两杯茶吧。谢谢！" },
+        { "role": "assistant", "text": "好的，请稍等，菜马上就来！" }
+      ]
+    },
+    {
+      "title": "週末の予定を話す",
+      "model": "gpt-6.1-sol",
+      "day": 1,
+      "time": "20:15",
+      "messages": [
+        { "role": "user", "text": "这个周末你有什么打算？" },
+        {
+          "role": "assistant",
+          "text": "我打算去公园散步，然后在家看书。你呢？"
+        },
+        { "role": "user", "text": "我要跟朋友去爬山，可是天气预报说会下雨。" },
+        {
+          "role": "assistant",
+          "text": "那太可惜了。如果下雨的话，你们可以去博物馆。\n\n「如果……的话」で「もし〜なら」を表せます。"
+        },
+        { "role": "user", "text": "好主意！如果下雨的话，我们就去博物馆。" },
+        {
+          "role": "assistant",
+          "text": "很好！「如果……的话，就……」の形を正しく使えています。"
+        }
+      ]
+    }
+  ],
+  "prepositionRecords": [
+    {
+      "day": 6,
+      "time": "20:00",
+      "elapsedSeconds": 96,
+      "questions": [
+        {
+          "id": "P001",
+          "answer": "在",
+          "noun": "学校",
+          "prompt": "（　）学校学习",
+          "misses": []
+        },
+        {
+          "id": "P003",
+          "answer": "从",
+          "noun": "车站",
+          "prompt": "（　）车站出发",
+          "misses": ["在"]
+        },
+        {
+          "id": "P062",
+          "answer": "对",
+          "noun": "历史",
+          "prompt": "（　）历史感兴趣",
+          "misses": []
+        },
+        {
+          "id": "P078",
+          "answer": "给",
+          "noun": "妈妈",
+          "prompt": "（　）妈妈打电话",
+          "misses": ["跟", "对"]
+        },
+        {
+          "id": "P086",
+          "answer": "比",
+          "noun": "弟弟",
+          "prompt": "（　）弟弟高",
+          "misses": []
+        }
+      ]
+    },
+    {
+      "day": 2,
+      "time": "19:30",
+      "elapsedSeconds": 74,
+      "questions": [
+        {
+          "id": "P070",
+          "answer": "跟",
+          "noun": "朋友",
+          "prompt": "（　）朋友旅行",
+          "misses": []
+        },
+        {
+          "id": "P027",
+          "answer": "离",
+          "noun": "学校",
+          "prompt": "（　）学校很近",
+          "misses": ["从"]
+        },
+        {
+          "id": "P041",
+          "answer": "往",
+          "noun": "北",
+          "prompt": "（　）北走",
+          "misses": []
+        },
+        {
+          "id": "P146",
+          "answer": "把",
+          "noun": "门",
+          "prompt": "（　）门关上",
+          "misses": []
+        },
+        {
+          "id": "P148",
+          "answer": "被",
+          "noun": "风",
+          "prompt": "（　）风吹倒",
+          "misses": []
+        }
+      ]
+    }
+  ],
+  "complementRecords": [
+    {
+      "mode": "result",
+      "day": 3,
+      "time": "22:00",
+      "elapsedSeconds": 81,
+      "questions": [
+        {
+          "id": "result-01",
+          "answer": "懂",
+          "noun": "結果補語",
+          "prompt": "我听（　）了老师的解释。",
+          "misses": []
+        },
+        {
+          "id": "result-02",
+          "answer": "到",
+          "noun": "結果補語",
+          "prompt": "我终于找（　）钥匙了。",
+          "misses": ["完"]
+        },
+        {
+          "id": "result-03",
+          "answer": "完",
+          "noun": "結果補語",
+          "prompt": "今天的作业已经做（　）了。",
+          "misses": []
+        },
+        {
+          "id": "result-04",
+          "answer": "错",
+          "noun": "結果補語",
+          "prompt": "他把我的名字写（　）了。",
+          "misses": []
+        },
+        {
+          "id": "result-07",
+          "answer": "见",
+          "noun": "結果補語",
+          "prompt": "我在楼下看（　）了小王。",
+          "misses": ["懂"]
+        }
+      ]
+    }
+  ]
+}
