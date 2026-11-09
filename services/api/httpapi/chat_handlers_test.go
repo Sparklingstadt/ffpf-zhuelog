@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/aiusage"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/chat"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
@@ -25,6 +26,8 @@ type fakeChat struct {
 
 func (f *fakeChat) Stream(ctx context.Context, msgs []chat.Message, emit func(string) error) error {
 	f.got = msgs
+	// Like the OpenAI client, report what the answer used.
+	aiusage.Report(ctx, aiusage.Usage{Model: "gpt-chat", InputTokens: 40, OutputTokens: 60})
 	for _, p := range f.pieces {
 		if err := emit(p); err != nil {
 			return err

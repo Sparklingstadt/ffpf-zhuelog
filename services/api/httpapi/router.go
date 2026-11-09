@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/aiusage"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
@@ -119,6 +120,9 @@ type Deps struct {
 	VocabularyDrafter VocabularyDrafter
 	// StudyLog counts what owners did each day.
 	StudyLog StudyLog
+	// AIUsage records the tokens of every OpenAI call and sums them up for
+	// the admin; nil records nothing and leaves the summary route out.
+	AIUsage AIUsage
 }
 
 const (
@@ -242,6 +246,9 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	private("GET /v1/admin/accounts", adminOnly(listAccounts(d.Accounts)))
 	private("POST /v1/admin/accounts", adminOnly(createAccount(d.Accounts, d.Hasher, d.Now)))
 	private("POST /v1/admin/accounts/{id}/password", adminOnly(resetAccountPassword(d.Accounts, d.Hasher, d.Now)))
+	if d.AIUsage != nil {
+		private("GET /v1/admin/ai-usage", adminOnly(aiUsageMonth(d.AIUsage, d.Now)))
+	}
 
 	// Finished rounds of preposition practice, for members and admins.
 	// Guests may practice in the web, but nothing of theirs is saved.
@@ -274,7 +281,7 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 		private("GET /v1/study-log", authed(listStudyLog(d.StudyLog)))
 	}
 	if d.VocabularyDrafter != nil {
-		private("POST /v1/vocabulary/draft", authed(draftVocabulary(d.VocabularyDrafter)))
+		private("POST /v1/vocabulary/draft", authed(trackAIUsage(d.AIUsage, aiusage.FeatureVocabularyDraft, d.Now, draftVocabulary(d.VocabularyDrafter))))
 	}
 
 	// The LINE routes exist only when the bot is configured. The webhook and
@@ -293,7 +300,7 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	// The chat, for members and admins (guests get 403 from requireAuth),
 	// exists only when OpenAI is configured.
 	if d.Chat != nil {
-		private("POST /v1/chat", authed(streamChat(d.Chat)))
+		private("POST /v1/chat", authed(trackAIUsage(d.AIUsage, aiusage.FeatureChat, d.Now, streamChat(d.Chat))))
 		private("GET /v1/conversations", authed(listConversations(d.Conversations, d.ChatModel)))
 		private("GET /v1/conversations/{id}", authed(getConversation(d.Conversations)))
 		private("PUT /v1/conversations/{id}", authed(putConversation(d.Conversations, d.Now)))
@@ -301,7 +308,7 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	}
 
 	if d.QuickChat != nil && d.Questions != nil {
-		private("POST /v1/quick-question", authed(streamMessages(d.QuickChat, true)))
+		private("POST /v1/quick-question", authed(trackAIUsage(d.AIUsage, aiusage.FeatureQuickQuestion, d.Now, streamMessages(d.QuickChat, true))))
 		private("GET /v1/questions", authed(listQuestions(d.Questions, d.ChatModel)))
 		private("GET /v1/questions/{id}", authed(getQuestion(d.Questions)))
 		private("PUT /v1/questions/{id}", authed(putQuestion(d.Questions, d.ChatModel, d.Now)))

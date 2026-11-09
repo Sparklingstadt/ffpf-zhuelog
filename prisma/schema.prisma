@@ -304,3 +304,18 @@ model VocabularyEntry {
   @@unique([ownerId, language, word])
   @@index([ownerId, createdAt])
 }
+
+// One OpenAI call: who it was for, which feature, and the tokens it used.
+// Written only by the Go API; read by the admin's monthly summary.
+model AiUsage {
+  id           String   @id
+  ownerId      String
+  feature      String
+  model        String
+  inputTokens  Int
+  outputTokens Int
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([ownerId, createdAt])
+}

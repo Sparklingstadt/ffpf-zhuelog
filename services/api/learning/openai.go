@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/aiusage"
 )
 
 const (
@@ -131,6 +133,8 @@ func (o *OpenAI) respond(ctx context.Context, instructions, schemaName string, s
 	if len(body) > maxRespBody {
 		return "", newError("OPENAI_INVALID_RESPONSE", false)
 	}
+	// The tokens are spent even when the answer turns out unusable.
+	reportUsage(ctx, body)
 	out, ok := outputText(body)
 	if !ok {
 		return "", newError("OPENAI_INVALID_RESPONSE", false)
@@ -192,4 +196,21 @@ func outputText(body []byte) (string, bool) {
 		}
 	}
 	return sb.String(), sb.Len() > 0
+}
+
+// reportUsage passes the token counts of a Responses API body to the
+// context's aiusage.Recorder. A body without usage reports nothing.
+func reportUsage(ctx context.Context, body []byte) {
+	var payload struct {
+		Usage *struct {
+			InputTokens  int `json:"input_tokens"`
+			OutputTokens int `json:"output_tokens"`
+		} `json:"usage"`
+	}
+	if json.Unmarshal(body, &payload) != nil || payload.Usage == nil {
+		return
+	}
+	aiusage.Report(ctx, aiusage.Usage{
+		Model: model, InputTokens: payload.Usage.InputTokens, OutputTokens: payload.Usage.OutputTokens,
+	})
 }

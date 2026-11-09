@@ -16,6 +16,7 @@ const (
 	msgUnauthorized      = "認証が必要です。"
 	msgForbidden         = "このアカウントは利用できません。" // allowlist removal, revoked session
 	msgAdminOnly         = "管理者だけが利用できます。"
+	msgInvalidMonth      = "月は YYYY-MM の形で指定してください。"
 	msgMembersOnly       = "この操作は会員だけが利用できます。"
 	msgShareMembersOnly  = "共有できるのは会員だけです。"
 	msgSelfFollow        = "自分はフォローできません。"
