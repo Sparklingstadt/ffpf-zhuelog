@@ -1,4 +1,4 @@
-import { COMPLEMENT_MODES } from "@/domain/practice/complement-quiz";
+import { roundModeLabel } from "@/domain/practice/complement-record";
 import { ArrowLeft, ChevronRight, History, Shuffle } from "lucide-react";
 import Link from "next/link";
 
@@ -28,7 +28,7 @@ export default async function ComplementRecordsPage() {
       <PageHeader
         icon={History}
         eyebrow="Complement records"
-        title="補語の練習記録"
+        title="補語・量詞の練習記録"
         description="終えた練習の正答率・ミス数・経過時間を、新しい順に見返せます。"
         actions={
           <>
@@ -45,7 +45,7 @@ export default async function ComplementRecordsPage() {
         <EmptyState
           icon={Shuffle}
           title="まだ練習の記録がありません"
-          description="補語の練習を最後まで解くと、ここに記録が残ります。"
+          description="補語か量詞の練習を最後まで解くと、ここに記録が残ります。"
         />
       ) : (
         <div className="grid gap-3">
@@ -62,8 +62,7 @@ export default async function ComplementRecordsPage() {
                       {formatTokyoDateTime(record.createdAt)}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {COMPLEMENT_MODES[record.mode].label} ·{" "}
-                      {record.questionCount}問
+                      {roundModeLabel(record.mode)} · {record.questionCount}問
                     </p>
                   </div>
                   <div className="flex items-center gap-4">

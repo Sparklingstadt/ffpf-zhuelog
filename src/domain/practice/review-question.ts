@@ -4,6 +4,10 @@ import {
   complementVerbQuestionById,
   isVerbQuestionId,
 } from "./complement-verb-quiz";
+import {
+  isMeasureWordQuestionId,
+  measureWordQuestionById,
+} from "./measure-word-quiz";
 import { PREPOSITION_USAGES } from "./preposition-data";
 import {
   buildQuestion,
@@ -13,7 +17,8 @@ import {
 
 // The practice question a review item names, with its choices shuffled:
 // "preposition" items are "<use id>:<noun>", "complement" items are the
-// question's id ("verb:<use id>:<verb>" for the verb mode). Null when the
+// question's id ("verb:<use id>:<verb>" for the verb mode, "measure-NN" for
+// the measure-word practice, whose rounds are kept with the complements'). Null when the
 // data no longer has it (a use or a phrase removed from the CSV), or for a
 // kind the web does not know yet.
 export function reviewQuestion(
@@ -31,6 +36,9 @@ export function reviewQuestion(
     return usage && pair ? buildQuestion(usage, pair, random) : null;
   }
   if (kind === "complement") {
+    // The measure-word practice keeps its rounds with the complements'.
+    if (isMeasureWordQuestionId(targetId))
+      return measureWordQuestionById(targetId, random);
     if (isVerbQuestionId(targetId))
       return complementVerbQuestionById(targetId, random);
     const q = COMPLEMENT_USAGES.find((u) => u.id === targetId);
@@ -53,6 +61,8 @@ export function reviewChoice(
   if (!question) return null;
   if (kind === "preposition")
     return { question, label: "介詞", compact: false };
+  if (isMeasureWordQuestionId(targetId))
+    return { question, label: "量詞", compact: false };
   if (isVerbQuestionId(targetId))
     return { question, label: "補語", compact: false };
   return { question, label: question.noun, compact: true };
