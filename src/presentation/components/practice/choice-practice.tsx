@@ -77,7 +77,8 @@ export function SolvedExample({
     "example" | "examplePinyin" | "translation"
   >;
   // Members and admins may pick words of the sentence into their vocabulary
-  // book; guests practice without one.
+  // book in today's review. The practice leaves it out, to keep the
+  // question and "next" in view.
   canAddToVocabulary?: boolean;
 }) {
   const preference = useSyncExternalStore(
@@ -458,10 +459,7 @@ export function ChoicePractice({
                         {question.answer} {question.pinyin}
                       </span>
                     </p>
-                    <SolvedExample
-                      question={question}
-                      canAddToVocabulary={canSave}
-                    />
+                    <SolvedExample question={question} />
                   </div>
                   <Button size="lg" onClick={next} ref={focusInPlace}>
                     {index + 1 < total ? "次へ" : "結果を見る"} <ArrowRight />

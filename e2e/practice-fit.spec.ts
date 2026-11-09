@@ -70,6 +70,8 @@ for (const { path, choiceLabel } of [
     }
     const next = page.getByRole("button", { name: "次へ" });
     await expect(next).toBeFocused();
+    // The practice has no form to add words of the example to the book.
+    await expect(page.getByText("例文の語句を単語帳に入れる")).toHaveCount(0);
     await expectInView(page, next);
     await page.screenshot({
       path: testInfo.outputPath(`${path.replaceAll("/", "-")}-solved.png`),
