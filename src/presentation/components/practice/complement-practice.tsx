@@ -3,6 +3,7 @@ import {
   buildComplementQuiz,
   type ComplementMode,
 } from "@/domain/practice/complement-quiz";
+import type { HskLevel } from "@/domain/practice/hsk-level";
 import type { PrepositionQuestion } from "@/domain/practice/preposition-quiz";
 import { saveComplementRoundAction } from "@/presentation/actions/complement-record-actions";
 import { ChoicePractice } from "./choice-practice";
@@ -11,10 +12,13 @@ export function ComplementPractice({
   initialQuiz,
   mode,
   canSave,
+  level,
 }: {
   initialQuiz: PrepositionQuestion[];
   mode: ComplementMode;
   canSave: boolean;
+  // The HSK level the questions are of, or null for every question.
+  level: HskLevel | null;
 }) {
   return (
     <ChoicePractice
@@ -23,7 +27,9 @@ export function ComplementPractice({
       // The verb mode shows its verb large, as the preposition practice
       // shows its noun; the other modes' prompts are whole sentences.
       compactHeading={mode !== "verb"}
-      buildNextQuiz={() => buildComplementQuiz(mode, initialQuiz.length)}
+      buildNextQuiz={() =>
+        buildComplementQuiz(mode, initialQuiz.length, Math.random, level)
+      }
       saveRound={(round) => saveComplementRoundAction({ ...round, mode })}
       recordsHref="/practice/complements/records"
       choiceLabel="補語を選ぶ"

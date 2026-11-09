@@ -6,31 +6,43 @@ import { isMemberRole } from "@/domain/identity/entities/authenticated-user";
 import {
   buildComplementQuiz,
   COMPLEMENT_MODES,
+  countComplementQuestions,
   isComplementMode,
 } from "@/domain/practice/complement-quiz";
+import { parseHskLevel } from "@/domain/practice/hsk-level";
 import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
 import { ComplementPractice } from "@/presentation/components/practice/complement-practice";
+import { HskLevelPicker } from "@/presentation/components/practice/hsk-level-picker";
 import { Button } from "@/presentation/components/ui/button";
 
 export const dynamic = "force-dynamic";
 export default async function ComplementQuizPage({
   params,
-}: {
-  params: Promise<{ mode: string }>;
-}) {
+  searchParams,
+}: PageProps<"/practice/complements/[mode]">) {
   const { mode } = await params;
   if (!isComplementMode(mode)) notFound();
+  const level = parseHskLevel((await searchParams).hsk);
   const user = await getCurrentViewerUser();
-  if (!user) redirect(`/signin?callbackUrl=/practice/complements/${mode}`);
+  if (!user)
+    redirect(
+      `/signin?callbackUrl=${encodeURIComponent(`/practice/complements/${mode}${level ? `?hsk=${level}` : ""}`)}`,
+    );
   const canSave = isMemberRole(user.role);
+  const counts = {
+    4: countComplementQuestions(mode, 4),
+    5: countComplementQuestions(mode, 5),
+    6: countComplementQuestions(mode, 6),
+  };
+  const quiz = buildComplementQuiz(mode, 25, Math.random, level);
   return (
     <PageShell user={user} width="4xl">
       <PageHeader
         icon={ListChecks}
         eyebrow="Complement practice"
         title={`${COMPLEMENT_MODES[mode].label}の練習`}
-        description={`${COMPLEMENT_MODES[mode].description} 日本語の意味に合う補語を、4つの中から選んでください。`}
+        description={`${COMPLEMENT_MODES[mode].description} 日本語の意味に合う補語を、4つの中から選んでください。HSK の級は、例文のいちばん難しい語で決めています。`}
         actions={
           <>
             <Button asChild variant="outline" size="sm">
@@ -50,12 +62,25 @@ export default async function ComplementQuizPage({
           </>
         }
       />
-      <ComplementPractice
-        key={mode}
-        initialQuiz={buildComplementQuiz(mode)}
-        mode={mode}
-        canSave={canSave}
+      <HskLevelPicker
+        path={`/practice/complements/${mode}`}
+        current={level}
+        counts={counts}
+        total={countComplementQuestions(mode)}
       />
+      {quiz.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          この級の問題はまだありません。
+        </p>
+      ) : (
+        <ComplementPractice
+          key={`${mode}:${level ?? "all"}`}
+          initialQuiz={quiz}
+          mode={mode}
+          canSave={canSave}
+          level={level}
+        />
+      )}
     </PageShell>
   );
 }
