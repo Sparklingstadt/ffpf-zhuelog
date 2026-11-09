@@ -7,10 +7,13 @@ import { complementQuestion } from "../src/domain/practice/complement-quiz";
 import { COMPLEMENT_VERB_USAGES } from "../src/domain/practice/complement-verb-data";
 import { complementVerbQuestion } from "../src/domain/practice/complement-verb-quiz";
 import { EXAMPLE_PINYIN } from "../src/domain/practice/example-pinyin";
+import { MEASURE_WORD_USAGES } from "../src/domain/practice/measure-word-data";
+import { measureWordQuestion } from "../src/domain/practice/measure-word-quiz";
 import { PREPOSITION_USAGES } from "../src/domain/practice/preposition-data";
 import { buildQuestion } from "../src/domain/practice/preposition-quiz";
 
-// Every question the complement and preposition practices can ask.
+// Every question the complement, measure-word and preposition practices can
+// ask.
 const questions = [
   ...COMPLEMENT_USAGES.map((usage) => complementQuestion(usage)),
   ...COMPLEMENT_VERB_USAGES.flatMap((usage) =>
@@ -19,6 +22,7 @@ const questions = [
   ...PREPOSITION_USAGES.flatMap((usage) =>
     usage.pairs.map((pair) => buildQuestion(usage, pair)),
   ),
+  ...MEASURE_WORD_USAGES.map((usage) => measureWordQuestion(usage)),
 ];
 
 test("every practice example has its pinyin", () => {

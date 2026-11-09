@@ -6,6 +6,7 @@ import {
   expect,
   memberOwnerId,
   test,
+  openSiteMenu,
 } from "./fixtures";
 
 test("admin chats, the conversation is saved and can be continued and deleted", async ({
@@ -14,9 +15,10 @@ test("admin chats, the conversation is saved and can be continued and deleted", 
 }) => {
   await asAdmin(context);
   await page.goto("/");
-  await page
-    .getByRole("navigation", { name: "アカウント" })
-    .getByRole("link", { name: "ChatGPT と話す" })
+  await (
+    await openSiteMenu(page)
+  )
+    .getByRole("menuitem", { name: "ChatGPT と話す" })
     .click();
   await expect(page).toHaveURL((url) => url.pathname === "/chat");
 
@@ -63,9 +65,10 @@ test("a member chats and keeps their own conversation notes; guests have no way 
 }) => {
   const accountId = await createMember(db, "taro", "太郎", "member-password-1");
   await asMember(page, "taro", "member-password-1");
-  await page
-    .getByRole("navigation", { name: "アカウント" })
-    .getByRole("link", { name: "ChatGPT と話す" })
+  await (
+    await openSiteMenu(page)
+  )
+    .getByRole("menuitem", { name: "ChatGPT と話す" })
     .click();
   await expect(page).toHaveURL((url) => url.pathname === "/chat");
   const input = page.getByLabel("ChatGPTへのメッセージ");
@@ -89,9 +92,11 @@ test("a member chats and keeps their own conversation notes; guests have no way 
 
   const guest = await browser.newPage();
   await asGuest(guest);
-  await expect(guest.getByRole("link", { name: "ChatGPT と話す" })).toHaveCount(
-    0,
-  );
+  await expect(
+    (await openSiteMenu(guest)).getByRole("menuitem", {
+      name: "ChatGPT と話す",
+    }),
+  ).toHaveCount(0);
   await expect(guest.getByRole("link", { name: "会話ノート" })).toHaveCount(0);
   expect((await guest.goto("/chat"))?.status()).toBe(404);
   expect((await guest.goto("/conversations"))?.status()).toBe(404);

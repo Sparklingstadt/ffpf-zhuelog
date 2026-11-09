@@ -35,6 +35,7 @@ type Store interface {
 	PruneLine(ctx context.Context, now time.Time) error
 	ConsumeThrottle(ctx context.Context, key string, limit int, window time.Duration, now time.Time) (bool, error)
 	ResetThrottle(ctx context.Context, key string) error
+	storeReviewNotify
 }
 
 // Generator turns a text into a correction or translation.
@@ -65,7 +66,10 @@ type Service struct {
 	Messenger  Messenger
 	OwnerValid OwnerCheck
 	// Usage, when set, records the tokens of each generation for the owner.
-	Usage  UsageRecorder
+	Usage UsageRecorder
+	// Quota reads the month's push allowance; without it no review message
+	// is sent.
+	Quota  QuotaReader
 	Now    func() time.Time // default time.Now
 	Logger *slog.Logger     // default slog.Default(); never given text, results, keys, LINE user IDs or codes
 	Random io.Reader        // default crypto/rand.Reader

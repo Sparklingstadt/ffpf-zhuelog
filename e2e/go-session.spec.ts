@@ -1,5 +1,5 @@
 import { type BrowserContext } from "@playwright/test";
-import { asMember, createMember, expect, test } from "./fixtures";
+import { asMember, createMember, expect, test, signOut } from "./fixtures";
 
 async function sessionCookies(context: BrowserContext) {
   const cookies = await context.cookies();
@@ -36,7 +36,7 @@ test("the proxy refreshes a missing access token, and sign-out revokes the old r
   expect(after.refresh).toBeTruthy();
   expect(after.refresh).not.toBe(before.refresh);
 
-  await page.getByRole("button", { name: "ログアウト" }).click();
+  await signOut(page);
   await expect(
     page.getByRole("button", { name: "ゲストとして使う" }),
   ).toBeVisible();

@@ -2,7 +2,15 @@ import { COMPLEMENT_USAGES } from "./complement-data";
 import {
   buildComplementVerbQuiz,
   countComplementVerbQuestions,
+  countComplementVerbQuestionsAt,
 } from "./complement-verb-quiz";
+import {
+  hskLevelOf,
+  inHskFilter,
+  type HskBasis,
+  type HskFilter,
+  type HskLevel,
+} from "./hsk-level";
 import {
   examplePinyinOf,
   type PrepositionQuestion,
@@ -69,9 +77,30 @@ export function isComplementMode(value: string): value is ComplementMode {
   return Object.hasOwn(COMPLEMENT_MODES, value);
 }
 
-export function countComplementQuestions(mode: ComplementMode): number {
-  if (mode === "verb") return countComplementVerbQuestions();
-  return COMPLEMENT_USAGES.filter((q) => q.mode === mode).length;
+export function countComplementQuestions(
+  mode: ComplementMode,
+  filter: HskFilter | null = null,
+): number {
+  if (mode === "verb")
+    return filter === null
+      ? countComplementVerbQuestions()
+      : countComplementVerbQuestionsAt(filter);
+  return COMPLEMENT_USAGES.filter(
+    (q) => q.mode === mode && inHskFilter(filter, sentenceOf(q)),
+  ).length;
+}
+
+// A hand-written question's sentence: its prompt with the answer in.
+function sentenceOf(q: ComplementUsage): string {
+  return q.prompt.replace("（　）", q.answer);
+}
+
+// The HSK level of a hand-written question, decided by `basis`.
+export function complementUsageLevel(
+  q: ComplementUsage,
+  basis: HskBasis,
+): HskLevel {
+  return hskLevelOf(basis, sentenceOf(q));
 }
 
 function shuffled<T>(values: readonly T[], random: Random): T[] {
@@ -89,11 +118,19 @@ export function buildComplementQuiz(
   mode: ComplementMode,
   count = 25,
   random: Random = Math.random,
+  filter: HskFilter | null = null,
 ): PrepositionQuestion[] {
   if (mode === "verb")
-    return buildComplementVerbQuiz(Math.max(0, Math.floor(count)), random);
+    return buildComplementVerbQuiz(
+      Math.max(0, Math.floor(count)),
+      random,
+      undefined,
+      filter,
+    );
   return shuffled(
-    COMPLEMENT_USAGES.filter((q) => q.mode === mode),
+    COMPLEMENT_USAGES.filter(
+      (q) => q.mode === mode && inHskFilter(filter, sentenceOf(q)),
+    ),
     random,
   )
     .slice(0, Math.max(0, Math.floor(count)))
