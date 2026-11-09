@@ -41,6 +41,35 @@ test("a member also carries the display name and account id", async () => {
   });
 });
 
+test("the demo account is a member marked demo", async () => {
+  const user = await provider(async () => ({
+    ownerId: "password:cdemo",
+    role: "member",
+    login: "demo",
+    displayName: "デモ",
+    accountId: "cdemo",
+    demo: true,
+  })).getCurrentUser();
+  assert.deepEqual(user, {
+    githubLogin: "demo",
+    githubId: "password:cdemo",
+    role: "member",
+    displayName: "デモ",
+    accountId: "cdemo",
+    demo: true,
+  });
+});
+
+test("only a member is ever marked demo", async () => {
+  const user = await provider(async () => ({
+    ownerId: "12345",
+    role: "admin",
+    login: "octocat",
+    demo: true,
+  })).getCurrentUser();
+  assert.equal(user?.demo, undefined);
+});
+
 test("a guest has no member fields even if the API sends them", async () => {
   const user = await provider(async () => ({
     ownerId: "guest",

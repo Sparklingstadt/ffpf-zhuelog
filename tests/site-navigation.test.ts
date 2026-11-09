@@ -121,3 +121,44 @@ test("the menu names the person by role", () => {
     { name: "デモ", roleLabel: "メンバー" },
   );
 });
+
+test("the demo menu leaves out what Go refuses the demo", () => {
+  const demo = menuSections("member", { demo: true }).flatMap((section) =>
+    section.links.map((link) => link.href),
+  );
+  for (const href of [
+    "/chat",
+    "/quick-question",
+    "/follow",
+    "/account/line",
+    "/account/password",
+    "/admin/accounts",
+  ])
+    assert.ok(!demo.includes(href), href);
+  for (const href of [
+    "/logs",
+    "/study-log",
+    "/import",
+    "/logs/trash",
+    "/practice/prepositions",
+    "/conversations",
+  ])
+    assert.ok(demo.includes(href), href);
+  // Without the flag a member's menu is unchanged.
+  assert.deepEqual(
+    menuSections("member", { demo: false }),
+    menuSections("member"),
+  );
+});
+
+test("the demo account is labelled demo", () => {
+  assert.deepEqual(
+    menuIdentity({
+      role: "member",
+      githubLogin: "demo",
+      displayName: "デモ",
+      demo: true,
+    }),
+    { name: "デモ", roleLabel: "デモ" },
+  );
+});

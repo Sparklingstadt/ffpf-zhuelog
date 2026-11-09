@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
 )
 
 const minJWTSecretBytes = 32
@@ -48,6 +50,9 @@ type Config struct {
 	// CronSecret is optional: the bearer secret the scheduler presents to the
 	// LINE retry endpoint. Unset means that endpoint always answers 401.
 	CronSecret []byte
+	// DemoLoginID is optional: the loginId of the demo account anyone may
+	// enter from the sign-in page. Unset means there is no demo.
+	DemoLoginID string
 	// Upstream base URLs. Only loopback overrides are accepted (for tests).
 	OpenAIBaseURL  string
 	LineAPIBaseURL string
@@ -165,6 +170,13 @@ func LoadConfig(getenv func(string) string) (Config, error) {
 	}
 	if cronSecret := get("CRON_SECRET"); cronSecret != "" {
 		cfg.CronSecret = []byte(cronSecret)
+	}
+	if demo := get("DEMO_LOGIN_ID"); demo != "" {
+		id, ok := auth.NormalizeLoginID(demo)
+		if !ok || id != demo {
+			return Config{}, errors.New("DEMO_LOGIN_ID must be a login ID: 3 to 32 of a-z, 0-9, '.', '_' and '-'")
+		}
+		cfg.DemoLoginID = id
 	}
 	if cfg.OpenAIBaseURL, err = baseURL(get, "OPENAI_API_BASE_URL", defaultOpenAIBaseURL); err != nil {
 		return Config{}, err
