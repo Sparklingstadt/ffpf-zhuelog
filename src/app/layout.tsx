@@ -7,6 +7,7 @@ import { siteUrl } from "@/infrastructure/config/environment";
 import { ThemeBootstrap } from "@/presentation/components/theme/theme-bootstrap";
 import { ActingBanner } from "@/presentation/components/layout/acting-banner";
 import { BottomNavigation } from "@/presentation/components/layout/bottom-navigation";
+import { menuIdentity } from "@/presentation/presenters/site-navigation";
 import "./globals.css";
 
 // Request-specific CSP nonces cannot be used in a statically cached document.
@@ -67,7 +68,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       >
         <ActingBanner user={user} />
         {children}
-        {user ? <BottomNavigation role={user.role} /> : null}
+        {user ? (
+          <BottomNavigation role={user.role} {...menuIdentity(user)} />
+        ) : null}
       </body>
     </html>
   );

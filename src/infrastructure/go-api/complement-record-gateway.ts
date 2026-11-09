@@ -1,4 +1,4 @@
-import type { ComplementMode } from "@/domain/practice/complement-quiz";
+import type { ComplementRoundMode } from "@/domain/practice/complement-record";
 import type {
   ComplementAnswer,
   ComplementRecord,
@@ -58,7 +58,7 @@ export function createComplementRecordGateway(call: GoApiCall = goApiAuthed) {
     // returns the round already saved.
     async save(round: {
       id: string;
-      mode: ComplementMode;
+      mode: ComplementRoundMode;
       startedAt: Date;
       elapsedMs: number;
       questions: ComplementAnswer[];

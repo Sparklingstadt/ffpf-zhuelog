@@ -101,15 +101,41 @@ export function createAccountGateway(call: GoApiCall = goApiAuthed) {
     // Go registers the link routes only when LINE is configured, so a 404
     // means "not available here", not "not linked". The LINE user id never
     // reaches the web: Go answers with the flag only.
-    async getLineLink(): Promise<{ linked: boolean; available: boolean }> {
+    // reviewNotify is the morning review message on LINE; an older Go API
+    // does not report it, which reads as off.
+    async getLineLink(): Promise<{
+      linked: boolean;
+      available: boolean;
+      reviewNotify: boolean;
+    }> {
       try {
-        const json = await call<{ linked: boolean }>("/v1/line/link", {
-          method: "GET",
-        });
-        return { linked: json.linked, available: true };
+        const json = await call<{ linked: boolean; reviewNotify?: boolean }>(
+          "/v1/line/link",
+          { method: "GET" },
+        );
+        return {
+          linked: json.linked,
+          available: true,
+          reviewNotify: json.reviewNotify === true,
+        };
       } catch (error) {
         if (error instanceof GoApiError && error.status === 404)
-          return { linked: false, available: false };
+          return { linked: false, available: false, reviewNotify: false };
+        throw error;
+      }
+    },
+
+    // Turns the morning review message on or off. false when Go has no such
+    // setting for the caller: LINE is not linked, or the API is older (both
+    // answer 404).
+    async setLineReviewNotify(on: boolean): Promise<boolean> {
+      try {
+        await call<unknown>("/v1/line/review-notify", {
+          method: on ? "PUT" : "DELETE",
+        });
+        return true;
+      } catch (error) {
+        if (error instanceof GoApiError && error.status === 404) return false;
         throw error;
       }
     },

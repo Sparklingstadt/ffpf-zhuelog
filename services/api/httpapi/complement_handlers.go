@@ -182,6 +182,8 @@ var complementModes = map[string]bool{
 	"direction-simple-extended": true, "direction-compound-extended": true,
 	// 動詞から選ぶ: built from the complement CSV, like the prepositions.
 	"verb": true,
+	// The measure-word practice keeps its rounds with the complements'.
+	"measure": true,
 }
 
 func validComplementMode(mode string) bool {

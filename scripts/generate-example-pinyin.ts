@@ -1,12 +1,13 @@
 // Writes src/domain/practice/example-pinyin.ts, the pinyin shown above the
-// example sentence when a complement or preposition question is solved.
+// example sentence when a complement, measure-word or preposition question
+// is solved.
 // Usage:
 //   pnpm exec tsx scripts/generate-example-pinyin.ts
 //
-// Run it again after changing complement-data.ts, complement-verb-data.ts or
-// preposition-data.ts; tests/example-pinyin.test.ts fails until then. A
-// wrong reading is fixed in READING_FIXES (scripts/lib/example-pinyin.ts),
-// never in the generated file.
+// Run it again after changing complement-data.ts, complement-verb-data.ts,
+// measure-word-data.ts or preposition-data.ts; tests/example-pinyin.test.ts
+// fails until then. A wrong reading is fixed in READING_FIXES
+// (scripts/lib/example-pinyin.ts), never in the generated file.
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -14,6 +15,7 @@ import { format, resolveConfig } from "prettier";
 
 import { COMPLEMENT_USAGES } from "../src/domain/practice/complement-data";
 import { COMPLEMENT_VERB_USAGES } from "../src/domain/practice/complement-verb-data";
+import { MEASURE_WORD_USAGES } from "../src/domain/practice/measure-word-data";
 import { PREPOSITION_USAGES } from "../src/domain/practice/preposition-data";
 import { examplePinyin } from "./lib/example-pinyin";
 
@@ -29,6 +31,7 @@ const sentences = [
     ...COMPLEMENT_USAGES.map((q) => q.prompt.replace("（　）", q.answer)),
     ...COMPLEMENT_VERB_USAGES.map((usage) => usage.example),
     ...PREPOSITION_USAGES.map((usage) => usage.example),
+    ...MEASURE_WORD_USAGES.map((usage) => usage.example),
   ]),
 ].sort();
 const entries = Object.fromEntries(

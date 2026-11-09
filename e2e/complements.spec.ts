@@ -6,6 +6,7 @@ import {
   expect,
   memberOwnerId,
   test,
+  openSiteMenu,
 } from "./fixtures";
 
 async function answerAll(page: Page) {
@@ -47,11 +48,8 @@ for (const [mode, label] of [
       "member-password-1",
     );
     await asMember(page, "complement-learner", "member-password-1");
-    // The header's link; on phones the bottom menu has one too.
-    await page
-      .getByRole("navigation", { name: "アカウント" })
-      .getByRole("link", { name: "補語練習", exact: true })
-      .click();
+    const menu = await openSiteMenu(page);
+    await menu.getByRole("menuitem", { name: "補語の練習" }).click();
     await page
       .getByRole("link", { name: `${label}を練習`, exact: true })
       .click();

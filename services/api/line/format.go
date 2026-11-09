@@ -1,6 +1,7 @@
 package line
 
 import (
+	"strconv"
 	"strings"
 	"unicode/utf8"
 )
@@ -77,4 +78,10 @@ func failureReason(code string) string {
 	default:
 		return "うまく処理できませんでした。しばらくしてからもう一度送ってください。"
 	}
+}
+
+// FormatReviewReminder is the morning message to an owner who asked for it:
+// how many reviews are due, where to answer them and how to stop it.
+func FormatReviewReminder(due int) string {
+	return "今日の復習が " + strconv.Itoa(due) + " 問あります。Web の「今日の復習」（/review）で答えましょう。\n\nこのお知らせは、Web のアカウント画面（/account/line）で止められます。"
 }

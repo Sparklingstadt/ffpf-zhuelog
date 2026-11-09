@@ -396,10 +396,7 @@ function ChoiceCard({
                   {question.answer} {question.pinyin}
                 </span>
               </p>
-              <SolvedExample question={question} />
-              <p className="text-sm text-muted-foreground">
-                {question.translation}
-              </p>
+              <SolvedExample question={question} canAddToVocabulary />
             </div>
             {ratings}
           </>

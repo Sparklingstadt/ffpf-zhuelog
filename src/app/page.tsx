@@ -5,11 +5,17 @@ import { redirect } from "next/navigation";
 import { learningNotes } from "@/composition/learning-container";
 import { reviews } from "@/composition/review-container";
 import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
+import {
+  isEntrySearchEmpty,
+  parseEntrySearch,
+  type EntrySearch,
+} from "@/domain/learning/entry-search";
 import { GoApiError } from "@/infrastructure/go-api/client";
 import type { ViewedOwner } from "@/infrastructure/go-api/learning-gateway";
 import { loadRecordOwnerView } from "@/composition/record-owner-options";
 import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { PageShell } from "@/presentation/components/layout/page-shell";
+import { EntrySearchForm } from "@/presentation/components/learning/entry-search-form";
 import { LearningEntryCard } from "@/presentation/components/learning/learning-entry-card";
 import { RecordOwnerControls } from "@/presentation/components/records/record-owner-controls";
 import { ReviewDueCard } from "@/presentation/components/review/review-due-card";
@@ -29,13 +35,16 @@ export const dynamic = "force-dynamic";
 
 // Go being unavailable (or failing) still shows the home with a notice. Any
 // other error, including the redirect to /signin, is rethrown.
-async function loadEntries(owner: ViewedOwner): Promise<{
+async function loadEntries(
+  owner: ViewedOwner,
+  search: EntrySearch,
+): Promise<{
   entries: LearningEntry[];
   total: number;
   loadFailed: boolean;
 }> {
   try {
-    const result = await learningNotes.listRecent(owner, 100);
+    const result = await learningNotes.listRecent(owner, 100, search);
     return { ...result, loadFailed: false };
   } catch (error) {
     if (!(error instanceof GoApiError)) throw error;
@@ -61,7 +70,12 @@ async function loadDueReviews(): Promise<{
 }
 
 type HomeProps = {
-  searchParams: Promise<{ user?: string | string[] }>;
+  searchParams: Promise<{
+    user?: string | string[];
+    q?: string | string[];
+    kind?: string | string[];
+    hint?: string | string[];
+  }>;
 };
 
 function HomeHeader() {
@@ -85,10 +99,13 @@ function HomeHeader() {
 }
 
 export default async function Home({ searchParams }: HomeProps) {
+  const params = await searchParams;
   const { user, owner } = await requireSignedInOwner(
-    requestedRecordOwner((await searchParams).user),
+    requestedRecordOwner(params.user),
     "/signin",
   );
+  const search = parseEntrySearch(params);
+  const searching = !isEntrySearchEmpty(search);
   if (owner.kind === "redirect-self") redirect("/");
 
   // Guests have no notes of their own.
@@ -121,7 +138,7 @@ export default async function Home({ searchParams }: HomeProps) {
 
   const ownNotes = owner.kind === "self";
   const [{ entries, total, loadFailed }, view, dueReviews] = await Promise.all([
-    loadEntries(owner),
+    loadEntries(owner, search),
     loadRecordOwnerView(user, owner),
     // Only the user's own queue; an admin viewing a member sees no card.
     ownNotes ? loadDueReviews() : Promise.resolve(null),
@@ -149,13 +166,35 @@ export default async function Home({ searchParams }: HomeProps) {
 
       <section className="space-y-4">
         <div>
-          <h2 className="text-xl font-semibold tracking-tight">学習ノート</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            新しく登録された文から最大100件を表示します。
+          <h2 className="text-xl font-semibold tracking-tight">
+            {searching ? "検索結果" : "学習ノート"}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground" aria-live="polite">
+            {searching
+              ? total > 0
+                ? `条件に合う学習ノートが${total}件あります。新しい順に最大100件を表示します。`
+                : "条件を変えて探せます。"
+              : "新しく登録された文から最大100件を表示します。"}
           </p>
         </div>
 
-        {entries.length === 0 ? (
+        {total > 0 || searching ? (
+          <EntrySearchForm
+            search={search}
+            viewedOwnerId={owner.kind === "other" ? owner.ownerId : undefined}
+            clearHref={withRecordOwner("/", owner)}
+          />
+        ) : null}
+
+        {searching && entries.length === 0 && !loadFailed ? (
+          <Card className="border-dashed py-10 text-center shadow-none">
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                条件に合う学習ノートはありません。語句を短くするか、条件を減らしてください。
+              </p>
+            </CardContent>
+          </Card>
+        ) : entries.length === 0 ? (
           <Card className="border-dashed py-14 text-center shadow-none">
             <CardContent className="flex flex-col items-center gap-3">
               <div className="rounded-full bg-muted p-3">
@@ -183,11 +222,11 @@ export default async function Home({ searchParams }: HomeProps) {
               <LearningEntryCard
                 key={entry.id}
                 entry={entry}
-                numberLabel={recentEntryNumberLabel(
-                  total,
-                  entries.length,
-                  index,
-                )}
+                numberLabel={
+                  searching
+                    ? `${index + 1} / ${total}`
+                    : recentEntryNumberLabel(total, entries.length, index)
+                }
                 href={withRecordOwner(getLogDateHref(entry.createdAt), owner)}
                 linkLabel="この日の一覧"
               />

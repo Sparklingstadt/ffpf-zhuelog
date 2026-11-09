@@ -166,13 +166,27 @@ test("getLineLink reads whether LINE is linked", async () => {
   const { call, calls } = fakeCall({ linked: true });
   const link = await createAccountGateway(call).getLineLink();
   assert.deepEqual(calls, [{ path: "/v1/line/link", init: { method: "GET" } }]);
-  assert.deepEqual(link, { linked: true, available: true });
+  assert.deepEqual(link, {
+    linked: true,
+    available: true,
+    reviewNotify: false,
+  });
+});
+
+test("getLineLink reads the review message setting", async () => {
+  const { call } = fakeCall({ linked: true, reviewNotify: true });
+  const link = await createAccountGateway(call).getLineLink();
+  assert.equal(link.reviewNotify, true);
 });
 
 test("getLineLink reports LINE as unavailable when Go has no link routes", async () => {
   const { call } = fakeCall(new GoApiError(404, "not_found", ""));
   const link = await createAccountGateway(call).getLineLink();
-  assert.deepEqual(link, { linked: false, available: false });
+  assert.deepEqual(link, {
+    linked: false,
+    available: false,
+    reviewNotify: false,
+  });
 });
 
 test("getLineLink rethrows other failures", async () => {
@@ -202,4 +216,29 @@ test("unlinkLine deletes the link", async () => {
   assert.deepEqual(calls, [
     { path: "/v1/line/link", init: { method: "DELETE" } },
   ]);
+});
+
+test("setLineReviewNotify puts to turn on and deletes to turn off", async () => {
+  const { call, calls } = fakeCall({ reviewNotify: true });
+  const gateway = createAccountGateway(call);
+  assert.equal(await gateway.setLineReviewNotify(true), true);
+  assert.equal(await gateway.setLineReviewNotify(false), true);
+  assert.deepEqual(calls, [
+    { path: "/v1/line/review-notify", init: { method: "PUT" } },
+    { path: "/v1/line/review-notify", init: { method: "DELETE" } },
+  ]);
+});
+
+test("setLineReviewNotify is false when Go has no setting and rethrows the rest", async () => {
+  const missing = fakeCall(new GoApiError(404, "not_found", ""));
+  assert.equal(
+    await createAccountGateway(missing.call).setLineReviewNotify(true),
+    false,
+  );
+  const failure = new GoApiError(500, "internal", "");
+  const broken = fakeCall(failure);
+  await assert.rejects(
+    () => createAccountGateway(broken.call).setLineReviewNotify(true),
+    failure,
+  );
 });

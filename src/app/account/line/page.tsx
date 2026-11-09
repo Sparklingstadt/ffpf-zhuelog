@@ -11,6 +11,7 @@ import {
   lineOfficialAccountId,
 } from "@/infrastructure/config/environment";
 import { LineLinkPanel } from "@/presentation/components/account/line-link-panel";
+import { LineReviewNotifyForm } from "@/presentation/components/account/line-review-notify-form";
 import { AppHeader } from "@/presentation/components/layout/app-header";
 import {
   Card,
@@ -77,6 +78,22 @@ export default async function LineLinkPage() {
               )}
             </CardContent>
           </Card>
+
+          {link.available && link.linked ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>復習のお知らせ</CardTitle>
+                <CardDescription>
+                  「今日の復習」に答える問題がある朝（6 時ごろ）に、この LINE へ
+                  1 日 1 回お知らせします。問題が無い日は送りません。LINE
+                  公式アカウントの月の送信数に上限があるため、上限が近い月は届かないことがあります。
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <LineReviewNotifyForm on={link.reviewNotify} />
+              </CardContent>
+            </Card>
+          ) : null}
         </div>
       </main>
     </>

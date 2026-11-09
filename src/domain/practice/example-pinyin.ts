@@ -35,6 +35,7 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
     "Rén tài duō le, wǒ jǐ bú shàng zhè liàng gōng jiāo chē.",
   "人群慢慢散开了。": "Rén qún màn màn sàn kāi le.",
   "今天我替同事值班。": "Jīn tiān wǒ tì tóng shì zhí bān.",
+  "今天我有三节课。": "Jīn tiān wǒ yǒu sān jié kè.",
   "今天比昨天冷得多。": "Jīn tiān bǐ zuó tiān lěng de duō.",
   "今天热得要命。": "Jīn tiān rè de yào mìng.",
   "今天热死了。": "Jīn tiān rè sǐ le.",
@@ -62,6 +63,7 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
   "他不小心把手划破了，流了很多血。":
     "Tā bù xiǎo xīn bǎ shǒu huá pò le, liú le hěn duō xiě.",
   "他举起手回答问题。": "Tā jǔ qǐ shǒu huí dá wèn tí.",
+  "他买了两条裤子。": "Tā mǎi le liǎng tiáo kù zi.",
   "他什么话都听不进。": "Tā shén me huà dōu tīng bú jìn.",
   "他今天起得很早。": "Tā jīn tiān qǐ de hěn zǎo.",
   "他今天起晚了，没赶上早班车。":
@@ -93,6 +95,8 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
     "Tā men liǎ shuō zhe shuō zhe jiù chǎo le qǐ lái.",
   "他们冒着大雨赶到了车站。": "Tā men mào zhe dà yǔ gǎn dào le chē zhàn.",
   "他们奔车站去了。": "Tā men bèn chē zhàn qù le.",
+  "他们是一对夫妻。": "Tā men shì yí duì fū qī.",
+  "他会说三门外语。": "Tā huì shuō sān mén wài yǔ.",
   "他伸出手跟我握手。": "Tā shēn chū shǒu gēn wǒ wò shǒu.",
   "他低下头，什么也没说。": "Tā dī xià tóu, shén me yě méi shuō.",
   "他住得很远，每天上班要两个小时。":
@@ -135,7 +139,10 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
   "他嘴很严，秘密守得住。": "Tā zuǐ hěn yán, mì mì shǒu de zhù.",
   "他回答得很干脆，一点儿也没犹豫。":
     "Tā huí dá de hěn gān cuì, yì diǎnr yě méi yóu yù.",
+  "他在一家公司工作。": "Tā zài yì jiā gōng sī gōng zuò.",
+  "他在一所大学教书。": "Tā zài yì suǒ dà xué jiào shū.",
   "他在会上提出了一个新建议。": "Tā zài huì shàng tí chū le yí gè xīn jiàn yì.",
+  "他在北京买了一套房子。": "Tā zài běi jīng mǎi le yí tào fáng zi.",
   "他在国外住了十年，去年搬回来了。":
     "Tā zài guó wài zhù le shí nián, qù nián bān huí lái le.",
   "他在门口站住了，回头看了我一眼。":
@@ -148,6 +155,7 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
     "Tā tài néng shuō le, wǒ shuō bú guò tā, zhǐ hǎo tīng tā de.",
   "他好不容易才追上前面的人。":
     "Tā hǎo bù róng yì cái zhuī shàng qián miàn de rén.",
+  "他家养了三头牛。": "Tā jiā yǎng le sān tóu niú.",
   "他就着咸菜吃了一碗粥。": "Tā jiù zhe xián cài chī le yì wǎn zhōu.",
   "他工作做得很出色。": "Tā gōng zuò zuò de hěn chū sè.",
   "他工资很高，这种车他买得起。":
@@ -168,6 +176,8 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
   "他慢慢地展开那张地图。": "Tā màn màn de zhǎn kāi nà zhāng dì tú.",
   "他慢慢地站起身。": "Tā màn màn de zhàn qǐ shēn.",
   "他戴上帽子出去了。": "Tā dài shàng mào zi chū qù le.",
+  "他戴着一块手表。": "Tā dài zhe yí kuài shǒu biǎo.",
+  "他戴着一顶帽子。": "Tā dài zhe yì dǐng mào zi.",
   "他打字打得飞快。": "Tā dǎ zì dǎ de fēi kuài.",
   "他打开电脑，开始工作。": "Tā dǎ kāi diàn nǎo, kāi shǐ gōng zuò.",
   "他打篮球打得很棒。": "Tā dǎ lán qiú dǎ de hěn bàng.",
@@ -324,6 +334,7 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
   "他车停得很乱，把路都堵住了。":
     "Tā chē tíng de hěn luàn, bǎ lù dōu dǔ zhù le.",
   "他车开得太快，我有点害怕。": "Tā chē kāi de tài kuài, wǒ yǒu diǎn hài pà.",
+  "他连一粒米也没剩。": "Tā lián yí lì mǐ yě méi shèng.",
   "他长得很高，篮球打得很好。": "Tā zhǎng de hěn gāo, lán qiú dǎ de hěn hǎo.",
   "他长胖了，比以前重了十公斤。":
     "Tā zhǎng pàng le, bǐ yǐ qián zhòng le shí gōng jīn.",
@@ -391,6 +402,7 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
     "Nǐ zhàn zài yǐ zi shàng tài wēi xiǎn le, kuài tiào xià lái!",
   "你站在那儿干什么？快走过来帮帮我。":
     "Nǐ zhàn zài nàr gàn shén me? kuài zǒu guò lái bāng bāng wǒ.",
+  "你能借我一支笔吗？": "Nǐ néng jiè wǒ yì zhī bǐ ma?",
   "你能听出来这是谁的声音吗？":
     "Nǐ néng tīng chū lái zhè shì shuí de shēng yīn ma?",
   "你能认出这是谁的字吗？": "Nǐ néng rèn chū zhè shì shuí de zì ma?",
@@ -464,6 +476,7 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
     "Dì bǎn yǐ jīng cā gān jìng le, yì diǎn huī dōu méi yǒu.",
   "基于安全考虑，我们取消了夜间活动。":
     "Jī yú ān quán kǎo lǜ, wǒ men qǔ xiāo le yè jiān huó dòng.",
+  "墙上挂着一幅画。": "Qiáng shàng guà zhe yì fú huà.",
   "声音很大，坐在最后一排也听得见。":
     "Shēng yīn hěn dà, zuò zài zuì hòu yì pái yě tīng de jiàn.",
   "外面冷得受不了。": "Wài miàn lěng de shòu bù liǎo.",
@@ -501,6 +514,7 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
   "她一不小心把面条煮过了头。":
     "Tā yí bù xiǎo xīn bǎ miàn tiáo zhǔ guò le tóu.",
   "她中文学得很认真。": "Tā zhōng wén xué de hěn rèn zhēn.",
+  "她买了一件衣服。": "Tā mǎi le yí jiàn yī fu.",
   "她今天穿得很整齐。": "Tā jīn tiān chuān de hěn zhěng qí.",
   "她从包里掏出手机看了看。": "Tā cóng bāo lǐ tāo chū shǒu jī kàn le kàn.",
   "她从口袋里掏出来一张照片。":
@@ -511,10 +525,12 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
     "Tā zhù de hěn jìn, zǒu lù wǔ fēn zhōng jiù dào xué xiào.",
   "她做事做得很麻利。": "Tā zuò shì zuò de hěn má lì.",
   "她冲我笑了笑。": "Tā chōng wǒ xiào le xiào.",
+  "她唱了一首歌。": "Tā chàng le yì shǒu gē.",
   "她唱得太小声了，后面的人听不见。":
     "Tā chàng de tài xiǎo shēng le, hòu miàn de rén tīng bú jiàn.",
   "她在北京工作。": "Tā zài běi jīng gōng zuò.",
   "她坐上了去上海的火车。": "Tā zuò shàng le qù shàng hǎi de huǒ chē.",
+  "她头上戴着一朵花。": "Tā tóu shàng dài zhe yì duǒ huā.",
   "她嫁人以后过上了幸福的生活。":
     "Tā jià rén yǐ hòu guò shàng le xìng fú de shēng huó.",
   "她字写得很漂亮。": "Tā zì xiě de hěn piào liang.",
@@ -660,6 +676,10 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
   "我一眼就认出来了。": "Wǒ yì yǎn jiù rèn chū lái le.",
   "我个子高，上面的书我够得着。":
     "Wǒ gè zi gāo, shàng miàn de shū wǒ gòu de zháo.",
+  "我买了一双鞋。": "Wǒ mǎi le yì shuāng xié.",
+  "我买了一台电脑。": "Wǒ mǎi le yì tái diàn nǎo.",
+  "我买了一本书。": "Wǒ mǎi le yì běn shū.",
+  "我买了两张票。": "Wǒ mǎi le liǎng zhāng piào.",
   "我买到票了，终于可以去看演出了。":
     "Wǒ mǎi dào piào le, zhōng yú kě yǐ qù kàn yǎn chū le.",
   "我今天睡过了头，上班迟到了。":
@@ -698,6 +718,7 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
     "Wǒ men gēn jù tiān qì yù bào tiáo zhěng le xíng chéng.",
   "我们正朝着共同的目标努力。":
     "Wǒ men zhèng cháo zhe gòng tóng de mù biāo nǔ lì.",
+  "我们点了一盘饺子。": "Wǒ men diǎn le yì pán jiǎo zi.",
   "我们玩得很尽兴。": "Wǒ men wán de hěn jìn xìng.",
   "我们的友谊会一直保持下去。": "Wǒ men de yǒu yì huì yì zhí bǎo chí xià qù.",
   "我们穿过树林来到了河边。": "Wǒ men chuān guò shù lín lái dào le hé biān.",
@@ -718,12 +739,17 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
   "我们针对这个问题提出了三条建议。":
     "Wǒ men zhēn duì zhè ge wèn tí tí chū le sān tiáo jiàn yì.",
   "我们顺原路返回。": "Wǒ men shùn yuán lù fǎn huí.",
+  "我借了一把伞。": "Wǒ jiè le yì bǎ sǎn.",
   "我借给你的照相机，用完了记得送回来。":
     "Wǒ jiè gěi nǐ de zhào xiàng jī, yòng wán le jì de sòng huí lái.",
+  "我写了一篇文章。": "Wǒ xiě le yì piān wén zhāng.",
   "我写完作业就去玩。": "Wǒ xiě wán zuò yè jiù qù wán.",
   "我刚来北京，这里的菜我还吃不惯。":
     "Wǒ gāng lái běi jīng, zhè lǐ de cài wǒ hái chī bú guàn.",
   "我去年学会了游泳。": "Wǒ qù nián xué huì le yóu yǒng.",
+  "我吃了一块蛋糕。": "Wǒ chī le yí kuài dàn gāo.",
+  "我吃了一根香蕉。": "Wǒ chī le yì gēn xiāng jiāo.",
+  "我吃了两碗米饭。": "Wǒ chī le liǎng wǎn mǐ fàn.",
   "我听不出来是谁的声音。": "Wǒ tīng bù chū lái shì shuí de shēng yīn.",
   "我听得懂老师的话。": "Wǒ tīng de dǒng lǎo shī de huà.",
   "我听懂了老师的解释。": "Wǒ tīng dǒng le lǎo shī de jiě shì.",
@@ -749,6 +775,8 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
   "我太累了，走不动了。": "Wǒ tài lèi le, zǒu bú dòng le.",
   "我家在十楼，电梯坏了，我们只好走上去。":
     "Wǒ jiā zài shí lóu, diàn tī huài le, wǒ men zhǐ hǎo zǒu shàng qù.",
+  "我家有一只猫。": "Wǒ jiā yǒu yì zhī māo.",
+  "我家有四口人。": "Wǒ jiā yǒu sì kǒu rén.",
   "我家离学校很近。": "Wǒ jiā lí xué xiào hěn jìn.",
   "我对中国历史很感兴趣。": "Wǒ duì zhōng guó lì shǐ hěn gǎn xìng qù.",
   "我就是冲着这家店的口碑来的。":
@@ -763,6 +791,7 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
   "我想不起来他叫什么。": "Wǒ xiǎng bù qǐ lái tā jiào shén me.",
   "我想买一本关于中国历史的书。":
     "Wǒ xiǎng mǎi yì běn guān yú zhōng guó lì shǐ de shū.",
+  "我想买一辆自行车。": "Wǒ xiǎng mǎi yí liàng zì xíng chē.",
   "我想借这个机会向大家表示感谢。":
     "Wǒ xiǎng jiè zhè ge jī huì xiàng dà jiā biǎo shì gǎn xiè.",
   "我想向老师请教一个问题。": "Wǒ xiǎng xiàng lǎo shī qǐng jiào yí gè wèn tí.",
@@ -796,12 +825,15 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
   "我明天有事，去不了你的生日会了。":
     "Wǒ míng tiān yǒu shì, qù bù liǎo nǐ de shēng rì huì le.",
   "我明天给他送去一些水果。": "Wǒ míng tiān gěi tā sòng qù yì xiē shuǐ guǒ.",
+  "我昨天看了一部电影。": "Wǒ zuó tiān kàn le yí bù diàn yǐng.",
   "我昨晚喝了太多咖啡，现在睡不着。":
     "Wǒ zuó wǎn hē le tài duō kā fēi, xiàn zài shuì bù zháo.",
   "我昨晚睡不着。": "Wǒ zuó wǎn shuì bù zháo.",
   "我昨晚睡得很晚。": "Wǒ zuó wǎn shuì de hěn wǎn.",
   "我晚上给妈妈打电话。": "Wǒ wǎn shàng gěi mā ma dǎ diàn huà.",
+  "我有一件事想问你。": "Wǒ yǒu yí jiàn shì xiǎng wèn nǐ.",
   "我梦见了我的奶奶。": "Wǒ mèng jiàn le wǒ de nǎi nai.",
+  "我每天买一份报纸。": "Wǒ měi tiān mǎi yí fèn bào zhǐ.",
   "我没认出他，认错人了。": "Wǒ méi rèn chū tā, rèn cuò rén le.",
   "我没认出来他是我的老同学。": "Wǒ méi rèn chū lái tā shì wǒ de lǎo tóng xué.",
   "我渴得嗓子都冒烟了。": "Wǒ kě de sǎng zi dōu mào yān le.",
@@ -826,6 +858,8 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
   "我看得出来你很累。": "Wǒ kàn de chū lái nǐ hěn lèi.",
   "我看得出来，你今天心情不好。":
     "Wǒ kàn de chū lái, nǐ jīn tiān xīn qíng bù hǎo.",
+  "我看见了一颗星星。": "Wǒ kàn jiàn le yì kē xīng xīng.",
+  "我租了一间屋子。": "Wǒ zū le yì jiān wū zi.",
   "我突然想起了一件事。": "Wǒ tū rán xiǎng qǐ le yí jiàn shì.",
   "我笑得肚子都疼了。": "Wǒ xiào de dù zi dōu téng le.",
   "我等了一个小时，终于等到了他。":
@@ -836,6 +870,8 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
   "我终于想起来他叫什么名字了。":
     "Wǒ zhōng yú xiǎng qǐ lái tā jiào shén me míng zì le.",
   "我终于找到钥匙了。": "Wǒ zhōng yú zhǎo dào yào shi le.",
+  "我给妈妈写了一封信。": "Wǒ gěi mā ma xiě le yì fēng xìn.",
+  "我要一杯咖啡。": "Wǒ yào yì bēi kā fēi.",
   "我记错了开会的时间。": "Wǒ jì cuò le kāi huì de shí jiān.",
   "我说不出话来。": "Wǒ shuō bù chū huà lái.",
   "我走累了，休息一下吧。": "Wǒ zǒu lèi le, xiū xi yí xià ba.",
@@ -853,6 +889,7 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
   "房租太高了，年轻人住不起。": "Fáng zū tài gāo le, nián qīng rén zhù bù qǐ.",
   "房间太小，放不下这么大的桌子。":
     "Fáng jiān tài xiǎo, fàng bú xià zhè me dà de zhuō zi.",
+  "房间里有一张桌子。": "Fáng jiān lǐ yǒu yì zhāng zhuō zi.",
   "房间里的灯开得太亮了，太刺眼了。":
     "Fáng jiān lǐ de dēng kāi de tài liàng le, tài cì yǎn le.",
   "打从小时候起，她就喜欢画画。":
@@ -879,6 +916,7 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
   "新规定自明年一月起实施。": "Xīn guī dìng zì míng nián yī yuè qǐ shí shī.",
   "旅馆距市中心五公里。": "Lǚ guǎn jù shì zhōng xīn wǔ gōng lǐ.",
   "早上八点，我们升起了国旗。": "Zǎo shàng bā diǎn, wǒ men shēng qǐ le guó qí.",
+  "早上我吃了两片面包。": "Zǎo shàng wǒ chī le liǎng piàn miàn bāo.",
   "时差太大，我还没倒过来。": "Shí chā tài dà, wǒ hái méi dǎo guò lái.",
   "时间不早了，我开车送你回去吧。":
     "Shí jiān bù zǎo le, wǒ kāi chē sòng nǐ huí qù ba.",
@@ -888,8 +926,10 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
   "明天会有人送来一台新冰箱。":
     "Míng tiān huì yǒu rén sòng lái yì tái xīn bīng xiāng.",
   "明天你去得了吗？": "Míng tiān nǐ qù de liǎo ma?",
+  "昨天下了一场大雨。": "Zuó tiān xià le yì chǎng dà yǔ.",
   "昨天我睡够了八个小时。": "Zuó tiān wǒ shuì gòu le bā gè xiǎo shí.",
   "昨天我睡得晚。": "Zuó tiān wǒ shuì de wǎn.",
+  "昨天有一场足球比赛。": "Zuó tiān yǒu yì chǎng zú qiú bǐ sài.",
   "昨晚他喝多了。": "Zuó wǎn tā hē duō le.",
   "晚上你睡得着吗？": "Wǎn shàng nǐ shuì de zháo ma?",
   "晚饭已经吃饱了，肚子一点也不饿。":
@@ -907,15 +947,19 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
   "杯子叫小猫打翻了。": "Bēi zi jiào xiǎo māo dǎ fān le.",
   "杯子里的水倒满了，别再倒了。":
     "Bēi zi lǐ de shuǐ dào mǎn le, bié zài dào le.",
+  "树上有一只鸟。": "Shù shàng yǒu yì zhī niǎo.",
   "树上的苹果掉下来了。": "Shù shàng de píng guǒ diào xià lái le.",
+  "桌子上有一把钥匙。": "Zhuō zi shàng yǒu yì bǎ yào shi.",
   "楼梯不高，老人也走得上去。": "Lóu tī bù gāo, lǎo rén yě zǒu de shàng qù.",
   "比赛因大雨延期了。": "Bǐ sài yīn dà yǔ yán qī le.",
   "比起价格，我更关心质量。": "Bǐ qǐ jià gé, wǒ gèng guān xīn zhì liàng.",
   "毕业以后，她搬回了老家。": "Bì yè yǐ hòu, tā bān huí le lǎo jiā.",
   "毛毛虫变成了蝴蝶。": "Máo máo chóng biàn chéng le hú dié.",
   "水从管子里流出来了。": "Shuǐ cóng guǎn zi lǐ liú chū lái le.",
+  "河上有一座桥。": "Hé shàng yǒu yí zuò qiáo.",
   "河上没有桥，他们只好游过去。":
     "Hé shàng méi yǒu qiáo, tā men zhǐ hǎo yóu guò qù.",
+  "河里有一条鱼。": "Hé lǐ yǒu yì tiáo yú.",
   "沿着这条街一直走，就到车站了。":
     "Yán zhe zhè tiáo jiē yì zhí zǒu, jiù dào chē zhàn le.",
   "法官依据证据作出了判决。": "Fǎ guān yī jù zhèng jù zuò chū le pàn jué.",
@@ -992,6 +1036,7 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
     "Jīng guò zhì liáo, tā de bìng qíng wěn dìng xià lái le.",
   "经过讨论，我们决定修改计划。":
     "Jīng guò tǎo lùn, wǒ men jué dìng xiū gǎi jì huà.",
+  "给我们两瓶啤酒。": "Gěi wǒ men liǎng píng pí jiǔ.",
   "老人去世前留下了一大笔财产。":
     "Lǎo rén qù shì qián liú xià le yí dà bǐ cái chǎn.",
   "老师一提问，他马上就答上来了。":
@@ -1009,6 +1054,7 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
     "Zì dǎ qù nián qǐ, zhè lǐ jiù bú mài piào le.",
   "至于住宿，我们明天再决定。": "Zhì yú zhù sù, wǒ men míng tiān zài jué dìng.",
   "花瓶被猫碰倒了。": "Huā píng bèi māo pèng dǎo le.",
+  "草原上有一匹马。": "Cǎo yuán shàng yǒu yì pǐ mǎ.",
   "菜太多了，我们吃不完。": "Cài tài duō le, wǒ men chī bù wán.",
   "菜太多了，我吃不完。": "Cài tài duō le, wǒ chī bù wán.",
   "虽然很远，我还是听得见钟声。":
@@ -1078,6 +1124,8 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
   "请由南门进入会场。": "Qǐng yóu nán mén jìn rù huì chǎng.",
   "请留下你的地址。": "Qǐng liú xià nǐ de dì zhǐ.",
   "请系上安全带。": "Qǐng jì shàng ān quán dài.",
+  "请给我一双筷子。": "Qǐng gěi wǒ yì shuāng kuài zi.",
+  "请给我一张纸。": "Qǐng gěi wǒ yì zhāng zhǐ.",
   "请继续说下去。": "Qǐng jì xù shuō xià qù.",
   "请记住这些生词。": "Qǐng jì zhù zhè xiē shēng cí.",
   "请说清楚你的理由。": "Qǐng shuō qīng chǔ nǐ de lǐ yóu.",
@@ -1209,6 +1257,8 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
   "这件衣服看起来很贵，其实很便宜。":
     "Zhè jiàn yī fu kàn qǐ lái hěn guì, qí shí hěn pián yi.",
   "这份报告由三个部分组成。": "Zhè fèn bào gào yóu sān gè bù fen zǔ chéng.",
+  "这位老师很有名。": "Zhè wèi lǎo shī hěn yǒu míng.",
+  "这儿还有一把椅子。": "Zhèr hái yǒu yì bǎ yǐ zi.",
   "这几天我忙得很。": "Zhè jǐ tiān wǒ máng de hěn.",
   "这双鞋穿起来很舒服。": "Zhè shuāng xié chuān qǐ lái hěn shū fú.",
   "这场比赛踢得很精彩。": "Zhè chǎng bǐ sài tī de hěn jīng cǎi.",
@@ -1243,6 +1293,8 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
     "Zhè běn xiǎo shuō wǒ fān yì wán le, xià gè yuè chū bǎn.",
   "这本小说用的词很简单，我看得懂。":
     "Zhè běn xiǎo shuō yòng de cí hěn jiǎn dān, wǒ kàn de dǒng.",
+  "这条街上有一家饭馆。": "Zhè tiáo jiē shàng yǒu yì jiā fàn guǎn.",
+  "这条路很长。": "Zhè tiáo lù hěn cháng.",
   "这条路我很熟，怎么走我说得清楚。":
     "Zhè tiáo lù wǒ hěn shú, zěn me zǒu wǒ shuō de qīng chǔ.",
   "这条鱼太小了，我们把它放回去吧。":
@@ -1275,6 +1327,7 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
   "这篇课文我看懂了，意思都明白了。":
     "Zhè piān kè wén wǒ kàn dǒng le, yì sī dōu míng bái le.",
   "这辆车很大，坐得下七个人。": "Zhè liàng chē hěn dà, zuò de xià qī gè rén.",
+  "这道菜很好吃。": "Zhè dào cài hěn hǎo chī.",
   "这道题太难，我做不出来。": "Zhè dào tí tài nán, wǒ zuò bù chū lái.",
   "这道题我们先跳过，做下一题吧。":
     "Zhè dào tí wǒ men xiān tiào guò, zuò xià yì tí ba.",
@@ -1291,6 +1344,8 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
   "这项工作由李老师负责。": "Zhè xiàng gōng zuò yóu lǐ lǎo shī fù zé.",
   "这首歌为大家所熟知。": "Zhè shǒu gē wèi dà jiā suǒ shú zhī.",
   "这首歌听起来很不错。": "Zhè shǒu gē tīng qǐ lái hěn bú cuò.",
+  "这首诗很美。": "Zhè shǒu shī hěn měi.",
+  "远处有一座山。": "Yuǎn chù yǒu yí zuò shān.",
   "连小孩都知道这个道理。": "Lián xiǎo hái dōu zhī dào zhè ge dào lǐ.",
   "适量运动有益于健康。": "Shì liàng yùn dòng yǒu yì yú jiàn kāng.",
   "那个人的电话号码你还想得起来吗？":
@@ -1309,6 +1364,8 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
   "鉴于当前情况，我们决定延期。":
     "Jiàn yú dāng qián qíng kuàng, wǒ men jué dìng yán qī.",
   "钱都花光了，一分也没剩。": "Qián dōu huā guāng le, yì fēn yě méi shèng.",
+  "门口停着一辆车。": "Mén kǒu tíng zhe yí liàng chē.",
+  "门口站着一群学生。": "Mén kǒu zhàn zhe yì qún xué shēng.",
   "门开着，你直接走进去就行。": "Mén kāi zhe, nǐ zhí jiē zǒu jìn qù jiù xíng.",
   "门很宽，冰箱搬得进来。": "Mén hěn kuān, bīng xiāng bān de jìn lái.",
   "门打不开了。": "Mén dǎ bù kāi le.",
@@ -1320,6 +1377,7 @@ export const EXAMPLE_PINYIN: Readonly<Record<string, string>> = {
   "队员们向着终点前进。": "Duì yuán men xiàng zhe zhōng diǎn qián jìn.",
   "阳光从窗外照进来，屋里很暖和。":
     "Yáng guāng cóng chuāng wài zhào jìn lái, wū lǐ hěn nuǎn huo.",
+  "院子里有一棵树。": "Yuàn zi lǐ yǒu yì kē shù.",
   "除了星期天，这家店每天都营业。":
     "Chú le xīng qī tiān, zhè jiā diàn měi tiān dōu yíng yè.",
   "除了汉语，她还会说日语。": "Chú le hàn yǔ, tā hái huì shuō rì yǔ.",

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/line"
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
 
 // LineService is what the LINE handlers need from *linebot.Service.
@@ -20,6 +22,9 @@ type LineService interface {
 	Linked(ctx context.Context, ownerID string) (bool, error)
 	Unlink(ctx context.Context, ownerID string) error
 	Drain(ctx context.Context, deadline time.Time) error
+	ReviewNotify(ctx context.Context, ownerID string) (linked, on bool, err error)
+	SetReviewNotify(ctx context.Context, ownerID string, on bool) error
+	NotifyDueReviews(ctx context.Context, deadline time.Time) error
 }
 
 const (
@@ -95,19 +100,41 @@ func lineWebhook(svc LineService, channelSecret []byte, now func() time.Time) ht
 	})
 }
 
-// lineLinked tells the caller whether a LINE account is linked. The LINE user
-// ID is never returned.
+// lineLinked tells the caller whether a LINE account is linked and whether
+// they asked for the morning review message. The LINE user ID is never
+// returned.
 func lineLinked(svc LineService) http.Handler {
 	type response struct {
-		Linked bool `json:"linked"`
+		Linked       bool `json:"linked"`
+		ReviewNotify bool `json:"reviewNotify"`
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		linked, err := svc.Linked(r.Context(), principalFrom(r.Context()).OwnerID)
+		linked, on, err := svc.ReviewNotify(r.Context(), principalFrom(r.Context()).OwnerID)
 		if err != nil {
 			writeServiceError(w, r, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, response{Linked: linked})
+		writeJSON(w, http.StatusOK, response{Linked: linked, ReviewNotify: on})
+	})
+}
+
+// lineReviewNotify turns the caller's morning review message on or off. It
+// is 404 while no LINE account is linked.
+func lineReviewNotify(svc LineService, on bool) http.Handler {
+	type response struct {
+		ReviewNotify bool `json:"reviewNotify"`
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		err := svc.SetReviewNotify(r.Context(), principalFrom(r.Context()).OwnerID, on)
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, codeNotFound, msgLineNotLinked)
+			return
+		}
+		if err != nil {
+			writeServiceError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, response{ReviewNotify: on})
 	})
 }
 
@@ -149,7 +176,12 @@ func lineDrain(svc LineService, cronSecret []byte, now func() time.Time) http.Ha
 			return
 		}
 		extendLineDeadlines(w)
-		if err := svc.Drain(r.Context(), now().Add(drainBudget)); err != nil {
+		deadline := now().Add(drainBudget)
+		// The late corrections go first; the review messages use what is
+		// left of the run, and run even when the drain had an error.
+		drainErr := svc.Drain(r.Context(), deadline)
+		notifyErr := svc.NotifyDueReviews(r.Context(), deadline)
+		if err := errors.Join(drainErr, notifyErr); err != nil {
 			writeServiceError(w, r, err)
 			return
 		}

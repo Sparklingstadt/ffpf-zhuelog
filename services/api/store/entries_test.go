@@ -131,7 +131,7 @@ func TestCreateImportBatchKeepsRowOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	listed, err := s.ListEntries(ctx, owner, nil, 50)
+	listed, err := s.ListEntries(ctx, owner, EntryFilter{}, nil, 50)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +202,7 @@ func TestListEntriesOrderAndOwner(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := s.ListEntries(ctx, owner, nil, 50)
+	got, err := s.ListEntries(ctx, owner, EntryFilter{}, nil, 50)
 	if err != nil {
 		t.Fatalf("ListEntries: %v", err)
 	}
@@ -216,7 +216,7 @@ func TestListEntriesOrderAndOwner(t *testing.T) {
 		t.Errorf("entry without hints should have empty non-nil slice, got %#v", got[0].Hints)
 	}
 
-	limited, err := s.ListEntries(ctx, owner, nil, 1)
+	limited, err := s.ListEntries(ctx, owner, EntryFilter{}, nil, 1)
 	if err != nil || len(limited) != 1 || limited[0].ID != e2[0].ID {
 		t.Errorf("limit=1: %+v, %v", limited, err)
 	}
@@ -232,7 +232,7 @@ func TestCountEntries(t *testing.T) {
 	if err := s.TrashEntry(ctx, owner, mine[0].ID, fixedNow()); err != nil {
 		t.Fatal(err)
 	}
-	n, err := s.CountEntries(ctx, owner)
+	n, err := s.CountEntries(ctx, owner, EntryFilter{})
 	if err != nil || n != 2 {
 		t.Fatalf("CountEntries = %d, %v; want 2", n, err)
 	}
@@ -252,7 +252,7 @@ func TestListEntriesPaginatesTies(t *testing.T) {
 	var seen []string
 	var cur *Cursor
 	for page := 0; page < 10; page++ {
-		got, err := s.ListEntries(ctx, owner, cur, 2)
+		got, err := s.ListEntries(ctx, owner, EntryFilter{}, cur, 2)
 		if err != nil {
 			t.Fatalf("page %d: %v", page, err)
 		}

@@ -1,4 +1,5 @@
 import { COMPLEMENT_VERB_USAGES } from "./complement-verb-data";
+import { inHskFilter, type HskFilter } from "./hsk-level";
 import {
   BLANK,
   CHOICE_COUNT,
@@ -145,15 +146,36 @@ export function buildComplementVerbQuiz(
   count: number,
   random: Random = Math.random,
   usages: readonly ComplementVerbUsage[] = COMPLEMENT_VERB_USAGES,
+  filter: HskFilter | null = null,
 ): PrepositionQuestion[] {
   const seen = new Set<string>();
   const questions: PrepositionQuestion[] = [];
   for (const usage of shuffled(usages, random)) {
     if (questions.length >= count) break;
     if (seen.has(usage.complement)) continue;
+    const pairs = verbPairsAt(usage, filter);
+    if (pairs.length === 0) continue;
     seen.add(usage.complement);
-    const pair = usage.pairs[Math.floor(random() * usage.pairs.length)];
+    const pair = pairs[Math.floor(random() * pairs.length)];
     questions.push(complementVerbQuestion(usage, pair, random, usages));
   }
   return questions;
+}
+
+// The pairs of a row that pass the HSK filter (all of them without one).
+function verbPairsAt(usage: ComplementVerbUsage, filter: HskFilter | null) {
+  return usage.pairs.filter((pair) =>
+    inHskFilter(filter, pair.phrase, usage.example),
+  );
+}
+
+// How many questions (a row with one of its verbs) pass the filter.
+export function countComplementVerbQuestionsAt(
+  filter: HskFilter,
+  usages: readonly ComplementVerbUsage[] = COMPLEMENT_VERB_USAGES,
+): number {
+  return usages.reduce(
+    (sum, usage) => sum + verbPairsAt(usage, filter).length,
+    0,
+  );
 }

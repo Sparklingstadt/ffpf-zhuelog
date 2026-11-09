@@ -1,5 +1,9 @@
 import type { LogDate } from "@/domain/calendar/value-objects/log-date";
 import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
+import {
+  entrySearchQuery,
+  type EntrySearch,
+} from "@/domain/learning/entry-search";
 
 import {
   goApiAuthed,
@@ -56,11 +60,18 @@ export function createLearningGateway(
     );
 
   return {
+    // The newest notes, or with a search only the ones that match it; total
+    // counts every note the search matches.
     async listRecent(
       owner: ViewedOwner,
       limit: number,
+      search?: EntrySearch,
     ): Promise<RecentLearningEntries> {
-      const json = await read<EntriesJson>(`/v1/entries?limit=${limit}`, owner);
+      const filter = search ? entrySearchQuery(search) : "";
+      const json = await read<EntriesJson>(
+        `/v1/entries?limit=${limit}${filter ? `&${filter}` : ""}`,
+        owner,
+      );
       return { entries: json.entries.map(toLearningEntry), total: json.total };
     },
 

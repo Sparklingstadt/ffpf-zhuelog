@@ -1,26 +1,17 @@
-import {
-  BookA,
-  CircleUserRound,
-  CircleHelp,
-  Eye,
-  KeyRound,
-  Languages,
-  ListChecks,
-  LogOut,
-  MessageCircle,
-  MessagesSquare,
-  Shuffle,
-  UserCog,
-  UsersRound,
-  type LucideIcon,
-} from "lucide-react";
+import { Languages } from "lucide-react";
 import Link from "next/link";
 
 import type { AuthenticatedUser } from "@/domain/identity/entities/authenticated-user";
-import { signOutAction } from "@/presentation/actions/auth-actions";
+import { CurrentLink } from "@/presentation/components/layout/current-link";
+import { MAIN_TAB_ICONS } from "@/presentation/components/layout/main-tab-icons";
+import { SiteMenu } from "@/presentation/components/layout/site-menu";
 import { ThemeSwitcher } from "@/presentation/components/theme/theme-switcher";
-import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
+import {
+  mainTabs,
+  menuIdentity,
+  type MainTab,
+} from "@/presentation/presenters/site-navigation";
 
 const repositoryUrl = "https://github.com/Sparklingstadt/ffpf-zhuelog";
 
@@ -33,114 +24,37 @@ function GitHubMark() {
   );
 }
 
-function NavLink({
-  href,
-  icon: Icon,
-  label,
-  children,
-}: {
-  href: string;
-  icon: LucideIcon;
-  label: string;
-  children: string;
-}) {
+// The four main pages, with text, on screens wide enough to have no bottom
+// tabs (xl); below that the tabs carry them and the header stays one row.
+function MainLinks({ user }: { user: AuthenticatedUser }) {
   return (
-    <Button asChild variant="ghost" size="sm" title={children}>
-      <Link href={href}>
-        <Icon />
-        <span className={label}>{children}</span>
-      </Link>
-    </Button>
+    <nav
+      aria-label="主なページ"
+      className="flex items-center gap-0.5 max-xl:hidden"
+    >
+      {mainTabs(user.role).map((tab) =>
+        tab.href ? (
+          <HeaderLink key={tab.page} tab={tab} href={tab.href} />
+        ) : null,
+      )}
+    </nav>
   );
 }
 
-function UserControls({ user }: { user: AuthenticatedUser }) {
-  const isGuest = user.role === "guest";
-  const isMember = user.role === "member";
-  const isAdmin = user.role === "admin";
-  const name = isGuest
-    ? "ゲスト"
-    : isMember
-      ? (user.displayName ?? user.githubLogin)
-      : `@${user.githubLogin}`;
-  const roleLabel = isAdmin ? "管理者" : isMember ? "メンバー" : null;
-  // Labels collapse to icons until there is room for them; the text stays for
-  // screen readers. Members' and admins' six links only fit with labels from
-  // `xl`.
-  // `max-*:sr-only` rather than `*:not-sr-only`, which resets the button's
-  // `whitespace-nowrap` and lets a squeezed label wrap.
-  const label = isGuest ? "max-lg:sr-only" : "max-xl:sr-only";
-
+function HeaderLink({ tab, href }: { tab: MainTab; href: string }) {
+  const Icon = MAIN_TAB_ICONS[tab.page];
   return (
-    <div className="flex min-w-0 items-center justify-between gap-2 md:justify-end">
-      <div className="flex max-w-40 min-w-0 shrink-0 items-center gap-1.5 text-sm">
-        {isGuest ? (
-          <Eye className="size-4 shrink-0 text-muted-foreground" />
-        ) : (
-          <CircleUserRound className="size-4 shrink-0 text-muted-foreground" />
-        )}
-        <span className="truncate font-medium" title={name}>
-          {name}
-        </span>
-        {roleLabel ? (
-          <Badge variant="secondary" className="font-normal max-sm:hidden">
-            {roleLabel}
-          </Badge>
-        ) : null}
-      </div>
-      <nav
-        aria-label="アカウント"
-        className="flex min-w-0 flex-wrap items-center justify-end gap-0.5"
-      >
-        <NavLink label={label} href="/practice/prepositions" icon={Shuffle}>
-          介詞練習
-        </NavLink>
-        <NavLink label={label} href="/practice/complements" icon={ListChecks}>
-          補語練習
-        </NavLink>
-        {isMember || isAdmin ? (
-          <NavLink label={label} href="/vocabulary" icon={BookA}>
-            単語帳
-          </NavLink>
-        ) : null}
-        {isMember || isAdmin ? (
-          <NavLink label={label} href="/follow" icon={UsersRound}>
-            フォロー
-          </NavLink>
-        ) : null}
-        {isMember || isAdmin ? (
-          <NavLink label={label} href="/account/line" icon={MessageCircle}>
-            LINE 連携
-          </NavLink>
-        ) : null}
-        {isMember ? (
-          <NavLink label={label} href="/account/password" icon={KeyRound}>
-            パスワード変更
-          </NavLink>
-        ) : null}
-        {isMember || isAdmin ? (
-          <NavLink label={label} href="/chat" icon={MessagesSquare}>
-            ChatGPT と話す
-          </NavLink>
-        ) : null}
-        {isMember || isAdmin ? (
-          <NavLink label={label} href="/quick-question" icon={CircleHelp}>
-            クイック質問
-          </NavLink>
-        ) : null}
-        {isAdmin ? (
-          <NavLink label={label} href="/admin/accounts" icon={UserCog}>
-            アカウント管理
-          </NavLink>
-        ) : null}
-        <form action={signOutAction} className="shrink-0">
-          <Button type="submit" variant="ghost" size="sm" title="ログアウト">
-            <LogOut />
-            <span className={label}>ログアウト</span>
-          </Button>
-        </form>
-      </nav>
-    </div>
+    <Button
+      asChild
+      variant="ghost"
+      size="sm"
+      className="data-[current]:bg-primary/10 data-[current]:text-primary"
+    >
+      <CurrentLink href={href} page={tab.page}>
+        <Icon />
+        {tab.headerLabel}
+      </CurrentLink>
+    </Button>
   );
 }
 
@@ -149,7 +63,7 @@ function UserControls({ user }: { user: AuthenticatedUser }) {
 export function AppHeader({ user }: { user?: AuthenticatedUser | null }) {
   return (
     <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur-md">
-      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 sm:px-6 md:flex-nowrap lg:px-8">
+      <div className="mx-auto flex h-12 w-full max-w-6xl items-center gap-x-4 px-4 sm:px-6 lg:px-8">
         <Link
           href="/"
           className="flex shrink-0 items-center gap-2 rounded-lg font-semibold tracking-tight outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -159,14 +73,15 @@ export function AppHeader({ user }: { user?: AuthenticatedUser | null }) {
           </span>
           学习録
         </Link>
-        {user ? (
-          <div className="order-last w-full min-w-0 border-t pt-2 md:order-none md:ml-auto md:w-auto md:border-0 md:pt-0">
-            <UserControls user={user} />
-          </div>
-        ) : null}
-        <div
-          className={`flex items-center gap-1 ${user ? "ml-auto md:ml-0 md:border-l md:pl-4" : "ml-auto"}`}
-        >
+        {user ? <MainLinks user={user} /> : null}
+        <div className="ml-auto flex min-w-0 items-center gap-1">
+          {user ? (
+            <SiteMenu
+              variant="header"
+              role={user.role}
+              {...menuIdentity(user)}
+            />
+          ) : null}
           <Button asChild variant="ghost" size="icon-sm" title="GitHub">
             <a href={repositoryUrl} target="_blank" rel="noopener noreferrer">
               <GitHubMark />

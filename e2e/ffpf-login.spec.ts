@@ -1,7 +1,14 @@
 import type { BrowserContext, Page } from "@playwright/test";
 import { ffpfIssuerURL } from "./environment";
 import { ffpfStubUser } from "./fixtures/ffpf-oidc-stub";
-import { asMember, createMember, expect, test, upload } from "./fixtures";
+import {
+  asMember,
+  createMember,
+  expect,
+  test,
+  upload,
+  signOut,
+} from "./fixtures";
 
 const password = "member-password-1";
 
@@ -76,7 +83,7 @@ test("an FFPF ID user signs in, keeps notes, gets the portal link and signs out"
   ).toHaveAttribute("href", `${ffpfIssuerURL}/id`);
   await expect(page.getByLabel("新しいパスワード")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "ログアウト" }).click();
+  await signOut(page);
   await expect(
     page.getByRole("button", { name: "ゲストとして使う" }),
   ).toBeVisible();
