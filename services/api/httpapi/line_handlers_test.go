@@ -42,6 +42,14 @@ type fakeLine struct {
 	linkedErr error
 	linkedFor string
 
+	reviewNotify   bool
+	setNotifyErr   error
+	setNotifyFor   string
+	setNotifyTo    []bool
+	notifyCalls    int
+	notifyDeadline time.Time
+	notifyErr      error
+
 	unlinkCalls int
 	unlinkedFor string
 	unlinkErr   error
@@ -83,6 +91,26 @@ func (f *fakeLine) Unlink(_ context.Context, ownerID string) error {
 	f.unlinkCalls++
 	f.unlinkedFor = ownerID
 	return f.unlinkErr
+}
+
+func (f *fakeLine) ReviewNotify(_ context.Context, ownerID string) (bool, bool, error) {
+	f.linkedFor = ownerID
+	return f.linked, f.reviewNotify, f.linkedErr
+}
+
+func (f *fakeLine) SetReviewNotify(_ context.Context, ownerID string, on bool) error {
+	f.setNotifyFor = ownerID
+	if f.setNotifyErr != nil {
+		return f.setNotifyErr
+	}
+	f.setNotifyTo = append(f.setNotifyTo, on)
+	return nil
+}
+
+func (f *fakeLine) NotifyDueReviews(_ context.Context, deadline time.Time) error {
+	f.notifyCalls++
+	f.notifyDeadline = deadline
+	return f.notifyErr
 }
 
 func (f *fakeLine) Drain(_ context.Context, deadline time.Time) error {
@@ -260,7 +288,7 @@ func TestLinkRoutesAllowMembersAndAdmins(t *testing.T) {
 			h, _, _ := lineRouter(t, role, f)
 
 			w := do(h, "GET", "/v1/line/link", "", authHeader)
-			if w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != `{"linked":true}` {
+			if w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != `{"linked":true,"reviewNotify":false}` {
 				t.Errorf("GET link = %d %q", w.Code, w.Body.String())
 			}
 			if f.linkedFor != testOwner {
