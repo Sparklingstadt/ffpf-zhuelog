@@ -106,6 +106,9 @@ type Service struct {
 	Allowlist Allowlist
 	Passwords Hasher
 	Now       func() time.Time // nil means time.Now
+	// DemoLoginID is the loginId of the demo account; empty means no demo
+	// (see LoginDemo).
+	DemoLoginID string
 }
 
 func (s *Service) now() time.Time {

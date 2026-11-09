@@ -33,6 +33,9 @@ type Auth interface {
 	LoginGuest(ctx context.Context) (auth.TokenPair, error)
 	Me(ctx context.Context, p auth.Principal) (auth.Me, error)
 	ActAs(ctx context.Context, p auth.Principal, ownerID string) (auth.Principal, error)
+	DemoEnabled() bool
+	LoginDemo(ctx context.Context, client string) (auth.TokenPair, error)
+	IsDemo(ctx context.Context, p auth.Principal) (bool, error)
 }
 
 // Entries is what the handlers need from *store.Store.
@@ -123,6 +126,9 @@ type Deps struct {
 	// AIUsage records the tokens of every OpenAI call and sums them up for
 	// the admin; nil records nothing and leaves the summary route out.
 	AIUsage AIUsage
+	// DemoReset puts the demo account back to its fixture; nil (no demo)
+	// leaves its cron route out. CronSecret guards it.
+	DemoReset DemoResetter
 }
 
 const (
@@ -142,6 +148,8 @@ type route struct {
 	// allowGuest lets guest tokens through requireAuth. It is the only place
 	// that records it: every other authed route answers guests with 403.
 	allowGuest bool
+	// closedToDemo answers the demo account with 403 (see notDemo).
+	closedToDemo bool
 }
 
 // NewRouter builds the API handler with all middleware applied.
@@ -190,6 +198,12 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	privateReadUser := func(pattern string, h http.Handler) {
 		handle(route{pattern: pattern, authed: true, allowUser: true}, h)
 	}
+	// notForDemo registers an authed route the demo account may not use: one
+	// that calls OpenAI, reaches other members or changes the account. h is
+	// the handler before authentication; authed (or wrap) goes around it.
+	notForDemo := func(pattern string, wrap func(http.Handler) http.Handler, h http.Handler) {
+		handle(route{pattern: pattern, authed: true, closedToDemo: true}, wrap(notDemo(d.Auth, h)))
+	}
 
 	// Production and the ALB health check use /health; /healthz is kept for
 	// local use.
@@ -209,6 +223,16 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	// With a proxy secret configured, only the web server may start guest
 	// sessions; without one (local development) anyone may.
 	public("POST /v1/auth/guest", limited(requireProxySecret(d.WebProxySecret, loginGuest(d.Auth))))
+	// The demo account: whether it exists (for the sign-in page) and a
+	// session for it, with no password and only from the web, like guests.
+	public("GET /v1/auth/demo", demoStatus(d.Auth))
+	public("POST /v1/auth/demo", limited(requireProxySecret(d.WebProxySecret, loginDemo(d.Auth, clientKey))))
+	if d.DemoReset != nil {
+		// Vercel Cron calls with GET; POST is for running it by hand.
+		reset := demoReset(d.DemoReset, d.CronSecret, d.Now)
+		public("GET "+demoResetPath, reset)
+		public("POST "+demoResetPath, reset)
+	}
 
 	// The only route guests may call: it tells the web who is signed in.
 	handle(route{pattern: "GET /v1/me", authed: true, allowGuest: true},
@@ -232,15 +256,17 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	private("DELETE /v1/trash", authed(emptyTrash(d.Entries)))
 	private("POST /v1/trash/{id}/restore", authed(restoreEntry(d.Entries)))
 	private("DELETE /v1/trash/{id}", authed(purgeEntry(d.Entries)))
-	private("PUT /v1/entries/{id}/share", authed(shareEntry(d.Entries, d.Now, true)))
-	private("DELETE /v1/entries/{id}/share", authed(shareEntry(d.Entries, d.Now, false)))
-	private("GET /v1/members", authed(listMembers(d.Follows)))
-	private("PUT /v1/follows/{ownerId}", authed(followMember(d.Follows, d.Now)))
-	private("DELETE /v1/follows/{ownerId}", authed(unfollowMember(d.Follows)))
-	private("GET /v1/timeline", authed(listTimeline(d.Follows)))
+	// Sharing and following reach other members, so the demo account (shared
+	// by strangers) has neither.
+	notForDemo("PUT /v1/entries/{id}/share", authed, shareEntry(d.Entries, d.Now, true))
+	notForDemo("DELETE /v1/entries/{id}/share", authed, shareEntry(d.Entries, d.Now, false))
+	notForDemo("GET /v1/members", authed, listMembers(d.Follows))
+	notForDemo("PUT /v1/follows/{ownerId}", authed, followMember(d.Follows, d.Now))
+	notForDemo("DELETE /v1/follows/{ownerId}", authed, unfollowMember(d.Follows))
+	notForDemo("GET /v1/timeline", authed, listTimeline(d.Follows))
 	// Changing a password checks the current one, so it shares the /v1/auth/*
 	// limit. The limit runs before authentication so failed tokens count too.
-	private("POST /v1/account/password", limited(authed(changePassword(d.Auth))))
+	notForDemo("POST /v1/account/password", func(h http.Handler) http.Handler { return limited(authed(h)) }, changePassword(d.Auth))
 	// Admin-only member management. Passwords are hashed with the shared
 	// scrypt semaphore and are never logged.
 	private("GET /v1/admin/accounts", adminOnly(listAccounts(d.Accounts)))
@@ -281,7 +307,7 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 		private("GET /v1/study-log", authed(listStudyLog(d.StudyLog)))
 	}
 	if d.VocabularyDrafter != nil {
-		private("POST /v1/vocabulary/draft", authed(trackAIUsage(d.AIUsage, aiusage.FeatureVocabularyDraft, d.Now, draftVocabulary(d.VocabularyDrafter))))
+		notForDemo("POST /v1/vocabulary/draft", authed, trackAIUsage(d.AIUsage, aiusage.FeatureVocabularyDraft, d.Now, draftVocabulary(d.VocabularyDrafter)))
 	}
 
 	// The LINE routes exist only when the bot is configured. The webhook and
@@ -292,17 +318,17 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	if d.Line != nil {
 		public("POST "+lineWebhookPath, lineWebhook(d.Line, d.LineChannelSecret, d.Now))
 		public("GET "+lineDrainPath, lineDrain(d.Line, d.CronSecret, d.Now))
-		private("GET /v1/line/link", authed(notActing(lineLinked(d.Line))))
-		private("POST /v1/line/link-code", authed(notActing(lineLinkCode(d.Line))))
-		private("DELETE /v1/line/link", authed(notActing(lineUnlink(d.Line))))
-		private("PUT /v1/line/review-notify", authed(notActing(lineReviewNotify(d.Line, true))))
-		private("DELETE /v1/line/review-notify", authed(notActing(lineReviewNotify(d.Line, false))))
+		notForDemo("GET /v1/line/link", authed, notActing(lineLinked(d.Line)))
+		notForDemo("POST /v1/line/link-code", authed, notActing(lineLinkCode(d.Line)))
+		notForDemo("DELETE /v1/line/link", authed, notActing(lineUnlink(d.Line)))
+		notForDemo("PUT /v1/line/review-notify", authed, notActing(lineReviewNotify(d.Line, true)))
+		notForDemo("DELETE /v1/line/review-notify", authed, notActing(lineReviewNotify(d.Line, false)))
 	}
 
 	// The chat, for members and admins (guests get 403 from requireAuth),
 	// exists only when OpenAI is configured.
 	if d.Chat != nil {
-		private("POST /v1/chat", authed(trackAIUsage(d.AIUsage, aiusage.FeatureChat, d.Now, streamChat(d.Chat))))
+		notForDemo("POST /v1/chat", authed, trackAIUsage(d.AIUsage, aiusage.FeatureChat, d.Now, streamChat(d.Chat)))
 		private("GET /v1/conversations", authed(listConversations(d.Conversations, d.ChatModel)))
 		private("GET /v1/conversations/{id}", authed(getConversation(d.Conversations)))
 		private("PUT /v1/conversations/{id}", authed(putConversation(d.Conversations, d.Now)))
@@ -310,7 +336,7 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	}
 
 	if d.QuickChat != nil && d.Questions != nil {
-		private("POST /v1/quick-question", authed(trackAIUsage(d.AIUsage, aiusage.FeatureQuickQuestion, d.Now, streamMessages(d.QuickChat, true))))
+		notForDemo("POST /v1/quick-question", authed, trackAIUsage(d.AIUsage, aiusage.FeatureQuickQuestion, d.Now, streamMessages(d.QuickChat, true)))
 		private("GET /v1/questions", authed(listQuestions(d.Questions, d.ChatModel)))
 		private("GET /v1/questions/{id}", authed(getQuestion(d.Questions)))
 		private("PUT /v1/questions/{id}", authed(putQuestion(d.Questions, d.ChatModel, d.Now)))

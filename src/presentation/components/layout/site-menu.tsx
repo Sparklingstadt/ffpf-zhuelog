@@ -20,12 +20,15 @@ import { cn } from "@/presentation/lib/utils";
 // ("tab"), within reach of the thumb.
 export function SiteMenu({
   role,
+  demo = false,
   name,
   roleLabel,
   variant,
   tabClassName,
 }: {
   role: AppRole;
+  // The demo account, whose menu leaves out what Go refuses it.
+  demo?: boolean;
   name: string;
   roleLabel: string;
   variant: "header" | "tab";
@@ -37,7 +40,7 @@ export function SiteMenu({
   // item is chosen: a submit button inside it would be gone before the
   // browser submitted, so the item submits this form itself.
   const signOutForm = useRef<HTMLFormElement>(null);
-  const sections = menuSections(role);
+  const sections = menuSections(role, { demo });
 
   return (
     <>

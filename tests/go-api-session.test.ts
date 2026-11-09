@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { GoApiError } from "../src/infrastructure/go-api/client";
 import {
+  goDemoFailureUrl,
   goGuestFailureUrl,
   goPasswordFailureUrl,
   isSecureRequest,
@@ -59,6 +60,23 @@ test("any Go API failure of the guest login shows the generic message", () => {
 test("a guest failure that is not a GoApiError is rethrown, not redirected", () => {
   for (const error of [new Error("boom"), undefined])
     assert.equal(goGuestFailureUrl(error, path), null);
+});
+
+test("a demo that is off says so; other demo failures are generic", () => {
+  assert.equal(
+    goDemoFailureUrl(new GoApiError(404, "not_found"), path),
+    "/signin?error=DemoUnavailable&callbackUrl=%2Flogs%3Fa%3D1%26b%3D2",
+  );
+  for (const error of [
+    new GoApiError(429, "rate_limited"),
+    new GoApiError(403, "forbidden"),
+    new GoApiError(0, "unavailable"),
+  ])
+    assert.equal(
+      goDemoFailureUrl(error, path),
+      "/signin?error=Unknown&callbackUrl=%2Flogs%3Fa%3D1%26b%3D2",
+    );
+  assert.equal(goDemoFailureUrl(new Error("boom"), path), null);
 });
 
 const originalAuthUrl = process.env.AUTH_URL;

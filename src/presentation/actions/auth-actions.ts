@@ -1,6 +1,7 @@
 "use server";
 
 import {
+  signInAsDemo,
   signInAsGuest,
   signInWithFfpf,
   signInWithGitHub,
@@ -19,6 +20,10 @@ export async function signInWithFfpfAction(callbackPath: string) {
 
 export async function signInAsGuestAction(callbackPath: string) {
   await signInAsGuest(getSafeCallbackPath(callbackPath));
+}
+
+export async function signInAsDemoAction(callbackPath: string) {
+  await signInAsDemo(getSafeCallbackPath(callbackPath));
 }
 
 export async function signInWithPasswordAction(
