@@ -5,10 +5,7 @@ import { z } from "zod";
 import { getCurrentViewerUser } from "@/composition/identity-container";
 import { complementRecords } from "@/composition/practice-container";
 import { isMemberRole } from "@/domain/identity/entities/authenticated-user";
-import {
-  COMPLEMENT_MODES,
-  type ComplementMode,
-} from "@/domain/practice/complement-quiz";
+import { COMPLEMENT_ROUND_MODES } from "@/domain/practice/complement-record";
 import { GoApiError } from "@/infrastructure/go-api/client";
 import { goFailureMessage } from "@/presentation/controllers/action-state";
 import { accountForbiddenMessage } from "@/presentation/presenters/account-action-errors";
@@ -18,9 +15,7 @@ import { practiceAnswerInput } from "./practice-round-input";
 // The shape only; Go checks the limits.
 const roundInput = z.object({
   id: z.uuid(),
-  mode: z.enum(
-    Object.keys(COMPLEMENT_MODES) as [ComplementMode, ...ComplementMode[]],
-  ),
+  mode: z.enum(COMPLEMENT_ROUND_MODES),
   startedAt: z.iso.datetime(),
   elapsedMs: z.number().int(),
   questions: z.array(practiceAnswerInput),

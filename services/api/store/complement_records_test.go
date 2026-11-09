@@ -198,3 +198,22 @@ func TestAddComplementRecordAcceptsTheVerbMode(t *testing.T) {
 		t.Errorf("saved = %+v", saved)
 	}
 }
+
+// The measure-word practice (measure) passes the table's CHECK on mode.
+func TestAddComplementRecordAcceptsTheMeasureMode(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	owner := newOwner(t, s)
+	cleanComplementRecords(t, s, owner)
+
+	r := complementRecord(fixedNow(), []string{"张"})
+	r.Mode = "measure"
+	r.Questions[0] = ComplementQuestion{ID: "measure-01", Answer: "本", Noun: "书", Prompt: "一（　）书", Misses: []string{"张"}}
+	saved, err := s.AddComplementRecord(ctx, owner, r, fixedNow())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.Mode != "measure" || saved.Questions[0].ID != "measure-01" {
+		t.Errorf("saved = %+v", saved)
+	}
+}

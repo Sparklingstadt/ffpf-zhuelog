@@ -220,7 +220,8 @@ model QuickQuestion {
 }
 
 // Complement rounds, isolated from preposition history. mode: result/potential/degree/
-// direction-simple/direction-compound/direction-simple-extended/direction-compound-extended.
+// direction-simple/direction-compound/direction-simple-extended/direction-compound-extended/
+// verb, and measure for the measure-word practice, whose rounds are kept here.
 model ComplementPracticeRecord {
   id            String   @id
   ownerId       String
