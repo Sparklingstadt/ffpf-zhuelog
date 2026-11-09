@@ -1,3 +1,7 @@
+import {
+  aspectParticleQuestionById,
+  isAspectParticleQuestionId,
+} from "./aspect-particle-quiz";
 import { COMPLEMENT_USAGES } from "./complement-data";
 import { complementQuestion } from "./complement-quiz";
 import {
@@ -15,12 +19,14 @@ import {
   type Random,
 } from "./preposition-quiz";
 
-// The practice question a review item names, with its choices shuffled:
+// The practice question a review item names, with its choices shuffled (the
+// 了・过・着 ones keep their fixed order):
 // "preposition" items are "<use id>:<noun>", "complement" items are the
 // question's id ("verb:<use id>:<verb>" for the verb mode, "measure-NN" for
-// the measure-word practice, whose rounds are kept with the complements'). Null when the
-// data no longer has it (a use or a phrase removed from the CSV), or for a
-// kind the web does not know yet.
+// the measure-word practice and "aspect-NN" for the 了・过・着 practice, whose
+// rounds are kept with the complements'). Null when the data no longer has
+// it (a use or a phrase removed from the CSV), or for a kind the web does
+// not know yet.
 export function reviewQuestion(
   kind: string,
   targetId: string,
@@ -36,9 +42,12 @@ export function reviewQuestion(
     return usage && pair ? buildQuestion(usage, pair, random) : null;
   }
   if (kind === "complement") {
-    // The measure-word practice keeps its rounds with the complements'.
+    // The measure-word and 了・过・着 practices keep their rounds with the
+    // complements'.
     if (isMeasureWordQuestionId(targetId))
       return measureWordQuestionById(targetId, random);
+    if (isAspectParticleQuestionId(targetId))
+      return aspectParticleQuestionById(targetId);
     if (isVerbQuestionId(targetId))
       return complementVerbQuestionById(targetId, random);
     const q = COMPLEMENT_USAGES.find((u) => u.id === targetId);
@@ -50,8 +59,8 @@ export function reviewQuestion(
 // What the review page shows for a choice item: the question, the badge
 // above it, and whether the headword is shown small. Prepositions and the
 // verb mode of the complements show their noun or verb large, as their
-// practice does; the other complement modes' prompts are whole sentences
-// labelled by their mode.
+// practice does; the other complement modes' prompts, and the 了・过・着
+// ones, are whole sentences labelled by their mode.
 export function reviewChoice(
   kind: string,
   targetId: string,

@@ -1,3 +1,10 @@
+import {
+  hskLevelOf,
+  inHskFilter,
+  type HskBasis,
+  type HskFilter,
+  type HskLevel,
+} from "./hsk-level";
 import { MEASURE_WORD_USAGES } from "./measure-word-data";
 import {
   BLANK,
@@ -36,8 +43,30 @@ export function isMeasureWordQuestionId(id: string): boolean {
   return id.startsWith(MEASURE_WORD_ID_PREFIX);
 }
 
-export function countMeasureWordQuestions(): number {
-  return MEASURE_WORD_USAGES.length;
+// The phrase a question asks about, with the measure word in.
+function phraseOf(usage: MeasureWordUsage): string {
+  return usage.prompt.replace(BLANK, usage.answer);
+}
+
+// The HSK level of a question, decided by `basis` from its phrase and
+// example sentence, as a preposition question's is.
+export function measureWordUsageLevel(
+  usage: MeasureWordUsage,
+  basis: HskBasis,
+): HskLevel {
+  return hskLevelOf(basis, phraseOf(usage), usage.example);
+}
+
+function usagesAt(filter: HskFilter | null) {
+  return MEASURE_WORD_USAGES.filter((usage) =>
+    inHskFilter(filter, phraseOf(usage), usage.example),
+  );
+}
+
+export function countMeasureWordQuestions(
+  filter: HskFilter | null = null,
+): number {
+  return usagesAt(filter).length;
 }
 
 function shuffled<T>(values: readonly T[], random: Random): T[] {
@@ -60,7 +89,7 @@ export function measureWordQuestion(
     noun: usage.noun,
     meaning: usage.meaning,
     prompt: usage.prompt,
-    phrase: usage.prompt.replace(BLANK, usage.answer),
+    phrase: phraseOf(usage),
     answer: usage.answer,
     pinyin: usage.pinyin,
     example: usage.example,
@@ -79,13 +108,15 @@ export function measureWordQuestionById(
   return usage ? measureWordQuestion(usage, random) : null;
 }
 
-// `count` questions in random order. Built on the server first so hydration
-// is deterministic; each retry builds a new order in the browser.
+// `count` questions in random order, only those of the filter's level when
+// one is given. Built on the server first so hydration is deterministic;
+// each retry builds a new order in the browser.
 export function buildMeasureWordQuiz(
   count = 25,
   random: Random = Math.random,
+  filter: HskFilter | null = null,
 ): PrepositionQuestion[] {
-  return shuffled(MEASURE_WORD_USAGES, random)
+  return shuffled(usagesAt(filter), random)
     .slice(0, Math.max(0, Math.floor(count)))
     .map((usage) => measureWordQuestion(usage, random));
 }

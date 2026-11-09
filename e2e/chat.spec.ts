@@ -21,6 +21,10 @@ test("admin chats, the conversation is saved and can be continued and deleted", 
     .getByRole("menuitem", { name: "ChatGPT と話す" })
     .click();
   await expect(page).toHaveURL((url) => url.pathname === "/chat");
+  // The page is called as the menu calls it.
+  await expect(
+    page.getByRole("heading", { level: 1, name: "ChatGPT と話す" }),
+  ).toBeVisible();
 
   const input = page.getByLabel("ChatGPTへのメッセージ");
   await input.fill("我今天很忙");

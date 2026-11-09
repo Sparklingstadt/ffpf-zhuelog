@@ -76,7 +76,7 @@ export default async function VocabularyPage() {
         <CardHeader>
           <CardTitle className="text-base">語句を入れる</CardTitle>
           <CardDescription>
-            「AIで下書き」でピン音と意味を埋め、直してから入れられます。
+            「AIで下書き」でピンインと意味を埋め、直してから入れられます。
           </CardDescription>
         </CardHeader>
         <CardContent>

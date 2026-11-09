@@ -162,7 +162,7 @@ export function VocabularyAddForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
           <label htmlFor={`${ids}-pinyin`} className="text-sm font-medium">
-            ピン音
+            ピンイン
           </label>
           <Input
             id={`${ids}-pinyin`}

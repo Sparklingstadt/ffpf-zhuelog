@@ -30,6 +30,20 @@ export const READING_FIXES: Readonly<Record<string, string>> = {
   够不着: "* * zháo",
   够得着: "* * zháo",
   睡不着觉: "* * zháo jiào",
+  // 过 after a verb, marking an experience, is guo (the 了・过・着 practice).
+  // The following character keeps these off the directional 过 (走过来).
+  去过两: "* guo *",
+  吃过北: "* guo *",
+  见过这: "* guo *",
+  学过钢: "* guo *",
+  见过面: "* guo *",
+  看过两: "* guo *",
+  听说过: "* * guo",
+  作过三: "* guo *",
+  爬过富: "* guo *",
+  他提过: "* * guo",
+  坐过飞: "* guo *",
+  前做过: "* * guo",
   // 地 marking an adverbial is de.
   悄悄地: "* * de",
   慢慢地: "* * de",
