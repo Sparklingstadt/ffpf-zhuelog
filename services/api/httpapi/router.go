@@ -295,6 +295,8 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 		private("GET /v1/line/link", authed(notActing(lineLinked(d.Line))))
 		private("POST /v1/line/link-code", authed(notActing(lineLinkCode(d.Line))))
 		private("DELETE /v1/line/link", authed(notActing(lineUnlink(d.Line))))
+		private("PUT /v1/line/review-notify", authed(notActing(lineReviewNotify(d.Line, true))))
+		private("DELETE /v1/line/review-notify", authed(notActing(lineReviewNotify(d.Line, false))))
 	}
 
 	// The chat, for members and admins (guests get 403 from requireAuth),
