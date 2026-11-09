@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   History,
+  Hourglass,
   ListChecks,
   Ruler,
   Shuffle,
@@ -11,6 +12,7 @@ import { redirect } from "next/navigation";
 
 import { getCurrentViewerUser } from "@/composition/identity-container";
 import { isMemberRole } from "@/domain/identity/entities/authenticated-user";
+import { ASPECT_PARTICLE_PRACTICE } from "@/domain/practice/aspect-particle-quiz";
 import { COMPLEMENT_MODES } from "@/domain/practice/complement-quiz";
 import { MEASURE_WORD_PRACTICE } from "@/domain/practice/measure-word-quiz";
 import { PageHeader } from "@/presentation/components/layout/page-header";
@@ -51,6 +53,13 @@ const PRACTICES: Practice[] = [
     icon: Ruler,
     recordsHref: "/practice/complements/records",
   },
+  {
+    title: ASPECT_PARTICLE_PRACTICE.label,
+    description: ASPECT_PARTICLE_PRACTICE.description,
+    href: "/practice/aspect-particles",
+    icon: Hourglass,
+    recordsHref: "/practice/complements/records",
+  },
 ];
 
 // The practices in one place, for the bottom tab and the header's 練習.
@@ -75,7 +84,7 @@ export default async function PracticePage() {
           </Button>
         }
       />
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         {PRACTICES.map((practice) => (
           <Card key={practice.href}>
             <CardContent className="flex h-full flex-col gap-4">

@@ -32,6 +32,7 @@ for (const { path, choiceLabel } of [
     choiceLabel: "補語を選ぶ",
   },
   { path: "/practice/complements/verb", choiceLabel: "補語を選ぶ" },
+  { path: "/practice/aspect-particles", choiceLabel: "了・过・着を選ぶ" },
 ]) {
   test(`${path} fits a phone: the question and all four choices above the tabs`, async ({
     page,
@@ -54,10 +55,9 @@ for (const { path, choiceLabel } of [
     ).toBeLessThan(44);
     // The basis of the HSK levels waits below the practice.
     const basis = page.getByRole("group", { name: "級の決め方" });
-    if (path !== "/practice/measure-words")
-      expect((await basis.boundingBox())!.y).toBeGreaterThan(
-        (await choices.boundingBox())!.y,
-      );
+    expect((await basis.boundingBox())!.y).toBeGreaterThan(
+      (await choices.boundingBox())!.y,
+    );
     await page.screenshot({
       path: testInfo.outputPath(`${path.replaceAll("/", "-")}-question.png`),
     });

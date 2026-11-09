@@ -1,11 +1,12 @@
 // Writes src/domain/practice/example-pinyin.ts, the pinyin shown above the
-// example sentence when a complement, measure-word or preposition question
-// is solved.
+// example sentence when a complement, measure-word, 了・过・着 or
+// preposition question is solved.
 // Usage:
 //   pnpm exec tsx scripts/generate-example-pinyin.ts
 //
 // Run it again after changing complement-data.ts, complement-verb-data.ts,
-// measure-word-data.ts or preposition-data.ts; tests/example-pinyin.test.ts
+// measure-word-data.ts, aspect-particle-data.ts or preposition-data.ts;
+// tests/example-pinyin.test.ts
 // fails until then. A wrong reading is fixed in READING_FIXES
 // (scripts/lib/example-pinyin.ts), never in the generated file.
 import { writeFileSync } from "node:fs";
@@ -13,6 +14,8 @@ import { fileURLToPath } from "node:url";
 
 import { format, resolveConfig } from "prettier";
 
+import { ASPECT_PARTICLE_USAGES } from "../src/domain/practice/aspect-particle-data";
+import { aspectParticleSentence } from "../src/domain/practice/aspect-particle-quiz";
 import { COMPLEMENT_USAGES } from "../src/domain/practice/complement-data";
 import { COMPLEMENT_VERB_USAGES } from "../src/domain/practice/complement-verb-data";
 import { MEASURE_WORD_USAGES } from "../src/domain/practice/measure-word-data";
@@ -24,14 +27,15 @@ const output = new URL(
   import.meta.url,
 );
 
-// The same sentences the quizzes show: a hand-written complement question's
-// example is its prompt with the answer in the blank.
+// The same sentences the quizzes show: a hand-written complement or 了・过・着
+// question's example is its prompt with the answer in the blank.
 const sentences = [
   ...new Set([
     ...COMPLEMENT_USAGES.map((q) => q.prompt.replace("（　）", q.answer)),
     ...COMPLEMENT_VERB_USAGES.map((usage) => usage.example),
     ...PREPOSITION_USAGES.map((usage) => usage.example),
     ...MEASURE_WORD_USAGES.map((usage) => usage.example),
+    ...ASPECT_PARTICLE_USAGES.map(aspectParticleSentence),
   ]),
 ].sort();
 const entries = Object.fromEntries(
