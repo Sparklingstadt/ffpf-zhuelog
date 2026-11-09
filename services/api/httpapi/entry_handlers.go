@@ -148,18 +148,23 @@ func listEntries(e Entries) http.Handler {
 		if !ok {
 			return
 		}
+		filter, ok := readEntryFilter(r)
+		if !ok {
+			writeError(w, http.StatusBadRequest, codeInvalidRequest, msgInvalidEntryFilter)
+			return
+		}
 		owner, ok := readOwner(w, r)
 		if !ok {
 			return
 		}
 		// Count first: a note added between the two queries then makes the
 		// list longer, never total smaller than what the list returns.
-		total, err := e.CountEntries(r.Context(), owner)
+		total, err := e.CountEntries(r.Context(), owner, filter)
 		if err != nil {
 			writeServiceError(w, r, err)
 			return
 		}
-		entries, err := e.ListEntries(r.Context(), owner, after, limit+1)
+		entries, err := e.ListEntries(r.Context(), owner, filter, after, limit+1)
 		if err != nil {
 			writeServiceError(w, r, err)
 			return
@@ -170,6 +175,41 @@ func listEntries(e Entries) http.Handler {
 		resp := response{Entries: toEntriesJSON(entries), NextCursor: next, Total: total}
 		writeJSON(w, http.StatusOK, resp)
 	})
+}
+
+// maxFilterRunes bounds the q and hint filters of GET /v1/entries.
+const maxFilterRunes = 100
+
+// readEntryFilter reads q, kind and hint. Each may appear once; q and hint
+// are trimmed and at most 100 characters, and kind is "correction" or
+// "translation". Empty values filter nothing.
+func readEntryFilter(r *http.Request) (store.EntryFilter, bool) {
+	q, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		return store.EntryFilter{}, false
+	}
+	one := func(key string) (string, bool) {
+		vals := q[key]
+		if len(vals) > 1 {
+			return "", false
+		}
+		if len(vals) == 0 {
+			return "", true
+		}
+		return runesWithin(vals[0], 0, maxFilterRunes)
+	}
+	var f store.EntryFilter
+	var ok1, ok2, ok3 bool
+	f.Query, ok1 = one("q")
+	f.Hint, ok2 = one("hint")
+	f.Kind, ok3 = one("kind")
+	if !ok1 || !ok2 || !ok3 {
+		return store.EntryFilter{}, false
+	}
+	if f.Kind != "" && f.Kind != "correction" && f.Kind != "translation" {
+		return store.EntryFilter{}, false
+	}
+	return f, true
 }
 
 func getEntry(e Entries) http.Handler {
