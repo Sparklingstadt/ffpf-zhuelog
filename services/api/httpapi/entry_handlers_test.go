@@ -21,6 +21,9 @@ var authHeader = map[string]string{"Authorization": "Bearer tok"}
 // fakeEntries implements Entries with per-method hooks; an unset hook returns
 // a sentinel error (which maps to 500).
 type fakeEntries struct {
+	// listFilter and countFilter are the filters of the last calls.
+	listFilter, countFilter store.EntryFilter
+
 	list   func(ctx context.Context, ownerID string, after *store.Cursor, limit int) ([]store.Entry, error)
 	get    func(ctx context.Context, ownerID, id string) (store.Entry, error)
 	create func(ctx context.Context, ownerID string, drafts []store.EntryDraft, now time.Time) (store.Batch, []store.Entry, error)
@@ -99,7 +102,8 @@ func (f *fakeEntries) SetShared(ctx context.Context, ownerID, id string, shared 
 	return f.setShared(ctx, ownerID, id, shared, now)
 }
 
-func (f *fakeEntries) CountEntries(ctx context.Context, ownerID string) (int, error) {
+func (f *fakeEntries) CountEntries(ctx context.Context, ownerID string, filter store.EntryFilter) (int, error) {
+	f.countFilter = filter
 	if f.count == nil {
 		return 0, nil
 	}
@@ -113,7 +117,8 @@ func (f *fakeEntries) CountTrashed(ctx context.Context, ownerID string) (int, er
 	return f.countTrashed(ctx, ownerID)
 }
 
-func (f *fakeEntries) ListEntries(ctx context.Context, ownerID string, after *store.Cursor, limit int) ([]store.Entry, error) {
+func (f *fakeEntries) ListEntries(ctx context.Context, ownerID string, filter store.EntryFilter, after *store.Cursor, limit int) ([]store.Entry, error) {
+	f.listFilter = filter
 	if f.list == nil {
 		return nil, errUnexpectedCall{"ListEntries"}
 	}

@@ -159,16 +159,58 @@ func attachHints(ctx context.Context, q dbtx, entries []*Entry) error {
 	return rows.Err()
 }
 
-// ListEntries returns up to limit of the owner's entries that are not in the
-// trash, ordered by (createdAt DESC, id DESC), starting after the cursor.
-func (s *Store) ListEntries(ctx context.Context, ownerID string, after *Cursor, limit int) ([]Entry, error) {
+// EntryFilter narrows the owner's notes. Every field is optional; the ones
+// set must all match. Query matches the written text, the corrected text,
+// the pinyin or a hint; Hint matches a hint only. Both ignore case.
+type EntryFilter struct {
+	Query string
+	Kind  string // "correction" or "translation"
+	Hint  string
+}
+
+// entryFilterSQL is the WHERE condition for f on the alias-less
+// "LearningEntry", with its placeholders numbered from $first, and the values
+// to bind to them.
+func entryFilterSQL(f EntryFilter, first int) (string, []any) {
+	var conds []string
+	var args []any
+	next := func(v any) string {
+		args = append(args, v)
+		return fmt.Sprintf("$%d", first+len(args)-1)
+	}
+	if f.Kind != "" {
+		conds = append(conds, `"kind" = `+next(f.Kind))
+	}
+	if f.Query != "" {
+		p := next(f.Query)
+		conds = append(conds, `(strpos(lower("originalText"), lower(`+p+`)) > 0
+		  OR strpos(lower("correctedText"), lower(`+p+`)) > 0
+		  OR strpos(lower("pinyin"), lower(`+p+`)) > 0
+		  OR EXISTS (SELECT 1 FROM "Hint" h WHERE h."learningEntryId" = "LearningEntry"."id"
+		             AND strpos(lower(h."content"), lower(`+p+`)) > 0))`)
+	}
+	if f.Hint != "" {
+		conds = append(conds, `EXISTS (SELECT 1 FROM "Hint" h WHERE h."learningEntryId" = "LearningEntry"."id"
+		  AND strpos(lower(h."content"), lower(`+next(f.Hint)+`)) > 0)`)
+	}
+	if len(conds) == 0 {
+		return "TRUE", nil
+	}
+	return strings.Join(conds, " AND "), args
+}
+
+// ListEntries returns the owner's notes outside the trash that match f,
+// newest first, after the cursor, at most limit of them.
+func (s *Store) ListEntries(ctx context.Context, ownerID string, f EntryFilter, after *Cursor, limit int) ([]Entry, error) {
 	afterAt, afterID := cursorArgs(after)
+	cond, args := entryFilterSQL(f, 5)
 	rows, err := s.pool.Query(ctx,
 		`SELECT `+entryColumns+` FROM "LearningEntry"
 		 WHERE "ownerId" = $1 AND "deletedAt" IS NULL
 		   AND ($2::timestamp IS NULL OR ("createdAt", "id") < ($2::timestamp, $3::text))
+		   AND `+cond+`
 		 ORDER BY "createdAt" DESC, "id" DESC
-		 LIMIT $4`, ownerID, afterAt, afterID, limit)
+		 LIMIT $4`, append([]any{ownerID, afterAt, afterID, limit}, args...)...)
 	if err != nil {
 		return nil, fmt.Errorf("store: list entries: %w", err)
 	}
@@ -182,11 +224,14 @@ func (s *Store) ListEntries(ctx context.Context, ownerID string, after *Cursor, 
 	return entries, nil
 }
 
-// CountEntries returns how many of the owner's entries are not in the trash.
-func (s *Store) CountEntries(ctx context.Context, ownerID string) (int, error) {
+// CountEntries returns how many of the owner's entries outside the trash
+// match f.
+func (s *Store) CountEntries(ctx context.Context, ownerID string, f EntryFilter) (int, error) {
 	var n int
+	cond, args := entryFilterSQL(f, 2)
 	err := s.pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM "LearningEntry" WHERE "ownerId" = $1 AND "deletedAt" IS NULL`, ownerID).Scan(&n)
+		`SELECT COUNT(*) FROM "LearningEntry" WHERE "ownerId" = $1 AND "deletedAt" IS NULL AND `+cond,
+		append([]any{ownerID}, args...)...).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("store: count entries: %w", err)
 	}
