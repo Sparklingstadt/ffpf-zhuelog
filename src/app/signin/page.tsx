@@ -92,7 +92,9 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
               <Badge variant="secondary" className="gap-1.5">
                 <ShieldCheck className="size-3.5" /> 管理者 / メンバー / ゲスト
               </Badge>
-              <CardTitle className="text-2xl">学习録にログイン</CardTitle>
+              <CardTitle className="text-2xl">
+                <h1>学习録にログイン</h1>
+              </CardTitle>
               <CardDescription>
                 学習ノートはログインしたユーザーごとの記録です。
               </CardDescription>

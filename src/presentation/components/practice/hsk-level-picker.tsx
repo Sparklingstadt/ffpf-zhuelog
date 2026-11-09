@@ -49,7 +49,7 @@ export function HskLevelPicker({
             <span
               className={cn(
                 "text-xs tabular-nums",
-                selected ? "opacity-80" : "text-muted-foreground",
+                selected ? "" : "text-muted-foreground",
               )}
             >
               {count}問
