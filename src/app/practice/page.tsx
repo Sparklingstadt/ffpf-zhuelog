@@ -32,14 +32,14 @@ const PRACTICES: Practice[] = [
   {
     title: "介詞",
     description:
-      "名詞と日本語の意味から、空欄に入る介詞を選びます。例：（在）图书馆学习。",
+      "名詞と日本語の意味から、空欄に入る介詞を選びます。HSK 4〜6級ごとにも練習できます。例：（在）图书馆学习。",
     href: "/practice/prepositions",
     icon: Shuffle,
     recordsHref: "/practice/prepositions/records",
   },
   {
     title: "補語",
-    description: `結果・可能・程度・方向補語など${Object.keys(COMPLEMENT_MODES).length}つのモードから選びます。例：听（懂）了。`,
+    description: `結果・可能・程度・方向補語など${Object.keys(COMPLEMENT_MODES).length}つのモードから選び、HSK 4〜6級ごとにも練習できます。例：听（懂）了。`,
     href: "/practice/complements",
     icon: ListChecks,
     recordsHref: "/practice/complements/records",
