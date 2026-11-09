@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/aiusage"
 )
 
 const (
@@ -108,8 +110,9 @@ func (s *Streamer) Stream(ctx context.Context, msgs []Message, emit func(text st
 			continue // event names, comments and blank separators
 		}
 		var ev struct {
-			Type  string `json:"type"`
-			Delta string `json:"delta"`
+			Type     string            `json:"type"`
+			Delta    string            `json:"delta"`
+			Response *finishedResponse `json:"response"`
 		}
 		if err := json.Unmarshal([]byte(strings.TrimSpace(data)), &ev); err != nil {
 			return &Error{"OPENAI_INVALID_RESPONSE"}
@@ -123,13 +126,16 @@ func (s *Streamer) Stream(ctx context.Context, msgs []Message, emit func(text st
 				return err
 			}
 		case "response.completed":
+			s.reportUsage(ctx, ev.Response)
 			return nil
 		case "response.incomplete":
+			s.reportUsage(ctx, ev.Response)
 			if s.RequireComplete {
 				return &Error{"OPENAI_INCOMPLETE_RESPONSE"}
 			}
 			return nil
 		case "response.failed", "error":
+			s.reportUsage(ctx, ev.Response)
 			return &Error{"OPENAI_INVALID_RESPONSE"}
 		}
 	}
@@ -167,4 +173,24 @@ func transportError(ctx context.Context, err error) *Error {
 		return &Error{"OPENAI_TIMEOUT"}
 	}
 	return &Error{"OPENAI_REQUEST_FAILED"}
+}
+
+// reportUsage passes the token counts of a finished response to the context's
+// aiusage.Recorder. A response without usage reports nothing.
+func (s *Streamer) reportUsage(ctx context.Context, resp *finishedResponse) {
+	if resp == nil || resp.Usage == nil {
+		return
+	}
+	aiusage.Report(ctx, aiusage.Usage{
+		Model: s.Model, InputTokens: resp.Usage.InputTokens, OutputTokens: resp.Usage.OutputTokens,
+	})
+}
+
+// finishedResponse is the part of the response in the final event that
+// carries the token counts.
+type finishedResponse struct {
+	Usage *struct {
+		InputTokens  int `json:"input_tokens"`
+		OutputTokens int `json:"output_tokens"`
+	} `json:"usage"`
 }

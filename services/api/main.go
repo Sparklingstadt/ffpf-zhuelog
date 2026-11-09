@@ -95,6 +95,7 @@ func newLineService(cfg Config, db *store.Store, allow auth.Allowlist, logger *s
 			AccessToken: cfg.LineChannelAccessToken,
 		},
 		OwnerValid: ownerValid(allow, db),
+		Usage:      db,
 		Logger:     logger,
 	}
 }
@@ -168,6 +169,7 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 		Reviews:            db,
 		Vocabulary:         db,
 		StudyLog:           db,
+		AIUsage:            db,
 		WebProxySecret:     cfg.WebProxySecret,
 	}
 	// Without the LINE settings the routes stay unregistered (404). Line is
