@@ -31,6 +31,14 @@ export function goProxySecret() {
   return deriveSecret("api-web-proxy");
 }
 
+// Guards the Go API's cron routes, the demo reset among them.
+export function goCronSecret() {
+  return deriveSecret("api-cron");
+}
+
+// The demo account's loginId in this run (DEMO_LOGIN_ID).
+export const demoLoginId = "demo";
+
 function deriveSecret(label: string) {
   return createHmac("sha256", runSecret()).update(label).digest("hex");
 }

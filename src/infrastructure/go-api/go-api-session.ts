@@ -5,6 +5,7 @@ import { clientAddress } from "../auth/client-address";
 import {
   fetchMe,
   GoApiError,
+  loginDemo,
   loginGuest,
   loginPassword,
   logout,
@@ -71,6 +72,18 @@ export function goGuestFailureUrl(
 ): string | null {
   if (!(error instanceof GoApiError)) return null;
   return `/signin?error=Unknown&callbackUrl=${encodeURIComponent(redirectTo)}`;
+}
+
+// The demo login fails with 404 when the demo is off or not set up yet
+// (DemoUnavailable); anything else (429, 503, unreachable) is the generic
+// message, as for guests.
+export function goDemoFailureUrl(
+  error: unknown,
+  redirectTo: string,
+): string | null {
+  if (!(error instanceof GoApiError)) return null;
+  const key = error.status === 404 ? "DemoUnavailable" : "Unknown";
+  return `/signin?error=${key}&callbackUrl=${encodeURIComponent(redirectTo)}`;
 }
 
 export async function readAccessToken(): Promise<string | undefined> {
@@ -145,6 +158,20 @@ export async function signInAsGuestViaGo(redirectTo: string) {
     tokens = await loginGuest(clientIp);
   } catch (error) {
     const failureUrl = goGuestFailureUrl(error, redirectTo);
+    if (!failureUrl) throw error;
+    redirect(failureUrl);
+  }
+  await startSession(tokens);
+  redirect(redirectTo);
+}
+
+export async function signInAsDemoViaGo(redirectTo: string) {
+  const clientIp = clientAddress(await headers());
+  let tokens: GoTokens;
+  try {
+    tokens = await loginDemo(clientIp);
+  } catch (error) {
+    const failureUrl = goDemoFailureUrl(error, redirectTo);
     if (!failureUrl) throw error;
     redirect(failureUrl);
   }

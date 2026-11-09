@@ -29,6 +29,32 @@ func getenvFrom(env map[string]string) func(string) string {
 	return func(key string) string { return env[key] }
 }
 
+func TestLoadConfigDemoLoginID(t *testing.T) {
+	cfg, err := LoadConfig(getenvFrom(validEnv()))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.DemoLoginID != "" {
+		t.Errorf("DemoLoginID = %q, want empty (demo off)", cfg.DemoLoginID)
+	}
+
+	env := validEnv()
+	env["DEMO_LOGIN_ID"] = " demo "
+	if cfg, err = LoadConfig(getenvFrom(env)); err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.DemoLoginID != "demo" {
+		t.Errorf("DemoLoginID = %q, want demo", cfg.DemoLoginID)
+	}
+
+	for _, bad := range []string{"de", "Demo", "demo user", "デモ"} {
+		env["DEMO_LOGIN_ID"] = bad
+		if _, err := LoadConfig(getenvFrom(env)); err == nil {
+			t.Errorf("DEMO_LOGIN_ID=%q: LoadConfig succeeded, want an error", bad)
+		}
+	}
+}
+
 func TestLoadConfigDefaults(t *testing.T) {
 	cfg, err := LoadConfig(getenvFrom(validEnv()))
 	if err != nil {

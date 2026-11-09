@@ -48,7 +48,8 @@ Web 用とは別の OAuth App を新しく作ります。GitHub の **Settings �
 | `LINE_CHANNEL_ACCESS_TOKEN`   | LINE の長期のチャネルアクセストークン                                                                                              |
 | `OPENAI_API_KEY`              | OpenAI の API キー                                                                                                                 |
 | `OPENAI_CHAT_MODEL`           | 「ChatGPT と話す」のモデル（任意。無ければ `gpt-6.1-sol`）。「8. ChatGPT と話す」を参照                                            |
-| `CRON_SECRET`                 | 拾い直しの Cron の認証用の秘密。Vercel が Cron の呼び出しに `Authorization: Bearer <値>` を付けます                                |
+| `CRON_SECRET`                 | Cron（LINE の拾い直し、デモのリセット）の認証用の秘密。Vercel が Cron の呼び出しに `Authorization: Bearer <値>` を付けます         |
+| `DEMO_LOGIN_ID`               | デモアカウントのログイン ID（例: `demo`。任意）。空のときはデモが無い状態です。「10. デモアカウント」を参照                        |
 | `FFPF_ID_ISSUER`              | FFPF ID（ffpf-portal）の issuer（例: `https://ffpf-portal.vercel.app`）。FFPF ID を使うときだけ。「9. FFPF ID でのログイン」を参照 |
 | `FFPF_ID_CLIENT_ID`           | portal に登録した zhuelog のクライアント ID（例: `zhuelog`）                                                                       |
 | `FFPF_ID_CLIENT_SECRET`       | `pnpm run oidc:client zhuelog`（ffpf-portal）で作ったシークレット                                                                  |
@@ -69,7 +70,8 @@ Web 用とは別の OAuth App を新しく作ります。GitHub の **Settings �
 - `API_WEB_PROXY_SECRET` は、Web（Next.js）が利用者の IP を渡すための共有の秘密です。使い方は 下の「レート制限とクライアントの IP」 を見てください。空のときは `X-Zhuelog-Client-IP` を常に無視します。設定すると、`POST /v1/auth/guest` は `X-Zhuelog-Proxy-Secret` が一致する呼び出し（Web のサーバー）だけを受け付け、それ以外は `403` です（下の「ゲストのセッション」）。
 - `API_WEB_PROXY_SECRET` も `API_JWT_SECRET` と同じく、Production と Preview で **別の値** にします。同じだと、プレビューの Web が本番の Go API に任意の IP を名乗れてしまいます。
 - LINE の 2 つ（`LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`）は、**両方設定するか、両方空** にします。LINE を使うときは `OPENAI_API_KEY` も要ります。足りないと起動時に止まります。LINE の 2 つが空のときは Go API は普通に起動し、`/v1/line/*` の 5 つのルートが `404` になります（LINE 連携が無い状態です）。`OPENAI_API_KEY` だけを設定すると、「ChatGPT と話す」だけが有効になります（「8. ChatGPT と話す」）。
-- `CRON_SECRET` が空のときは、`GET /v1/line/drain` は常に `401` です（拾い直しが動きません）。LINE 連携を使うときは設定します。
+- `CRON_SECRET` が空のときは、`GET /v1/line/drain` と `/v1/cron/demo-reset` は常に `401` です（拾い直しとデモのリセットが動きません）。LINE 連携かデモを使うときは設定します。
+- `DEMO_LOGIN_ID` は、ログイン ID と同じ形（英小文字・数字・`.` `_` `-` の 3〜32 文字）にします。違うと起動時に止まります。同じログイン ID の会員がすでにいると、その会員のデータが毎晩消えるので、使われていない ID にします。
 - `FFPF_ID_*` の 4 つは **すべて設定するか、すべて空** にします（一部だけだと起動時に止まります）。`FFPF_ID_ISSUER` は `https://` の URL で、`?` や `#` を含めません（`http://` は `localhost` と `127.0.0.1` だけ）。違うと起動時に止まります。4 つが空のときは、`POST /v1/auth/ffpf` が `503` を返します（FFPF ID のログインが無い状態です）。
 - `OPENAI_API_BASE_URL` と `LINE_API_BASE_URL` は、テストが偽のサーバーへつなぐための設定です。`127.0.0.1` などのループバックの URL だけを受け付け、それ以外は起動時に止まります。**本番と Preview には設定しません。**
 
@@ -254,6 +256,25 @@ FFPF ID（ffpf-portal が提供する OpenID Connect のプロバイダー）の
 5. マージの後に、Go API のプロジェクトへ main を手でデプロイします（Git の自動デプロイは切っています）。Web は main への push で自動でデプロイされます。
 6. `curl -i -X POST https://ffpf-zhuelog-api.vercel.app/v1/auth/ffpf -H 'content-type: application/json' -d '{"code":"x","codeVerifier":"x","redirectUri":"x","nonce":"x"}'` が `401`（`503` ではない）を返すことを確かめてから、本番の Web で FFPF ID のログイン・ログアウトを試します。
 
+## 10. デモアカウント
+
+採用担当など、アカウントを持たない人が会員向けの画面（学習ノート・今日の復習・単語帳・会話ノート・練習の記録）を試せるようにする機能です。ログイン画面の「デモで試す」から入ります。
+
+- アカウント：`DEMO_LOGIN_ID` の ID の、普通のパスワード会員です。パスワードのハッシュは使えない値なので、ID とパスワードではログインできません。アカウントは下のリセットが作ります（手で作る必要はありません）。
+- データ：デモを試す全員で 1 つのアカウントを共有します。毎晩 04:00（日本時間）に、`services/api/vercel.json` の Cron（`0 19 * * *`、UTC）が `GET /v1/cron/demo-reset` を呼び、1 つのトランザクションで、デモの持ち物（学習ノートとヒント、復習の項目と記録、単語帳、会話ノート、クイック質問、練習の記録、フォロー、LINE の行）を消してから、`services/api/demo/seed.json` の内容を入れ直します。日付は「リセットの何日前か」で書いてあるので、いつ見ても直近 7 日の記録に見えます。ログイン中のセッションは消しません。
+- 使えないもの：OpenAI を呼ぶルート（`POST /v1/chat`・`POST /v1/quick-question`・`POST /v1/vocabulary/draft`）、LINE 連携の 5 つ、`POST /v1/account/password`、フォロー・メンバー一覧・タイムライン・共有（ほかの会員に届くため）は、デモには `403`（「デモでは使えません。」）です。判定は `auth.Service.IsDemo` の 1 か所で、管理者がデモとして操作しているときや、ほかの会員には当てはまりません。`GET /v1/me` はデモに `"demo": true` を返し、Web はすべてのページに「デモアカウントです。…」を出し、メニューから使えない機能を外します。
+- 手でリセットする：`curl -i -X POST https://ffpf-zhuelog-api.vercel.app/v1/cron/demo-reset -H "Authorization: Bearer $CRON_SECRET"` が `204` を返します（`GET` でも同じです）。`CRON_SECRET` を知っている人だけが呼べます。
+- マイグレーションは要りません（既存の表だけを使います）。Vercel Hobby の Cron は 2 つまでで、LINE の拾い直しとこのリセットで 2 つです。
+
+### 切り替えの手順
+
+1. Go API の Vercel プロジェクトの Production に `DEMO_LOGIN_ID`（例: `demo`）を入れます。`CRON_SECRET` が無ければ一緒に入れます。
+2. Go API のプロジェクトへ main を手でデプロイします（Git の自動デプロイは切っています）。`vercel.json` の Cron もこのデプロイで登録されます。
+3. 上の `curl` でリセットを 1 回呼び、デモアカウントとデータを作ります（呼ぶまではアカウントが無く、「デモで試す」を押すと「デモは今は利用できません。」になります）。
+4. 本番の Web の `/signin` に「デモで試す」が出ること、押すと学習ノートと「デモアカウントです。」が出ることを確かめます。
+
+やめるときは `DEMO_LOGIN_ID` を消して Go API を再デプロイします。ボタンが消え、`POST /v1/auth/demo` は `404` になり、Cron のリセットのルートも無くなります（`404`）。リセットが作ったアカウントは使えないパスワードのハッシュで見分けるので、残っているデモのセッションも同じ制限のままです。アカウントとデータは残ります。
+
 ## 運用上の注意
 
 ### 本文の上限と CSV
@@ -289,6 +310,10 @@ Vercel の関数は、要求と応答の本文がそれぞれ **4.5 MB まで** 
 ### ゲストのセッション
 
 `POST /v1/auth/guest` は認証なしで、ゲストのトークン一式を返します（`role: "guest"`、`ownerId: "guest"`）。`API_WEB_PROXY_SECRET` を設定したときは、`X-Zhuelog-Proxy-Secret` が一致する呼び出し（Web のサーバー）だけを受け付け（定数時間で比べます）、一致しない・無いときは `403`（`forbidden`）です。未設定のとき（ローカルの開発）は誰でも呼べます。ログイン情報なしで呼べるので、DB の行を増やされにくいよう、ゲストのリフレッシュトークンの寿命は **24 時間** です。期限切れの行は、ゲストがログインするたびに削除します。ゲストのトークンは `GET /v1/me` 以外の認証つきルートでは `403` です。
+
+### デモのセッション
+
+`POST /v1/auth/demo` は、パスワードなしでデモアカウント（`DEMO_LOGIN_ID`）の会員のトークン一式を返します。ゲストと同じく、`API_WEB_PROXY_SECRET` を設定したときは Web のサーバーからの呼び出しだけを受け付けます。`/v1/auth/*` のレート制限に加えて、`SignInThrottle` で 1 つのクライアントから 15 分に 20 回まで（キーは `demo:<IP>`）です。デモが無い・アカウントがまだ無いときは `404` です。`GET /v1/auth/demo` は、デモが設定されていれば `204`、無ければ `404` を返します（ログイン画面が「デモで試す」を出すかどうかに使います）。
 
 ### DB の接続数とパスワードの計算
 

@@ -5,8 +5,10 @@ import { join } from "node:path";
 import {
   baseURL,
   databaseUrl,
+  demoLoginId,
   ffpfIssuerURL,
   goApiURL,
+  goCronSecret,
   goJwtSecret,
   goProxySecret,
   openAiStubURL,
@@ -123,6 +125,9 @@ async function startGoApi(): Promise<ChildProcess> {
       OPENAI_API_KEY: "e2e-openai-api-key",
       LINE_API_BASE_URL: "http://127.0.0.1:9",
       OPENAI_API_BASE_URL: openAiStubURL,
+      // The demo account; e2e/demo.spec.ts resets it with the cron secret.
+      DEMO_LOGIN_ID: demoLoginId,
+      CRON_SECRET: goCronSecret(),
     },
     stdio: "inherit",
   });

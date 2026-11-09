@@ -27,6 +27,10 @@ type fakeAuth struct {
 	guest        func(ctx context.Context) (auth.TokenPair, error)
 	me           func(ctx context.Context, p auth.Principal) (auth.Me, error)
 	actAs        func(ctx context.Context, p auth.Principal, ownerID string) (auth.Principal, error)
+	demoEnabled  bool
+	loginDemo    func(ctx context.Context, client string) (auth.TokenPair, error)
+	// isDemo is optional: unset, nobody is the demo account.
+	isDemo func(ctx context.Context, p auth.Principal) (bool, error)
 }
 
 type errUnexpectedCall struct{ name string }
@@ -101,6 +105,22 @@ func (f *fakeAuth) ActAs(ctx context.Context, p auth.Principal, ownerID string) 
 		return auth.Principal{}, errUnexpectedCall{"ActAs"}
 	}
 	return f.actAs(ctx, p, ownerID)
+}
+
+func (f *fakeAuth) DemoEnabled() bool { return f.demoEnabled }
+
+func (f *fakeAuth) LoginDemo(ctx context.Context, client string) (auth.TokenPair, error) {
+	if f.loginDemo == nil {
+		return auth.TokenPair{}, errUnexpectedCall{"LoginDemo"}
+	}
+	return f.loginDemo(ctx, client)
+}
+
+func (f *fakeAuth) IsDemo(ctx context.Context, p auth.Principal) (bool, error) {
+	if f.isDemo == nil {
+		return false, nil
+	}
+	return f.isDemo(ctx, p)
 }
 
 type fakePinger struct{ err error }

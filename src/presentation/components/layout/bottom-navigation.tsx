@@ -21,10 +21,12 @@ const tabInteractive =
 // menu with everything else. Wide screens (xl) have them in the header.
 export function BottomNavigation({
   role,
+  demo = false,
   name,
   roleLabel,
 }: {
   role: AppRole;
+  demo?: boolean;
   name: string;
   roleLabel: string;
 }) {
@@ -80,6 +82,7 @@ export function BottomNavigation({
         <SiteMenu
           variant="tab"
           role={role}
+          demo={demo}
           name={name}
           roleLabel={roleLabel}
           tabClassName={cn(

@@ -1,5 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "go",
-  "crons": [{ "path": "/v1/line/drain", "schedule": "0 21 * * *" }]
+  "crons": [
+    { "path": "/v1/line/drain", "schedule": "0 21 * * *" },
+    { "path": "/v1/cron/demo-reset", "schedule": "0 19 * * *" }
+  ]
 }

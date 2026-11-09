@@ -80,8 +80,13 @@ const PRACTICE: MenuSection = {
 };
 
 // The menu's sections for a role. The main pages are left out: they are
-// always one tap away in the tabs or the header.
-export function menuSections(role: AppRole): MenuSection[] {
+// always one tap away in the tabs or the header. The demo account (a member)
+// gets no AI features, follows, LINE or password change: Go refuses them, so
+// the menu leaves them out and keeps only the saved conversations.
+export function menuSections(
+  role: AppRole,
+  { demo = false }: { demo?: boolean } = {},
+): MenuSection[] {
   if (!isMemberRole(role)) return [PRACTICE];
   const sections: MenuSection[] = [
     {
@@ -95,6 +100,15 @@ export function menuSections(role: AppRole): MenuSection[] {
       ],
     },
     PRACTICE,
+  ];
+  if (demo) {
+    sections.push({
+      title: "AI に聞く",
+      links: [{ label: "会話ノート", href: "/conversations" }],
+    });
+    return sections;
+  }
+  sections.push(
     {
       title: "AI に聞く",
       links: [
@@ -118,7 +132,7 @@ export function menuSections(role: AppRole): MenuSection[] {
           : []),
       ],
     },
-  ];
+  );
   if (role === "admin")
     sections.push({
       title: "管理",
@@ -146,6 +160,8 @@ export function menuIdentity(user: AuthenticatedUser): {
   if (user.role === "guest") return { name: "ゲスト", roleLabel: "ゲスト" };
   if (user.role === "admin")
     return { name: `@${user.githubLogin}`, roleLabel: "管理者" };
+  if (user.demo)
+    return { name: user.displayName ?? user.githubLogin, roleLabel: "デモ" };
   return {
     name: user.displayName ?? user.githubLogin,
     roleLabel: "メンバー",

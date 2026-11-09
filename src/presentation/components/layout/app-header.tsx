@@ -79,6 +79,7 @@ export function AppHeader({ user }: { user?: AuthenticatedUser | null }) {
             <SiteMenu
               variant="header"
               role={user.role}
+              demo={user.demo}
               {...menuIdentity(user)}
             />
           ) : null}

@@ -19,6 +19,9 @@ export type AuthenticatedUser = {
   // (an older API, or a member that no longer exists): githubId is the
   // admin's own.
   actAsIgnored?: boolean;
+  // The demo account (a member): its data is shared by everyone trying the
+  // demo, and the AI features, LINE, follows and password are closed to it.
+  demo?: boolean;
 };
 
 export function isMemberRole(role: AppRole) {

@@ -36,6 +36,8 @@ const (
 	msgActAsAdminOnly     = "他の人として操作できるのは管理者だけです。"
 	msgMemberNotFound     = "会員が見つかりません。"
 	msgNotWhileActing     = "会員として操作している間は使えません。"
+	msgDemoRestricted     = "デモでは使えません。"
+	msgDemoDisabled       = "デモは利用できません。"
 
 	msgInvalidNewPassword     = "パスワードは12〜128文字にしてください。"
 	msgPasswordMismatch       = "確認用のパスワードが一致しません。"
@@ -144,6 +146,8 @@ func writeServiceError(w http.ResponseWriter, r *http.Request, err error) {
 		writeError(w, http.StatusBadGateway, codeGitHubUnavailable, msgGitHubUnavailable)
 	case errors.Is(err, auth.ErrFFPFUnavailable):
 		writeError(w, http.StatusBadGateway, codeFFPFUnavailable, msgFFPFUnavailable)
+	case errors.Is(err, auth.ErrDemoDisabled):
+		writeError(w, http.StatusNotFound, codeNotFound, msgDemoDisabled)
 	case errors.Is(err, auth.ErrFFPFDisabled):
 		writeError(w, http.StatusServiceUnavailable, codeUnavailable, msgUnavailable)
 	case errors.As(err, &tooLarge):

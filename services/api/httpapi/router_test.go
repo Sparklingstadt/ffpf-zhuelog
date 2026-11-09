@@ -79,7 +79,7 @@ func TestPublicRouteSetIsExactlyTheKnownRoutes(t *testing.T) {
 		Auth: &fakeAuth{}, Entries: &fakeEntries{}, Follows: &fakeFollows{},
 		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret,
 		QuickChat: &fakeChat{}, Questions: &fakeQuestions{}, Chat: &fakeChat{}, Conversations: &fakeConversations{}, PrepositionRecords: &fakePrepositionRecords{},
-		Reviews: &fakeReviews{}, Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
+		Reviews: &fakeReviews{}, DemoReset: &fakeDemoReset{}, Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
 	}.withDefaults()
 	mux, routes := newMux(d)
 	h := wrap(d, jsonMuxErrors(mux))
@@ -94,10 +94,17 @@ func TestPublicRouteSetIsExactlyTheKnownRoutes(t *testing.T) {
 		"POST /v1/auth/refresh",
 		"POST /v1/auth/logout",
 		"POST /v1/auth/guest",
+		"GET /v1/auth/demo",
+		"POST /v1/auth/demo",
 		"POST /v1/line/webhook",
 		"GET /v1/line/drain",
+		"GET /v1/cron/demo-reset",
+		"POST /v1/cron/demo-reset",
 	}
-	selfAuthenticated := map[string]bool{"POST /v1/line/webhook": true, "GET /v1/line/drain": true}
+	selfAuthenticated := map[string]bool{
+		"POST /v1/line/webhook": true, "GET /v1/line/drain": true,
+		"GET /v1/cron/demo-reset": true, "POST /v1/cron/demo-reset": true,
+	}
 	isPublic := map[string]bool{}
 	for _, p := range want {
 		isPublic[p] = true

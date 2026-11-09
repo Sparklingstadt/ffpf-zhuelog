@@ -202,6 +202,9 @@ type meResponse struct {
 	DisplayName string            `json:"displayName,omitempty"`
 	AccountID   string            `json:"accountId,omitempty"`
 	ActingAs    *actingAsResponse `json:"actingAs,omitempty"`
+	// Demo is true for the demo account, so the web can say so and hide
+	// what the demo cannot use.
+	Demo bool `json:"demo,omitempty"`
 }
 
 type actingAsResponse struct {
@@ -220,7 +223,7 @@ func me(a Auth) http.Handler {
 		}
 		res := meResponse{
 			OwnerID: m.OwnerID, Role: m.Role, Login: m.Login,
-			DisplayName: m.DisplayName, AccountID: m.AccountID,
+			DisplayName: m.DisplayName, AccountID: m.AccountID, Demo: m.Demo,
 		}
 		if m.ActingAs.OwnerID != "" {
 			res.ActingAs = &actingAsResponse{

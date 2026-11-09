@@ -14,6 +14,7 @@ import (
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/chat"
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/demo"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/httpapi"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/learning"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/line"
@@ -142,6 +143,8 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 		GitHub:    githubApps,
 		Allowlist: allowlist,
 		Passwords: passwords,
+
+		DemoLoginID: cfg.DemoLoginID,
 	}
 	// Without the FFPF ID settings POST /v1/auth/ffpf answers 503. FFPF is
 	// assigned only here so it is a nil interface, not a nil *auth.FFPFClient.
@@ -173,13 +176,18 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 		StudyLog:           db,
 		AIUsage:            db,
 		WebProxySecret:     cfg.WebProxySecret,
+		// The cron secret guards the LINE drain and the demo reset.
+		CronSecret: cfg.CronSecret,
+	}
+	// Without DEMO_LOGIN_ID there is no demo and no reset route.
+	if cfg.DemoLoginID != "" {
+		deps.DemoReset = &demo.Resetter{Store: db, LoginID: cfg.DemoLoginID}
 	}
 	// Without the LINE settings the routes stay unregistered (404). Line is
 	// assigned only here so it is a nil interface, not a nil *linebot.Service.
 	if cfg.LineEnabled() {
 		deps.Line = newLineService(cfg, db, allowlist, logger)
 		deps.LineChannelSecret = cfg.LineChannelSecret
-		deps.CronSecret = cfg.CronSecret
 	}
 	if cfg.ChatEnabled() {
 		// The client's limit sits above the streamer's own 60 s one.
