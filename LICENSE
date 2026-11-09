@@ -1,0 +1,19 @@
+Copyright (c) 2026 Sparklingstadt. All rights reserved.
+
+This repository is published so that its source code can be read, for
+example to review the author's work. No license is granted to use, copy,
+modify, merge, publish, distribute, sublicense or sell the software or any
+part of it, except as permitted by applicable law (such as viewing it on
+GitHub). For any other use, ask the author for permission.
+
+Third-party files keep their own licenses. In particular, data/hsk30.csv
+comes from https://github.com/ivankra/hsk30 under the MIT License.
+
+---
+
+このリポジトリは、ソースコードを読んでもらうため（作者の仕事を見てもらうためなど）に公開しています。
+法律で認められる範囲（GitHub 上で閲覧するなど）を除き、ソフトウェアやその一部を使用・複製・改変・
+再配布・販売する権利は許諾していません。それ以外の使い方をしたいときは、作者に許可を求めてください。
+
+第三者のファイルは、それぞれのライセンスに従います。data/hsk30.csv は
+https://github.com/ivankra/hsk30 の MIT ライセンスのものです。

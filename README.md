@@ -1,390 +1,85 @@
 # 学习録
 
-開発には `package.json` で指定した pnpm 11.25.0 を使用します。`corepack enable` 後、`pnpm install --frozen-lockfile` で依存関係をインストールしてください。
+中国語の作文を添削してもらったあと、その学びを置きっぱなしにしないための学習ノートです。書いた文と添削後の文を、ピンインと覚えるべきヒントと一緒に残し、間隔反復の復習、単語帳、文法の練習問題へつなげます。
 
-添削前後の中国語、ピンイン、可変個数の学習ヒントをCSVから取り込んで表示する、Next.js製の中国語学習アプリです。
+**本番**：<https://ffpf-zhuelog.sparklingstadt.com/>
 
-これから取り組むことは [docs/roadmap.md](docs/roadmap.md) にあります。
+| 学習ノート（PC）                                               | 練習（スマホ）                                            | 今日の復習（PC）                                      |
+| -------------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------- |
+| ![学習ノートの一覧と添削の差分](docs/images/notes-desktop.png) | ![介詞の練習の正解の画面](docs/images/practice-phone.png) | ![今日の復習のカード](docs/images/review-desktop.png) |
+
+## 試す
+
+- **ゲスト**：ログイン画面の「ゲストとして使う」で、介詞・補語・量詞・了・过・着の練習を試せます。データは残りません。
+- **会員**：ID とパスワードのアカウントは管理者が発行します。FFPF ID を持っている人は、自分でログインできます。
+
+## できること
+
+- **学習ノート**：添削前後の文、ピンイン、ヒントを CSV や LINE から取り込み、差分を色で見せます。日付別のログ、検索、ゴミ箱、フォローした人との共有があります。
+- **今日の復習**：学習ノート、練習で間違えた問題、単語帳の語句を、FSRS（間隔反復）で忘れかけたころにもう一度出します。期日が来た朝には LINE で知らせます。
+- **練習**：介詞、補語（結果・可能・程度・方向の 8 モード）、量詞、了・过・着の 4 択問題です。HSK 3.0 の級で絞れ、級の決め方は手作りの表と公式の語彙表（11,092 語）を切り替えられます。
+- **単語帳**：例文や学習ノートから語句を入れ、ピンインと意味の下書きを AI が作ります。
+- **AI**：LINE に送った文を添削・翻訳して学習ノートに入れます。「ChatGPT と話す」と「クイック質問」もあります。OpenAI を呼ぶたびにトークン数を記録し、管理者が月ごとの費用を見られます。
+- **読み上げ・テーマ・スマホ**：例文と学習ノートの読み上げ、ライトとダーク、スマホの下のタブがあります。
+
+機能ごとの詳しい説明は [docs/features.md](docs/features.md) にあります。
 
 ## 技術構成
 
-- Next.js 16（App Router / Server Actions）
-- Go API（`services/api/`）: ログイン（GitHub OAuth / ID・パスワード / ゲスト）と、学習ノートの読み書き
-- PostgreSQL 17（読み書きするのは Go API だけ）
-- Prisma ORM 7（スキーマとマイグレーション、seed）
-- shadcn/ui + Tailwind CSS 4
+| 部分         | 使っているもの                                                                                                              |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| Web          | Next.js 16（App Router、Server Components、Server Actions）、React 19、TypeScript、Tailwind CSS 4、shadcn/ui                |
+| API          | Go（標準の `net/http`）。ログイン、学習ノート、復習、練習の記録、LINE、OpenAI のすべてを受け持ちます                        |
+| DB           | PostgreSQL 17（本番は Neon）。スキーマとマイグレーションは Prisma 7。読み書きするのは Go API だけです                       |
+| 認証         | GitHub OAuth（PKCE）、ID とパスワード（scrypt）、FFPF ID（OpenID Connect）、ゲスト。Go が JWT と refresh token を発行します |
+| 外部サービス | OpenAI API、LINE Messaging API、Web Speech API（読み上げ）                                                                  |
+| テスト       | Node の test runner、Go の testing、Playwright（PC とスマホの幅）、lefthook                                                 |
+| デプロイ     | Vercel（Web と Go API の 2 プロジェクト）。本番のマイグレーションは Web のビルドで当てます                                  |
 
-## アーキテクチャ
+## 設計の要点
 
-コードは依存関係が内側へ向くよう、機能別の関心事を層に分けています。
+- **Web は DB に触らない**：Web は画面と Server Actions だけを持ち、データはすべて Go API を通します。Web とネイティブアプリが同じ API を使えるようにするためで、`src` から Prisma や pg を import しないことをテストで確かめています。
+- **層を分ける**：Web のコードは `domain`・`application`・`infrastructure`・`presentation`・`composition` に分け、内側の層が Next.js や React に依存しないことを ESLint とテストで検査します。
+- **復習を 1 つの列にする**：学習ノート、練習の間違い、単語帳の語句を、同じ FSRS のカードとして 1 つの「今日の復習」に並べます。
+- **AI の費用を測ってから考える**：OpenAI を呼ぶ 4 か所のトークン数を記録し、料金や無料枠はその数字を見てから考える順にしました。
 
-```text
-src/
-├── domain/          # エンティティ、値オブジェクト、リポジトリの契約
-├── application/     # ユースケースと外部サービスのポート
-├── infrastructure/  # Go API の呼び出し、Cookie、設定の実装
-├── presentation/    # 画面部品、Server Action、コントローラー
-├── composition/     # 実装を組み立ててユースケースを公開
-└── app/             # Next.js App Routerのエントリーポイント
-```
+全体の図、認証の流れ、選んだ理由と捨てた案は [docs/architecture.md](docs/architecture.md) にまとめています。
 
-`domain` はフレームワークやデータベースに依存せず、`application` はドメインの契約だけを利用します。外部サービス固有のコードは `infrastructure` に閉じ込め、`composition` で依存性を注入します。
+## 品質
 
-層の間の依存は、次のルールをESLintと `tests/architecture.test.ts` で検査します。
+- 単体テスト 371 件（TypeScript）、Go のテスト（DB を使うものを含む）、E2E 200 件（Playwright、PC とスマホの 2 つの幅）があります。
+- E2E は、Docker の Postgres、Go API、Web、OpenAI と FFPF ID のスタブを立ち上げて、本物の画面を通して確かめます。
+- commit の前に format・lint・型チェック、push の前に単体テストと E2E を lefthook が走らせます。
+- 本番の表示速度とアクセシビリティ（axe-core）の記録は [docs/quality.md](docs/quality.md) にあります。
 
-- `domain`・`application` から外側の層（`@/infrastructure` など）、Next.js、React、Prismaを import しない
-- `domain` から `application` を import しない
+## 手元で動かす
 
-## 起動方法
-
-前提: Node.js 24 または 26、Docker Desktop、Go（`services/api/go.mod` の版）
-
-Web は DB に直接つながらず、ログインも学習ノートの読み書きも Go API で行います。手元では、ローカル専用の Go API（[docs/api-local.md](docs/api-local.md)）を使います。
+前提は Node.js 24 か 26、pnpm 11.25.0（`corepack enable`）、Docker、Go です。
 
 ```bash
 cp .env.example .env
-pnpm install
+pnpm install --frozen-lockfile
 pnpm run api:db    # Go API 用の DB を起動し、マイグレーションとサンプルデータを入れる
 pnpm run api:dev   # Go API を 127.0.0.1:8081 で起動（起動したまま、別のターミナルで次へ）
 pnpm run dev
 ```
 
-ブラウザで <http://localhost:3000> を開き、ゲストか、サンプルの会員（`docs/api-local.md` の表）でログインします。GitHub ログインは本物の OAuth App が要るので、手元では使えません。
-
-`.env` の `GO_API_URL`・`API_WEB_PROXY_SECRET`・`AUTH_URL`・`AUTH_GITHUB_ID` が Web の設定です（FFPF ID を試すときは `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID` も）。`DATABASE_URL` は Prisma のマイグレーションと seed だけが使います（`docker compose up -d` の開発用 DB）。
-
-## 認証・認可の設定
-
-ログインは Go API が行います。Web の Vercel プロジェクトに入れる値は `GO_API_URL`・`API_WEB_PROXY_SECRET`・`AUTH_URL`・`AUTH_GITHUB_ID` の 4 つです（FFPF ID を使うときは、下の「FFPF ID でのログイン」の 2 つも）。Go API に入れる値も含めて、手順は [docs/api-deployment.md](docs/api-deployment.md) の「6. Web の設定」にあります。
-
-GitHubの **Settings → Developer settings → OAuth Apps** で、Web 用のOAuth Appを作成します。
-
-- Homepage URL: `https://本番ドメイン`
-- Authorization callback URL: `https://本番ドメイン/api/auth/callback/github`（実際の callback は、この下の `/api/auth/callback/github/go` です）
-
-Client ID は Web の `AUTH_GITHUB_ID` と Go API の `GITHUB_WEB_CLIENT_ID` に、Client Secret は Go API の `GITHUB_WEB_CLIENT_SECRET` だけに入れます。
-
-管理者の許可リストは、Go API の `AUTH_ALLOWED_GITHUB_IDS` です。GitHubユーザーの **数字のID** をカンマ区切りで並べます。IDは `https://api.github.com/users/<ログイン名>` の `id` で確認できます。ログイン名は使いません。ログイン名は変更でき、空いた名前を別人が取得できるためです。空の場合は安全側に倒し、すべてのGitHubユーザーを拒否します。
-
-### FFPF ID でのログイン
-
-ログイン画面の「FFPF IDでログイン」から、FFPF ID（ffpf-portal の OpenID Connect）のアカウントでメンバーとしてログインできます。任意の機能です。Web の `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID` が無ければボタンは出ません（Web は自分の 2 つの変数だけを見ます）。Go API の設定が無いままボタンを出すと、押してもログインは `503` で失敗するので、Web と Go API の両方に入れてください。
-
-- portal で `pnpm run oidc:client zhuelog` を実行してクライアントを登録します（redirect URI は `https://本番ドメイン/api/auth/callback/ffpf`。手順は ffpf-portal の README）。
-- Web には `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID` を、Go API には `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID`・`FFPF_ID_CLIENT_SECRET`・`FFPF_ID_REDIRECT_URI` を入れます。Client Secret は Go API だけに入れます。
-- 本番 DB にマイグレーション `20261027120000_add_ffpf_accounts`（`FfpfAccount` の追加）が必要です。main へのマージで Web の本番ビルドが自動で当てます（下の「マイグレーションの適用」）。
-- 詳しい手順は [docs/api-deployment.md](docs/api-deployment.md) の「9. FFPF ID でのログイン」にあります。
-
-### ロールとID・パスワードのアカウント
-
-ロールは4種類です。
-
-- **admin（管理者）**: GitHub認証で許可リストに載っているユーザー。自分の学習ノート、CSVインポートとアカウント管理を使えます。メンバーの学習ノートは、切り替え欄から閲覧のみで見られます。
-- **member（メンバー）**: ID・パスワードでログインするアカウント、または FFPF ID でログインした人。自分の学習ノートとCSVインポートを使えます。CSVインポートは自分の学習ノートに追加されます。ほかのユーザーの記録は見られません。アカウント管理は使えません。
-- **guest（ゲスト）**: ログイン画面の「ゲストとして使う」。学習ノートはなく、`/` には案内だけが出ます。`/logs` と `/follow` は `/` に戻されます。
-- **revoked**: 許可リストから外れた管理者や、再設定・変更でセッションが失効したメンバー。どのページも使えず、ログイン画面に戻されます。
-
-ID・パスワードのmemberのアカウントは、GitHub管理者が `/admin/accounts` で作ります。セルフ登録はありません（FFPF ID のメンバーは、初めてログインしたときに作られます）。最初のアカウントも、まずGitHubで管理者としてログインして作成してください。
-
-- **作成・再設定**: ログインID（英小文字・数字・`.` `_` `-` の3〜32文字）と表示名を入力します。パスワードは12〜128文字で、空欄にすると自動生成します。パスワードは作成・再設定の直後に一度だけ画面に表示され、あとから確認できません。管理者から本人に別の経路で伝えてください。
-- **パスワード変更**: memberは、メニューの「パスワード変更」（`/account/password`）から自分で変更できます。変更するとログアウトされ、新しいパスワードでログインし直します。FFPF ID のメンバーには、この画面に FFPF ID のマイページへのリンクを出します（パスワードは portal で変えます）。
-- **試行回数の制限**: 接続元（IPアドレス。IPv6は /64 単位）ごとに数えます。同じ接続元から同じログインIDへ15分間に5回まで、ログインID全体で15分間に20回までです。超えると、その接続元からは15分間、正しいパスワードでもログインできません。アカウント単位ではロックしないので、ほかの場所からの失敗で本人が締め出されることはありません。接続元は Vercel が設定する `x-real-ip` / `x-forwarded-for` で判定し、Web が Go API に渡します。回数は Go API が DB のテーブル（`SignInThrottle`）で数えます。ログイン画面には、IDの有無や制限の状態を区別せず「IDまたはパスワードが違うか、一時的にロックされています。」とだけ表示します。パスワード変更画面の現在のパスワードも、アカウントごとに15分間5回までです。
-- **セッションの失効**: パスワードを再設定・変更すると、そのアカウントの既存のセッションは、すべて使えなくなります。セッションの有効性（`sessionVersion`）は、Go API がリクエストのたびにDBで確認します。
-- **パスワードの保存**: scrypt（N=2^15, r=8, p=1）でハッシュ化したものだけを保存します。平文はDBにもログにも残しません。
-- **記録の持ち主**: memberの学習ノートは、所有者 `password:<アカウントID>`（FFPF ID のメンバーは `ffpf:<sub>`）に紐づきます。本人と管理者が見られます（詳細は「学習ノートの公開範囲」）。
-
-**マイグレーションの適用**: 本番へのDBマイグレーションは、mainへのマージで走るWebの本番ビルドが自動で当てます。`vercel.json` の `buildCommand` が `scripts/vercel-build.sh` を動かし、`VERCEL_ENV=production` のときだけ `prisma migrate deploy` を実行してから `next build` します。Previewのビルドは本番と同じDBを使うので、マイグレーションは当てません。このためWebのProductionには `DATABASE_URL` が必要です（無い・つながらない・DDLが失敗すると、本番のWebのデプロイが失敗します）。Go APIは別プロジェクトで、あとから手でデプロイするので、**マイグレーションは今動いているGo APIと両立する形（表の追加、null許可の列の追加）にします**。列や表の削除のような壊す変更は、2回のリリースに分けます。以下の `migrate deploy` / `migrate status` の手順は、自動で当たらなかったときの手動の適用と、適用済みの確認に使います。詳しくは [docs/api-deployment.md](docs/api-deployment.md) の「4. 本番の DB の確認」を参照してください。以下の各節にある「マージの前に適用」という記述は、自動化の前の手順なので、手動の適用として読んでください。
-
-パスワードアカウントのために新しい環境変数は要りません。ただしDBマイグレーション `20261007090000_password_accounts`（`PasswordAccount` テーブルの追加）が必要です。Vercelとリンク済みのmainのチェックアウトで、次の手順で本番DB（Neon）へ適用できます。`prisma.config.ts` は `.env` だけを読み込むので、`vercel env pull` だけでは本番の `DATABASE_URL` が使われません。`--environment=production` で取得したファイルを、`--env-file` で明示して渡します。
-
-```bash
-vercel env pull .env.production.local --environment=production --yes
-node --env-file=.env.production.local node_modules/prisma/build/index.js migrate status
-node --env-file=.env.production.local node_modules/prisma/build/index.js migrate deploy
-rm .env.production.local
-```
-
-適用前にデプロイすると、ID・パスワードでのログインと `/admin/accounts` だけがエラーになります。GitHubログインとゲストログインは影響を受けません。
-
-認可はProxyによるページ保護に加え、画面のServer ComponentとServer Actionでも検証します。データの権限は、最後に Go API が確かめます。
-
-ログイン画面からは、GitHub認証を使わずゲストとしてログインすることもできます。学習ノート・日付別ログ・CSVインポート・フォローは管理者・メンバー専用です。書き込み権限と記録の持ち主はServer Actionでも検証します。
-
-開発用PostgreSQLはDockerホストの `127.0.0.1` にだけ公開されます。`.env` はGit管理対象外です。秘密情報をコミットせず、公開・漏洩した可能性がある場合は該当する認証情報を直ちに失効・再発行してください。
-
-## ネイティブアプリ向け API
-
-`services/api/` に、ネイティブアプリ（iOS など）と Web が使う Go 製 API があります。Web とは別の Vercel プロジェクトとして動かし、本番の Neon を読み書きします。ローカルでのテストは `pnpm run test:unit` に含まれます（DB を使うテストは `API_TEST_DATABASE_URL` が無いと skip されます）。Vercel の準備、モバイル用 GitHub OAuth App の登録、本番へのマイグレーション適用、デプロイの手順は [docs/api-deployment.md](docs/api-deployment.md) を参照してください。手元で API を起動して試す手順（`pnpm run api:db` → `pnpm run api:dev` → `pnpm run api:smoke`）は [docs/api-local.md](docs/api-local.md) にあります。
-
-## AI の利用量
-
-OpenAI を呼ぶ 4 つの機能（LINE の添削・翻訳、ChatGPT と話す、クイック質問、単語帳の下書き）は、呼ぶたびに入出力のトークン数を Go API が `AiUsage` に記録します。管理者はメニューの「AI 利用量」（`/admin/ai-usage`）で、日本時間の月ごとに、人・機能・モデル別の回数とトークン数を見られます。入力した文や答えは記録しません。admin が会員として操作しているときの分は admin に数えます。AI の費用を測るための記録です。測った数字の使い道は [就職までのロードマップ](docs/job-hunting-roadmap.md) の J5 にあります。
-
-## 画面の移動
-
-- **主なページ**：学習ノート（`/`）・今日の復習（`/review`）・練習（`/practice`）・単語帳（`/vocabulary`）の 4 つです。スマホとタブレット（幅 1280px 未満）では画面の下のタブに、それより広い画面ではヘッダーに文字付きで並びます。ゲストには、復習と単語帳が「メンバー向け」として押せない形で出ます。
-- **メニュー**：ヘッダー右の自分の名前を押すと開きます。スマホとタブレットでは下のタブの「メニュー」からも開けます。日付別の学習ノート、学習ログ（カレンダー）、CSV の取り込み・書き出し、ゴミ箱、4 つの練習、ChatGPT と話す、クイック質問、フォロー、LINE 連携、パスワード変更、管理者の画面、ログアウトがあります。中身は `src/presentation/presenters/site-navigation.ts` で決めています。
-- **練習の入口**：`/practice` に介詞、補語、量詞、了・过・着の 4 つの練習と、それぞれの記録への入口があります。
-
-## 表示テーマ
-
-全ページ右上の「システム / ライト / ダーク」から切り替えられます。初期値は「システム」で、OSの配色変更にも自動で追従します。手動で選んだテーマだけを端末の `zhuelog:theme:v1` に保存し、再読み込み・ページ移動・同じブラウザーの別タブでも反映します。DBやアカウントには保存しません。
-
-ブラウザーの保存が制限されている場合でも、その画面での切り替えは利用できます。初期配色はCSP nonce付きの固定スクリプトで本文表示前に適用し、ライト画面が一瞬表示されるのを防ぎます。
-
-## OGP・サイトマップ・X 投稿
-
-リンクを X・LINE などに貼ったときのカード（OGP）は `src/app/layout.tsx` の `metadata` と `src/app/opengraph-image.png` で、検索エンジン向けの `sitemap.xml`・`robots.txt` は `src/app/sitemap.ts`・`src/app/robots.ts` で出しています。絶対 URL の元は `AUTH_URL` です（無ければ Vercel の本番ドメイン）。これらのファイルはログインなしで読める公開ルートです（`isMetadataFile`）。サイトマップに載せているのは、クローラーが読める唯一のページ `/signin` だけです。
-
-OGP 画像は `scripts/og-image/opengraph-image.html` から `pnpm run og:render` で作り直します。X に投稿する文の草案と、カードの確認のしかたは [docs/x-posts.md](docs/x-posts.md) にあります。
-
-## 学習ノートの公開範囲
-
-学習ノートは、ユーザーごとの個人の記録です（本人が共有したノートだけ、フォロワーが読めます）。
-
-- **本人**: 自分の学習ノート・日付別ログだけを見られます。番号（`#1` やその日の n 件目）も持ち主ごとに数えます。memberが `?user=` に他人を指定しても、自分の記録のページに戻されます。
-- **管理者**: 自分の記録に加えて、ヘッダー下の切り替え欄（「表示するユーザー」）でmemberを選ぶと、そのユーザーの学習ノート・日付別ログを見られます。閲覧のみで、「〇〇さんの記録を表示中（閲覧のみ）」のバナーを出し、CSVのインポート・エクスポートへのリンクは出しません。日付や詳細へのリンクでも `?user=` を引き継ぎます。
-- **ゲスト**: 記録を持ちません。`/logs`・`/import`・`/export` は `/` に戻されます。
-- **フォロワー**: フォロー中のメンバーが共有した学習ノートだけを `/follow` で読めます。
-- **CSVインポート**（`/import`）: `?user=` に関わらず、ログイン中のユーザー自身の学習ノートに登録します。
-- **CSVエクスポート**（`/export`）: ログイン中のユーザー自身の学習ノートから選んだものを、インポートと同じ形式のCSV（UTF-8、BOM付き）でダウンロードします。書き出したファイルは、そのままインポートし直せます。
-
-## 学習ノートの持ち主の本番への反映
-
-mainはVercelの本番へ自動でデプロイされます。手順の順番を守ってください。
-
-1. **マイグレーション** `20261008090000_learning_entry_owner`（`LearningEntry.ownerId` の追加）を本番DB（Neon）へ適用します。既存の学習ノートは、すべて持ち主 `219588180` のものになります。前節と同じ手順ですが、**Vercelとリンク済みのリポジトリで、このPRのブランチをチェックアウトして**実行してください。mainにはまだこのマイグレーションがないため、mainのまま実行すると「No pending migrations」と表示され、適用できたように見えてしまいます。
-
-   ```bash
-   git fetch origin
-   git switch --detach origin/claude/per-user-learning-notes
-   vercel env pull .env.production.local --environment=production --yes
-   node --env-file=.env.production.local node_modules/prisma/build/index.js migrate deploy
-   node --env-file=.env.production.local node_modules/prisma/build/index.js migrate status
-   rm .env.production.local
-   git switch main
-   ```
-
-   `migrate status` で `20261008090000_learning_entry_owner` が適用済みになっていること（「Database schema is up to date!」）を、マージの前に必ず確認してください。ブランチをほかの作業場所でチェックアウトしている場合に備え、`git switch --detach` で取得したコミットを直接開いています。
-
-2. **マージし、Vercelの本番デプロイが Ready になるのを待ちます。**
-
-3. **確認します。** 管理者としてCSVを1件インポートし、`/` を開いてそのノートが表示されることを確認します。DBで確認するには、NeonのSQL Editorで次を実行し、`219588180` が返ることを見ます。
-
-   ```sql
-   SELECT "ownerId" FROM "LearningEntry" ORDER BY "createdAt" DESC LIMIT 1;
-   ```
-
-**注意: 手順1から、手順2のVercelのデプロイが終わるまでの間は、CSVインポートが失敗します。** `ownerId` は必須の列で、今のコードはこの列に値を入れずに登録するため、登録できません。この間はCSVインポートを使わず、終わったあとにやり直してください。GitHub・パスワードでのログインと、ノートの閲覧は影響を受けません。
-
-**ロールバック**: マージを取り消した（revertした）場合も、古いコードは `ownerId` を入れられないため、CSVインポートが失敗します。ブランチをもう一度マージするまでの間は、NeonのSQL Editorで次を実行して、既定の持ち主を付けてください。再マージして新しいコードを反映したら、`ALTER TABLE "LearningEntry" ALTER COLUMN "ownerId" DROP DEFAULT;` で戻します。マイグレーションとスキーマには `DEFAULT` を入れていません。
-
-```sql
-ALTER TABLE "LearningEntry" ALTER COLUMN "ownerId" SET DEFAULT '219588180';
-```
-
-## 学習ノートのゴミ箱
-
-自分の学習ノートは、消すとまずゴミ箱に入り、あとから元に戻せます。
-
-- **ゴミ箱に入れる**: 学習ノートの詳細画面（`/logs/年/月/日/番号`）の「ゴミ箱に入れる」を押します。確認はありません。その日の一覧に戻り、「ゴミ箱に入れました。ゴミ箱から元に戻せます。」と表示されます。
-- **ゴミ箱の中身**: ホームの最近のノート、日付一覧、その日の一覧、詳細、フォローのタイムラインのどこにも出ません。その日の番号と件数は、ゴミ箱にないノートだけで数え直します。
-- **ゴミ箱を開く**: 日付一覧とその日の一覧の「ゴミ箱」から開きます（`/logs/trash`）。ゴミ箱に入れた日時の新しい順に、100件まで表示します。
-- **元に戻す・完全に削除**: ゴミ箱の各ノートの「元に戻す」で元の日付に戻ります。「完全に削除」と「ゴミ箱を空にする」は確認のあとDBから消え、元に戻せません。ゴミ箱は自動では空になりません。
-- **公開範囲**: 自分のノートだけを操作できます。管理者が他人の記録を表示しているときは、「ゴミ箱に入れる」も「ゴミ箱」も出ません。ゴミ箱の画面は `?user=` を読まず、常に自分のゴミ箱を表示します。
-
-### 本番への反映
-
-DBマイグレーション `20261008120000_add_note_trash`（`LearningEntry` に `deletedAt` 列を追加）が必要です。null を許す列を足すだけなので、今のコードのまま先に適用しても動作は変わりません。マージの前に、Vercelとリンク済みのリポジトリで、このPRのブランチを `git switch --detach` で開いて、前節と同じ手順（`vercel env pull` → `migrate deploy` → `migrate status`）で本番DB（Neon）へ適用し、`migrate status` で適用済みになっていることを確認してください。
-
-マージを取り消した（revertした）場合、古いコードは `deletedAt` を見ないため、ゴミ箱に入っていたノートが一覧に戻って見えます。データは消えません。
-
-## フォローと学習ノートの共有
-
-メンバーは、ほかのメンバーをフォローして、相手が共有した学習ノートだけを読めます。
-
-- **だれがフォローできるか**: メンバーと管理者が、メニューの「フォロー」（`/follow`）からフォローできます。ゲストはフォローの画面を開けず、`/` に戻されます。
-- **だれをフォローできるか**: メンバーだけです。管理者はDBに行がないため、一覧に出ず、フォローされません。自分自身もフォローできません。
-- **一覧に出る情報**: 表示名だけです。ログインIDはログイン情報の半分にあたるため、ほかのメンバーには見せません（管理者は `/admin/accounts` で確認できます）。
-- **共有の切り替え**: メンバーが自分の学習ノートの詳細画面（`/logs/年/月/日/番号`）で「共有する」「共有をやめる」を押します。共有中のノートには「共有中（フォロワーが見られます）」と表示されます。ノートは最初は共有されません。管理者が他人の記録を表示しているときは、共有のボタンは出ません。
-- **タイムライン**: `/follow` の「フォロー中の人の共有ノート」に出るのは、フォロー中の人が共有中で、ゴミ箱にない学習ノートだけです。登録日時の新しい順に、最新100件まで表示します。ノートの詳細ページへのリンクは出しません。
-- **フォロー関係**: 一覧の「フォローされています」で、自分をフォローしている人が分かります。「フォロー中 N人・フォロワー N人」の人数も同じ画面に出ます。管理者のフォローは、フォロワーの人数にだけ数えます。
-
-### 本番への反映
-
-DBマイグレーション `20261010000353_add_follows_and_shared_notes`（`Follow` テーブルの追加と、`LearningEntry` への `sharedAt` 列の追加）が必要です。マージの前に、Vercelとリンク済みのリポジトリで、このPRのブランチを `git switch --detach` で開いて、パスワードアカウントの節と同じ手順で本番DB（Neon）へ適用してください。
-
-## LINE 連携
-
-LINE に中国語や日本語の文を送ると、OpenAI（ChatGPT）で添削・翻訳し、送った人の学習ノートに追加します。会員と管理者が、それぞれ自分の LINE を結びつけて使います（ゲストは使えません）。Go API（`services/api/`）の `/v1/line/*` で動きます。
-
-- **結びつけ**: Web の `/account/line`（メニューの「LINE 連携」）で「連携コードを出す」を押し、出た 8 文字のコード（10 分で切れます）を LINE の公式アカウントに送ります。同じ画面から連携を解除できます。
-- **添削と翻訳**: 漢字だけの文は添削、ひらがなやカタカナを含む文は中国語への翻訳です。結果は LINE に返信され、学習ノートに保存されます（翻訳は `kind=translation`）。500 文字までです。
-- **結びついていない LINE**: 送った文は学習ノートにも OpenAI にも届きません。
-- **復習のお知らせ**: `/account/line` で「お知らせを受け取る」を押すと、「今日の復習」に答える問題がある朝（06:00 JST の Cron）に、LINE へ 1 日 1 回お知らせします。初めは止まっています。LINE の月の送信数の残りから 30 通を拾い直しのために残し、その範囲だけ送ります。
-- **失敗したとき**: 時間切れなどで結果が出なかった文は、1 日 1 回の Cron（毎日 06:00 JST）が 1 回だけ試し直し、できた結果か失敗を LINE に送ります。
-- **設定**: Go API に `LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`OPENAI_API_KEY`（LINE を使うときは 3 つとも）と `CRON_SECRET`、Web に `LINE_ADD_FRIEND_URL`（友だち追加のリンク。無くても動きます）を入れます。設定が空のときは LINE 連携は使えず、画面には「LINE 連携は今は使えません。」と出ます。ローカルでは使えません。
-- **本番への反映**: DBマイグレーション `20261023090000_add_line_link`（`LineLink`・`LineLinkCode`・`LineMessage` の追加）を、**main へのマージの前に** 本番のNeonへ適用してください。LINE の Webhook URL の設定など、切り替えの手順は [docs/api-deployment.md](docs/api-deployment.md) の「7. LINE 連携」にあります。
-
-## ChatGPT と話す（会話ノート）
-
-会員と管理者は `/chat`（メニューの「ChatGPT と話す」）で ChatGPT と中国語で話せます。ゲストには出ません。Go API（`services/api/`）の `POST /v1/chat` と `/v1/conversations` で動きます。
-
-- **会話**: 回答は少しずつ表示されます。停止ボタンで止められます。途中で切れた回答は保存せず、その発言は入力欄に戻ります。
-- **会話ノート**: 回答が届くたびに、会話をまるごと保存します。`/conversations` で話した日（日本時間）ごとに見返せ、「続きを話す」で続きから話せます。削除もできます（ゴミ箱はありません）。
-- **上限**: 1 つの会話は 40 発言・合計 4 万字までです。上限に達した会話は読むだけになります。
-- **設定**: Go API に `OPENAI_API_KEY`（と任意で `OPENAI_CHAT_MODEL`）を入れます。空のときは画面に「ChatGPT が設定されていません」と出ます。
-- **本番への反映**: DBマイグレーション `20261024090000_add_chat_conversations`（`ChatConversation` の追加）を、**main へのマージの前に** 本番のNeonへ適用してください。手順は [docs/api-deployment.md](docs/api-deployment.md) の「8. ChatGPT と話す（会話ノート）」にあります。
-
-## 介詞の練習
-
-`/practice/prepositions`（「練習」の「介詞」）で、名詞と日本語の意味に合う介詞を 4 つから選ぶ練習が 25 問ずつできます。ゲストも練習できます。
-
-- **HSK の級**: 問題の上の「すべて・HSK 4級まで・HSK 5級・HSK 6級以上」で、出す問題の級をしぼれます（`?hsk=4` など）。補語の各モードも同じです。級は HSK 3.0 の級で、句と例文に出てくるいちばん難しい語の級です。1〜3 級の語だけの問題は「4級まで」、7〜9 級の語がある問題は「6級以上」に入れます。練習の記録には級を残しません。
-  - **級の決め方の切り替え**：問題の上の「級の決め方」で、「手作りの表」と「公式の語彙表」を選べます。選んだほうは Cookie（`zhuelog_hsk_basis`）に 1 年残り、ほかの練習でも使います。初めは「手作りの表」です。
-  - **手作りの表**：5 級以上の語とその級を、知識で `src/domain/practice/hsk-words.ts` に並べたものです。問題の文の中にその語があるかを探します（已经 の 经 のような、易しい語の中の 1 文字は数えません）。級が違う語はここで直します。
-  - **公式の語彙表**：HSK 3.0 の公式の語彙表（`data/hsk30.csv`、[ivankra/hsk30](https://github.com/ivankra/hsk30)、MIT）で文を区切り、文ごとの級を `src/domain/practice/hsk-words-official.ts` に生成しておいて引きます。問題データか語彙表を変えたら `node --import tsx scripts/generate-hsk-words.ts` で作り直します（作り直すまで `tests/hsk-words-official.test.ts` が失敗します）。級の数え方と問題数は [docs/hsk-levels-official.md](docs/hsk-levels-official.md) にあります。
-- **練習中**: 正答率（1 回目で正解した問題の割合）・ミス数（間違えて選んだ回数）・経過時間を問題の上に出します。
-- **結果**: 25 問を解き終えると、正答率・ミス数・経過時間と、ミスした問題（正解と、間違えて選んだ介詞）を出します。
-- **記録**: 会員と管理者の結果は、解き終えたときに Go API の `/v1/preposition-records` へ保存します。`/practice/prepositions/records`（練習画面の「過去の記録」）で新しい順に見返せ、1 件ずつ全問の結果も見られます。ゲストの練習は記録に残りません。
-- **本番への反映**: DBマイグレーション `20261024150000_add_preposition_practice_records`（`PrepositionPracticeRecord` の追加）を、**main へのマージの前に** 本番のNeonへ適用してください（`vercel env pull` → `migrate deploy` → `migrate status`）。
-
-## LINE・チャットのテーブルの削除
-
-DBマイグレーション `20261020090000_drop_line_and_chat` は、LINEと管理者チャットを削除したあとに残っていたテーブル（`LineLearningJob`・`LineDevelopmentSession`・`ChatConversation`）を削除します。今のコードはどれも読み書きしないので、適用する前にデプロイしても、あとにデプロイしても動作は変わりません。**適用すると、保存されていたLINEのジョブとチャットの履歴は元に戻せません。** 残したいデータがあれば、先にNeonでバックアップを取ってください。手順は、パスワードアカウントの節と同じです（`vercel env pull` → `migrate deploy` → `migrate status`）。
-
-```bash
-vercel env pull .env.production.local --environment=production --yes
-node --env-file=.env.production.local node_modules/prisma/build/index.js migrate status
-node --env-file=.env.production.local node_modules/prisma/build/index.js migrate deploy
-rm .env.production.local
-```
-
-## 日付別の学習ログ
-
-学習ノートの登録日時は日本時間（JST）で表示します。`/logs` から登録日を選び、日別一覧とその日の連番詳細を開けます。
-
-- 日別一覧: `/logs/2026/9/20`
-- その日の2件目: `/logs/2026/9/20/2`
-
-## 学習カードの表示
-
-学習ノートと日付別ログのカードでは、最初の文と添削後の文を文字単位で比べ、削除された文字（赤の取り消し線）と追加された文字（緑の下線）を表示します。続けて変わった文字は1箇所に数え、見出しに「N箇所を添削」と表示します。大きく書き換えた文では、書き換えの間にたまたま残った短い共通部分（前後の書き換えの半分以下の長さ、または長めの書き換えに隣接する1文字）を書き換えに含め、差分が細切れにならないようにします。ヒントは番号付きの「覚えるポイント」として並べます。差分は `<del>` / `<ins>` で表し、文のテキスト自体は変えないため、コピーや検索にはそのままの文が使われます。比較する部分が約500文字を超える場合は、処理時間を抑えるため、その部分を1つの書き換えとして表示します。
-
-## CSV形式
-
-UTF-8のCSVを利用します。ヘッダー行は省略可能です。
-
-```csv
-最初の文,添削後の文,ピンイン,ヒント1,ヒント2,...
-我昨天去图书馆了。,我昨天去了图书馆。,Wǒ zuótiān qù le túshūguǎn.,場所の前では「去」を使う,動作完了の「了」
-```
-
-- 1〜3列目は必須です。
-- 4列目以降の空でないセルは、すべて順番付きのヒントとして保存します。
-- 「最初の文 / 添削後の文 / ピンイン」のほか、「原文 / 添削文 / 拼音」または英語ヘッダーにも対応します。
-- 1ファイル4MB、1回1,000行までです。
-- 1項目1万文字・1行10万文字・ヒント100個までです（行ごとに個数を変えられます）。
-- サンプルは [`examples/sample.csv`](examples/sample.csv) にあります。
-
-## データ構造
-
-- `ImportBatch`: インポートしたファイル名・件数・日時
-- `LearningEntry`: 最初の文・添削後の文・ピンイン・所有者（GitHubの数字のID、`password:<アカウントID>`、または `ffpf:<sub>`）
-- `Hint`: 学習文に属する可変個数のヒントと表示順
-- `PasswordAccount`: ID・パスワードのアカウント（ログインID・表示名・パスワードのハッシュ・`sessionVersion`）。`failedAttempts`・`lockedUntil` は旧ロック用で、今は使っていません
-- `FfpfAccount`: FFPF ID でログインしたメンバー（`sub`・メールアドレス・表示名・`sessionVersion`・最終ログイン日時）。ログインのたびに最新の値で更新します
-- `SignInThrottle`: ログイン試行回数の制限用のカウンター（キー・回数・期限）。Go API が使います
-
-インポートはファイル単位のトランザクションです。途中の行でエラーになった場合、そのファイルのデータは1件も保存されません。
-
-## セキュリティ
-
-ページの保護は `src/proxy.ts` と各Server Componentで、書き込みはServer Action内で再検証します。管理者の許可リストは、Go API がリクエストのたびに確認します。リモートPostgreSQL接続は `sslmode=verify-full` に統一し、証明書とホスト名を検証します。
-
-HTMLにはリクエストごとのnonce付きCSPを設定します。ログの秘匿化、監査範囲と制約は [2026-09-24 セキュリティレビュー](docs/security-review-2026-09-24.md) を参照してください（AI機能はその後削除しました）。
-
-## Seedデータ
-
-個人の学習ノートを公開リポジトリへ含めないよう、実データはGit管理外の `prisma/seed.private.json` に保存します。
-
-```bash
-cp prisma/seed.example.json prisma/seed.private.json
-pnpm run db:seed
-```
-
-各エントリには固定IDと登録日時を指定します。seedは同じID、または同じ本文・添削文・ピンインの組み合わせを検出してスキップするため、再実行しても重複しません。公開してよいダミーデータの形式は [`prisma/seed.example.json`](prisma/seed.example.json) で確認できます。
-
-## Playwright E2E
-
-Node.js 24 または 26、起動済みのDocker（Compose v2）、Go（`services/api/go.mod` の版）が必要です。
-
-```bash
-pnpm install --frozen-lockfile
-pnpm exec playwright install chromium
-pnpm run test:e2e
-# 対話的な実行
-pnpm run test:e2e:ui
-# 終了後、専用DBを停止・破棄（テストデータのみ）
-pnpm run test:e2e:stop
-```
-
-Desktop Chromiumとモバイル幅（Pixel 7 / Chromium）の両方で検証します。
-テスト起動時に専用PostgreSQLを起動し、既存マイグレーションを適用してTurbopackでビルド、`127.0.0.1:3107`に本番モードのサーバーを起動します。Go API（`services/api`）もビルドして `127.0.0.1:3108` で起動し、Web はこれを通してログインとデータの読み書きを行います。
-既存サーバーは再利用しません。通常の開発サーバーは停止してから実行してください（ビルド先の`.next`を共有します）。
-
-- 認証前のリダイレクト、ゲストログイン／ログアウト、外部URLへのリダイレクト拒否
-- ID・パスワードのアカウント（管理者による作成、作成直後のパスワード表示（再表示できない旨の注記つき）、memberのログイン、アカウント管理画面の拒否、ログイン失敗の共通メッセージ、別の接続元からの5回失敗では本人がロックされないこと、再設定によるセッション失効、パスワード変更）
-- ゲストへの学習ノートの非表示・CSV操作の拒否（古い管理者フォームからの投稿も拒否）
-- CSVの登録・リロード後の永続化・可変ヒント・BOM・引用符・改行・入力エラー
-- 日付一覧・ノート詳細・前後移動・JST日付境界・無効なURL・折り畳み
-- ユーザーごとの記録（memberは自分の記録だけが見え番号も別々、管理者は切り替え欄でmemberの記録を閲覧のみで見られる、memberの `?user=` は自分に戻される）
-- ゴミ箱（詳細からゴミ箱に入れると一覧・ホーム・日付一覧から消えて番号が振り直される、元に戻す、確認つきの完全に削除とゴミ箱を空にする、確認のキャンセル、管理者が他人を表示中は操作できず他人のゴミ箱も見られない、320px幅で横スクロールしない）
-
-DBは`127.0.0.1:55439/zhuelog_e2e`に固定され、`compose.e2e.yaml`の専用コンテナだけを使用します。
-各テスト前にこのDBの学習データを初期化します。ポート55439を別のDBに割り当てないでください。
-通常の`DATABASE_URL`と実際のOAuth情報は使用しません。
-管理者セッションはテスト側で実行ごとのランダムな秘密鍵を使って作成します。本番コードに認証バイパスは追加していません。
-GitHub OAuthの外部ログインは、このE2Eの対象外です。
-
-失敗時のスクリーンショット・トレースは`test-results/`、HTMLレポートは`playwright-report/`に出力されます（Git管理外）。
-`pnpm exec playwright show-report`で結果を確認できます。GitHub Actionsにも同じE2Eを追加しています。
-設定の参考：[Playwright webServer](https://playwright.dev/docs/test-webserver)。
-
-## コミット・プッシュ前のチェック（Lefthook）
-
-`pnpm install --frozen-lockfile` / `pnpm install`でGitフックを自動設定します。再設定は`pnpm run hooks:install`です。CI・Vercel・Git管理外ではインストールをスキップします。
-
-| タイミング | 順番に実行する処理                                                                                   |
-| ---------- | ---------------------------------------------------------------------------------------------------- |
-| コミット前 | ステージ済みファイルのPrettier自動整形 → ESLint（警告もエラー）→ Next.js型生成・TypeScript型チェック |
-| プッシュ前 | ESLint → 型チェック → Playwright E2E（Desktop / Mobile）                                             |
-
-どれかが失敗するとコミット／プッシュを中止します。自動整形の結果はステージへ反映されます。部分ステージしたファイルの未ステージ部分はLefthookが一時退避・復元します。ただしLint・型チェック・E2Eは作業ツリー全体を対象とし、コミット済みスナップショットだけの検証ではありません。
-
-プッシュには起動済みDockerとPlaywright Chromiumが必要です。上のE2E手順で準備し、`.next`の競合を避けるため開発サーバーを停止してください。フック終了時は成功・失敗にかかわらず専用E2Eコンテナを停止します。E2Eの手動実行との同時使用は避けてください。
-
-既存コード全体の一括整形は行わず、コミット対象から段階的に整形します。生成コード・ロックファイル・秘密情報・テストレポートは整形対象外です。手動の全体整形は`pnpm run format`、全体の整形確認は`pnpm run format:check`（移行中は既存ファイルで失敗し得ます）、個別チェックは`pnpm run lint`と`pnpm run typecheck`で実行できます。
-
-## pnpm移行の回帰テスト
-
-`pnpm install --frozen-lockfile` 後、`pnpm run test:regression` で既存機能の検証を実行します。GitHub Actions では同じ内容を CI ワークフローが並列で実行します（`verify` と `e2e` を、本番の Vercel と同じ Node 24 で実行）。`package.json` の `engines` は `24.x` です（Vercel はまだ Node 26 に対応していないため）。
-ブラウザーテストの前に `pnpm exec playwright install chromium` を実行してください。Webの回帰テストは本番ビルドを使い、既存サーバーを再利用しません。
-
-## 補語の練習
-
-トップバーの「補語練習」から、結果補語・可能補語・程度補語と、方向補語の4種類（単純方向補語・複合方向補語・単純方向補語の派生義・複合方向補語の派生義）、それに「動詞から選ぶ」を選べます（`/practice/complements`）。各モード100問から毎回25問を4択で出題し、正解まで選び直します。正答率・ミス数・経過時間、解答後の中国語例文・補語のピンイン・日本語訳を表示します。問題データは `src/domain/practice/complement-data.ts` にあります。
-
-「動詞から選ぶ」（`/practice/complements/verb`）は介詞の練習と同じ出し方です。大きく動詞と日本語の意味を見せ、短い句の空欄に入る補語を 4 つから選びます。結果・方向・可能・程度のすべての補語が混ざって出て、毎回ちがう補語が 25 問出ます。誤答は手書きではなく規則で選びます（正解と意味分類を共有しない補語のうち、その動詞と組み合わさる補語と、正解を含む・正解に含まれる補語を除く）。問題データは `data/中国語の補語_動詞との組み合わせと例文.csv`（131 行・379 問）から `pnpm exec tsx scripts/generate-complement-verb-data.ts <csv>` で `src/domain/practice/complement-verb-data.ts` に作ります。生成したファイルは手で直さず、CSV を直して作り直します。間違えた問題は介詞と同じく問題ごと（CSV の行と動詞）に「今日の復習」へ入り、復習でも動詞を大きく出します。
-
-正解すると、例文の上に例文全体のピンインを出します（補語と介詞の練習で共通）。ピンインは `pnpm exec tsx scripts/generate-example-pinyin.ts` で pinyin-pro から `src/domain/practice/example-pinyin.ts` に作ります。補語・介詞の問題データを変えたら作り直してください（作り直すまで `tests/example-pinyin.test.ts` が失敗します）。構造助詞の「得」は de、名詞の接尾辞の「子」は zi、「儿」は r 化として読み、pinyin-pro が誤る多音字（睡不着 の zháo、系上 の jì など）は `scripts/lib/example-pinyin.ts` の `READING_FIXES` で直します。生成したファイルは手で直しません。
-
-会員・管理者の結果は Go API 経由で保存し、補語の種類を付けて履歴から見返せます。ゲストも練習できますが、記録は保存されません。API の仕様は [練習の記録](docs-site/reference/practice.md) を参照してください。
-
-本番反映時は追加マイグレーション `20261030090000_add_complement_practice_records`（`ComplementPracticeRecord` テーブルの新設）が必要です。方向補語のモードには、続くマイグレーション `20261101090000_add_direction_complement_modes`（`mode` の CHECK 制約に4種類を追加）、「動詞から選ぶ」には `20261108090000_add_complement_verb_mode`（同じ制約に `verb` を追加）も必要です。Web の本番ビルドで適用し、補語記録の新ルートを含む Go API もデプロイしてください。既存の介詞練習の記録は別テーブルに保持されます。
-
-## 了・过・着の練習
-
-`/practice/aspect-particles`（「練習」の「了・过・着」）で、文の空欄に入るものを「了・过・着・なし」の 4 つから選びます。全 48 問（4 つの答えが 12 問ずつ）から毎回 25 問です。同じ 4 つを毎回同じ順に並べ、日本語の意味で答えを決めます（〜た は 了、〜たことがある は 过、〜ている・〜ながら は 着）。「なし」は、習慣・没 の否定・予定・觉得 や 是 のような動詞・連動文の前の動詞の後ろです。問題データは `src/domain/practice/aspect-particle-data.ts` にあります。
-
-補語の各モードと同じく HSK の級でしぼれ（量詞の練習も同じ）、正解すると例文のピンインを出します。記録は補語の記録と同じ表に `mode = 'aspect'` で保存し、間違えた問題は「今日の復習」に入ります。マイグレーションは `20261110110000_add_complement_aspect_mode`（`mode` の CHECK に `aspect` を追加）です。
+<http://localhost:3000> を開き、ゲストか、サンプルの会員（[docs/api-local.md](docs/api-local.md) の表）でログインします。認証の設定、テスト、本番への反映の手順は [docs/development.md](docs/development.md) にあります。
+
+## 文書
+
+| 文書                                                       | 中身                                     |
+| ---------------------------------------------------------- | ---------------------------------------- |
+| [docs/architecture.md](docs/architecture.md)               | 全体の設計と、選んだ理由                 |
+| [docs/features.md](docs/features.md)                       | 機能ごとの説明                           |
+| [docs/quality.md](docs/quality.md)                         | 表示速度とアクセシビリティの記録         |
+| [docs/development.md](docs/development.md)                 | 手元での動かし方、認証の設定、テスト     |
+| [docs/api-local.md](docs/api-local.md)                     | Go API を手元で試す                      |
+| [docs/api-deployment.md](docs/api-deployment.md)           | 本番への反映                             |
+| [docs/releases/](docs/releases/)                           | リリースノート                           |
+| [docs/roadmap.md](docs/roadmap.md)                         | これから取り組むこと                     |
+| [docs/job-hunting-roadmap.md](docs/job-hunting-roadmap.md) | このアプリをポートフォリオに仕上げる計画 |
+
+## ライセンス
+
+All rights reserved です。ソースコードを読んでもらうために公開しています。詳しくは [LICENSE](LICENSE) を見てください。

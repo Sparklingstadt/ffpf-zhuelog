@@ -2,6 +2,7 @@
   "name": "@ffpf-zhuelog/web",
   "version": "0.31.0",
   "private": true,
+  "license": "UNLICENSED",
   "engines": {
     "node": "24.x"
   },
