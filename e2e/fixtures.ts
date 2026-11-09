@@ -189,3 +189,20 @@ export async function seedNotes(
       );
   }
 }
+
+// Opens the menu from the header's name button (every width) and returns it.
+// Pages and settings that are not main tabs are only linked from here.
+export async function openSiteMenu(page: Page) {
+  await page
+    .getByRole("banner")
+    .getByRole("button", { name: /のメニュー$/ })
+    .click();
+  const menu = page.getByRole("menu", { name: "メニュー" });
+  await expect(menu).toBeVisible();
+  return menu;
+}
+
+export async function signOut(page: Page) {
+  const menu = await openSiteMenu(page);
+  await menu.getByRole("menuitem", { name: "ログアウト" }).click();
+}

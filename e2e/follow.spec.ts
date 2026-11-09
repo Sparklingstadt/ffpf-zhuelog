@@ -9,6 +9,7 @@ import {
   memberOwnerId,
   seedNotes,
   test,
+  openSiteMenu,
 } from "./fixtures";
 
 const password = "member-password-1";
@@ -160,7 +161,7 @@ test("guests get no follow link and are sent home from /follow", async ({
 }) => {
   await asGuest(page);
   await expect(
-    page.getByRole("link", { name: "フォロー", exact: true }),
+    (await openSiteMenu(page)).getByRole("menuitem", { name: "フォロー" }),
   ).toHaveCount(0);
   await page.goto("/follow");
   await expect(page).toHaveURL((url) => url.pathname === "/");
@@ -179,7 +180,11 @@ test("an admin can follow a member but has no share button", async ({
   await asAdmin(context);
 
   await page.goto("/");
-  await page.getByRole("link", { name: "フォロー", exact: true }).click();
+  await (
+    await openSiteMenu(page)
+  )
+    .getByRole("menuitem", { name: "フォロー" })
+    .click();
   await expect(page).toHaveURL("/follow");
   await memberRow(page, "太郎")
     .getByRole("button", { name: "フォローする" })
