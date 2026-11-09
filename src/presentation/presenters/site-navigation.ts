@@ -75,6 +75,7 @@ const PRACTICE: MenuSection = {
     { label: "介詞の練習", href: "/practice/prepositions" },
     { label: "補語の練習", href: "/practice/complements" },
     { label: "量詞の練習", href: "/practice/measure-words" },
+    { label: "了・过・着の練習", href: "/practice/aspect-particles" },
   ],
 };
 
@@ -98,6 +99,7 @@ export function menuSections(role: AppRole): MenuSection[] {
       title: "AI に聞く",
       links: [
         { label: "ChatGPT と話す", href: "/chat" },
+        { label: "会話ノート", href: "/conversations" },
         { label: "クイック質問", href: "/quick-question" },
       ],
     },

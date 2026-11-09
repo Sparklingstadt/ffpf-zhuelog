@@ -41,8 +41,9 @@ export default async function ComplementQuizPage({
   };
   const quiz = buildComplementQuiz(mode, 25, Math.random, filter);
   return (
-    <PageShell user={user} width="4xl">
+    <PageShell user={user} width="4xl" dense>
       <PageHeader
+        dense
         icon={ListChecks}
         eyebrow="Complement practice"
         title={`${COMPLEMENT_MODES[mode].label}の練習`}

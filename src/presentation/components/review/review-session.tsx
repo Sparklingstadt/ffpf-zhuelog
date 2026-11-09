@@ -199,7 +199,7 @@ export function ReviewSession({
               ? `期日が来ている問題が、まだ${left}問あります。`
               : cards.length > 0
                 ? "「もう一度」や「難しい」にした問題は、少したつとまた出てきます。"
-                : "練習で間違えた問題が、ここに出てきます。"}
+                : "練習で間違えた問題、単語帳の語句、復習に入れた学習ノートが、ここに出てきます。"}
           </p>
           <div className="flex flex-wrap justify-center gap-3">
             {left > 0 || cards.length > 0 ? (

@@ -18,7 +18,7 @@ test("a word added to the book comes up as a flashcard and can be removed", asyn
   await page.goto("/vocabulary");
   await expect(page.getByText("まだ単語がありません。")).toBeVisible();
   await page.getByLabel("語句").fill("认真");
-  await page.getByLabel("ピン音").fill("rènzhēn");
+  await page.getByLabel("ピンイン").fill("rènzhēn");
   await page.getByLabel("意味").fill("まじめに");
   await page.getByRole("button", { name: "単語帳に入れる" }).click();
   await expect(page.getByText("「认真」を単語帳に入れました。")).toBeVisible();

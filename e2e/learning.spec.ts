@@ -134,7 +134,7 @@ test("exports the selected notes as a CSV the import reads back", async ({
   // Notes from one import share a time, so their order is not checked.
   expect(text.startsWith("\uFEFF")).toBe(true);
   const [header, ...rows] = text.slice(1).split("\r\n");
-  expect(header).toBe('"最初の文","添削後の文","ピン音","ヒント1","ヒント2"');
+  expect(header).toBe('"最初の文","添削後の文","ピンイン","ヒント1","ヒント2"');
   expect(rows.sort()).toEqual([
     "",
     '"引用""B","添削B","pinyin B"',

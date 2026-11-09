@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { ASPECT_PARTICLE_USAGES } from "../src/domain/practice/aspect-particle-data";
+import { aspectParticleSentence } from "../src/domain/practice/aspect-particle-quiz";
 import { COMPLEMENT_USAGES } from "../src/domain/practice/complement-data";
 import {
   buildComplementQuiz,
@@ -18,6 +20,7 @@ import {
 } from "../src/domain/practice/hsk-level";
 import { HSK_OFFICIAL_TEXT_LEVELS } from "../src/domain/practice/hsk-words-official";
 import { HSK_HARD_WORDS } from "../src/domain/practice/hsk-words";
+import { MEASURE_WORD_USAGES } from "../src/domain/practice/measure-word-data";
 import { PREPOSITION_USAGES } from "../src/domain/practice/preposition-data";
 import {
   buildQuiz,
@@ -43,6 +46,11 @@ const texts = [
     u.example,
     ...u.pairs.map((p) => p.phrase),
   ]),
+  ...MEASURE_WORD_USAGES.flatMap((u) => [
+    u.prompt.replace("（　）", u.answer),
+    u.example,
+  ]),
+  ...ASPECT_PARTICLE_USAGES.map(aspectParticleSentence),
 ];
 
 test("?hsk= reads 4, 5 or 6 and nothing else", () => {
