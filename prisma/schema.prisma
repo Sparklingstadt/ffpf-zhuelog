@@ -124,11 +124,16 @@ model ApiRefreshToken {
 // Ties one LINE account to one Zhuelog owner (a PasswordAccount id prefixed
 // "password:", or an admin's GitHub numeric id). ownerId has no foreign key:
 // admins have no row in the database. role is "member" | "admin" (CHECK).
+// reviewNotify is the owner's choice to get a LINE message on mornings when
+// reviews are due (off until they turn it on); reviewNotifiedOn is the JST
+// date the last one was sent, so the daily run sends at most one a day.
 model LineLink {
-  lineUserId String   @id
-  ownerId    String   @unique
-  role       String
-  createdAt  DateTime @default(now())
+  lineUserId       String    @id
+  ownerId          String    @unique
+  role             String
+  createdAt        DateTime  @default(now())
+  reviewNotify     Boolean   @default(false)
+  reviewNotifiedOn DateTime? @db.Date
 }
 
 // One-time link codes shown on /account/line. Only the SHA-256 hex of the code

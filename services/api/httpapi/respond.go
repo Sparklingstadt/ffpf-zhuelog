@@ -16,6 +16,7 @@ const (
 	msgUnauthorized       = "認証が必要です。"
 	msgForbidden          = "このアカウントは利用できません。" // allowlist removal, revoked session
 	msgAdminOnly          = "管理者だけが利用できます。"
+	msgLineNotLinked      = "LINE と連携していません。先に連携してください。"
 	msgInvalidMonth       = "月は YYYY-MM の形で指定してください。"
 	msgInvalidEntryFilter = "検索の条件が正しくありません。語句とヒントは100文字まで、種類は添削か翻訳です。"
 	msgMembersOnly        = "この操作は会員だけが利用できます。"

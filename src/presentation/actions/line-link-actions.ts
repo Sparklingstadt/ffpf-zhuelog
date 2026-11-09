@@ -50,3 +50,38 @@ export async function unlinkLineAction(): Promise<void> {
   await memberAccounts.unlinkLine();
   revalidatePath("/account/line");
 }
+
+export type LineReviewNotifyState =
+  | { status: "idle" }
+  | { status: "saved"; on: boolean }
+  | { status: "error"; message: string };
+
+// Turns the morning LINE message about due reviews on or off. The form sends
+// on=1 to turn it on and anything else to turn it off.
+export async function setLineReviewNotifyAction(
+  _previous: LineReviewNotifyState,
+  formData: FormData,
+): Promise<LineReviewNotifyState> {
+  if (!(await getLinkOwner()))
+    return { status: "error", message: accountForbiddenMessage };
+  const on = formData.get("on") === "1";
+  try {
+    const saved = await memberAccounts.setLineReviewNotify(on);
+    if (!saved)
+      return {
+        status: "error",
+        message:
+          "お知らせを切り替えられませんでした。LINE と連携しているか、ページを読み込み直して確かめてください。",
+      };
+    revalidatePath("/account/line");
+    return { status: "saved", on };
+  } catch (error) {
+    if (!(error instanceof GoApiError)) throw error;
+    if (error.status === 403)
+      return { status: "error", message: accountForbiddenMessage };
+    return {
+      status: "error",
+      message: goFailureMessage("LINE_REVIEW_NOTIFY_FAILED", error),
+    };
+  }
+}
