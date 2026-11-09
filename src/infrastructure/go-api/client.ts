@@ -16,6 +16,8 @@ export type GoMe = {
   accountId?: string;
   // Only while an admin acts as a member (X-Zhuelog-Act-As).
   actingAs?: GoActingAs;
+  // Only for the demo account, which anyone may enter from /signin.
+  demo?: boolean;
 };
 
 export type GoActingAs = {
@@ -177,6 +179,25 @@ export function loginGuest(clientIp: string) {
     body: {},
     clientIp,
   });
+}
+
+// The demo account: a member session without a password, for anyone.
+export function loginDemo(clientIp: string) {
+  return goApi<GoTokens>("/v1/auth/demo", {
+    method: "POST",
+    body: {},
+    clientIp,
+  });
+}
+
+// Whether the Go API has a demo account to offer. Any failure means no.
+export async function isDemoAvailable(): Promise<boolean> {
+  try {
+    await goApi<void>("/v1/auth/demo", { method: "GET" });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function loginGitHub(

@@ -9,6 +9,8 @@ import {
   GoApiError,
   goApi,
   goUpload,
+  isDemoAvailable,
+  loginDemo,
   loginPassword,
   logout,
 } from "../src/infrastructure/go-api/client";
@@ -332,4 +334,32 @@ test("plain HTTP is allowed for this machine (local development and e2e)", async
     await goApi("/v1/x", { method: "GET", accessToken: "tok" });
     assert.equal(calls[0]!.url, `${url.replace(/\/$/, "")}/v1/x`);
   }
+});
+
+test("loginDemo posts an empty body with the client IP", async () => {
+  stub(() =>
+    json({ accessToken: "a", refreshToken: "r", expiresIn: 900 }, 200),
+  );
+  const tokens = await loginDemo("203.0.113.5");
+  assert.equal(tokens.accessToken, "a");
+  assert.equal(calls[0].url, "https://api.test/v1/auth/demo");
+  assert.equal(calls[0].init.method, "POST");
+  assert.equal(calls[0].init.body, "{}");
+  const headers = calls[0].init.headers as Record<string, string>;
+  assert.equal(headers["X-Zhuelog-Client-IP"], "203.0.113.5");
+});
+
+test("isDemoAvailable is true only when Go answers 2xx", async () => {
+  stub(() => new Response(null, { status: 204 }));
+  assert.equal(await isDemoAvailable(), true);
+  assert.equal(calls[0].url, "https://api.test/v1/auth/demo");
+  assert.equal(calls[0].init.method, "GET");
+
+  stub(() => json({ error: { code: "not_found", message: "x" } }, 404));
+  assert.equal(await isDemoAvailable(), false);
+
+  stub(() => {
+    throw new Error("offline");
+  });
+  assert.equal(await isDemoAvailable(), false);
 });

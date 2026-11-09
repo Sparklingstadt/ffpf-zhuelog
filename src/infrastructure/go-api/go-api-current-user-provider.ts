@@ -50,7 +50,12 @@ export class GoApiCurrentUserProvider implements CurrentUserProvider {
       return { ...user, actAsIgnored: true };
     }
     if (me.role !== "member") return user;
-    return { ...user, displayName: me.displayName, accountId: me.accountId };
+    return {
+      ...user,
+      displayName: me.displayName,
+      accountId: me.accountId,
+      ...(me.demo === true ? { demo: true } : {}),
+    };
   }
 
   // Undefined when Go refuses the member, so the caller asks again as the

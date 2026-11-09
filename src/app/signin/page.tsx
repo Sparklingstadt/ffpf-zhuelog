@@ -1,6 +1,7 @@
 import {
   CircleUserRound,
   Eye,
+  FlaskConical,
   KeyRound,
   Languages,
   LockKeyhole,
@@ -10,12 +11,16 @@ import {
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
-import { getCurrentViewerUser } from "@/composition/identity-container";
+import {
+  demoAvailable,
+  getCurrentViewerUser,
+} from "@/composition/identity-container";
 import {
   ffpfIdConfig,
   isAuthConfigured,
 } from "@/infrastructure/config/environment";
 import {
+  signInAsDemoAction,
   signInAsGuestAction,
   signInWithFfpfAction,
   signInWithGitHubAction,
@@ -48,6 +53,7 @@ const errorMessages: Record<string, string> = {
   Configuration: "認証設定が完了していません。管理者に確認してください。",
   OAuthCallbackError:
     "認証サービスからの結果を確認できませんでした。もう一度お試しください。",
+  DemoUnavailable: "デモは今は利用できません。",
 };
 
 // The only page a crawler can read: every other page sends it here with a
@@ -73,6 +79,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   const callbackPath = getSafeCallbackPath(params.callbackUrl);
   const isConfigured = isAuthConfigured();
   const showFfpfId = Boolean(ffpfIdConfig());
+  const showDemo = await demoAvailable();
   const errorMessage = params.error
     ? (errorMessages[params.error] ??
       "認証中にエラーが発生しました。もう一度お試しください。")
@@ -184,6 +191,18 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
                 <Eye /> ゲストとして使う
               </Button>
             </form>
+            {showDemo ? (
+              <div className="space-y-2">
+                <form action={signInAsDemoAction.bind(null, callbackPath)}>
+                  <Button type="submit" className="w-full" variant="outline">
+                    <FlaskConical /> デモで試す
+                  </Button>
+                </form>
+                <p className="text-center text-xs leading-5 text-muted-foreground">
+                  デモでは学習ノート・復習・単語帳まで試せます。データは試している全員で共有され、毎晩元に戻ります。AIの機能は使えません。
+                </p>
+              </div>
+            ) : null}
             <p className="text-center text-xs leading-5 text-muted-foreground">
               ゲストは学習ノート・CSVインポートを利用できません。
               {showFfpfId

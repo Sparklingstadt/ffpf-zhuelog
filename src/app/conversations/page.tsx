@@ -43,7 +43,8 @@ export default async function ConversationsPage() {
                 <ArrowLeft /> 学習ノートへ
               </Link>
             </Button>
-            {conversations ? (
+            {/* The demo account cannot chat; it only reads the notes. */}
+            {conversations && !user.demo ? (
               <Button asChild size="sm">
                 <Link href="/chat">
                   <MessageCircle /> ChatGPT と話す

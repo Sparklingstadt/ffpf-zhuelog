@@ -14,6 +14,7 @@ import { GoApiCurrentUserProvider } from "@/infrastructure/go-api/go-api-current
 import {
   readAccessToken,
   readActAsCookie,
+  signInAsDemoViaGo,
   signInAsGuestViaGo,
   signInWithFfpfViaGo,
   signInWithGitHubViaGo,
@@ -22,6 +23,7 @@ import {
   startActingAsViaGo,
   stopActingViaGo,
 } from "@/infrastructure/go-api/go-api-session";
+import { isDemoAvailable } from "@/infrastructure/go-api/client";
 import { createAccountGateway } from "@/infrastructure/go-api/account-gateway";
 import { createAiUsageGateway } from "@/infrastructure/go-api/ai-usage-gateway";
 
@@ -79,6 +81,15 @@ export async function signInWithFfpf(redirectTo: string) {
 
 export async function signInAsGuest(redirectTo: string) {
   await signInAsGuestViaGo(redirectTo);
+}
+
+export async function signInAsDemo(redirectTo: string) {
+  await signInAsDemoViaGo(redirectTo);
+}
+
+// Whether the sign-in page offers the demo account.
+export function demoAvailable() {
+  return isDemoAvailable();
 }
 
 export async function signInWithPassword(input: {
