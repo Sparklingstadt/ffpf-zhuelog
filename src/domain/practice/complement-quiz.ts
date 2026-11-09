@@ -2,7 +2,9 @@ import { COMPLEMENT_USAGES } from "./complement-data";
 import {
   buildComplementVerbQuiz,
   countComplementVerbQuestions,
+  countComplementVerbQuestionsAt,
 } from "./complement-verb-quiz";
+import { hskLevelOf, type HskLevel } from "./hsk-level";
 import {
   examplePinyinOf,
   type PrepositionQuestion,
@@ -69,9 +71,23 @@ export function isComplementMode(value: string): value is ComplementMode {
   return Object.hasOwn(COMPLEMENT_MODES, value);
 }
 
-export function countComplementQuestions(mode: ComplementMode): number {
-  if (mode === "verb") return countComplementVerbQuestions();
-  return COMPLEMENT_USAGES.filter((q) => q.mode === mode).length;
+export function countComplementQuestions(
+  mode: ComplementMode,
+  level: HskLevel | null = null,
+): number {
+  if (mode === "verb")
+    return level === null
+      ? countComplementVerbQuestions()
+      : countComplementVerbQuestionsAt(level);
+  return COMPLEMENT_USAGES.filter(
+    (q) =>
+      q.mode === mode && (level === null || complementUsageLevel(q) === level),
+  ).length;
+}
+
+// The HSK level of a hand-written question: its sentence with the answer in.
+export function complementUsageLevel(q: ComplementUsage): HskLevel {
+  return hskLevelOf(q.prompt.replace("（　）", q.answer));
 }
 
 function shuffled<T>(values: readonly T[], random: Random): T[] {
@@ -89,11 +105,21 @@ export function buildComplementQuiz(
   mode: ComplementMode,
   count = 25,
   random: Random = Math.random,
+  level: HskLevel | null = null,
 ): PrepositionQuestion[] {
   if (mode === "verb")
-    return buildComplementVerbQuiz(Math.max(0, Math.floor(count)), random);
+    return buildComplementVerbQuiz(
+      Math.max(0, Math.floor(count)),
+      random,
+      undefined,
+      level,
+    );
   return shuffled(
-    COMPLEMENT_USAGES.filter((q) => q.mode === mode),
+    COMPLEMENT_USAGES.filter(
+      (q) =>
+        q.mode === mode &&
+        (level === null || complementUsageLevel(q) === level),
+    ),
     random,
   )
     .slice(0, Math.max(0, Math.floor(count)))
