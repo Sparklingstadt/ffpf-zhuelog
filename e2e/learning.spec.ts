@@ -7,6 +7,7 @@ import {
   expect,
   test,
   upload,
+  signOut,
 } from "./fixtures";
 
 test("unauthenticated pages redirect to signin", async ({ page }) => {
@@ -52,7 +53,7 @@ test("guest sees no notes and no note tools", async ({ page, db }) => {
     await page.goto(path);
     await expect(page).toHaveURL(/\/$/);
   }
-  await page.getByRole("button", { name: "ログアウト" }).click();
+  await signOut(page);
   await expect(
     page.getByRole("button", { name: "ゲストとして使う" }),
   ).toBeVisible();

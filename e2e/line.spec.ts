@@ -7,6 +7,7 @@ import {
   expect,
   memberOwnerId,
   test,
+  openSiteMenu,
 } from "./fixtures";
 
 test("linked members can unlink and see links completed in LINE without reloading", async ({
@@ -65,7 +66,11 @@ test("member issues a LINE link code with a matching QR and mobile link", async 
   await createMember(db, "taro", "太郎", "member-password-1");
   await asMember(page, "taro", "member-password-1");
 
-  await page.getByRole("link", { name: "LINE 連携" }).click();
+  await (
+    await openSiteMenu(page)
+  )
+    .getByRole("menuitem", { name: "LINE 連携" })
+    .click();
   await expect(page).toHaveURL((url) => url.pathname === "/account/line");
   await expect(
     page.getByRole("heading", { name: "LINE 連携", exact: true }),
@@ -118,7 +123,9 @@ test("guest has no LINE link menu and is sent away from the page", async ({
   page,
 }) => {
   await asGuest(page);
-  await expect(page.getByRole("link", { name: "LINE 連携" })).toHaveCount(0);
+  await expect(
+    (await openSiteMenu(page)).getByRole("menuitem", { name: "LINE 連携" }),
+  ).toHaveCount(0);
 
   await page.goto("/account/line");
   await expect(page).toHaveURL((url) => url.pathname === "/");
