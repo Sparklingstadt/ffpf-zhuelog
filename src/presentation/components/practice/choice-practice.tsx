@@ -1,8 +1,15 @@
 "use client";
 
-import { ArrowRight, Check, History, RotateCcw, X } from "lucide-react";
+import {
+  ArrowRight,
+  BookPlus,
+  Check,
+  History,
+  RotateCcw,
+  X,
+} from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import {
   accuracyPercent,
@@ -18,9 +25,20 @@ import type {
   SavePrepositionRoundInput,
   SavePrepositionRoundResult,
 } from "@/presentation/actions/preposition-record-actions";
+import {
+  getExamplePinyinSnapshot,
+  getServerExamplePinyinSnapshot,
+  setExamplePinyinPreference,
+  subscribeToExamplePinyin,
+} from "@/infrastructure/preferences/example-pinyin-store";
 import { PrepositionAnswerList } from "@/presentation/components/practice/preposition-answer-list";
 import { PrepositionStats } from "@/presentation/components/practice/preposition-stats";
 import { SpeakButton } from "@/presentation/components/speech/speak-button";
+import {
+  draftVocabularyAction,
+  saveVocabularyAction,
+} from "@/presentation/actions/vocabulary-actions";
+import { VocabularyAddForm } from "@/presentation/components/vocabulary/vocabulary-add-form";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
 import { cn } from "@/presentation/lib/utils";
@@ -32,23 +50,82 @@ export function focusInPlace(button: HTMLButtonElement | null) {
 }
 
 // The example sentence of a solved question, with the pinyin of the whole
-// sentence above it when there is one.
+// sentence above it when there is one. With the "hide" setting on, the
+// pinyin waits behind a button so the learner reads the sentence first.
 export function SolvedExample({
   question,
+  canAddToVocabulary = false,
 }: {
-  question: Pick<PrepositionQuestion, "example" | "examplePinyin">;
+  question: Pick<
+    PrepositionQuestion,
+    "example" | "examplePinyin" | "translation"
+  >;
+  // Members and admins may pick words of the sentence into their vocabulary
+  // book; guests practice without one.
+  canAddToVocabulary?: boolean;
 }) {
+  const preference = useSyncExternalStore(
+    subscribeToExamplePinyin,
+    getExamplePinyinSnapshot,
+    getServerExamplePinyinSnapshot,
+  );
+  const [revealed, setRevealed] = useState(false);
+  const hidden = preference === "hidden";
+
   return (
     <>
       {question.examplePinyin ? (
-        <p lang="zh-Latn-pinyin" className="text-xs text-muted-foreground">
-          {question.examplePinyin}
-        </p>
+        hidden && !revealed ? (
+          <p>
+            <button
+              type="button"
+              onClick={() => setRevealed(true)}
+              className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            >
+              ピンインを見る
+            </button>
+          </p>
+        ) : (
+          <p lang="zh-Latn-pinyin" className="text-xs text-muted-foreground">
+            {question.examplePinyin}
+          </p>
+        )
       ) : null}
       <p lang="zh-CN" className="text-sm">
         {question.example}
         <SpeakButton text={question.example} className="ml-1 align-middle" />
       </p>
+      <p className="text-sm text-muted-foreground">{question.translation}</p>
+      {question.examplePinyin ? (
+        <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={hidden}
+            onChange={(event) =>
+              setExamplePinyinPreference(
+                event.target.checked ? "hidden" : "shown",
+              )
+            }
+            className="size-3.5 accent-primary"
+          />
+          例文のピンインを最初は隠す
+        </label>
+      ) : null}
+      {canAddToVocabulary ? (
+        <details className="group mx-auto w-full max-w-xl rounded-lg border text-left">
+          <summary className="flex cursor-pointer list-none items-center justify-center gap-1.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground">
+            <BookPlus className="size-4" aria-hidden="true" />
+            例文の語句を単語帳に入れる
+          </summary>
+          <div className="border-t p-3">
+            <VocabularyAddForm
+              sentence={question.example}
+              draftVocabulary={draftVocabularyAction}
+              saveVocabulary={saveVocabularyAction}
+            />
+          </div>
+        </details>
+      ) : null}
     </>
   );
 }
@@ -326,10 +403,10 @@ export function ChoicePractice({
                         {question.answer} {question.pinyin}
                       </span>
                     </p>
-                    <SolvedExample question={question} />
-                    <p className="text-sm text-muted-foreground">
-                      {question.translation}
-                    </p>
+                    <SolvedExample
+                      question={question}
+                      canAddToVocabulary={canSave}
+                    />
                   </div>
                   <Button size="lg" onClick={next} ref={focusInPlace}>
                     {index + 1 < total ? "次へ" : "結果を見る"} <ArrowRight />
