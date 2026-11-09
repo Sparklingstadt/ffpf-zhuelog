@@ -171,7 +171,7 @@ func TestComplementRecordPutAcceptsEveryMode(t *testing.T) {
 	for _, mode := range []string{
 		"result", "potential", "degree",
 		"direction-simple", "direction-compound", "direction-simple-extended", "direction-compound-extended",
-		"verb", "measure",
+		"verb", "measure", "aspect",
 	} {
 		rs := &fakeComplementRecords{}
 		h, _ := complementRouter(t, auth.RoleAdmin, rs)

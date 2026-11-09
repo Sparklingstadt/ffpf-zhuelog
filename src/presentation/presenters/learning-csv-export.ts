@@ -4,7 +4,7 @@ import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
 // The CSV the import accepts back: the header row it recognises, then the
 // original, corrected and pinyin columns and one column per hint. Every field
 // is quoted, so commas and line breaks inside a value stay in one field.
-const BASE_HEADER = ["最初の文", "添削後の文", "ピン音"];
+const BASE_HEADER = ["最初の文", "添削後の文", "ピンイン"];
 
 function quote(value: string) {
   return `"${value.replaceAll('"', '""')}"`;

@@ -217,3 +217,23 @@ func TestAddComplementRecordAcceptsTheMeasureMode(t *testing.T) {
 		t.Errorf("saved = %+v", saved)
 	}
 }
+
+// The 了・过・着 practice (aspect) passes the table's CHECK on mode, and a
+// question whose answer is なし (no particle) keeps it.
+func TestAddComplementRecordAcceptsTheAspectMode(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	owner := newOwner(t, s)
+	cleanComplementRecords(t, s, owner)
+
+	r := complementRecord(fixedNow(), []string{"了"})
+	r.Mode = "aspect"
+	r.Questions[0] = ComplementQuestion{ID: "aspect-37", Answer: "なし", Noun: "了・过・着", Prompt: "我每天早上喝（　）一杯牛奶。", Misses: []string{"了"}}
+	saved, err := s.AddComplementRecord(ctx, owner, r, fixedNow())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.Mode != "aspect" || saved.Questions[0].ID != "aspect-37" || saved.Questions[0].Answer != "なし" {
+		t.Errorf("saved = %+v", saved)
+	}
+}

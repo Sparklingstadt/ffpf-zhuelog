@@ -42,6 +42,7 @@ test("every path lands under the right main page", () => {
     ["/practice", "practice"],
     ["/practice/complements/records/abc", "practice"],
     ["/practice/measure-words", "practice"],
+    ["/practice/aspect-particles", "practice"],
     ["/vocabulary", "vocabulary"],
     ["/chat", null],
     ["/follow", null],
@@ -62,7 +63,9 @@ test("the menu reaches every page that is not a main tab", () => {
     "/practice/prepositions",
     "/practice/complements",
     "/practice/measure-words",
+    "/practice/aspect-particles",
     "/chat",
+    "/conversations",
     "/quick-question",
     "/follow",
     "/account/line",
@@ -85,6 +88,7 @@ test("the menu reaches every page that is not a main tab", () => {
     "/practice/prepositions",
     "/practice/complements",
     "/practice/measure-words",
+    "/practice/aspect-particles",
   ]);
 });
 

@@ -146,6 +146,8 @@ Web の `/practice/complements` で、結果補語（`result`）・可能補語�
 
 量詞の練習（Web の `/practice/measure-words`）も、記録はここに `mode` が `measure` の練習として保存します。名詞（`questions[].noun`）を数える量詞を4択で選び、`questions[].id` は `measure-NN` です。補語の記録の一覧・詳細にも一緒に出ます。
 
+了・过・着の練習（Web の `/practice/aspect-particles`）も、記録はここに `mode` が `aspect` の練習として保存します。文の空欄に入るものを「了・过・着・なし」の4択で選び、`questions[].noun` は `了・过・着`、何も入らない問題の `answer` は `なし`、`questions[].id` は `aspect-NN` です。補語の記録の一覧・詳細にも一緒に出ます。
+
 ### 補語の記録 API
 
 以下の3ルートは、上記の介詞の記録 API と同じ認証・所有者制限・採点・再送時の動作を持ちます。保存先は独立した `ComplementPracticeRecord` テーブルです。
@@ -154,6 +156,6 @@ Web の `/practice/complements` で、結果補語（`result`）・可能補語�
 - `GET /v1/complement-records/{id}`：自分の記録の詳細。
 - `PUT /v1/complement-records/{id}`：練習の結果を保存。
 
-保存リクエストには、介詞の記録の項目に加えて `mode`（`result` / `potential` / `degree` / `direction-simple` / `direction-compound` / `direction-simple-extended` / `direction-compound-extended` / `verb` / `measure`）が必要です。一覧・詳細にも `mode` を返します。`questions[].noun` は補語の種類名（`verb` では動詞）、`answer` と `misses` の各要素は1〜40字です。`questions[].id` は補語の問題の ID です（`verb` では `verb:<CSV の行 ID>:<動詞>`、例 `verb:C005:看`。復習はこの ID で同じ問題を出します）。その他の長さや件数の制限は介詞と同じです。未知の `mode` は `400` です。
+保存リクエストには、介詞の記録の項目に加えて `mode`（`result` / `potential` / `degree` / `direction-simple` / `direction-compound` / `direction-simple-extended` / `direction-compound-extended` / `verb` / `measure` / `aspect`）が必要です。一覧・詳細にも `mode` を返します。`questions[].noun` は補語の種類名（`verb` では動詞）、`answer` と `misses` の各要素は1〜40字です。`questions[].id` は補語の問題の ID です（`verb` では `verb:<CSV の行 ID>:<動詞>`、例 `verb:C005:看`。復習はこの ID で同じ問題を出します）。その他の長さや件数の制限は介詞と同じです。未知の `mode` は `400` です。
 
 Web の記録一覧は `/practice/complements/records`、詳細は `/practice/complements/records/{id}` です。会員・管理者だけが利用でき、ゲストは記録を保存しません。

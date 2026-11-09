@@ -10,7 +10,7 @@ func TestFormatResultCorrection(t *testing.T) {
 	got := FormatResult("correction", "我喜欢学汉语", "我喜欢学习汉语", "wǒ xǐhuan xuéxí hànyǔ", []string{"「学」は「学习」にする", "語順は自然"})
 	want := "【元の文】\n我喜欢学汉语\n\n" +
 		"【添削後】\n我喜欢学习汉语\n\n" +
-		"【ピン音】\nwǒ xǐhuan xuéxí hànyǔ\n\n" +
+		"【ピンイン】\nwǒ xǐhuan xuéxí hànyǔ\n\n" +
 		"【ヒント】\n・「学」は「学习」にする\n・語順は自然\n\n" +
 		"学習ノートに保存しました"
 	if got != want {
@@ -20,7 +20,7 @@ func TestFormatResultCorrection(t *testing.T) {
 
 func TestFormatResultTranslationHeading(t *testing.T) {
 	got := FormatResult("translation", "今日は雨", "今天下雨", "jīntiān xiàyǔ", []string{"ヒント"})
-	for _, h := range []string{"【元の文】", "【中国語訳】", "【ピン音】", "【ヒント】", "学習ノートに保存しました"} {
+	for _, h := range []string{"【元の文】", "【中国語訳】", "【ピンイン】", "【ヒント】", "学習ノートに保存しました"} {
 		if !strings.Contains(got, h) {
 			t.Fatalf("missing %q in:\n%s", h, got)
 		}
@@ -32,7 +32,7 @@ func TestFormatResultTranslationHeading(t *testing.T) {
 
 func TestFormatResultOmitsEmptySections(t *testing.T) {
 	got := FormatResult("correction", "a", "b", "", nil)
-	if strings.Contains(got, "【ピン音】") || strings.Contains(got, "【ヒント】") {
+	if strings.Contains(got, "【ピンイン】") || strings.Contains(got, "【ヒント】") {
 		t.Fatalf("empty sections rendered:\n%s", got)
 	}
 	if !strings.HasSuffix(got, "学習ノートに保存しました") {

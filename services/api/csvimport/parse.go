@@ -83,7 +83,7 @@ func Parse(r io.Reader) ([]store.EntryDraft, error) {
 			cells[j] = jsstr.Trim(c)
 		}
 		if cells[0] == "" || cells[1] == "" || cells[2] == "" {
-			return nil, &ValidationError{line + "行目の「最初の文」「添削後の文」「ピン音」は必須です。"}
+			return nil, &ValidationError{line + "行目の「最初の文」「添削後の文」「ピンイン」は必須です。"}
 		}
 		hints := []string{}
 		for _, h := range cells[3:] {
@@ -131,7 +131,7 @@ func FileName(name string) (string, error) {
 var headerNames = [3][]string{
 	{"最初の文", "原文", "original"},
 	{"添削後の文", "添削文", "corrected"},
-	{"ピン音", "拼音", "pinyin"},
+	{"ピンイン", "ピン音", "拼音", "pinyin"},
 }
 
 func isHeader(row []string) bool {

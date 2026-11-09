@@ -50,6 +50,13 @@ test("missed practice questions come back on the review page and an answer resch
   await page.goto("/");
   await expect(page.getByTestId("review-due-count")).toHaveText("0");
   await expect(page.getByTestId("review-streak-days")).toHaveText("0");
+  // The card names every kind of review, notes included.
+  await expect(
+    page.getByText(
+      "練習で間違えた問題、単語帳の語句、復習に入れた学習ノートがここに入ります。",
+      { exact: false },
+    ),
+  ).toBeVisible();
 
   await practiceOneRound(page);
   const {

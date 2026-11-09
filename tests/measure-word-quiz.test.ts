@@ -5,11 +5,14 @@ import {
   COMPLEMENT_ROUND_MODES,
   roundModeLabel,
 } from "../src/domain/practice/complement-record";
+import { HSK_BASES, HSK_LEVELS } from "../src/domain/practice/hsk-level";
 import { MEASURE_WORD_USAGES } from "../src/domain/practice/measure-word-data";
 import {
   buildMeasureWordQuiz,
+  countMeasureWordQuestions,
   isMeasureWordQuestionId,
   measureWordQuestion,
+  measureWordUsageLevel,
 } from "../src/domain/practice/measure-word-quiz";
 import { BLANK } from "../src/domain/practice/preposition-quiz";
 import {
@@ -61,6 +64,32 @@ test("a quiz has 25 different questions", () => {
   assert.equal(new Set(quiz.map((q) => q.id)).size, 25);
   assert.equal(buildMeasureWordQuiz(0).length, 0);
 });
+
+for (const basis of HSK_BASES) {
+  test(`${basis}: every measure-word question has one level and the quizzes keep to it`, () => {
+    const split = HSK_LEVELS.reduce(
+      (n, level) => n + countMeasureWordQuestions({ level, basis }),
+      0,
+    );
+    assert.equal(split, MEASURE_WORD_USAGES.length);
+    assert.equal(countMeasureWordQuestions(), MEASURE_WORD_USAGES.length);
+    for (const level of HSK_LEVELS) {
+      const filter = { level, basis };
+      const quiz = buildMeasureWordQuiz(25, seeded(level), filter);
+      assert.equal(
+        quiz.length,
+        Math.min(25, countMeasureWordQuestions(filter)),
+      );
+      for (const q of quiz) {
+        const usage = MEASURE_WORD_USAGES.find((u) => u.id === q.id)!;
+        assert.equal(measureWordUsageLevel(usage, basis), level, q.id);
+      }
+    }
+    // 一匹马 and 草原 are level 5 either way.
+    const horse = MEASURE_WORD_USAGES.find((u) => u.prompt === "一（　）马")!;
+    assert.equal(measureWordUsageLevel(horse, basis), 5);
+  });
+}
 
 test("review finds measure-word questions among the complement items", () => {
   const id = MEASURE_WORD_USAGES[5].id;

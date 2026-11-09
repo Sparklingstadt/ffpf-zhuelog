@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 
 const siteName = "学习録";
 const description =
-  "添削文・ピン音・学習ヒントをCSVから蓄積する中国語学習アプリ";
+  "添削文・ピンイン・学習ヒントをCSVから蓄積する中国語学習アプリ";
 
 // OGP and the X card: src/app/opengraph-image.png (rendered from
 // scripts/og-image/ by `pnpm run og:render`) is picked up by the file
@@ -58,7 +58,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="ja"
       suppressHydrationWarning
-      className={`${GeistSans.variable} ${GeistMono.variable} h-full antialiased`}
+      // What scrolls into view (a focused field, the practice's "next")
+      // stops below the sticky header and above the bottom tabs.
+      className={`${GeistSans.variable} ${GeistMono.variable} h-full scroll-pt-16 antialiased ${user ? "scroll-pb-[calc(5rem+1px+env(safe-area-inset-bottom)+1rem)] xl:scroll-pb-4" : ""}`}
     >
       <head>
         <ThemeBootstrap nonce={nonce} />

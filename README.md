@@ -2,7 +2,7 @@
 
 開発には `package.json` で指定した pnpm 11.25.0 を使用します。`corepack enable` 後、`pnpm install --frozen-lockfile` で依存関係をインストールしてください。
 
-添削前後の中国語、ピン音、可変個数の学習ヒントをCSVから取り込んで表示する、Next.js製の中国語学習アプリです。
+添削前後の中国語、ピンイン、可変個数の学習ヒントをCSVから取り込んで表示する、Next.js製の中国語学習アプリです。
 
 これから取り組むことは [docs/roadmap.md](docs/roadmap.md) にあります。
 
@@ -123,8 +123,8 @@ OpenAI を呼ぶ 4 つの機能（LINE の添削・翻訳、ChatGPT と話す、
 ## 画面の移動
 
 - **主なページ**：学習ノート（`/`）・今日の復習（`/review`）・練習（`/practice`）・単語帳（`/vocabulary`）の 4 つです。スマホとタブレット（幅 1280px 未満）では画面の下のタブに、それより広い画面ではヘッダーに文字付きで並びます。ゲストには、復習と単語帳が「メンバー向け」として押せない形で出ます。
-- **メニュー**：ヘッダー右の自分の名前を押すと開きます。スマホとタブレットでは下のタブの「メニュー」からも開けます。日付別の学習ノート、学習ログ（カレンダー）、CSV の取り込み・書き出し、ゴミ箱、3 つの練習、ChatGPT と話す、クイック質問、フォロー、LINE 連携、パスワード変更、管理者の画面、ログアウトがあります。中身は `src/presentation/presenters/site-navigation.ts` で決めています。
-- **練習の入口**：`/practice` に介詞・補語・量詞の 3 つの練習と、それぞれの記録への入口があります。
+- **メニュー**：ヘッダー右の自分の名前を押すと開きます。スマホとタブレットでは下のタブの「メニュー」からも開けます。日付別の学習ノート、学習ログ（カレンダー）、CSV の取り込み・書き出し、ゴミ箱、4 つの練習、ChatGPT と話す、クイック質問、フォロー、LINE 連携、パスワード変更、管理者の画面、ログアウトがあります。中身は `src/presentation/presenters/site-navigation.ts` で決めています。
+- **練習の入口**：`/practice` に介詞、補語、量詞、了・过・着の 4 つの練習と、それぞれの記録への入口があります。
 
 ## 表示テーマ
 
@@ -226,15 +226,15 @@ LINE に中国語や日本語の文を送ると、OpenAI（ChatGPT）で添削�
 - **設定**: Go API に `LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`OPENAI_API_KEY`（LINE を使うときは 3 つとも）と `CRON_SECRET`、Web に `LINE_ADD_FRIEND_URL`（友だち追加のリンク。無くても動きます）を入れます。設定が空のときは LINE 連携は使えず、画面には「LINE 連携は今は使えません。」と出ます。ローカルでは使えません。
 - **本番への反映**: DBマイグレーション `20261023090000_add_line_link`（`LineLink`・`LineLinkCode`・`LineMessage` の追加）を、**main へのマージの前に** 本番のNeonへ適用してください。LINE の Webhook URL の設定など、切り替えの手順は [docs/api-deployment.md](docs/api-deployment.md) の「7. LINE 連携」にあります。
 
-## ChatGPT との会話練習
+## ChatGPT と話す（会話ノート）
 
-管理者は `/chat`（メニューの「ChatGPT と話す」）で ChatGPT と中国語の会話練習ができます。会員とゲストには出ません。Go API（`services/api/`）の `POST /v1/chat` と `/v1/conversations` で動きます。
+会員と管理者は `/chat`（メニューの「ChatGPT と話す」）で ChatGPT と中国語で話せます。ゲストには出ません。Go API（`services/api/`）の `POST /v1/chat` と `/v1/conversations` で動きます。
 
 - **会話**: 回答は少しずつ表示されます。停止ボタンで止められます。途中で切れた回答は保存せず、その発言は入力欄に戻ります。
 - **会話ノート**: 回答が届くたびに、会話をまるごと保存します。`/conversations` で話した日（日本時間）ごとに見返せ、「続きを話す」で続きから話せます。削除もできます（ゴミ箱はありません）。
 - **上限**: 1 つの会話は 40 発言・合計 4 万字までです。上限に達した会話は読むだけになります。
 - **設定**: Go API に `OPENAI_API_KEY`（と任意で `OPENAI_CHAT_MODEL`）を入れます。空のときは画面に「ChatGPT が設定されていません」と出ます。
-- **本番への反映**: DBマイグレーション `20261024090000_add_chat_conversations`（`ChatConversation` の追加）を、**main へのマージの前に** 本番のNeonへ適用してください。手順は [docs/api-deployment.md](docs/api-deployment.md) の「8. 会話練習（ChatGPT）」にあります。
+- **本番への反映**: DBマイグレーション `20261024090000_add_chat_conversations`（`ChatConversation` の追加）を、**main へのマージの前に** 本番のNeonへ適用してください。手順は [docs/api-deployment.md](docs/api-deployment.md) の「8. ChatGPT と話す（会話ノート）」にあります。
 
 ## 介詞の練習
 
@@ -276,13 +276,13 @@ rm .env.production.local
 UTF-8のCSVを利用します。ヘッダー行は省略可能です。
 
 ```csv
-最初の文,添削後の文,ピン音,ヒント1,ヒント2,...
+最初の文,添削後の文,ピンイン,ヒント1,ヒント2,...
 我昨天去图书馆了。,我昨天去了图书馆。,Wǒ zuótiān qù le túshūguǎn.,場所の前では「去」を使う,動作完了の「了」
 ```
 
 - 1〜3列目は必須です。
 - 4列目以降の空でないセルは、すべて順番付きのヒントとして保存します。
-- 「最初の文 / 添削後の文 / ピン音」のほか、「原文 / 添削文 / 拼音」または英語ヘッダーにも対応します。
+- 「最初の文 / 添削後の文 / ピンイン」のほか、「原文 / 添削文 / 拼音」または英語ヘッダーにも対応します。
 - 1ファイル4MB、1回1,000行までです。
 - 1項目1万文字・1行10万文字・ヒント100個までです（行ごとに個数を変えられます）。
 - サンプルは [`examples/sample.csv`](examples/sample.csv) にあります。
@@ -290,7 +290,7 @@ UTF-8のCSVを利用します。ヘッダー行は省略可能です。
 ## データ構造
 
 - `ImportBatch`: インポートしたファイル名・件数・日時
-- `LearningEntry`: 最初の文・添削後の文・ピン音・所有者（GitHubの数字のID、`password:<アカウントID>`、または `ffpf:<sub>`）
+- `LearningEntry`: 最初の文・添削後の文・ピンイン・所有者（GitHubの数字のID、`password:<アカウントID>`、または `ffpf:<sub>`）
 - `Hint`: 学習文に属する可変個数のヒントと表示順
 - `PasswordAccount`: ID・パスワードのアカウント（ログインID・表示名・パスワードのハッシュ・`sessionVersion`）。`failedAttempts`・`lockedUntil` は旧ロック用で、今は使っていません
 - `FfpfAccount`: FFPF ID でログインしたメンバー（`sub`・メールアドレス・表示名・`sessionVersion`・最終ログイン日時）。ログインのたびに最新の値で更新します
@@ -313,7 +313,7 @@ cp prisma/seed.example.json prisma/seed.private.json
 pnpm run db:seed
 ```
 
-各エントリには固定IDと登録日時を指定します。seedは同じID、または同じ本文・添削文・ピン音の組み合わせを検出してスキップするため、再実行しても重複しません。公開してよいダミーデータの形式は [`prisma/seed.example.json`](prisma/seed.example.json) で確認できます。
+各エントリには固定IDと登録日時を指定します。seedは同じID、または同じ本文・添削文・ピンインの組み合わせを検出してスキップするため、再実行しても重複しません。公開してよいダミーデータの形式は [`prisma/seed.example.json`](prisma/seed.example.json) で確認できます。
 
 ## Playwright E2E
 
@@ -382,3 +382,9 @@ GitHub OAuthの外部ログインは、このE2Eの対象外です。
 会員・管理者の結果は Go API 経由で保存し、補語の種類を付けて履歴から見返せます。ゲストも練習できますが、記録は保存されません。API の仕様は [練習の記録](docs-site/reference/practice.md) を参照してください。
 
 本番反映時は追加マイグレーション `20261030090000_add_complement_practice_records`（`ComplementPracticeRecord` テーブルの新設）が必要です。方向補語のモードには、続くマイグレーション `20261101090000_add_direction_complement_modes`（`mode` の CHECK 制約に4種類を追加）、「動詞から選ぶ」には `20261108090000_add_complement_verb_mode`（同じ制約に `verb` を追加）も必要です。Web の本番ビルドで適用し、補語記録の新ルートを含む Go API もデプロイしてください。既存の介詞練習の記録は別テーブルに保持されます。
+
+## 了・过・着の練習
+
+`/practice/aspect-particles`（「練習」の「了・过・着」）で、文の空欄に入るものを「了・过・着・なし」の 4 つから選びます。全 48 問（4 つの答えが 12 問ずつ）から毎回 25 問です。同じ 4 つを毎回同じ順に並べ、日本語の意味で答えを決めます（〜た は 了、〜たことがある は 过、〜ている・〜ながら は 着）。「なし」は、習慣・没 の否定・予定・觉得 や 是 のような動詞・連動文の前の動詞の後ろです。問題データは `src/domain/practice/aspect-particle-data.ts` にあります。
+
+補語の各モードと同じく HSK の級でしぼれ（量詞の練習も同じ）、正解すると例文のピンインを出します。記録は補語の記録と同じ表に `mode = 'aspect'` で保存し、間違えた問題は「今日の復習」に入ります。マイグレーションは `20261110110000_add_complement_aspect_mode`（`mode` の CHECK に `aspect` を追加）です。

@@ -2,7 +2,8 @@ import { formatElapsed } from "@/domain/practice/preposition-record";
 import { cn } from "@/presentation/lib/utils";
 
 // The accuracy, the misses and the time of a round, during it and after.
-// accuracy is null before the first answer.
+// accuracy is null before the first answer. During the round ("sm") each
+// label sits beside its value on phones, to keep the question in view.
 export function PrepositionStats({
   accuracy,
   missCount,
@@ -29,13 +30,19 @@ export function PrepositionStats({
       {stats.map((stat) => (
         <div
           key={stat.label}
-          className="flex flex-col items-center gap-0.5 rounded-lg border bg-card px-2 py-2"
+          className={cn(
+            "flex flex-col items-center gap-0.5 rounded-lg border bg-card px-2 py-2",
+            size === "sm" &&
+              "max-sm:flex-row max-sm:justify-center max-sm:gap-1 max-sm:px-1 max-sm:py-1",
+          )}
         >
-          <dt className="text-xs text-muted-foreground">{stat.label}</dt>
+          <dt className="text-xs whitespace-nowrap text-muted-foreground">
+            {stat.label}
+          </dt>
           <dd
             className={cn(
               "font-mono font-semibold tabular-nums",
-              size === "lg" ? "text-2xl" : "text-lg",
+              size === "lg" ? "text-2xl" : "text-sm sm:text-lg",
             )}
           >
             {stat.value}

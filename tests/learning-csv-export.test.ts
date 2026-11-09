@@ -36,7 +36,7 @@ test("writes the import format: a header, then one quoted row per note", () => {
   assert.equal(
     csv,
     [
-      '"最初の文","添削後の文","ピン音","ヒント1"',
+      '"最初の文","添削後の文","ピンイン","ヒント1"',
       '"我去","我去了","wǒ qù le","了は完了"',
       '"他很高","他很高。","tā hěn gāo"',
       "",
@@ -51,7 +51,7 @@ test("the header has as many hint columns as the note with the most hints", () =
   ]);
   assert.equal(
     csv.split("\r\n")[0],
-    '"最初の文","添削後の文","ピン音","ヒント1","ヒント2","ヒント3"',
+    '"最初の文","添削後の文","ピンイン","ヒント1","ヒント2","ヒント3"',
   );
   assert.equal(csv.split("\r\n")[1], '"a","b","c","1"');
 });
@@ -70,7 +70,7 @@ test("quotes, commas and line breaks stay inside one field", () => {
 });
 
 test("no notes still gives the header", () => {
-  assert.equal(toLearningCsv([]), '"最初の文","添削後の文","ピン音"\r\n');
+  assert.equal(toLearningCsv([]), '"最初の文","添削後の文","ピンイン"\r\n');
 });
 
 test("the file name carries the Japan date", () => {

@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { examplePinyin } from "../scripts/lib/example-pinyin";
+import { ASPECT_PARTICLE_USAGES } from "../src/domain/practice/aspect-particle-data";
+import { aspectParticleQuestion } from "../src/domain/practice/aspect-particle-quiz";
 import { COMPLEMENT_USAGES } from "../src/domain/practice/complement-data";
 import { complementQuestion } from "../src/domain/practice/complement-quiz";
 import { COMPLEMENT_VERB_USAGES } from "../src/domain/practice/complement-verb-data";
@@ -12,8 +14,8 @@ import { measureWordQuestion } from "../src/domain/practice/measure-word-quiz";
 import { PREPOSITION_USAGES } from "../src/domain/practice/preposition-data";
 import { buildQuestion } from "../src/domain/practice/preposition-quiz";
 
-// Every question the complement, measure-word and preposition practices can
-// ask.
+// Every question the complement, measure-word, 了・过・着 and preposition
+// practices can ask.
 const questions = [
   ...COMPLEMENT_USAGES.map((usage) => complementQuestion(usage)),
   ...COMPLEMENT_VERB_USAGES.flatMap((usage) =>
@@ -23,6 +25,7 @@ const questions = [
     usage.pairs.map((pair) => buildQuestion(usage, pair)),
   ),
   ...MEASURE_WORD_USAGES.map((usage) => measureWordQuestion(usage)),
+  ...ASPECT_PARTICLE_USAGES.map(aspectParticleQuestion),
 ];
 
 test("every practice example has its pinyin", () => {

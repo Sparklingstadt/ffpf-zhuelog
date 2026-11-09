@@ -1,6 +1,6 @@
 {
   "blank_line_numbering.csv": {
-    "error": "3行目の「最初の文」「添削後の文」「ピン音」は必須です。"
+    "error": "3行目の「最初の文」「添削後の文」「ピンイン」は必須です。"
   },
   "blank_lines.csv": {
     "error": "CSVにデータ行がありません。"
@@ -103,10 +103,10 @@
     "error": "CSVの形式を確認してください。引用符が閉じていないか、1行が長すぎる可能性があります。"
   },
   "empty_required.csv": {
-    "error": "3行目の「最初の文」「添削後の文」「ピン音」は必須です。"
+    "error": "3行目の「最初の文」「添削後の文」「ピンイン」は必須です。"
   },
   "empty_required_fullwidth.csv": {
-    "error": "1行目の「最初の文」「添削後の文」「ピン音」は必須です。"
+    "error": "1行目の「最初の文」「添削後の文」「ピンイン」は必須です。"
   },
   "header_dotted_i.csv": {
     "entries": [
@@ -6333,7 +6333,7 @@
     ]
   },
   "quoted_empty_required.csv": {
-    "error": "2行目の「最初の文」「添削後の文」「ピン音」は必須です。"
+    "error": "2行目の「最初の文」「添削後の文」「ピンイン」は必須です。"
   },
   "record_limit_ok.csv": {
     "entries": [

@@ -44,8 +44,8 @@ export default async function ChatPage({ searchParams }: ChatPageProps) {
       <PageHeader
         icon={MessageCircle}
         eyebrow="ChatGPT"
-        title="会話練習"
-        description="ChatGPTと中国語を練習し、表現・文法・語彙についてその場で質問できます。会話は回答ごとに会話ノートへ保存されます。"
+        title="ChatGPT と話す"
+        description="ChatGPT と中国語で話し、表現・文法・語彙をその場で質問できます。話した内容は、回答ごとに会話ノートへ保存されます。"
         actions={
           <>
             <Button asChild variant="outline" size="sm">

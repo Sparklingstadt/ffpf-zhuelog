@@ -8,7 +8,8 @@ import {
 import { cn } from "@/presentation/lib/utils";
 
 // Chooses which HSK level a practice asks about, through ?hsk= on the same
-// page. A level without questions cannot be chosen.
+// page. A level without questions cannot be chosen. On phones the levels
+// stay on one row that scrolls sideways, to leave room for the question.
 export function HskLevelPicker({
   path,
   current,
@@ -29,11 +30,14 @@ export function HskLevelPicker({
     })),
   ];
   return (
-    <nav aria-label="HSK の級" className="flex flex-wrap gap-2">
+    <nav
+      aria-label="HSK の級"
+      className="-mx-4 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
+    >
       {options.map(({ level, label, count }) => {
         const selected = level === current;
         const className = cn(
-          "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm",
+          "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-sm",
           selected
             ? "border-primary bg-primary text-primary-foreground"
             : "bg-card hover:bg-accent",

@@ -43,7 +43,7 @@ export function CsvImportForm({ disabled = false }: { disabled?: boolean }) {
           className="cursor-pointer file:cursor-pointer"
         />
         <p className="text-xs leading-5 text-muted-foreground">
-          先頭3列は「最初の文」「添削後の文」「ピン音」。4列目以降はすべてヒントとして扱います。
+          先頭3列は「最初の文」「添削後の文」「ピンイン」。4列目以降はすべてヒントとして扱います。
         </p>
       </div>
       <Button type="submit" className="w-full" disabled={disabled || pending}>

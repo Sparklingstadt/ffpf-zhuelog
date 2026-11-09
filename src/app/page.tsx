@@ -90,7 +90,7 @@ function HomeHeader() {
             学习録
           </h1>
           <p className="max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-            自分が書いた文と添削後の文を、ピン音や覚えるべきヒントと一緒に蓄積します。
+            自分が書いた文と添削後の文を、ピンインや覚えるべきヒントと一緒に蓄積します。
           </p>
         </div>
       </div>

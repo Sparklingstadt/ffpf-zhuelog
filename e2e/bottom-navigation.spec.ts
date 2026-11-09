@@ -134,6 +134,7 @@ test("guest menu keeps five tabs without linking to restricted features", async 
     "介詞の練習",
     "補語の練習",
     "量詞の練習",
+    "了・过・着の練習",
     "ログアウト",
   ]);
   await page.keyboard.press("Escape");

@@ -1,9 +1,12 @@
 // Words of HSK 3.0 (汉语水平考试等级标准, 2021) levels 5, 6 and 7-9 (written
-// 7) that appear in the preposition and complement practices. The levels were
+// 7) that appear in the preposition, complement, measure-word and 了・过・着
+// practices. The levels of the preposition and complement words were
 // assigned from knowledge of the standard, not read from the official list,
 // so a word may be a level off: fix it here. Words of levels 1-4 are left
 // out, since they do not move a question above level 4. Where two readings
-// disagreed, the lower level was kept.
+// disagreed, the lower level was kept. The measure-word and 了・过・着 words
+// were added later with the official list at hand; 钥匙, 蛋糕 and 剩 stay
+// out, as the table already counts them easy in the complement practice.
 export const HSK_HARD_WORDS: Readonly<Record<string, 5 | 6 | 7>> = {
   // Level 5.
   严: 5,
@@ -14,6 +17,7 @@ export const HSK_HARD_WORDS: Readonly<Record<string, 5 | 6 | 7>> = {
   凭: 5,
   划: 5,
   剪: 5,
+  匹: 5,
   原: 5,
   同: 5,
   吓: 5,
@@ -40,6 +44,7 @@ export const HSK_HARD_WORDS: Readonly<Record<string, 5 | 6 | 7>> = {
   晒: 5,
   晕: 5,
   朝: 5,
+  朵: 5,
   杀: 5,
   沿: 5,
   泡: 5,
@@ -74,6 +79,7 @@ export const HSK_HARD_WORDS: Readonly<Record<string, 5 | 6 | 7>> = {
   雾: 5,
   顶: 5,
   顺: 5,
+  颗: 5,
   飘: 5,
   义务: 5,
   书架: 5,
@@ -91,6 +97,7 @@ export const HSK_HARD_WORDS: Readonly<Record<string, 5 | 6 | 7>> = {
   信号: 5,
   傍晚: 5,
   出售: 5,
+  出差: 5,
   出版: 5,
   出色: 5,
   分类: 5,
@@ -164,6 +171,7 @@ export const HSK_HARD_WORDS: Readonly<Record<string, 5 | 6 | 7>> = {
   清晰: 5,
   渐渐: 5,
   灯光: 5,
+  烤鸭: 5,
   熟练: 5,
   熬夜: 5,
   牌子: 5,
@@ -183,6 +191,7 @@ export const HSK_HARD_WORDS: Readonly<Record<string, 5 | 6 | 7>> = {
   脸色: 5,
   至于: 5,
   花瓶: 5,
+  草原: 5,
   获胜: 5,
   营业: 5,
   规模: 5,
@@ -195,14 +204,17 @@ export const HSK_HARD_WORDS: Readonly<Record<string, 5 | 6 | 7>> = {
   路线: 5,
   返回: 5,
   进度: 5,
+  远处: 5,
   配合: 5,
   针对: 5,
+  钢琴: 5,
   长度: 5,
   难题: 5,
   需求: 5,
   面子: 5,
   顺着: 5,
   香味: 5,
+  一句话: 5,
   不得了: 5,
   冰淇淋: 5,
   忍不住: 5,
@@ -211,6 +223,7 @@ export const HSK_HARD_WORDS: Readonly<Record<string, 5 | 6 | 7>> = {
   说明书: 5,
   好不容易: 5,
   // Level 6.
+  副: 6,
   // 鞠躬 is used split (鞠了一躬), so its first character stands for it.
   鞠: 6,
   依: 6,
@@ -363,6 +376,7 @@ export const HSK_HARD_WORDS: Readonly<Record<string, 5 | 6 | 7>> = {
   熨: 7,
   瞒: 7,
   竖: 7,
+  粒: 7,
   缓: 7,
   缝: 7,
   肿: 7,

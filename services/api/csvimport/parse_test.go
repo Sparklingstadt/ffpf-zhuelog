@@ -24,6 +24,10 @@
 //
 //	pnpm exec tsx /path/to/expected.ts services/api/csvimport/testdata > services/api/csvimport/testdata/expected.json
 //	pnpm exec prettier --write services/api/csvimport/testdata/expected.json
+//
+// The web's parser is gone since the import moved here. Messages changed
+// after that were edited in place: v0.30.0 renamed 「ピン音」 to 「ピンイン」
+// in the message for an empty required cell.
 package csvimport
 
 import (
@@ -121,7 +125,7 @@ func TestParseLimits(t *testing.T) {
 	}
 	const (
 		msgLimit    = "上限（各項目1万文字・ヒント100列）を超えています。"
-		msgRequired = "の「最初の文」「添削後の文」「ピン音」は必須です。"
+		msgRequired = "の「最初の文」「添削後の文」「ピンイン」は必須です。"
 	)
 	bad := []struct {
 		name, in, want string
@@ -132,6 +136,7 @@ func TestParseLimits(t *testing.T) {
 		{"104 columns", "a,b,c," + hints(101) + "\n", "1行目は" + msgLimit},
 		{"no data rows", "", "CSVにデータ行がありません。"},
 		{"header only", "最初の文,添削後の文,ピン音\n", "CSVにデータ行がありません。"},
+		{"header with ピンイン", "最初の文,添削後の文,ピンイン\n", "CSVにデータ行がありません。"},
 		{"fewer than 3 columns", "a,b,c\nx,y\n", "2行目は3列未満です。"},
 		{"empty required cell", "原文,添削文,拼音\na,b,c\na,b,\u3000\n", "3行目" + msgRequired},
 		{"record over 100000 bytes", strings.Repeat(strings.Repeat("a", 9_999)+",", 11) + "\n", msgFormat},

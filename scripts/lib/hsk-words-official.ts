@@ -3,8 +3,11 @@
 // Used by scripts/generate-hsk-words.ts and tests/hsk-words-official.test.ts.
 import { readFileSync } from "node:fs";
 
+import { ASPECT_PARTICLE_USAGES } from "../../src/domain/practice/aspect-particle-data";
+import { aspectParticleSentence } from "../../src/domain/practice/aspect-particle-quiz";
 import { COMPLEMENT_USAGES } from "../../src/domain/practice/complement-data";
 import { COMPLEMENT_VERB_USAGES } from "../../src/domain/practice/complement-verb-data";
+import { MEASURE_WORD_USAGES } from "../../src/domain/practice/measure-word-data";
 import { PREPOSITION_USAGES } from "../../src/domain/practice/preposition-data";
 
 // 1–6, and 7 for the "7-9" band, which the standard does not split.
@@ -154,7 +157,10 @@ export function segment(text: string, vocabulary: HskVocabulary): Token[] {
 
 // One question of the preposition or complement practice, and the texts it
 // shows: the phrase and the example sentence, or for a hand-written
-// complement question its prompt with the answer in the blank.
+// complement or 了・过・着 question its prompt with the answer in the blank.
+// The measure-word and 了・过・着 practices keep their rounds with the
+// complements', so they are complement questions of modes "measure" and
+// "aspect".
 export type PracticeQuestion = {
   practice: "preposition" | "complement";
   // The complement mode; "verb" for COMPLEMENT_VERB_USAGES.
@@ -186,6 +192,18 @@ export function practiceQuestions(): PracticeQuestion[] {
         texts: [pair.phrase, usage.example],
       })),
     ),
+    ...MEASURE_WORD_USAGES.map((usage) => ({
+      practice: "complement" as const,
+      mode: "measure",
+      id: usage.id,
+      texts: [usage.prompt.replace("（　）", usage.answer), usage.example],
+    })),
+    ...ASPECT_PARTICLE_USAGES.map((usage) => ({
+      practice: "complement" as const,
+      mode: "aspect",
+      id: usage.id,
+      texts: [aspectParticleSentence(usage)],
+    })),
   ];
 }
 

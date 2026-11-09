@@ -38,7 +38,7 @@ func FormatResult(kind, original, text, pinyin string, hints []string) string {
 		textHeading + "\n" + text,
 	}
 	if pinyin != "" {
-		sections = append(sections, "【ピン音】\n"+pinyin)
+		sections = append(sections, "【ピンイン】\n"+pinyin)
 	}
 	if len(hints) > 0 {
 		lines := make([]string, len(hints))

@@ -156,7 +156,7 @@ func TestImportCSVHandlerRejectsFiles(t *testing.T) {
 		{"unclosed quote", []formPart{{name: "csvFile", fileName: "a.csv", content: []byte("a,b,\"c\n")}}, 400, "invalid_csv",
 			"CSVの形式を確認してください。引用符が閉じていないか、1行が長すぎる可能性があります。"},
 		{"missing pinyin", []formPart{{name: "csvFile", fileName: "a.csv", content: []byte("a,b,c\nd,e,\n")}}, 400, "invalid_csv",
-			"2行目の「最初の文」「添削後の文」「ピン音」は必須です。"},
+			"2行目の「最初の文」「添削後の文」「ピンイン」は必須です。"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

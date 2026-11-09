@@ -9,7 +9,13 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type Ref,
+} from "react";
 
 import {
   accuracyPercent,
@@ -43,10 +49,20 @@ import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
 import { cn } from "@/presentation/lib/utils";
 
-// Moves focus to the button that just appeared. Unlike autoFocus it keeps
-// the scroll position, so the progress bar stays in view.
+// Moves focus to the button that just appeared. Unlike autoFocus it does not
+// center the button: the page stays where it is, so the progress bar stays
+// in view, unless the button is out of sight (on a phone, below the bottom
+// tabs), when it scrolls just far enough to show it.
 export function focusInPlace(button: HTMLButtonElement | null) {
-  button?.focus({ preventScroll: true });
+  if (!button) return;
+  button.focus({ preventScroll: true });
+  button.scrollIntoView({ block: "nearest", behavior: scrollBehavior() });
+}
+
+function scrollBehavior(): ScrollBehavior {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ? "auto"
+    : "smooth";
 }
 
 // The example sentence of a solved question, with the pinyin of the whole
@@ -130,9 +146,17 @@ export function SolvedExample({
   );
 }
 
-function ProgressBar({ done, total }: { done: number; total: number }) {
+function ProgressBar({
+  done,
+  total,
+  ref,
+}: {
+  done: number;
+  total: number;
+  ref?: Ref<HTMLDivElement>;
+}) {
   return (
-    <div className="flex items-center gap-3">
+    <div ref={ref} className="flex items-center gap-3">
       <div
         role="progressbar"
         aria-label="進捗"
@@ -180,10 +204,10 @@ export function Choice({
       }
       onClick={onPick}
       className={cn(
-        "relative min-h-20 font-medium disabled:opacity-100",
+        "relative min-h-16 font-medium disabled:opacity-100 sm:min-h-20",
         compact
-          ? "h-auto whitespace-normal px-6 py-4 text-lg leading-relaxed sm:text-xl"
-          : "h-20 text-3xl",
+          ? "h-auto whitespace-normal px-6 py-3 text-lg leading-relaxed sm:py-4 sm:text-xl"
+          : "h-16 text-2xl sm:h-20 sm:text-3xl",
         state === "correct" &&
           "border-primary bg-primary text-primary-foreground dark:border-primary dark:bg-primary",
         state === "wrong" &&
@@ -259,6 +283,7 @@ export function ChoicePractice({
   const [now, setNow] = useState(() => Date.now());
   const [round, setRound] = useState<FinishedRound | null>(null);
   const [save, setSave] = useState<SaveState>({ status: "idle" });
+  const progress = useRef<HTMLDivElement>(null);
 
   const total = quiz.length;
   const finished = index >= total;
@@ -306,10 +331,20 @@ export function ChoicePractice({
     if (canSave) void store(finishedRound);
   }
 
+  // After scrolling down to "next" on a phone, the next question starts out
+  // of sight; bring the round back from the progress bar down.
+  function showQuestion() {
+    progress.current?.scrollIntoView({
+      block: "nearest",
+      behavior: scrollBehavior(),
+    });
+  }
+
   function next() {
     setIndex((current) => current + 1);
     setWrong([]);
     setSolved(false);
+    showQuestion();
   }
 
   function restart() {
@@ -323,11 +358,12 @@ export function ChoicePractice({
     setNow(startAt);
     setRound(null);
     setSave({ status: "idle" });
+    showQuestion();
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <ProgressBar done={done} total={total} />
+    <div className="flex flex-col gap-3 sm:gap-6">
+      <ProgressBar ref={progress} done={done} total={total} />
       {/* The result shows them again, larger. */}
       {finished ? null : (
         <PrepositionStats
@@ -338,19 +374,21 @@ export function ChoicePractice({
       )}
 
       {question ? (
-        <Card className="py-10 sm:py-14">
-          <CardContent className="flex flex-col items-center gap-10">
+        <Card className="py-5 sm:py-14">
+          <CardContent className="flex flex-col items-center gap-6 sm:gap-10">
             <div className="flex flex-col items-center gap-2 text-center">
               <p className="text-sm text-muted-foreground">
                 {question.meaning}
               </p>
+              {/* With compactHeading this is the complement mode's name,
+                  which the page title already gives on phones. */}
               <p
                 lang="zh-CN"
                 className={cn(
                   "font-semibold tracking-tight",
                   compactHeading
-                    ? "text-xl sm:text-2xl"
-                    : "text-6xl sm:text-7xl",
+                    ? "text-xl max-sm:hidden sm:text-2xl"
+                    : "text-5xl sm:text-7xl",
                 )}
               >
                 {question.noun}
