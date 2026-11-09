@@ -275,3 +275,24 @@ test("the review status lets other Go errors through", async () => {
     (error) => error instanceof GoApiError && error.status === 500,
   );
 });
+
+test("listRecent passes a search to Go, before ?user=", async () => {
+  const { call, paths } = fakeCall({ entries: [], total: 0 });
+  const gateway = createLearningGateway(call);
+  await gateway.listRecent(self, 100, {
+    query: "学 校",
+    kind: "translation",
+    hint: "了",
+  });
+  await gateway.listRecent(other, 100, { query: "", kind: null, hint: "" });
+  await gateway.listRecent(other, 100, {
+    query: "",
+    kind: "correction",
+    hint: "",
+  });
+  assert.deepEqual(paths, [
+    "/v1/entries?limit=100&q=%E5%AD%A6+%E6%A0%A1&kind=translation&hint=%E4%BA%86",
+    "/v1/entries?limit=100&user=o%202",
+    "/v1/entries?limit=100&kind=correction&user=o%202",
+  ]);
+});
