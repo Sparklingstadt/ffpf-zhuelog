@@ -10,7 +10,7 @@ import (
 
 func TestLoginDemoDisabled(t *testing.T) {
 	f := newFixture()
-	f.store.addAccount("cdemo", "demo", "unused", 0)
+	f.store.addDemoAccount("cdemo", "demo", 0)
 	if f.svc.DemoEnabled() {
 		t.Fatal("DemoEnabled with no DemoLoginID")
 	}
@@ -33,7 +33,7 @@ func TestLoginDemoBeforeTheAccountExists(t *testing.T) {
 func TestLoginDemoStartsAMemberSession(t *testing.T) {
 	f := newFixture()
 	f.svc.DemoLoginID = "demo"
-	f.store.addAccount("cdemo", "demo", "unused", 2)
+	f.store.addDemoAccount("cdemo", "demo", 2)
 	pair, err := f.svc.LoginDemo(context.Background(), testClient)
 	if err != nil {
 		t.Fatalf("LoginDemo: %v", err)
@@ -59,7 +59,7 @@ func TestLoginDemoStartsAMemberSession(t *testing.T) {
 func TestLoginDemoIsThrottledPerClient(t *testing.T) {
 	f := newFixture()
 	f.svc.DemoLoginID = "demo"
-	f.store.addAccount("cdemo", "demo", "unused", 0)
+	f.store.addDemoAccount("cdemo", "demo", 0)
 	ctx := context.Background()
 	for i := range maxAttemptsPerClient {
 		if _, err := f.svc.LoginDemo(ctx, testClient); err != nil {
@@ -140,4 +140,23 @@ func TestMeReportsTheDemo(t *testing.T) {
 	if err != nil || m.Demo {
 		t.Fatalf("Me(alice) = %+v, %v; want not Demo", m, err)
 	}
+}
+
+// A real member whose loginId DEMO_LOGIN_ID happens to name is never entered
+// without their password.
+func TestLoginDemoRefusesARealMember(t *testing.T) {
+	f := newFixture()
+	f.svc.DemoLoginID = "demo"
+	f.store.addAccount("creal", "demo", "scrypt$real-hash", 1)
+	if _, err := f.svc.LoginDemo(context.Background(), testClient); !errors.Is(err, ErrDemoDisabled) {
+		t.Fatalf("err = %v, want ErrDemoDisabled", err)
+	}
+}
+
+// addDemoAccount adds an account as the nightly reset makes it: with the
+// unusable password hash that marks the demo.
+func (f *fakeStore) addDemoAccount(id, loginID string, sv int) *store.PasswordAccount {
+	a := f.addAccount(id, loginID, "", sv)
+	a.PasswordHash = store.DemoPasswordHash
+	return a
 }

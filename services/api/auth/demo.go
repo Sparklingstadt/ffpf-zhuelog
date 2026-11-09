@@ -33,6 +33,11 @@ func (s *Service) LoginDemo(ctx context.Context, client string) (TokenPair, erro
 	if err != nil {
 		return TokenPair{}, fmt.Errorf("auth: find demo account: %w", err)
 	}
+	// Only the account the reset made, which has no usable password: if
+	// DEMO_LOGIN_ID named a real member, this would let anyone into it.
+	if account.PasswordHash != store.DemoPasswordHash {
+		return TokenPair{}, ErrDemoDisabled
+	}
 	return s.startSession(ctx, Principal{
 		OwnerID:        store.MemberOwnerID(account.ID),
 		Role:           RoleMember,
