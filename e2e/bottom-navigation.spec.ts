@@ -107,6 +107,7 @@ test("bottom menu fits phones and tablets and follows navigation", async ({
     "今日の復習",
     "練習",
     "単語帳",
+    "AI に聞く",
   ]);
   await expect(
     mainLinks.getByRole("link", { name: "学習ノート" }),
@@ -138,8 +139,15 @@ test("guest menu keeps five tabs without linking to restricted features", async 
     "補語の練習",
     "量詞の練習",
     "了・过・着の練習",
+    "GitHub のリポジトリ（新しいタブ）",
     "ログアウト",
   ]);
+  // The color theme is in the menu once signed in.
+  await expect(
+    siteMenu
+      .getByRole("group", { name: "カラーテーマ" })
+      .getByRole("menuitemradio"),
+  ).toHaveText(["システム", "ライト", "ダーク"]);
   await page.keyboard.press("Escape");
   await expect(siteMenu).toBeHidden();
 

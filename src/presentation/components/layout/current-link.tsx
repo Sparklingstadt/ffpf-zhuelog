@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import type { ComponentProps } from "react";
 
 import {
+  isAiPath,
   mainPageOf,
   type MainPage,
 } from "@/presentation/presenters/site-navigation";
@@ -14,8 +15,10 @@ import {
 export function CurrentLink({
   page,
   ...props
-}: ComponentProps<typeof Link> & { page: MainPage }) {
-  const current = mainPageOf(usePathname()) === page;
+}: ComponentProps<typeof Link> & { page: MainPage | "ai" }) {
+  const pathname = usePathname();
+  const current =
+    page === "ai" ? isAiPath(pathname) : mainPageOf(pathname) === page;
   return (
     <Link
       {...props}

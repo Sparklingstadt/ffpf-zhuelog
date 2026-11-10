@@ -52,6 +52,24 @@ export function mainTabs(role: AppRole): MainTab[] {
   ];
 }
 
+// The header's link to the AI questions, after the four main pages: members
+// only, and not the demo account, which Go refuses them.
+export function aiHeaderLink(
+  role: AppRole,
+  { demo = false }: { demo?: boolean } = {},
+): { label: string; href: string } | null {
+  return isMemberRole(role) && !demo
+    ? { label: "AI に聞く", href: "/quick-question" }
+    : null;
+}
+
+// Whether a path is one of the AI pages the header's link covers.
+export function isAiPath(pathname: string): boolean {
+  return ["/quick-question", "/questions", "/chat", "/conversations"].some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
+
 export type BottomPage =
   "notes" | "review" | "line" | "quickQuestion" | "conversations";
 
