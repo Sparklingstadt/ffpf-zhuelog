@@ -33,13 +33,7 @@ import {
 import { Button } from "@/presentation/components/ui/button";
 import { Input } from "@/presentation/components/ui/input";
 import { Label } from "@/presentation/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/presentation/components/ui/card";
+import { Card, CardContent } from "@/presentation/components/ui/card";
 import { getSafeCallbackPath } from "@/presentation/http/safe-callback-path";
 import { AppHeader } from "@/presentation/components/layout/app-header";
 
@@ -87,21 +81,21 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
     <>
       <AppHeader />
       <main className="flex flex-1 items-center justify-center px-4 py-8 sm:py-12">
-        <Card className="w-full max-w-md shadow-lg">
-          <CardHeader className="space-y-4">
-            <div className="flex size-11 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <Languages className="size-6" />
-            </div>
-            <div className="space-y-2">
-              <CardTitle className="text-2xl">
-                <h1>学习録にログイン</h1>
-              </CardTitle>
-              <CardDescription className="leading-6">
+        {/* Wide screens: what the app does and the ways to try it on the
+            left, members on the right. Narrow ones stack them in that order. */}
+        <div className="grid w-full max-w-md gap-6 lg:max-w-5xl lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start lg:gap-12">
+          <div className="space-y-6">
+            <div className="space-y-3">
+              <div className="flex size-11 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+                <Languages className="size-6" />
+              </div>
+              <h1 className="text-2xl font-semibold tracking-tight">
+                学习録にログイン
+              </h1>
+              <p className="max-w-xl text-sm leading-6 text-muted-foreground lg:text-lg lg:leading-8 lg:text-foreground">
                 添削してもらった中国語を、ピンインとヒントと一緒に残し、忘れかけたころに復習します。
-              </CardDescription>
+              </p>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
             {errorMessage ? (
               <Alert variant="destructive">
                 <LockKeyhole />
@@ -151,88 +145,100 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
                 </p>
               </div>
             </section>
+          </div>
 
-            <section aria-labelledby="signin-member" className="space-y-3">
-              <h2 id="signin-member" className="text-sm font-semibold">
-                会員の方
-              </h2>
-              {!isConfigured ? (
-                <Alert>
-                  <LockKeyhole />
-                  <AlertTitle>OAuth設定が必要です</AlertTitle>
-                  <AlertDescription>
-                    GitHubでのログインは現在利用できません。READMEに従ってGitHub
-                    OAuth Appと許可ユーザーを設定してください。
-                  </AlertDescription>
-                </Alert>
-              ) : null}
-              <form
-                action={signInWithPasswordAction.bind(null, callbackPath)}
-                className="space-y-3"
-              >
-                <div className="space-y-2">
-                  <Label htmlFor="loginId">ログインID</Label>
-                  <Input
-                    id="loginId"
-                    name="loginId"
-                    type="text"
-                    autoComplete="username"
-                    autoCapitalize="none"
-                    spellCheck={false}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">パスワード</Label>
-                  <Input
-                    id="password"
-                    name="password"
-                    type="password"
-                    autoComplete="current-password"
-                    required
-                  />
-                </div>
-                <Button
-                  type="submit"
-                  className="w-full"
-                  variant={showDemo ? "secondary" : "default"}
-                >
-                  <KeyRound /> IDとパスワードでログイン
-                </Button>
-              </form>
-              <div
-                className={
-                  showFfpfId ? "grid gap-2 sm:grid-cols-2" : "grid gap-2"
-                }
-              >
-                {showFfpfId ? (
-                  <form action={signInWithFfpfAction.bind(null, callbackPath)}>
-                    <Button type="submit" className="w-full" variant="outline">
-                      <UserRoundCheck /> FFPF IDでログイン
-                    </Button>
-                  </form>
+          <Card className="shadow-lg">
+            <CardContent className="space-y-6">
+              <section aria-labelledby="signin-member" className="space-y-3">
+                <h2 id="signin-member" className="text-sm font-semibold">
+                  会員の方
+                </h2>
+                {!isConfigured ? (
+                  <Alert>
+                    <LockKeyhole />
+                    <AlertTitle>OAuth設定が必要です</AlertTitle>
+                    <AlertDescription>
+                      GitHubでのログインは現在利用できません。READMEに従ってGitHub
+                      OAuth Appと許可ユーザーを設定してください。
+                    </AlertDescription>
+                  </Alert>
                 ) : null}
-                <form action={signInWithGitHubAction.bind(null, callbackPath)}>
+                <form
+                  action={signInWithPasswordAction.bind(null, callbackPath)}
+                  className="space-y-3"
+                >
+                  <div className="space-y-2">
+                    <Label htmlFor="loginId">ログインID</Label>
+                    <Input
+                      id="loginId"
+                      name="loginId"
+                      type="text"
+                      autoComplete="username"
+                      autoCapitalize="none"
+                      spellCheck={false}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password">パスワード</Label>
+                    <Input
+                      id="password"
+                      name="password"
+                      type="password"
+                      autoComplete="current-password"
+                      required
+                    />
+                  </div>
                   <Button
                     type="submit"
                     className="w-full"
-                    variant="outline"
-                    disabled={!isConfigured}
+                    variant={showDemo ? "secondary" : "default"}
                   >
-                    <CircleUserRound /> GitHubでログイン
+                    <KeyRound /> IDとパスワードでログイン
                   </Button>
                 </form>
-              </div>
-              <p className="text-xs leading-5 text-muted-foreground">
-                IDとパスワードのアカウントは管理者が発行します。
-                {showFfpfId
-                  ? "FFPF IDではメールアドレスと表示名が利用されます。"
-                  : null}
-                GitHub認証ではユーザー名・表示名・メールアドレス・プロフィール画像が利用されます。
-              </p>
-            </section>
-          </CardContent>
-        </Card>
+                <div
+                  className={
+                    showFfpfId ? "grid gap-2 sm:grid-cols-2" : "grid gap-2"
+                  }
+                >
+                  {showFfpfId ? (
+                    <form
+                      action={signInWithFfpfAction.bind(null, callbackPath)}
+                    >
+                      <Button
+                        type="submit"
+                        className="w-full"
+                        variant="outline"
+                      >
+                        <UserRoundCheck /> FFPF IDでログイン
+                      </Button>
+                    </form>
+                  ) : null}
+                  <form
+                    action={signInWithGitHubAction.bind(null, callbackPath)}
+                  >
+                    <Button
+                      type="submit"
+                      className="w-full"
+                      variant="outline"
+                      disabled={!isConfigured}
+                    >
+                      <CircleUserRound /> GitHubでログイン
+                    </Button>
+                  </form>
+                </div>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  IDとパスワードのアカウントは管理者が発行します。
+                  {showFfpfId
+                    ? "FFPF IDではメールアドレスと表示名が利用されます。"
+                    : null}
+                  GitHub認証ではユーザー名・表示名・メールアドレス・プロフィール画像が利用されます。
+                </p>
+              </section>
+            </CardContent>
+          </Card>
+        </div>
       </main>
     </>
   );
