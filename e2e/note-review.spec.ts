@@ -30,10 +30,13 @@ test("a learning note put in review comes back as a card and can be taken out", 
   await expect(page.getByText(note.hint)).toHaveCount(0);
   await page.getByRole("button", { name: "めくる" }).click();
   await expect(page.getByText(note.hint)).toBeVisible();
-  await page
-    .getByRole("group", { name: "思い出せた度合い" })
-    .getByRole("button", { name: "簡単" })
-    .click();
+  // The keys 1 to 4 answer as the rating buttons do: 4 is 簡単.
+  await expect(
+    page
+      .getByRole("group", { name: "思い出せた度合い" })
+      .getByRole("button", { name: "簡単" }),
+  ).toHaveAttribute("aria-keyshortcuts", "4");
+  await page.keyboard.press("4");
   await expect(page.getByText("1問 復習しました")).toBeVisible();
 
   // Taken out, it is no longer in the queue.

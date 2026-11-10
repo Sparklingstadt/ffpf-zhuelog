@@ -40,8 +40,6 @@ export default async function ConversationDayPage({
   return (
     <PageShell user={user} width="4xl">
       <PageHeader
-        icon={MessagesSquare}
-        eyebrow="Conversation notes"
         title={formatLogDate(date)}
         description={`${items.length}件の会話`}
         actions={

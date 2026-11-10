@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   useEffect,
   useRef,
@@ -26,6 +27,13 @@ import {
 import { Textarea } from "@/presentation/components/ui/textarea";
 
 type Status = "idle" | "asking" | "saving" | "saved" | "save-failed";
+
+// Starting points for a question; picking one puts it in the box to finish.
+const EXAMPLES = [
+  { label: "この文は自然？", text: "次の文は自然な中国語ですか？\n" },
+  { label: "似た語の違い", text: "「」と「」の違いは何ですか？" },
+  { label: "量詞は？", text: "「」に使う量詞は何ですか？" },
+] as const;
 const FAILURE =
   "回答を受信できませんでした。質問を確認して、もう一度送信してください。";
 
@@ -36,6 +44,7 @@ export function QuickQuestionInterface({ chatModel }: { chatModel: string }) {
   const [status, setStatus] = useState<Status>("idle");
   const [notice, setNotice] = useState("");
   const [note, setNote] = useState<SaveQuestionInput | null>(null);
+  const router = useRouter();
   const abort = useRef<AbortController | null>(null);
   const locked = useRef(false);
   const mounted = useRef(true);
@@ -57,6 +66,8 @@ export function QuickQuestionInterface({ chatModel }: { chatModel: string }) {
       /* Keep the answer available to retry. */
     }
     if (!mounted.current) return;
+    // The page's list of question notes picks up the new one.
+    if (ok) router.refresh();
     setStatus(ok ? "saved" : "save-failed");
     setNotice(
       ok
@@ -174,11 +185,16 @@ export function QuickQuestionInterface({ chatModel }: { chatModel: string }) {
           <ChatMessage role="user" text={question} />
         )}
         {answer ? (
-          <ChatMessage
-            role="assistant"
-            text={answer}
-            muted={status === "idle"}
-          />
+          <>
+            <ChatMessage
+              role="assistant"
+              text={answer}
+              muted={status === "idle"}
+            />
+            <p className="text-xs text-muted-foreground">
+              AI の回答です。まちがいを含むことがあります。
+            </p>
+          </>
         ) : null}
         {status === "asking" && !answer ? (
           <p role="status" className="text-sm text-muted-foreground">
@@ -233,6 +249,27 @@ export function QuickQuestionInterface({ chatModel }: { chatModel: string }) {
       {status === "idle" || status === "asking" ? (
         <CardFooter className="block border-t p-4 sm:p-5">
           <form onSubmit={submit} className="space-y-3">
+            {!question ? (
+              <div
+                role="group"
+                aria-label="質問の例"
+                className="flex flex-wrap gap-2"
+              >
+                {EXAMPLES.map((example) => (
+                  <Button
+                    key={example.label}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full"
+                    disabled={busy}
+                    onClick={() => setInput(example.text)}
+                  >
+                    {example.label}
+                  </Button>
+                ))}
+              </div>
+            ) : null}
             <Textarea
               aria-label="クイック質問の内容"
               placeholder="中国語の疑問を入力…"
@@ -245,7 +282,8 @@ export function QuickQuestionInterface({ chatModel }: { chatModel: string }) {
             />
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-xs text-muted-foreground">
-                Enterで質問 · Shift + Enterで改行
+                Enterで質問 · Shift + Enterで改行 · 質問は
+                OpenAI（ChatGPT）に送られます
               </p>
               {status === "asking" ? (
                 <Button

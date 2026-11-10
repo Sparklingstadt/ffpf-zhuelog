@@ -1,4 +1,4 @@
-import { ArrowLeft, MessageCircle, MessagesSquare, Trash2 } from "lucide-react";
+import { ArrowLeft, MessageCircle, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -25,7 +25,6 @@ import {
   toConversationMarkdown,
 } from "@/presentation/presenters/conversation-markdown-export";
 import {
-  formatLogDate,
   formatTokyoDateTime,
   getLogDateHref,
 } from "@/presentation/presenters/log-date-presenter";
@@ -56,10 +55,8 @@ export default async function ConversationDetailPage({
   return (
     <PageShell user={user} width="4xl">
       <PageHeader
-        icon={MessagesSquare}
-        eyebrow={`${formatLogDate(date)} · #${conversationNumber}`}
         title={conversation.title}
-        description={`${formatTokyoDateTime(conversation.createdAt)} · ${conversation.modelName}`}
+        description={`#${conversationNumber} · ${formatTokyoDateTime(conversation.createdAt)} · ${conversation.modelName}`}
         actions={
           <>
             <Button asChild variant="outline" size="sm">

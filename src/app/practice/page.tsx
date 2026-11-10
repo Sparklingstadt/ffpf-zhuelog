@@ -72,8 +72,6 @@ export default async function PracticePage() {
   return (
     <PageShell user={user} width="4xl">
       <PageHeader
-        icon={ListChecks}
-        eyebrow="Practice"
         title="文法の練習"
         description="4つの選択肢から正しい語を選ぶ練習です。1回25問で、正答率・ミス数・経過時間がわかります。"
         actions={

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useFormStatus } from "react-dom";
 import { LoaderCircle, MessageCircle, Unlink } from "lucide-react";
@@ -17,6 +17,7 @@ import {
 } from "@/presentation/components/ui/alert";
 import { Button } from "@/presentation/components/ui/button";
 import { lineLinkMessageUrl } from "@/domain/line/official-account";
+import { cn } from "@/presentation/lib/utils";
 import { LineLinkQr } from "./line-link-qr";
 
 const initialState: LineLinkState = { status: "idle" };
@@ -106,6 +107,7 @@ export function LineLinkPanel({
     );
   }
 
+  const issued = state.status === "issued" ? state : null;
   return (
     <div className="space-y-5">
       {preview ? (
@@ -126,54 +128,110 @@ export function LineLinkPanel({
           </AlertDescription>
         </Alert>
       ) : null}
-      <form action={formAction}>
-        <Button type="submit" className="w-full" disabled={pending}>
-          {pending ? (
-            <LoaderCircle className="animate-spin" />
+      {/* The three steps side by side on wide screens; the current one is
+          outlined: issue a code, send it in LINE, wait for the link. */}
+      <ol aria-label="連携の手順" className="grid gap-4 md:grid-cols-3">
+        <Step number={1} title="連携コードを出す" current={!issued}>
+          <form action={formAction}>
+            <Button type="submit" className="w-full" disabled={pending}>
+              {pending ? (
+                <LoaderCircle className="animate-spin" />
+              ) : (
+                <MessageCircle />
+              )}
+              {pending ? "発行中…" : "連携コードを出す"}
+            </Button>
+          </form>
+          {issued ? (
+            <output className="block space-y-2 rounded-lg border bg-muted/50 p-4 text-sm leading-6">
+              <span className="block text-center font-mono text-2xl font-semibold tracking-widest">
+                {issued.code}
+              </span>
+              <span className="block text-muted-foreground">
+                {expiryLabel(issued.expiresAt)}まで有効（10分）。
+                {preview
+                  ? "表示確認用のコードです。LINEには送信しないでください。"
+                  : "このコードをLINE公式アカウントに送ると連携できます。連携状態は自動で確認します。"}
+              </span>
+            </output>
+          ) : null}
+          {state.status === "error" ? (
+            <Alert variant="destructive">
+              <AlertTitle>コードを出せませんでした</AlertTitle>
+              <AlertDescription>{state.message}</AlertDescription>
+            </Alert>
+          ) : null}
+        </Step>
+        <Step number={2} title="LINE でコードを送る" current={Boolean(issued)}>
+          {issued && messageUrl && !preview ? (
+            <LineLinkQr
+              key={`${issued.code}:${issued.expiresAt}`}
+              url={messageUrl}
+              expiresAt={issued.expiresAt}
+            />
           ) : (
-            <MessageCircle />
+            <p className="text-sm leading-6 text-muted-foreground">
+              コードを出すと、LINE で送るためのリンクと QR
+              コードがここに出ます。
+            </p>
           )}
-          {pending ? "発行中…" : "連携コードを出す"}
-        </Button>
-      </form>
-      {state.status === "issued" ? (
-        <output className="block space-y-2 rounded-lg border bg-muted/50 p-4 text-sm leading-6">
-          <span className="block font-mono text-2xl font-semibold tracking-widest">
-            {state.code}
-          </span>
-          <span className="block text-muted-foreground">
-            {expiryLabel(state.expiresAt)}まで有効（10分）。
-            {preview
-              ? "表示確認用のコードです。LINEには送信しないでください。"
-              : "このコードをLINE公式アカウントに送ると連携できます。連携状態は自動で確認します。"}
-          </span>
-        </output>
-      ) : null}
-      {state.status === "issued" && messageUrl && !preview ? (
-        <LineLinkQr
-          key={`${state.code}:${state.expiresAt}`}
-          url={messageUrl}
-          expiresAt={state.expiresAt}
-        />
-      ) : null}
-      {state.status === "error" ? (
-        <Alert variant="destructive">
-          <AlertTitle>コードを出せませんでした</AlertTitle>
-          <AlertDescription>{state.message}</AlertDescription>
-        </Alert>
-      ) : null}
-      {addFriendUrl ? (
-        <p className="text-sm leading-6">
-          <a
-            href={addFriendUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary underline underline-offset-4"
-          >
-            LINE 公式アカウントを友だち追加
-          </a>
-        </p>
-      ) : null}
+          {addFriendUrl ? (
+            <p className="text-sm leading-6">
+              <a
+                href={addFriendUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary underline underline-offset-4"
+              >
+                LINE 公式アカウントを友だち追加
+              </a>
+            </p>
+          ) : null}
+        </Step>
+        <Step number={3} title="連携の完了を待つ" current={false}>
+          <p className="text-sm leading-6 text-muted-foreground">
+            この画面のまま待つと、自動で確認して表示が変わります。
+          </p>
+        </Step>
+      </ol>
     </div>
+  );
+}
+
+function Step({
+  number,
+  title,
+  current,
+  children,
+}: {
+  number: number;
+  title: string;
+  current: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <li
+      aria-current={current ? "step" : undefined}
+      className={cn(
+        "flex flex-col gap-3 rounded-xl border bg-card p-4",
+        current && "border-primary ring-1 ring-primary",
+      )}
+    >
+      <p className="flex items-center gap-2 font-medium">
+        <span
+          className={cn(
+            "flex size-7 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
+            current
+              ? "bg-primary text-primary-foreground"
+              : "border-2 text-muted-foreground",
+          )}
+          aria-hidden="true"
+        >
+          {number}
+        </span>
+        {title}
+      </p>
+      {children}
+    </li>
   );
 }

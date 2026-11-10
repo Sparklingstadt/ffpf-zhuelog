@@ -1,11 +1,31 @@
 import type { Page } from "@playwright/test";
-import { asAdmin, expect, test, upload } from "./fixtures";
+import { asAdmin, expect, openSiteMenu, test, upload } from "./fixtures";
 
 const storageKey = "zhuelog:theme:v1";
 const controls = (page: Page) =>
   page.getByRole("group", { name: "カラーテーマ" });
 const choice = (page: Page, name: string) =>
   controls(page).getByRole("button", { name, exact: true });
+// Signed in, the theme is a radio group in the header's menu.
+async function pickInMenu(page: Page, name: string) {
+  const menu = await openSiteMenu(page);
+  await menu
+    .getByRole("group", { name: "カラーテーマ" })
+    .getByRole("menuitemradio", { name, exact: true })
+    .click();
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
+}
+async function expectPickedInMenu(page: Page, name: string) {
+  const menu = await openSiteMenu(page);
+  await expect(
+    menu
+      .getByRole("group", { name: "カラーテーマ" })
+      .getByRole("menuitemradio", { name, exact: true }),
+  ).toHaveAttribute("aria-checked", "true");
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
+}
 const expectDark = (page: Page, dark: boolean) =>
   dark
     ? expect(page.locator("html")).toHaveClass(/\bdark\b/)
@@ -138,11 +158,11 @@ test("both themes cover sign-in, notes, CSV and dated logs", async ({
   const detail = new URL(page.url()).pathname;
   paths.push(detail, detail.slice(0, detail.lastIndexOf("/")));
   for (const mode of ["ダーク", "ライト"]) {
-    await choice(page, mode).click();
+    await pickInMenu(page, mode);
     for (const path of paths) {
       await page.goto(path);
       await expectDark(page, mode === "ダーク");
-      await expect(choice(page, mode)).toHaveAttribute("aria-pressed", "true");
+      await expectPickedInMenu(page, mode);
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth > innerWidth + 1,
       );

@@ -1,4 +1,4 @@
-import { ArrowLeft, History, ListChecks } from "lucide-react";
+import { ArrowLeft, History } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentViewerUser } from "@/composition/identity-container";
@@ -44,8 +44,6 @@ export default async function ComplementQuizPage({
     <PageShell user={user} width="4xl" dense>
       <PageHeader
         dense
-        icon={ListChecks}
-        eyebrow="Complement practice"
         title={`${COMPLEMENT_MODES[mode].label}の練習`}
         description={`${COMPLEMENT_MODES[mode].description} 日本語の意味に合う補語を、4つの中から選んでください。HSK の級は、例文のいちばん難しい語で決めています。`}
         actions={

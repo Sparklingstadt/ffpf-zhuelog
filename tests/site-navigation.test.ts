@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  aiHeaderLink,
   bottomPageOf,
   bottomTabs,
+  isAiPath,
   isCurrentLink,
   mainPageOf,
   mainTabs,
@@ -214,4 +216,26 @@ test("the demo account is labelled demo", () => {
     }),
     { name: "デモ", roleLabel: "デモ" },
   );
+});
+
+test("the header links members to the AI questions, but not guests or the demo", () => {
+  for (const role of ["member", "admin"] as const)
+    assert.deepEqual(aiHeaderLink(role), {
+      label: "AI に聞く",
+      href: "/quick-question",
+    });
+  assert.equal(aiHeaderLink("guest"), null);
+  assert.equal(aiHeaderLink("member", { demo: true }), null);
+});
+
+test("the AI link is current on the questions, the chat and the conversations", () => {
+  for (const path of [
+    "/quick-question",
+    "/questions/abc",
+    "/chat",
+    "/conversations/2026/11/09",
+  ])
+    assert.equal(isAiPath(path), true, path);
+  for (const path of ["/", "/review", "/chatter", "/account/line"])
+    assert.equal(isAiPath(path), false, path);
 });
