@@ -466,7 +466,7 @@ export function ChoicePractice({
             {solved ? (
               <Card className="gap-0 py-0">
                 <CardContent className="flex flex-col gap-4 p-5">
-                  <div className="space-y-1">
+                  <div className="order-1 space-y-1">
                     <p className="text-sm font-medium text-primary">正解！</p>
                     <p className="flex flex-wrap items-baseline gap-x-3">
                       <span
@@ -483,15 +483,16 @@ export function ChoicePractice({
                       </span>
                     </p>
                   </div>
-                  <div className="space-y-1 border-t pt-4">
+                  <div className="order-3 space-y-1 border-t pt-4">
                     <p className="text-xs font-medium text-muted-foreground">
                       例文
                     </p>
                     <SolvedExample question={question} />
                   </div>
-                  {/* On phones and tablets "next" stays above the bottom tabs
-                      while the explanation scrolls. */}
-                  <div className="sticky bottom-[calc(5rem+1px+env(safe-area-inset-bottom)+0.75rem)] -mx-5 -mb-5 border-t bg-card/95 px-5 py-3 backdrop-blur-sm xl:static xl:mx-0 xl:mb-0 xl:border-0 xl:bg-transparent xl:p-0">
+                  {/* On phones and tablets "next" comes right under the
+                      answer, so it shows without scrolling past the example
+                      and covers nothing; wide screens end the panel with it. */}
+                  <div className="order-2 xl:order-4">
                     <Button
                       size="lg"
                       onClick={next}
