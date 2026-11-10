@@ -8,7 +8,7 @@ import { cn } from "@/presentation/lib/utils";
 
 // Chooses how a question's HSK level is decided: the hand-made list of hard
 // words, or the official HSK 3.0 word list. The choice is remembered. On
-// phones it moves below the practice, which needs the room above the tabs.
+// small screens it moves below the practice, which needs the room above the tabs.
 export function HskBasisSwitch({
   current,
   returnTo,
@@ -19,7 +19,7 @@ export function HskBasisSwitch({
   return (
     <form
       action={setHskBasisAction}
-      className="flex flex-wrap items-center gap-2 text-sm max-sm:order-last"
+      className="flex flex-wrap items-center gap-2 text-sm cramped:order-last"
     >
       <input type="hidden" name="returnTo" value={returnTo} />
       <span id="hsk-basis-label" className="text-muted-foreground">

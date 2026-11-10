@@ -5,8 +5,8 @@ import {
 } from "@/domain/identity/entities/authenticated-user";
 
 // What the app's navigation shows, in one place: the four main pages (the
-// bottom tabs on phones and tablets, the header links on wide screens) and
-// the menu with everything else. Icons are chosen by the components.
+// header links on wide screens), the five bottom tabs on phones and tablets,
+// and the menu with everything else. Icons are chosen by the components.
 
 export type MainPage = "notes" | "review" | "practice" | "vocabulary";
 
@@ -25,6 +25,7 @@ export type MenuLink = { label: string; href: string };
 export type MenuSection = { title: string; links: MenuLink[] };
 
 const MEMBERS_ONLY = "メンバー向け";
+const NOT_IN_DEMO = "デモ対象外";
 
 export function mainTabs(role: AppRole): MainTab[] {
   const member = isMemberRole(role);
@@ -51,6 +52,63 @@ export function mainTabs(role: AppRole): MainTab[] {
   ];
 }
 
+export type BottomPage =
+  "notes" | "review" | "line" | "quickQuestion" | "conversations";
+
+export type BottomTab = {
+  page: BottomPage;
+  label: string;
+  // Missing when the role may not open the page; the tab is then shown
+  // disabled with `unavailable`.
+  href?: string;
+  unavailable?: string;
+};
+
+// The tabs at the bottom of phones and tablets. Guests get only the notes;
+// the demo account has no LINE or AI questions (Go refuses them) but keeps
+// its saved conversations.
+export function bottomTabs(
+  role: AppRole,
+  { demo = false }: { demo?: boolean } = {},
+): BottomTab[] {
+  const member = isMemberRole(role);
+  const forMembers = (href: string) =>
+    member ? { href } : { unavailable: MEMBERS_ONLY };
+  const notInDemo = (href: string) =>
+    !member
+      ? { unavailable: MEMBERS_ONLY }
+      : demo
+        ? { unavailable: NOT_IN_DEMO }
+        : { href };
+  return [
+    { page: "notes", label: "学習ノート", href: "/" },
+    { page: "review", label: "復習", ...forMembers("/review") },
+    { page: "line", label: "LINE 連携", ...notInDemo("/account/line") },
+    {
+      page: "quickQuestion",
+      label: "クイック質問",
+      ...notInDemo("/quick-question"),
+    },
+    {
+      page: "conversations",
+      label: "会話ノート",
+      ...forMembers("/conversations"),
+    },
+  ];
+}
+
+// Which bottom tab a path belongs to, for aria-current.
+export function bottomPageOf(pathname: string): BottomPage | null {
+  const under = (prefix: string) =>
+    pathname === prefix || pathname.startsWith(`${prefix}/`);
+  const main = mainPageOf(pathname);
+  if (main === "notes" || main === "review") return main;
+  if (under("/account/line")) return "line";
+  if (under("/quick-question")) return "quickQuestion";
+  if (under("/conversations")) return "conversations";
+  return null;
+}
+
 // Which main page a path belongs to, for aria-current. Pages that only the
 // menu links to (chat, follow, settings) belong to none.
 export function mainPageOf(pathname: string): MainPage | null {
@@ -72,6 +130,7 @@ export function mainPageOf(pathname: string): MainPage | null {
 const PRACTICE: MenuSection = {
   title: "練習",
   links: [
+    { label: "練習の一覧", href: "/practice" },
     { label: "介詞の練習", href: "/practice/prepositions" },
     { label: "補語の練習", href: "/practice/complements" },
     { label: "量詞の練習", href: "/practice/measure-words" },
@@ -79,8 +138,9 @@ const PRACTICE: MenuSection = {
   ],
 };
 
-// The menu's sections for a role. The main pages are left out: they are
-// always one tap away in the tabs or the header. The demo account (a member)
+// The menu's sections for a role. The notes and the review are left out:
+// they are always one tap away in the tabs or the header. Practice and the
+// vocabulary are in it, since phones have no tab for them. The demo account (a member)
 // gets no AI features, follows, LINE or password change: Go refuses them, so
 // the menu leaves them out and keeps only the saved conversations.
 export function menuSections(
@@ -97,6 +157,7 @@ export function menuSections(
         { label: "CSV を取り込む", href: "/import" },
         { label: "CSV に書き出す", href: "/export" },
         { label: "ゴミ箱", href: "/logs/trash" },
+        { label: "単語帳", href: "/vocabulary" },
       ],
     },
     PRACTICE,
@@ -145,10 +206,12 @@ export function menuSections(
 }
 
 // A link is current on its own path and below it, except "/logs", which
-// would otherwise also claim the trash.
+// would otherwise also claim the trash, and "/practice", whose drills have
+// links of their own.
 export function isCurrentLink(pathname: string, href: string): boolean {
   if (pathname === href) return true;
   if (href === "/logs") return /^\/logs\/\d/.test(pathname);
+  if (href === "/practice") return false;
   return pathname.startsWith(`${href}/`);
 }
 

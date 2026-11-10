@@ -3,7 +3,7 @@ import { cn } from "@/presentation/lib/utils";
 
 // The accuracy, the misses and the time of a round, during it and after.
 // accuracy is null before the first answer. During the round ("sm") each
-// label sits beside its value on phones, to keep the question in view.
+// label sits beside its value on small screens, to keep the question in view.
 export function PrepositionStats({
   accuracy,
   missCount,
@@ -33,7 +33,7 @@ export function PrepositionStats({
           className={cn(
             "flex flex-col items-center gap-0.5 rounded-lg border bg-card px-2 py-2",
             size === "sm" &&
-              "max-sm:flex-row max-sm:justify-center max-sm:gap-1 max-sm:px-1 max-sm:py-1",
+              "cramped:flex-row cramped:justify-center cramped:gap-1 cramped:px-1 cramped:py-1",
           )}
         >
           <dt className="text-xs whitespace-nowrap text-muted-foreground">
@@ -42,7 +42,7 @@ export function PrepositionStats({
           <dd
             className={cn(
               "font-mono font-semibold tabular-nums",
-              size === "lg" ? "text-2xl" : "text-sm sm:text-lg",
+              size === "lg" ? "text-2xl" : "text-sm roomy:text-lg",
             )}
           >
             {stat.value}

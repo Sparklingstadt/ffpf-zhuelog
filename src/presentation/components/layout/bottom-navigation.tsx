@@ -4,11 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import type { AppRole } from "@/domain/identity/entities/authenticated-user";
-import { MAIN_TAB_ICONS } from "@/presentation/components/layout/main-tab-icons";
-import { SiteMenu } from "@/presentation/components/layout/site-menu";
+import { BOTTOM_TAB_ICONS } from "@/presentation/components/layout/main-tab-icons";
 import {
-  mainPageOf,
-  mainTabs,
+  bottomPageOf,
+  bottomTabs,
 } from "@/presentation/presenters/site-navigation";
 import { cn } from "@/presentation/lib/utils";
 
@@ -17,20 +16,17 @@ const tabBase =
 const tabInteractive =
   "outline-none transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50";
 
-// The tabs at the bottom of phones and tablets: the four main pages and the
-// menu with everything else. Wide screens (xl) have them in the header.
+// The tabs at the bottom of phones and tablets: the notes, the review, LINE,
+// quick questions and the conversation notes. Everything else is in the
+// header's menu. Wide screens (xl) have no bottom tabs.
 export function BottomNavigation({
   role,
   demo = false,
-  name,
-  roleLabel,
 }: {
   role: AppRole;
   demo?: boolean;
-  name: string;
-  roleLabel: string;
 }) {
-  const current = mainPageOf(usePathname());
+  const current = bottomPageOf(usePathname());
 
   return (
     <nav
@@ -38,8 +34,8 @@ export function BottomNavigation({
       className="fixed inset-x-0 bottom-0 z-50 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] backdrop-blur-md xl:hidden"
     >
       <div className="mx-auto grid h-20 w-full max-w-6xl grid-cols-5 px-2">
-        {mainTabs(role).map((tab) => {
-          const Icon = MAIN_TAB_ICONS[tab.page];
+        {bottomTabs(role, { demo }).map((tab) => {
+          const Icon = BOTTOM_TAB_ICONS[tab.page];
           const active = current === tab.page;
           const content = (
             <>
@@ -79,18 +75,6 @@ export function BottomNavigation({
             </button>
           );
         })}
-        <SiteMenu
-          variant="tab"
-          role={role}
-          demo={demo}
-          name={name}
-          roleLabel={roleLabel}
-          tabClassName={cn(
-            tabBase,
-            tabInteractive,
-            "text-muted-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground",
-          )}
-        />
       </div>
     </nav>
   );

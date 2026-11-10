@@ -77,7 +77,8 @@ export function SolvedExample({
     "example" | "examplePinyin" | "translation"
   >;
   // Members and admins may pick words of the sentence into their vocabulary
-  // book; guests practice without one.
+  // book in today's review. The practice leaves it out, to keep the
+  // question and "next" in view.
   canAddToVocabulary?: boolean;
 }) {
   const preference = useSyncExternalStore(
@@ -204,10 +205,10 @@ export function Choice({
       }
       onClick={onPick}
       className={cn(
-        "relative min-h-16 font-medium disabled:opacity-100 sm:min-h-20",
+        "relative min-h-14 font-medium disabled:opacity-100 roomy:min-h-20",
         compact
-          ? "h-auto whitespace-normal px-6 py-3 text-lg leading-relaxed sm:py-4 sm:text-xl"
-          : "h-16 text-2xl sm:h-20 sm:text-3xl",
+          ? "h-auto whitespace-normal px-6 py-3 text-lg leading-relaxed roomy:py-4 roomy:text-xl"
+          : "h-14 text-2xl roomy:h-20 roomy:text-3xl",
         state === "correct" &&
           "border-primary bg-primary text-primary-foreground dark:border-primary dark:bg-primary",
         state === "wrong" &&
@@ -284,6 +285,22 @@ export function ChoicePractice({
   const [round, setRound] = useState<FinishedRound | null>(null);
   const [save, setSave] = useState<SaveState>({ status: "idle" });
   const progress = useRef<HTMLDivElement>(null);
+  const choicesRef = useRef<HTMLDivElement>(null);
+
+  // On a short screen the page header can push the choices out of sight
+  // (below the bottom tabs, or the window's edge). Then the round starts
+  // scrolled to its progress bar, so the question and all four choices
+  // show without scrolling; the header is still above.
+  useEffect(() => {
+    const choices = choicesRef.current;
+    if (!choices) return;
+    const reserved = parseFloat(
+      getComputedStyle(document.documentElement).scrollPaddingBottom,
+    );
+    const bottom = window.innerHeight - (Number.isNaN(reserved) ? 0 : reserved);
+    if (choices.getBoundingClientRect().bottom > bottom)
+      progress.current?.scrollIntoView({ block: "start" });
+  }, []);
 
   const total = quiz.length;
   const finished = index >= total;
@@ -362,7 +379,7 @@ export function ChoicePractice({
   }
 
   return (
-    <div className="flex flex-col gap-3 sm:gap-6">
+    <div className="flex flex-col gap-3 roomy:gap-6">
       <ProgressBar ref={progress} done={done} total={total} />
       {/* The result shows them again, larger. */}
       {finished ? null : (
@@ -374,34 +391,35 @@ export function ChoicePractice({
       )}
 
       {question ? (
-        <Card className="py-5 sm:py-14">
-          <CardContent className="flex flex-col items-center gap-6 sm:gap-10">
+        <Card className="py-4 roomy:py-12">
+          <CardContent className="flex flex-col items-center gap-5 roomy:gap-10">
             <div className="flex flex-col items-center gap-2 text-center">
               <p className="text-sm text-muted-foreground">
                 {question.meaning}
               </p>
               {/* With compactHeading this is the complement mode's name,
-                  which the page title already gives on phones. */}
+                  which the page title already gives on small screens. */}
               <p
                 lang="zh-CN"
                 className={cn(
                   "font-semibold tracking-tight",
                   compactHeading
-                    ? "text-xl max-sm:hidden sm:text-2xl"
-                    : "text-5xl sm:text-7xl",
+                    ? "text-xl cramped:hidden roomy:text-2xl"
+                    : "text-5xl roomy:text-7xl",
                 )}
               >
                 {question.noun}
               </p>
               <p
                 lang="zh-CN"
-                className="text-lg leading-relaxed text-muted-foreground sm:text-2xl"
+                className="text-lg leading-relaxed text-muted-foreground roomy:text-2xl"
               >
                 {question.prompt}
               </p>
             </div>
 
             <div
+              ref={choicesRef}
               role="group"
               aria-label={choiceLabel}
               lang="zh-CN"
@@ -441,10 +459,7 @@ export function ChoicePractice({
                         {question.answer} {question.pinyin}
                       </span>
                     </p>
-                    <SolvedExample
-                      question={question}
-                      canAddToVocabulary={canSave}
-                    />
+                    <SolvedExample question={question} />
                   </div>
                   <Button size="lg" onClick={next} ref={focusInPlace}>
                     {index + 1 < total ? "次へ" : "結果を見る"} <ArrowRight />
