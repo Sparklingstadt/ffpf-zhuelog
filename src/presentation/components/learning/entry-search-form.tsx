@@ -27,52 +27,60 @@ export function EntrySearchForm({
       role="search"
       aria-label="学習ノートを検索"
       action="/"
-      className="grid gap-3 rounded-lg border bg-card p-4 sm:grid-cols-[1fr_9rem_1fr_auto] sm:items-end"
+      className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_12rem_auto] sm:items-center"
     >
       {viewedOwnerId ? (
         <input type="hidden" name="user" value={viewedOwnerId} />
       ) : null}
-      <div className="grid gap-1.5">
-        <Label htmlFor="entry-search-q">語句</Label>
+      <div className="grid">
+        <Label htmlFor="entry-search-q" className="sr-only">
+          語句
+        </Label>
         <Input
           id="entry-search-q"
           name="q"
           type="search"
           defaultValue={search.query}
           maxLength={ENTRY_SEARCH_MAX_LENGTH}
-          placeholder="中国語・日本語・ピンイン"
+          placeholder="語句：中国語・日本語・ピンイン"
+          className="h-11"
         />
       </div>
-      <div className="grid gap-1.5">
-        <Label htmlFor="entry-search-kind">種類</Label>
+      <div className="grid">
+        <Label htmlFor="entry-search-kind" className="sr-only">
+          種類
+        </Label>
         <select
           id="entry-search-kind"
           name="kind"
           defaultValue={search.kind ?? ""}
-          className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs dark:bg-input/30"
+          className="h-11 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs dark:bg-input/30"
         >
-          <option value="">すべて</option>
+          <option value="">種類：すべて</option>
           <option value="correction">添削</option>
           <option value="translation">翻訳</option>
         </select>
       </div>
-      <div className="grid gap-1.5">
-        <Label htmlFor="entry-search-hint">ヒント</Label>
+      <div className="grid">
+        <Label htmlFor="entry-search-hint" className="sr-only">
+          ヒント
+        </Label>
         <Input
           id="entry-search-hint"
           name="hint"
           type="search"
           defaultValue={search.hint}
           maxLength={ENTRY_SEARCH_MAX_LENGTH}
-          placeholder="例：了の位置"
+          placeholder="ヒント：例 了の位置"
+          className="h-11"
         />
       </div>
       <div className="flex gap-2">
-        <Button type="submit">
+        <Button type="submit" className="h-11">
           <Search /> 検索
         </Button>
         {isEntrySearchEmpty(search) ? null : (
-          <Button asChild variant="ghost">
+          <Button asChild variant="ghost" className="h-11">
             <Link href={clearHref}>
               <X /> クリア
             </Link>
