@@ -9,8 +9,10 @@ import {
 import { Button } from "@/presentation/components/ui/button";
 import { Input } from "@/presentation/components/ui/input";
 import { Label } from "@/presentation/components/ui/label";
+import { SearchFiltersToggle } from "@/presentation/components/learning/search-filters-toggle";
 
-// Searches the notes shown on the home page. A plain GET form, so the search
+// Searches the notes shown on the home page. On phones only the words field
+// shows until 絞り込む opens the filters (open already while searching). A plain GET form, so the search
 // is in the URL and works without JavaScript. viewedOwnerId keeps an admin on
 // the member they are viewing.
 export function EntrySearchForm({
@@ -27,7 +29,7 @@ export function EntrySearchForm({
       role="search"
       aria-label="学習ノートを検索"
       action="/"
-      className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_12rem_auto] sm:items-center"
+      className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_12rem_auto] sm:items-center"
     >
       {viewedOwnerId ? (
         <input type="hidden" name="user" value={viewedOwnerId} />
@@ -46,47 +48,49 @@ export function EntrySearchForm({
           className="h-11"
         />
       </div>
-      <div className="grid">
-        <Label htmlFor="entry-search-kind" className="sr-only">
-          種類
-        </Label>
-        <select
-          id="entry-search-kind"
-          name="kind"
-          defaultValue={search.kind ?? ""}
-          className="h-11 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs dark:bg-input/30"
-        >
-          <option value="">種類：すべて</option>
-          <option value="correction">添削</option>
-          <option value="translation">翻訳</option>
-        </select>
-      </div>
-      <div className="grid">
-        <Label htmlFor="entry-search-hint" className="sr-only">
-          ヒント
-        </Label>
-        <Input
-          id="entry-search-hint"
-          name="hint"
-          type="search"
-          defaultValue={search.hint}
-          maxLength={ENTRY_SEARCH_MAX_LENGTH}
-          placeholder="ヒント：例 了の位置"
-          className="h-11"
-        />
-      </div>
-      <div className="flex gap-2">
-        <Button type="submit" className="h-11">
-          <Search /> 検索
-        </Button>
-        {isEntrySearchEmpty(search) ? null : (
-          <Button asChild variant="ghost" className="h-11">
-            <Link href={clearHref}>
-              <X /> クリア
-            </Link>
+      <SearchFiltersToggle defaultOpen={!isEntrySearchEmpty(search)}>
+        <div className="grid max-sm:col-span-2">
+          <Label htmlFor="entry-search-kind" className="sr-only">
+            種類
+          </Label>
+          <select
+            id="entry-search-kind"
+            name="kind"
+            defaultValue={search.kind ?? ""}
+            className="h-11 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs dark:bg-input/30"
+          >
+            <option value="">種類：すべて</option>
+            <option value="correction">添削</option>
+            <option value="translation">翻訳</option>
+          </select>
+        </div>
+        <div className="grid max-sm:col-span-2">
+          <Label htmlFor="entry-search-hint" className="sr-only">
+            ヒント
+          </Label>
+          <Input
+            id="entry-search-hint"
+            name="hint"
+            type="search"
+            defaultValue={search.hint}
+            maxLength={ENTRY_SEARCH_MAX_LENGTH}
+            placeholder="ヒント：例 了の位置"
+            className="h-11"
+          />
+        </div>
+        <div className="flex gap-2 max-sm:col-span-2">
+          <Button type="submit" className="h-11 max-sm:flex-1">
+            <Search /> 検索
           </Button>
-        )}
-      </div>
+          {isEntrySearchEmpty(search) ? null : (
+            <Button asChild variant="ghost" className="h-11">
+              <Link href={clearHref}>
+                <X /> クリア
+              </Link>
+            </Button>
+          )}
+        </div>
+      </SearchFiltersToggle>
     </form>
   );
 }
