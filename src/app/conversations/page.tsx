@@ -1,9 +1,4 @@
-import {
-  ArrowLeft,
-  CalendarDays,
-  ChevronRight,
-  MessageCircle,
-} from "lucide-react";
+import { CalendarDays, ChevronRight, MessageCircle } from "lucide-react";
 import Link from "next/link";
 
 import { EmptyState } from "@/presentation/components/layout/empty-state";
@@ -15,9 +10,14 @@ import {
   loadConversationList,
   requireChatUser,
 } from "@/presentation/guards/chat-guard";
-import { listConversationDates } from "@/presentation/presenters/conversation-dates";
 import {
+  conversationsOn,
+  listConversationDates,
+} from "@/presentation/presenters/conversation-dates";
+import {
+  formatLogDate,
   formatLogDateKey,
+  formatTokyoTime,
   getLogDateHref,
 } from "@/presentation/presenters/log-date-presenter";
 
@@ -32,24 +32,18 @@ export default async function ConversationsPage() {
     <PageShell user={user} width="4xl">
       <PageHeader
         title="会話ノート"
-        description="「ChatGPT と話す」で話した会話を、話した日から見返せます。"
+        description="「ChatGPT と話す」で話した会話を、話した日ごとに見返せます。"
         actions={
-          <>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/">
-                <ArrowLeft /> 学習ノートへ
+          // The demo account cannot chat; it only reads the notes.
+          conversations && !user.demo ? (
+            <Button asChild size="sm">
+              <Link href="/chat">
+                <MessageCircle /> ChatGPT と話す
               </Link>
             </Button>
-            {/* The demo account cannot chat; it only reads the notes. */}
-            {conversations && !user.demo ? (
-              <Button asChild size="sm">
-                <Link href="/chat">
-                  <MessageCircle /> ChatGPT と話す
-                </Link>
-              </Button>
-            ) : null}
-          </>
+          ) : null
         }
+        dense
       />
 
       {!conversations ? (
@@ -61,33 +55,56 @@ export default async function ConversationsPage() {
       ) : dates.length === 0 ? (
         <EmptyState icon={CalendarDays} title="まだ会話ノートがありません" />
       ) : (
-        <div className="grid gap-3">
-          {dates.map((group) => (
-            <Link
-              key={formatLogDateKey(group.date)}
-              href={getLogDateHref(group.date, "/conversations")}
-              className="group"
-            >
-              <Card className="transition-colors group-hover:bg-muted/40">
-                <CardContent className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex size-10 items-center justify-center rounded-lg bg-muted">
-                      <CalendarDays className="size-4 text-muted-foreground" />
-                    </div>
-                    <div>
-                      <p className="font-medium">
-                        {formatLogDateKey(group.date)}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {group.count}件の会話
-                      </p>
-                    </div>
-                  </div>
-                  <ChevronRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
+        // Each day with its conversations, so the list shows what was
+        // talked about; the day's own page is a link away.
+        <div className="space-y-6">
+          {dates.map((group) => {
+            const dayHref = getLogDateHref(group.date, "/conversations");
+            const key = formatLogDateKey(group.date);
+            return (
+              <section
+                key={key}
+                aria-labelledby={`day-${key}`}
+                className="space-y-2"
+              >
+                <div className="flex items-baseline justify-between gap-3">
+                  <h2 id={`day-${key}`} className="text-sm font-semibold">
+                    {formatLogDate(group.date)}
+                  </h2>
+                  <Link
+                    href={dayHref}
+                    className="flex items-center gap-0.5 text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    {group.count}件の会話
+                    <ChevronRight className="size-4" aria-hidden="true" />
+                  </Link>
+                </div>
+                <ul className="space-y-2">
+                  {conversationsOn(conversations, group.date).map((item) => (
+                    <li key={item.id}>
+                      <Link
+                        href={`${dayHref}/${item.number}`}
+                        className="group"
+                      >
+                        <Card className="py-3 transition-colors group-hover:bg-muted/40">
+                          <CardContent className="space-y-1">
+                            <p className="flex gap-2 text-xs text-muted-foreground">
+                              <span>#{item.number}</span>
+                              <span>{formatTokyoTime(item.createdAt)}</span>
+                              {item.ended ? <span>読むだけ</span> : null}
+                            </p>
+                            <p className="line-clamp-2 font-medium break-words">
+                              {item.title}
+                            </p>
+                          </CardContent>
+                        </Card>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            );
+          })}
         </div>
       )}
     </PageShell>
