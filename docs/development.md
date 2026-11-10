@@ -189,7 +189,7 @@ DBは`127.0.0.1:55439/zhuelog_e2e`に固定され、`compose.e2e.yaml`の専用�
 GitHub OAuthの外部ログインは、このE2Eの対象外です。
 
 失敗時のスクリーンショット・トレースは`test-results/`、HTMLレポートは`playwright-report/`に出力されます（Git管理外）。
-`pnpm exec playwright show-report`で結果を確認できます。GitHub Actionsにも同じE2Eを追加しています。
+`pnpm exec playwright show-report`で結果を確認できます。
 設定の参考：[Playwright webServer](https://playwright.dev/docs/test-webserver)。
 
 ## コミット・プッシュ前のチェック（Lefthook）
@@ -209,5 +209,5 @@ GitHub OAuthの外部ログインは、このE2Eの対象外です。
 
 ## pnpm移行の回帰テスト
 
-`pnpm install --frozen-lockfile` 後、`pnpm run test:regression` で既存機能の検証を実行します。GitHub Actions では同じ内容を CI ワークフローが並列で実行します（`verify` と `e2e` を、本番の Vercel と同じ Node 24 で実行）。`package.json` の `engines` は `24.x` です（Vercel はまだ Node 26 に対応していないため）。
+`pnpm install --frozen-lockfile` 後、`pnpm run test:regression` で既存機能の検証を実行します。GitHub Actions の CI はありません。`package.json` の `engines` は `24.x` です（Vercel はまだ Node 26 に対応していないため）。
 ブラウザーテストの前に `pnpm exec playwright install chromium` を実行してください。Webの回帰テストは本番ビルドを使い、既存サーバーを再利用しません。
