@@ -70,3 +70,41 @@ test("guests have no vocabulary book", async ({ page }) => {
   await page.goto("/vocabulary");
   await expect(page).toHaveURL((url) => url.pathname === "/");
 });
+
+test("the search over the book narrows its cards as it is typed", async ({
+  page,
+  db,
+}) => {
+  await createMember(db, "taro", "太郎", "member-password-1");
+  await asMember(page, "taro", "member-password-1");
+  await page.goto("/vocabulary");
+  for (const [word, pinyin, meaning] of [
+    ["认真", "rènzhēn", "まじめに"],
+    ["绿", "lǜ", "緑"],
+  ]) {
+    await page.getByLabel("語句").fill(word);
+    await page.getByLabel("ピンイン").fill(pinyin);
+    await page.getByLabel("意味").fill(meaning);
+    await page.getByRole("button", { name: "単語帳に入れる" }).click();
+    await expect(
+      page.getByText(`「${word}」を単語帳に入れました。`),
+    ).toBeVisible();
+  }
+  const list = page.getByRole("region", { name: "単語の一覧" });
+  const cards = list.getByRole("listitem");
+  await expect(cards).toHaveCount(2);
+
+  const search = page.getByRole("searchbox", { name: "単語帳の中を探す" });
+  // Pinyin is found without its tone marks; ü is typed as v.
+  await search.fill("renzhen");
+  await expect(cards).toHaveCount(1);
+  await expect(cards).toContainText("认真");
+  await search.fill("lv");
+  await expect(cards).toHaveCount(1);
+  await expect(cards).toContainText("绿");
+  await search.fill("学校");
+  await expect(cards).toHaveCount(0);
+  await expect(list).toContainText("「学校」に合う語句はありません。");
+  await search.fill("");
+  await expect(cards).toHaveCount(2);
+});
