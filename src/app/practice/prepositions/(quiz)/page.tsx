@@ -1,5 +1,3 @@
-import { ArrowLeft, History } from "lucide-react";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getCurrentViewerUser } from "@/composition/identity-container";
@@ -9,13 +7,12 @@ import {
   buildQuiz,
   countPrepositionQuestionsByLevel,
 } from "@/domain/practice/preposition-quiz";
-import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
 import { readHskBasis } from "@/infrastructure/preferences/hsk-basis-cookie";
 import { HskBasisSwitch } from "@/presentation/components/practice/hsk-basis-switch";
 import { HskLevelPicker } from "@/presentation/components/practice/hsk-level-picker";
+import { PracticeBar } from "@/presentation/components/practice/practice-bar";
 import { PrepositionPractice } from "@/presentation/components/practice/preposition-practice";
-import { Button } from "@/presentation/components/ui/button";
 
 export const dynamic = "force-dynamic";
 
@@ -41,32 +38,19 @@ export default async function PrepositionPracticePage({
 
   return (
     <PageShell user={user} width="4xl" dense>
-      <PageHeader
-        dense
+      <PracticeBar
         title="介詞の練習"
         description="名詞と日本語の意味に合う介詞を、4つの中から選んでください。HSK の級は、例文と句のいちばん難しい語で決めています。"
-        actions={
-          <>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/practice">
-                <ArrowLeft /> 練習へ
-              </Link>
-            </Button>
-            {canSave ? (
-              <Button asChild variant="outline" size="sm">
-                <Link href="/practice/prepositions/records">
-                  <History /> 過去の記録
-                </Link>
-              </Button>
-            ) : null}
-          </>
+        exitHref="/practice"
+        recordsHref={canSave ? "/practice/prepositions/records" : null}
+        levels={
+          <HskLevelPicker
+            path="/practice/prepositions"
+            current={level}
+            counts={counts}
+            total={counts[4] + counts[5] + counts[6]}
+          />
         }
-      />
-      <HskLevelPicker
-        path="/practice/prepositions"
-        current={level}
-        counts={counts}
-        total={counts[4] + counts[5] + counts[6]}
       />
       <HskBasisSwitch
         current={basis}
