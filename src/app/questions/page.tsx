@@ -23,8 +23,6 @@ export default async function QuestionsPage() {
   return (
     <PageShell user={user} width="4xl">
       <PageHeader
-        icon={BookOpen}
-        eyebrow="Question notes"
         title="質問ノート"
         description="クイック質問で解決した疑問を、新しい順に見返せます。最新100件を表示します。"
         actions={

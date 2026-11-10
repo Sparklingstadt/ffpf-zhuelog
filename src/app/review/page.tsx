@@ -1,4 +1,4 @@
-import { ArrowLeft, Database, Repeat } from "lucide-react";
+import { ArrowLeft, Database } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -66,8 +66,6 @@ export default async function ReviewPage() {
   return (
     <PageShell user={user} width="4xl">
       <PageHeader
-        icon={Repeat}
-        eyebrow="Review"
         title="今日の復習"
         description="忘れかけたころにもう一度出します。答えたら、どのくらい思い出せたかを選んでください。"
         dense

@@ -21,8 +21,6 @@ export default async function QuickQuestionPage() {
   return (
     <PageShell user={user} width="4xl">
       <PageHeader
-        icon={CircleHelp}
-        eyebrow="Quick question"
         title="クイック質問"
         description="文法や単語の疑問を、1回の質問で解決。質問と回答は質問ノートに残ります。"
         actions={

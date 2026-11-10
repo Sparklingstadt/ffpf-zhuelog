@@ -3,7 +3,6 @@ import {
   CalendarDays,
   ChevronRight,
   MessageCircle,
-  MessagesSquare,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -32,8 +31,6 @@ export default async function ConversationsPage() {
   return (
     <PageShell user={user} width="4xl">
       <PageHeader
-        icon={MessagesSquare}
-        eyebrow="Conversation notes"
         title="会話ノート"
         description="「ChatGPT と話す」で話した会話を、話した日から見返せます。"
         actions={

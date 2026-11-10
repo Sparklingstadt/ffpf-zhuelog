@@ -1,4 +1,4 @@
-import { ArrowLeft, Download, FileUp } from "lucide-react";
+import { ArrowLeft, Download } from "lucide-react";
 import Link from "next/link";
 
 import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
@@ -28,8 +28,6 @@ export default async function LearningCsvImportPage() {
   return (
     <PageShell user={user} width="4xl">
       <PageHeader
-        icon={FileUp}
-        eyebrow="CSV import"
         title="CSVをインポート"
         description="UTF-8のCSVファイルを選んで、自分の学習ノートに学習文を一括登録します。"
         actions={

@@ -1,10 +1,4 @@
-import {
-  ArrowLeft,
-  CalendarDays,
-  ChevronLeft,
-  ChevronRight,
-  Database,
-} from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Database } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -77,8 +71,6 @@ export default async function StudyLogPage({
   return (
     <PageShell user={user} width="4xl">
       <PageHeader
-        icon={CalendarDays}
-        eyebrow="Study log"
         title="学習ログ"
         description="日本時間の日ごとに、復習・練習・学習ノート・単語帳でしたことを数えます。色が濃いほど多く学習した日です。"
         actions={

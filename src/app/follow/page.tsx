@@ -1,4 +1,4 @@
-import { ArrowLeft, UsersRound } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 import { socialNetwork } from "@/composition/social-container";
@@ -31,8 +31,6 @@ export default async function FollowPage() {
   return (
     <PageShell user={user} width="5xl">
       <PageHeader
-        icon={UsersRound}
-        eyebrow="Follow"
         title="フォロー"
         description={
           directory

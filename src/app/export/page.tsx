@@ -1,4 +1,4 @@
-import { ArrowLeft, BookOpenText, Download, FileUp } from "lucide-react";
+import { ArrowLeft, BookOpenText, FileUp } from "lucide-react";
 import Link from "next/link";
 
 import { learningNotes } from "@/composition/learning-container";
@@ -25,8 +25,6 @@ export default async function LearningCsvExportPage() {
   return (
     <PageShell user={user} width="5xl">
       <PageHeader
-        icon={Download}
-        eyebrow="CSV export"
         title="CSVでエクスポート"
         description="学習ノートを選んで、インポートと同じ形式のCSVファイルに書き出します。"
         actions={
