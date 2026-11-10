@@ -24,10 +24,13 @@ type LearningEntryCardProps = {
   defaultOpen?: boolean;
 };
 
+// The light theme's primary and destructive are too pale for small text on
+// their own tints (Lighthouse: under 4.5:1), so the text is a darker shade;
+// in the dark theme the destructive red is too dark, so it is a lighter one.
 const deletedClassName =
-  "rounded-[3px] bg-destructive/10 text-destructive line-through decoration-destructive/60 box-decoration-clone dark:bg-destructive/20";
+  "rounded-[3px] bg-destructive/10 text-red-700 line-through decoration-destructive/60 box-decoration-clone dark:bg-destructive/20 dark:text-red-300";
 const insertedClassName =
-  "rounded-[3px] bg-primary/12 font-semibold text-primary underline decoration-primary/60 decoration-2 underline-offset-[5px] box-decoration-clone";
+  "rounded-[3px] bg-primary/12 font-semibold text-emerald-800 underline decoration-primary/60 decoration-2 underline-offset-[5px] box-decoration-clone dark:text-primary";
 const sectionLabelClassName =
   "text-xs font-medium tracking-wider text-muted-foreground";
 
@@ -81,7 +84,7 @@ export function LearningEntryCard({
               翻訳
             </Badge>
           ) : diff.changeCount > 0 ? (
-            <Badge className="bg-primary/12 font-normal text-primary">
+            <Badge className="bg-primary/12 font-normal text-emerald-800 dark:text-primary">
               {diff.changeCount}箇所を添削
             </Badge>
           ) : (

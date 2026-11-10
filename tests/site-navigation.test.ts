@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  bottomPageOf,
+  bottomTabs,
   isCurrentLink,
   mainPageOf,
   mainTabs,
@@ -29,6 +31,50 @@ test("guests see review and vocabulary as members-only, without links", () => {
   assert.equal(tabs[1].unavailable, "メンバー向け");
 });
 
+test("the bottom tabs are the notes, review, LINE, quick questions and conversations", () => {
+  for (const role of ["member", "admin"] as const)
+    assert.deepEqual(
+      bottomTabs(role).map((t) => [t.label, t.href]),
+      [
+        ["学習ノート", "/"],
+        ["復習", "/review"],
+        ["LINE 連携", "/account/line"],
+        ["クイック質問", "/quick-question"],
+        ["会話ノート", "/conversations"],
+      ],
+    );
+});
+
+test("guests and the demo see the tabs they may not open as disabled", () => {
+  assert.deepEqual(
+    bottomTabs("guest").map((t) => t.href ?? t.unavailable),
+    ["/", "メンバー向け", "メンバー向け", "メンバー向け", "メンバー向け"],
+  );
+  assert.deepEqual(
+    bottomTabs("member", { demo: true }).map((t) => t.href ?? t.unavailable),
+    ["/", "/review", "デモ対象外", "デモ対象外", "/conversations"],
+  );
+});
+
+test("every path lands under the right bottom tab", () => {
+  const cases: [string, string | null][] = [
+    ["/", "notes"],
+    ["/logs/trash", "notes"],
+    ["/review", "review"],
+    ["/study-log", "review"],
+    ["/account/line", "line"],
+    ["/account/password", null],
+    ["/quick-question", "quickQuestion"],
+    ["/conversations", "conversations"],
+    ["/conversations/2026/11/9/1", "conversations"],
+    ["/practice", null],
+    ["/vocabulary", null],
+    ["/chat", null],
+  ];
+  for (const [path, page] of cases)
+    assert.equal(bottomPageOf(path), page, path);
+});
+
 test("every path lands under the right main page", () => {
   const cases: [string, string | null][] = [
     ["/", "notes"],
@@ -52,9 +98,11 @@ test("every path lands under the right main page", () => {
   for (const [path, page] of cases) assert.equal(mainPageOf(path), page, path);
 });
 
-test("the menu reaches every page that is not a main tab", () => {
+test("the menu reaches every page that is not a bottom tab or the notes", () => {
   const member = hrefs("member");
   for (const href of [
+    "/practice",
+    "/vocabulary",
     "/logs",
     "/study-log",
     "/import",
@@ -85,6 +133,7 @@ test("the menu reaches every page that is not a main tab", () => {
   );
 
   assert.deepEqual(hrefs("guest"), [
+    "/practice",
     "/practice/prepositions",
     "/practice/complements",
     "/practice/measure-words",
@@ -98,6 +147,8 @@ test("a menu link is current on its page and below, and /logs leaves the trash a
     isCurrentLink("/practice/complements/result", "/practice/complements"),
   );
   assert.ok(!isCurrentLink("/practice/complements", "/practice/prepositions"));
+  assert.ok(isCurrentLink("/practice", "/practice"));
+  assert.ok(!isCurrentLink("/practice/complements", "/practice"));
   assert.ok(isCurrentLink("/logs/2026/11/9", "/logs"));
   assert.ok(!isCurrentLink("/logs/trash", "/logs"));
   assert.ok(isCurrentLink("/logs/trash", "/logs/trash"));
@@ -136,6 +187,8 @@ test("the demo menu leaves out what Go refuses the demo", () => {
   ])
     assert.ok(!demo.includes(href), href);
   for (const href of [
+    "/practice",
+    "/vocabulary",
     "/logs",
     "/study-log",
     "/import",

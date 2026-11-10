@@ -3,6 +3,10 @@
 @import "./shadcn.css";
 
 @custom-variant dark (&:is(.dark *));
+/* Wide and tall enough for the practice's large question and choices;
+   anything smaller (a phone, a short laptop window) uses the compact ones. */
+@custom-variant roomy (@media (min-width: 40rem) and (min-height: 56rem));
+@custom-variant cramped (@media not all and (min-width: 40rem) and (min-height: 56rem));
 
 @theme inline {
   --color-background: var(--background);

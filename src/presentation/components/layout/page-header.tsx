@@ -12,8 +12,8 @@ type Props = {
   description?: ReactNode;
   // Links and buttons for this page on the right: back links, the trash.
   actions: ReactNode;
-  // A smaller title and description on phones, without the badge, for the
-  // practice pages (see PageShell's dense).
+  // A smaller title and description, without the badge, unless the screen
+  // is wide and tall (`roomy`), for the practice pages (see PageShell's dense).
   dense?: boolean;
 };
 
@@ -29,22 +29,22 @@ export function PageHeader({
   return (
     <header
       className={cn(
-        "flex flex-col border-b sm:flex-row sm:items-end sm:justify-between sm:gap-5 sm:pb-6",
-        dense ? "gap-3 pb-4" : "gap-5 pb-6",
+        "flex flex-col border-b sm:flex-row sm:items-end sm:justify-between",
+        dense ? "gap-3 pb-4 roomy:gap-5 roomy:pb-6" : "gap-5 pb-6",
       )}
     >
       <div className="space-y-3">
         <Badge
           variant="secondary"
-          className={cn("gap-1.5", dense && "max-sm:hidden")}
+          className={cn("gap-1.5", dense && "cramped:hidden")}
         >
           <Icon className="size-3.5" /> {eyebrow}
         </Badge>
         <div>
           <h1
             className={cn(
-              "font-semibold tracking-tight sm:text-3xl",
-              dense ? "text-2xl" : "text-3xl",
+              "font-semibold tracking-tight",
+              dense ? "text-2xl roomy:text-3xl" : "text-3xl",
             )}
           >
             {title}
@@ -52,8 +52,10 @@ export function PageHeader({
           {description ? (
             <p
               className={cn(
-                "text-muted-foreground sm:mt-2 sm:text-sm",
-                dense ? "mt-1 text-xs leading-relaxed" : "mt-2 text-sm",
+                "text-muted-foreground",
+                dense
+                  ? "mt-1 text-xs leading-relaxed roomy:mt-2 roomy:text-sm"
+                  : "mt-2 text-sm",
               )}
             >
               {description}
