@@ -1,5 +1,3 @@
-import { History } from "lucide-react";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getCurrentViewerUser } from "@/composition/identity-container";
@@ -11,12 +9,11 @@ import {
   MEASURE_WORD_PRACTICE,
 } from "@/domain/practice/measure-word-quiz";
 import { readHskBasis } from "@/infrastructure/preferences/hsk-basis-cookie";
-import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
 import { HskBasisSwitch } from "@/presentation/components/practice/hsk-basis-switch";
 import { HskLevelPicker } from "@/presentation/components/practice/hsk-level-picker";
+import { PracticeBar } from "@/presentation/components/practice/practice-bar";
 import { MeasureWordPractice } from "@/presentation/components/practice/measure-word-practice";
-import { Button } from "@/presentation/components/ui/button";
 
 export const dynamic = "force-dynamic";
 
@@ -40,26 +37,19 @@ export default async function MeasureWordPracticePage({
   const quiz = buildMeasureWordQuiz(25, Math.random, filter);
   return (
     <PageShell user={user} width="4xl" dense>
-      <PageHeader
-        dense
+      <PracticeBar
         title="量詞の練習"
         description={`${MEASURE_WORD_PRACTICE.description} 全${countMeasureWordQuestions()}問から毎回25問を、4つの中から選んでください。`}
-        actions={
-          canSave ? (
-            <Button asChild variant="outline" size="sm">
-              <Link href="/practice/complements/records">
-                <History />
-                過去の記録
-              </Link>
-            </Button>
-          ) : undefined
+        exitHref="/practice"
+        recordsHref={canSave ? "/practice/complements/records" : null}
+        levels={
+          <HskLevelPicker
+            path={PATH}
+            current={level}
+            counts={counts}
+            total={countMeasureWordQuestions()}
+          />
         }
-      />
-      <HskLevelPicker
-        path={PATH}
-        current={level}
-        counts={counts}
-        total={countMeasureWordQuestions()}
       />
       <HskBasisSwitch current={basis} returnTo={returnTo} />
       {quiz.length === 0 ? (
