@@ -147,7 +147,7 @@ export function SolvedExample({
   );
 }
 
-function ProgressBar({
+export function ProgressBar({
   done,
   total,
   ref,

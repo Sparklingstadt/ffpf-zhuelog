@@ -69,7 +69,8 @@ export default async function ReviewPage() {
         icon={Repeat}
         eyebrow="Review"
         title="今日の復習"
-        description="練習で間違えた問題、単語帳の語句、復習に入れた学習ノートを、忘れかけたころにもう一度出します。答えたら、どのくらい思い出せたかを選んでください。"
+        description="忘れかけたころにもう一度出します。答えたら、どのくらい思い出せたかを選んでください。"
+        dense
         actions={
           <Button asChild variant="outline" size="sm">
             <Link href="/">

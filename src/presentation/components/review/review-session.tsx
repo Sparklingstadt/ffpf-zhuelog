@@ -2,11 +2,15 @@
 
 import { Home, RotateCcw } from "lucide-react";
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
 import type { PrepositionQuestion } from "@/domain/practice/preposition-quiz";
-import { REVIEW_RATINGS, type ReviewRating } from "@/domain/review/review-item";
+import {
+  isReviewRating,
+  REVIEW_RATINGS,
+  type ReviewRating,
+} from "@/domain/review/review-item";
 import type { VocabularyCard } from "@/domain/vocabulary/vocabulary-entry";
 import type {
   AnswerReviewInput,
@@ -15,6 +19,7 @@ import type {
 import {
   Choice,
   focusInPlace,
+  ProgressBar,
   SolvedExample,
 } from "@/presentation/components/practice/choice-practice";
 import { SpeakButton } from "@/presentation/components/speech/speak-button";
@@ -184,6 +189,29 @@ export function ReviewSession({
     setSend({ status: "idle" });
   }
 
+  // Once the ratings show, the keys 1 to 4 pick them, as their buttons say.
+  // Typing in a field and shortcuts with a modifier are left alone.
+  const ratingOpen = card !== null && solved && send.status !== "sending";
+  useEffect(() => {
+    if (!ratingOpen) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.altKey || event.ctrlKey || event.metaKey || event.repeat)
+        return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.isContentEditable ||
+        target?.closest("input, textarea, select")
+      )
+        return;
+      const rating = Number(event.key);
+      if (!isReviewRating(rating)) return;
+      event.preventDefault();
+      void rate(rating);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+
   if (!card) {
     const left = Math.max(0, remaining);
     return (
@@ -228,18 +256,27 @@ export function ReviewSession({
       <div
         role="group"
         aria-label="思い出せた度合い"
-        className="grid w-full max-w-md grid-cols-2 gap-2 sm:grid-cols-4"
+        className="grid w-full max-w-lg grid-cols-2 gap-2 sm:grid-cols-4"
       >
         {REVIEW_RATINGS.map(({ rating, label }) => (
           <Button
             key={rating}
             type="button"
+            size="lg"
             variant={rating === suggested ? "default" : "outline"}
             ref={rating === suggested ? focusInPlace : undefined}
             disabled={send.status === "sending"}
+            aria-keyshortcuts={String(rating)}
             onClick={() => void rate(rating)}
+            className="h-12 gap-2"
           >
             {label}
+            <kbd
+              aria-hidden
+              className="hidden rounded border border-current/25 px-1.5 font-mono text-xs leading-5 opacity-70 sm:inline"
+            >
+              {rating}
+            </kbd>
           </Button>
         ))}
       </div>
@@ -255,9 +292,7 @@ export function ReviewSession({
 
   return (
     <div className="flex flex-col gap-6">
-      <p className="text-right font-mono text-sm text-muted-foreground">
-        {index + 1} / {cards.length}
-      </p>
+      <ProgressBar done={index + 1} total={cards.length} />
       <Card className="py-10 sm:py-14">
         {card.type === "note" ? (
           <NoteCardContent
