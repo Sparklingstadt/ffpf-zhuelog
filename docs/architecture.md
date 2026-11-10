@@ -190,7 +190,7 @@ sequenceDiagram
 
 - **E2E の土台**：`e2e/server.ts` が、マイグレーション、`next build`、スタブ、Go のビルドと起動を行います。テストのたびに表を空にします。
 - **CSV のパースの移植**：Web から Go に移したとき、前の Web の出力を `testdata/expected.json`（約 45 件の CSV）に固定しました。Go の結果が同じことを確かめています。
-- **lefthook**：commit の前に format・lint・型チェック、push の前に単体と E2E を走らせます。2026 年 11 月は GitHub Actions の枠を使い切ったので、このローカルの確認を関門にしました。
+- **lefthook**：commit の前に format・lint・型チェック、push の前に単体と E2E を走らせます。GitHub Actions の CI は置いていないので、このローカルの確認が関門です。
 
 ## 10. デプロイ
 
@@ -203,5 +203,5 @@ sequenceDiagram
 - **入力の検証が 2 か所にある**：ログイン ID・パスワード・表示名の規則や、チャットの本文の上限を、Web（zod）と Go の両方で持っています。Go が最後の砦で、Web は早く知らせるためですが、規則を変えるときは 2 か所を直す必要があります。
 - **外部キーがない**：管理者は DB に行を持たないので、`ownerId` に外部キーがありません。持ち主の整合性は Go API のコードで守っています。
 - **Preview の DB**：Preview の Go API がどの DB を使うかについて、文書の記述が食い違っています（`api-deployment.md` の 62 行目と 80 行目）。どちらかにそろえる必要があります。
-- **CI が止まっている**：GitHub Actions の月の枠を使い切っています。枠が戻ったら、push ではジョブを軽くし、E2E は PR と main だけにする予定です（[job-hunting-roadmap.md](job-hunting-roadmap.md) の J4）。
+- **CI がない**：GitHub Actions の CI は外しました。確認は lefthook のローカルの検査だけで、`pnpm audit` と `pnpm run build` は自動では走りません。
 - **層の検査に抜けがある**：`presentation` から `infrastructure` への import は、まだ制限していません。
