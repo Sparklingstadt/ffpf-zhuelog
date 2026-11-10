@@ -1,26 +1,20 @@
-import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { Badge } from "@/presentation/components/ui/badge";
 import { cn } from "@/presentation/lib/utils";
 
 type Props = {
-  icon: LucideIcon;
-  // Short English label in the badge above the title.
-  eyebrow: string;
   title: ReactNode;
   description?: ReactNode;
   // Links and buttons for this page on the right: back links, the trash.
   actions: ReactNode;
-  // A smaller title and description, without the badge, unless the screen
-  // is wide and tall (`roomy`), for the practice pages (see PageShell's dense).
+  // A smaller title and description unless the screen is wide and tall
+  // (`roomy`), for the practice pages (see PageShell's dense).
   dense?: boolean;
 };
 
-// The title row of a records page.
+// The title row of a page: no label above it, since the header already
+// names the app and the current page.
 export function PageHeader({
-  icon: Icon,
-  eyebrow,
   title,
   description,
   actions,
@@ -34,12 +28,6 @@ export function PageHeader({
       )}
     >
       <div className="space-y-3">
-        <Badge
-          variant="secondary"
-          className={cn("gap-1.5", dense && "cramped:hidden")}
-        >
-          <Icon className="size-3.5" /> {eyebrow}
-        </Badge>
         <div>
           <h1
             className={cn(

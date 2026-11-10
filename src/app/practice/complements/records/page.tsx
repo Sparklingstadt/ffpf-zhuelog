@@ -1,5 +1,5 @@
 import { roundModeLabel } from "@/domain/practice/complement-record";
-import { ArrowLeft, ChevronRight, History, Shuffle } from "lucide-react";
+import { ArrowLeft, ChevronRight, Shuffle } from "lucide-react";
 import Link from "next/link";
 
 import { complementRecords } from "@/composition/practice-container";
@@ -26,8 +26,6 @@ export default async function ComplementRecordsPage() {
   return (
     <PageShell user={user} width="4xl">
       <PageHeader
-        icon={History}
-        eyebrow="Complement records"
         title="補語、量詞、了・过・着の練習記録"
         description="終えた練習の正答率・ミス数・経過時間を、新しい順に見返せます。"
         actions={

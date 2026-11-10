@@ -1,11 +1,12 @@
-import { ArrowRight, BookA, CalendarDays, Flame, Repeat } from "lucide-react";
+import { ArrowRight, BookA, CalendarDays, Flame } from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
 
-// The home's way into today's reviews: how many are due, how many days in a
-// row the user has reviewed, and a link.
+// The top of the home: today's reviews as the main card, with its count
+// large and the one primary button, and beside it the review streak and the
+// ways to the study log and the vocabulary book.
 export function ReviewDueCard({
   count,
   streakDays,
@@ -14,61 +15,73 @@ export function ReviewDueCard({
   streakDays: number;
 }) {
   return (
-    <Card className="py-5">
-      <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div className="rounded-full bg-muted p-2.5">
-            <Repeat className="size-5 text-muted-foreground" />
-          </div>
-          <div>
-            <p className="font-medium">
-              今日の復習{" "}
-              <span className="font-mono" data-testid="review-due-count">
+    <section
+      aria-labelledby="review-due-heading"
+      className="grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
+    >
+      <Card className="py-6">
+        <CardContent className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1.5">
+            <h2
+              id="review-due-heading"
+              className="text-sm font-medium text-muted-foreground"
+            >
+              今日の復習
+            </h2>
+            <p className="flex items-baseline gap-1.5">
+              <span
+                className="text-5xl leading-none font-semibold tracking-tight tabular-nums"
+                data-testid="review-due-count"
+              >
                 {count}
               </span>
-              問
+              <span className="text-base">問</span>
             </p>
-            <p className="text-sm text-muted-foreground">
+            <p className="max-w-md text-sm leading-6 text-muted-foreground">
               {count > 0
                 ? "練習で間違えた問題、単語帳の語句、復習に入れた学習ノートの期日が来ています。"
                 : "期日が来ているものはありません。練習で間違えた問題、単語帳の語句、復習に入れた学習ノートがここに入ります。"}
             </p>
           </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-3 sm:justify-end">
+          {count > 0 ? (
+            <Button asChild size="lg" className="h-12 px-7 text-base">
+              <Link href="/review">
+                復習する <ArrowRight />
+              </Link>
+            </Button>
+          ) : null}
+        </CardContent>
+      </Card>
+      <Card className="py-4 md:py-6">
+        <CardContent className="flex h-full flex-wrap items-center justify-between gap-3 md:flex-col md:flex-nowrap md:items-start">
           <p
-            className="flex items-center gap-1.5 text-sm text-muted-foreground"
+            className="flex items-baseline gap-1.5 text-sm text-muted-foreground"
             title="1問以上復習した日が続いている日数"
           >
-            <Flame className="size-4" />
-            連続{" "}
+            <Flame className="size-4 self-center" />
+            連続
             <span
-              className="font-mono text-base text-foreground"
+              className="text-2xl font-semibold text-foreground tabular-nums"
               data-testid="review-streak-days"
             >
               {streakDays}
             </span>
             日
           </p>
-          <Button asChild variant="outline">
-            <Link href="/study-log">
-              <CalendarDays /> 学習ログ
-            </Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link href="/vocabulary">
-              <BookA /> 単語帳
-            </Link>
-          </Button>
-          {count > 0 ? (
-            <Button asChild>
-              <Link href="/review">
-                復習する <ArrowRight />
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href="/study-log">
+                <CalendarDays /> 学習ログ
               </Link>
             </Button>
-          ) : null}
-        </div>
-      </CardContent>
-    </Card>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/vocabulary">
+                <BookA /> 単語帳
+              </Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </section>
   );
 }

@@ -1,4 +1,4 @@
-import { ArrowLeft, Languages, RotateCcw, Trash2 } from "lucide-react";
+import { ArrowLeft, RotateCcw, Trash2 } from "lucide-react";
 import Link from "next/link";
 
 import { learningNotes } from "@/composition/learning-container";
@@ -38,8 +38,6 @@ export default async function LearningTrashPage() {
   return (
     <PageShell user={user} width="5xl">
       <PageHeader
-        icon={Languages}
-        eyebrow="Learning notes trash"
         title="学習ノートのゴミ箱"
         description={trash ? `ゴミ箱：${trash.total}件` : null}
         actions={

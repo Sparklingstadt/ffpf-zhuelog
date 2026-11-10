@@ -1,4 +1,4 @@
-import { ArrowLeft, CalendarDays, ChevronRight, Languages } from "lucide-react";
+import { ArrowLeft, CalendarDays, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -47,8 +47,6 @@ export default async function LogsPage({ searchParams }: LogsPageProps) {
   return (
     <PageShell user={user} width="4xl">
       <PageHeader
-        icon={Languages}
-        eyebrow="Chinese learning log"
         title="日付別の学習ノート"
         description="学習文を登録した日から一覧を開けます。"
         actions={

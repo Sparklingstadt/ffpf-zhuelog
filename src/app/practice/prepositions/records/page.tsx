@@ -1,4 +1,4 @@
-import { ArrowLeft, ChevronRight, History, Shuffle } from "lucide-react";
+import { ArrowLeft, ChevronRight, Shuffle } from "lucide-react";
 import Link from "next/link";
 
 import { prepositionRecords } from "@/composition/practice-container";
@@ -25,8 +25,6 @@ export default async function PrepositionRecordsPage() {
   return (
     <PageShell user={user} width="4xl">
       <PageHeader
-        icon={History}
-        eyebrow="Preposition records"
         title="介詞の練習記録"
         description="終えた練習の正答率・ミス数・経過時間を、新しい順に見返せます。"
         actions={

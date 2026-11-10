@@ -1,4 +1,4 @@
-import { BookOpenText, Database, Languages } from "lucide-react";
+import { BookOpenText, Database } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -20,7 +20,6 @@ import { LearningEntryCard } from "@/presentation/components/learning/learning-e
 import { RecordOwnerControls } from "@/presentation/components/records/record-owner-controls";
 import { ReviewDueCard } from "@/presentation/components/review/review-due-card";
 import { Alert, AlertDescription } from "@/presentation/components/ui/alert";
-import { Badge } from "@/presentation/components/ui/badge";
 import { Card, CardContent } from "@/presentation/components/ui/card";
 import { requireSignedInOwner } from "@/presentation/guards/record-owner-guard";
 import { genericErrorMessage } from "@/presentation/presenters/generic-error-message";
@@ -78,23 +77,13 @@ type HomeProps = {
   }>;
 };
 
-function HomeHeader() {
+// The page's title. The home has no large banner: the header already names
+// the app, so the notes heading is the h1.
+function NotesHeading({ searching = false }: { searching?: boolean }) {
   return (
-    <header className="flex flex-col gap-5 border-b pb-8 sm:flex-row sm:items-end sm:justify-between">
-      <div className="space-y-3">
-        <Badge variant="secondary" className="gap-1.5">
-          <Languages className="size-3.5" /> Chinese learning log
-        </Badge>
-        <div className="space-y-2">
-          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-            学习録
-          </h1>
-          <p className="max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-            自分が書いた文と添削後の文を、ピンインや覚えるべきヒントと一緒に蓄積します。
-          </p>
-        </div>
-      </div>
-    </header>
+    <h1 className="text-2xl font-semibold tracking-tight">
+      {searching ? "検索結果" : "学習ノート"}
+    </h1>
   );
 }
 
@@ -112,7 +101,7 @@ export default async function Home({ searchParams }: HomeProps) {
   if (owner.kind === "denied" && owner.reason === "guest") {
     return (
       <PageShell user={user} width="6xl" spacious>
-        <HomeHeader />
+        <NotesHeading />
         <Card className="border-dashed py-14 text-center shadow-none">
           <CardContent className="flex flex-col items-center gap-4">
             <div className="rounded-full bg-muted p-3">
@@ -130,7 +119,7 @@ export default async function Home({ searchParams }: HomeProps) {
   if (owner.kind === "denied") {
     return (
       <PageShell user={user} width="6xl" spacious>
-        <HomeHeader />
+        <NotesHeading />
         <ReauthNotice subject="学習ノート" />
       </PageShell>
     );
@@ -146,16 +135,14 @@ export default async function Home({ searchParams }: HomeProps) {
 
   return (
     <PageShell user={user} width="6xl" spacious>
-      <HomeHeader />
-
-      <RecordOwnerControls owner={owner} view={view} path="/" />
-
       {dueReviews === null ? null : (
         <ReviewDueCard
           count={dueReviews.count}
           streakDays={dueReviews.streakDays}
         />
       )}
+
+      <RecordOwnerControls owner={owner} view={view} path="/" />
 
       {loadFailed ? (
         <Alert variant="destructive">
@@ -165,11 +152,9 @@ export default async function Home({ searchParams }: HomeProps) {
       ) : null}
 
       <section className="space-y-4">
-        <div>
-          <h2 className="text-xl font-semibold tracking-tight">
-            {searching ? "検索結果" : "学習ノート"}
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground" aria-live="polite">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <NotesHeading searching={searching} />
+          <p className="text-sm text-muted-foreground" aria-live="polite">
             {searching
               ? total > 0
                 ? `条件に合う学習ノートが${total}件あります。新しい順に最大100件を表示します。`

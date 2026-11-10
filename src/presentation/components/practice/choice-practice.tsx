@@ -147,17 +147,19 @@ export function SolvedExample({
   );
 }
 
-function ProgressBar({
+export function ProgressBar({
   done,
   total,
   ref,
+  className,
 }: {
   done: number;
   total: number;
   ref?: Ref<HTMLDivElement>;
+  className?: string;
 }) {
   return (
-    <div ref={ref} className="flex items-center gap-3">
+    <div ref={ref} className={cn("flex items-center gap-3", className)}>
       <div
         role="progressbar"
         aria-label="進捗"
@@ -380,99 +382,135 @@ export function ChoicePractice({
 
   return (
     <div className="flex flex-col gap-3 roomy:gap-6">
-      <ProgressBar ref={progress} done={done} total={total} />
-      {/* The result shows them again, larger. */}
-      {finished ? null : (
-        <PrepositionStats
-          accuracy={accuracyPercent(score.firstTryCount, score.questionCount)}
-          missCount={score.missCount + (solved ? 0 : wrong.length)}
-          elapsedMs={elapsedMs}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+        <ProgressBar
+          ref={progress}
+          done={done}
+          total={total}
+          className="min-w-48 flex-1"
         />
-      )}
+        {/* The result shows them again, larger. */}
+        {finished ? null : (
+          <PrepositionStats
+            accuracy={accuracyPercent(score.firstTryCount, score.questionCount)}
+            missCount={score.missCount + (solved ? 0 : wrong.length)}
+            elapsedMs={elapsedMs}
+          />
+        )}
+      </div>
 
       {question ? (
-        <Card className="py-4 roomy:py-12">
-          <CardContent className="flex flex-col items-center gap-5 roomy:gap-10">
-            <div className="flex flex-col items-center gap-2 text-center">
-              <p className="text-sm text-muted-foreground">
-                {question.meaning}
-              </p>
-              {/* With compactHeading this is the complement mode's name,
-                  which the page title already gives on small screens. */}
-              <p
-                lang="zh-CN"
-                className={cn(
-                  "font-semibold tracking-tight",
-                  compactHeading
-                    ? "text-xl cramped:hidden roomy:text-2xl"
-                    : "text-5xl roomy:text-7xl",
-                )}
-              >
-                {question.noun}
-              </p>
-              <p
-                lang="zh-CN"
-                className="text-lg leading-relaxed text-muted-foreground roomy:text-2xl"
-              >
-                {question.prompt}
-              </p>
-            </div>
+        // Wide screens put the explanation beside the question, so it shows
+        // without scrolling; narrower ones put it under the choices.
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start lg:gap-5">
+          <Card className="py-4 roomy:py-12">
+            <CardContent className="flex flex-col items-center gap-5 roomy:gap-10">
+              <div className="flex flex-col items-center gap-2 text-center">
+                <p className="text-sm text-muted-foreground">
+                  {question.meaning}
+                </p>
+                {/* With compactHeading this is the complement mode's name,
+                    which the page title already gives on small screens. */}
+                <p
+                  lang="zh-CN"
+                  className={cn(
+                    "font-semibold tracking-tight",
+                    compactHeading
+                      ? "text-xl cramped:hidden roomy:text-2xl"
+                      : "text-5xl roomy:text-7xl",
+                  )}
+                >
+                  {question.noun}
+                </p>
+                <p
+                  lang="zh-CN"
+                  className="text-lg leading-relaxed text-muted-foreground roomy:text-2xl"
+                >
+                  {question.prompt}
+                </p>
+              </div>
 
-            <div
-              ref={choicesRef}
-              role="group"
-              aria-label={choiceLabel}
-              lang="zh-CN"
-              className="grid w-full max-w-md grid-cols-2 gap-3"
-            >
-              {question.choices.map((preposition) => (
-                <Choice
-                  key={preposition}
-                  preposition={preposition}
-                  compact={compactHeading}
-                  state={
-                    solved && preposition === question.answer
-                      ? "correct"
-                      : wrong.includes(preposition)
-                        ? "wrong"
-                        : "idle"
-                  }
-                  disabled={solved || wrong.includes(preposition)}
-                  onPick={() => pick(preposition)}
-                />
-              ))}
-            </div>
-
-            <div
-              className="flex min-h-9 flex-col items-center gap-4 text-center"
-              aria-live="polite"
-            >
-              {solved ? (
-                <>
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">
-                      正解！{" "}
-                      <span lang="zh-CN" className="text-base">
-                        {question.phrase}
-                      </span>{" "}
-                      <span className="font-mono text-muted-foreground">
-                        {question.answer} {question.pinyin}
-                      </span>
-                    </p>
-                    <SolvedExample question={question} />
-                  </div>
-                  <Button size="lg" onClick={next} ref={focusInPlace}>
-                    {index + 1 < total ? "次へ" : "結果を見る"} <ArrowRight />
-                  </Button>
-                </>
-              ) : wrong.length > 0 ? (
-                <p className="text-sm text-destructive">
+              <div
+                ref={choicesRef}
+                role="group"
+                aria-label={choiceLabel}
+                lang="zh-CN"
+                className="grid w-full max-w-md grid-cols-2 gap-3"
+              >
+                {question.choices.map((preposition) => (
+                  <Choice
+                    key={preposition}
+                    preposition={preposition}
+                    compact={compactHeading}
+                    state={
+                      solved && preposition === question.answer
+                        ? "correct"
+                        : wrong.includes(preposition)
+                          ? "wrong"
+                          : "idle"
+                    }
+                    disabled={solved || wrong.includes(preposition)}
+                    onPick={() => pick(preposition)}
+                  />
+                ))}
+              </div>
+              {!solved && wrong.length > 0 ? (
+                <p className="text-sm text-destructive" role="status">
                   ちがいます。もう一度選んでください。
                 </p>
               ) : null}
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+
+          <div aria-live="polite" className="contents">
+            {solved ? (
+              <Card className="gap-0 py-0">
+                <CardContent className="flex flex-col gap-4 p-5">
+                  <div className="order-1 space-y-1">
+                    <p className="text-sm font-medium text-primary">正解！</p>
+                    <p className="flex flex-wrap items-baseline gap-x-3">
+                      <span
+                        lang="zh-CN"
+                        className="text-2xl font-semibold tracking-tight"
+                      >
+                        {question.answer}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {question.pinyin}
+                      </span>
+                      <span lang="zh-CN" className="text-sm">
+                        {question.phrase}
+                      </span>
+                    </p>
+                  </div>
+                  <div className="order-3 space-y-1 border-t pt-4">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      例文
+                    </p>
+                    <SolvedExample question={question} />
+                  </div>
+                  {/* On phones and tablets "next" comes right under the
+                      answer, so it shows without scrolling past the example
+                      and covers nothing; wide screens end the panel with it. */}
+                  <div className="order-2 xl:order-4">
+                    <Button
+                      size="lg"
+                      onClick={next}
+                      ref={focusInPlace}
+                      className="w-full"
+                    >
+                      {index + 1 < total ? "次へ" : "結果を見る"} <ArrowRight />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <p className="hidden rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground lg:block">
+                選ぶと、ここに正解と例文が出ます。
+              </p>
+            )}
+          </div>
+        </div>
       ) : (
         <Card className="py-12">
           <CardContent className="flex flex-col items-center gap-6">

@@ -1,4 +1,4 @@
-import { ArrowLeft, CalendarDays, Languages } from "lucide-react";
+import { ArrowLeft, CalendarDays } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
@@ -64,8 +64,6 @@ export default async function LogDatePage({
   return (
     <PageShell user={user} width="5xl">
       <PageHeader
-        icon={Languages}
-        eyebrow="Daily learning log"
         title={formatLogDate(date)}
         description={
           hasNotes ? `この日に追加した学習ノート：${entries.length}件` : null

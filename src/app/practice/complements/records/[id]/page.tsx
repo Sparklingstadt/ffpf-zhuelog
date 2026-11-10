@@ -1,5 +1,5 @@
 import { roundModeLabel } from "@/domain/practice/complement-record";
-import { ArrowLeft, History } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -34,8 +34,6 @@ export default async function ComplementRecordPage({
   return (
     <PageShell user={user} width="4xl">
       <PageHeader
-        icon={History}
-        eyebrow="Complement record"
         title={`${formatTokyoDateTime(record.createdAt)} の練習`}
         description={`${roundModeLabel(record.mode)} · ${record.questionCount}問中 ${record.firstTryCount}問を1回目で正解`}
         actions={

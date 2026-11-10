@@ -1,4 +1,4 @@
-import { Hourglass, History } from "lucide-react";
+import { History } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -42,8 +42,6 @@ export default async function AspectParticlePracticePage({
     <PageShell user={user} width="4xl" dense>
       <PageHeader
         dense
-        icon={Hourglass}
-        eyebrow="Aspect particle practice"
         title="了・过・着の練習"
         description={`${ASPECT_PARTICLE_PRACTICE.description} 日本語の意味に合うものを、4つの中から選んでください。HSK の級は、文のいちばん難しい語で決めています。`}
         actions={

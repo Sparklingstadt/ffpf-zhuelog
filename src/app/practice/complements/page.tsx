@@ -1,4 +1,4 @@
-import { History, ListChecks } from "lucide-react";
+import { History } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentViewerUser } from "@/composition/identity-container";
@@ -21,8 +21,6 @@ export default async function ComplementModesPage() {
   return (
     <PageShell user={user} width="4xl">
       <PageHeader
-        icon={ListChecks}
-        eyebrow="Complement practice"
         title="補語の練習"
         description="練習する補語を選んでください。各100問から毎回25問を4択で出題します。正答率・ミス数・経過時間を確認できます。"
         actions={

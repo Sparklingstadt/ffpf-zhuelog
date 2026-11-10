@@ -7,6 +7,11 @@ import { useRef } from "react";
 import { DropdownMenu } from "radix-ui";
 
 import type { AppRole } from "@/domain/identity/entities/authenticated-user";
+import {
+  GitHubMark,
+  repositoryUrl,
+} from "@/presentation/components/layout/github-mark";
+import { ThemeMenuItems } from "@/presentation/components/theme/theme-menu-items";
 import { signOutAction } from "@/presentation/actions/auth-actions";
 import {
   isCurrentLink,
@@ -14,8 +19,8 @@ import {
 } from "@/presentation/presenters/site-navigation";
 import { cn } from "@/presentation/lib/utils";
 
-// The menu with every page that is not a main tab, the signed-in person and
-// the sign-out. The header's trigger shows who is signed in at every width
+// The menu with every page that is not a main tab, the signed-in person,
+// the color theme, the repository link and the sign-out. The header's trigger shows who is signed in at every width
 // ("header"); phones and tablets can also open it from the last bottom tab
 // ("tab"), within reach of the thumb.
 export function SiteMenu({
@@ -120,7 +125,26 @@ export function SiteMenu({
                 })}
               </DropdownMenu.Group>
             ))}
+            <DropdownMenu.Group className="pt-1">
+              <DropdownMenu.Separator className="mx-1 mb-1 h-px bg-border" />
+              <DropdownMenu.Label className="px-2 pt-1 pb-0.5 text-xs font-medium text-muted-foreground">
+                表示
+              </DropdownMenu.Label>
+              <ThemeMenuItems />
+            </DropdownMenu.Group>
             <DropdownMenu.Separator className="mx-1 my-1 h-px bg-border" />
+            <DropdownMenu.Item asChild>
+              <a
+                href={repositoryUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none select-none data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground [&_svg]:size-4"
+              >
+                <GitHubMark />
+                GitHub のリポジトリ
+                <span className="sr-only">（新しいタブ）</span>
+              </a>
+            </DropdownMenu.Item>
             <DropdownMenu.Item
               onSelect={() => signOutForm.current?.requestSubmit()}
               className="flex w-full cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none select-none data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground"

@@ -27,8 +27,6 @@ export default async function QuestionPage({
   return (
     <PageShell user={user} width="4xl">
       <PageHeader
-        icon={CircleHelp}
-        eyebrow="Question notes"
         title="質問と回答"
         description={`${formatTokyoDateTime(q.createdAt)} · ${q.modelName}`}
         actions={

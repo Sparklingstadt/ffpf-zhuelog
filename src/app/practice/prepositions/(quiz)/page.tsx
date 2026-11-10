@@ -1,4 +1,4 @@
-import { ArrowLeft, History, Shuffle } from "lucide-react";
+import { ArrowLeft, History } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -43,8 +43,6 @@ export default async function PrepositionPracticePage({
     <PageShell user={user} width="4xl" dense>
       <PageHeader
         dense
-        icon={Shuffle}
-        eyebrow="Preposition practice"
         title="介詞の練習"
         description="名詞と日本語の意味に合う介詞を、4つの中から選んでください。HSK の級は、例文と句のいちばん難しい語で決めています。"
         actions={

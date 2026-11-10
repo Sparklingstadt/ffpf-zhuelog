@@ -1,4 +1,4 @@
-import { History, Ruler } from "lucide-react";
+import { History } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -42,8 +42,6 @@ export default async function MeasureWordPracticePage({
     <PageShell user={user} width="4xl" dense>
       <PageHeader
         dense
-        icon={Ruler}
-        eyebrow="Measure word practice"
         title="量詞の練習"
         description={`${MEASURE_WORD_PRACTICE.description} 全${countMeasureWordQuestions()}問から毎回25問を、4つの中から選んでください。`}
         actions={

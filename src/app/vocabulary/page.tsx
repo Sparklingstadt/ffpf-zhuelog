@@ -1,5 +1,4 @@
-import { ArrowLeft, BookA, Database, Repeat, Trash2 } from "lucide-react";
-import Link from "next/link";
+import { Database, Trash2 } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import { getCurrentViewerUser } from "@/composition/identity-container";
@@ -17,11 +16,9 @@ import { PageShell } from "@/presentation/components/layout/page-shell";
 import { NoteActionForm } from "@/presentation/components/records/note-action-form";
 import { SpeakButton } from "@/presentation/components/speech/speak-button";
 import { Alert, AlertDescription } from "@/presentation/components/ui/alert";
-import { Button } from "@/presentation/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/presentation/components/ui/card";
@@ -50,37 +47,21 @@ export default async function VocabularyPage() {
   const entries = await loadVocabulary();
 
   return (
-    <PageShell user={user} width="4xl">
+    <PageShell user={user} width="6xl">
       <PageHeader
-        icon={BookA}
-        eyebrow="Vocabulary"
         title="単語帳"
-        description="覚えたい語句を入れておくと、今日の復習に出てきます。学習ノートの詳細からも入れられます。"
-        actions={
-          <>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/">
-                <ArrowLeft /> ホームへ
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/review">
-                <Repeat /> 今日の復習
-              </Link>
-            </Button>
-          </>
-        }
+        description="入れた語句は今日の復習に出てきます。学習ノートの詳細からも入れられます。"
+        actions={null}
+        dense
       />
 
       <Card>
         <CardHeader>
           <CardTitle className="text-base">語句を入れる</CardTitle>
-          <CardDescription>
-            「AIで下書き」でピンインと意味を埋め、直してから入れられます。
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <VocabularyAddForm
+            layout="row"
             draftVocabulary={draftVocabularyAction}
             saveVocabulary={saveVocabularyAction}
           />
@@ -97,34 +78,36 @@ export default async function VocabularyPage() {
       ) : (
         <section className="space-y-3" aria-label="単語の一覧">
           <h2 className="text-lg font-semibold tracking-tight">
-            {entries.length}語
+            入れた語句{" "}
+            <span className="text-sm font-normal text-muted-foreground">
+              {entries.length}語
+            </span>
           </h2>
-          <ul className="divide-y rounded-lg border">
+          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {entries.map((entry) => (
               <li
                 key={entry.id}
-                className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+                className="flex flex-col gap-1 rounded-xl border bg-card px-5 py-4"
               >
-                <div className="min-w-0 space-y-0.5">
-                  <p className="flex flex-wrap items-baseline gap-x-3">
-                    <span lang="zh-CN" className="text-xl font-semibold">
-                      {entry.word}
-                    </span>
-                    <SpeakButton text={entry.word} className="self-center" />
-                    <span className="font-mono text-sm text-muted-foreground">
-                      {entry.pinyin}
-                    </span>
+                <div className="flex items-center gap-2">
+                  <p
+                    lang="zh-CN"
+                    className="min-w-0 flex-1 truncate text-2xl font-semibold"
+                  >
+                    {entry.word}
                   </p>
-                  <p className="text-sm">{entry.meaning}</p>
+                  <SpeakButton text={entry.word} />
+                  <NoteActionForm
+                    action={deleteVocabularyAction}
+                    fields={{ id: entry.id }}
+                    label="消す"
+                    pendingLabel="消しています…"
+                    icon={<Trash2 />}
+                    confirmMessage={`「${entry.word}」を単語帳から消しますか？復習の記録も消えます。`}
+                  />
                 </div>
-                <NoteActionForm
-                  action={deleteVocabularyAction}
-                  fields={{ id: entry.id }}
-                  label="消す"
-                  pendingLabel="消しています…"
-                  icon={<Trash2 />}
-                  confirmMessage={`「${entry.word}」を単語帳から消しますか？復習の記録も消えます。`}
-                />
+                <p className="text-sm text-muted-foreground">{entry.pinyin}</p>
+                <p className="text-sm">{entry.meaning}</p>
               </li>
             ))}
           </ul>

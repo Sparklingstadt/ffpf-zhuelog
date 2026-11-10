@@ -25,3 +25,13 @@ export function formatTokyoDateTime(date: Date) {
     hour12: false,
   }).format(date);
 }
+
+// 「21:10」: the time of day in Tokyo, for lists already grouped by date.
+export function formatTokyoTime(date: Date) {
+  return new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+}
