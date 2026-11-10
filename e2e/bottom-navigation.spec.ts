@@ -1,4 +1,11 @@
-import { asAdmin, asGuest, expect, signOut, test } from "./fixtures";
+import {
+  asAdmin,
+  asGuest,
+  expect,
+  openSiteMenu,
+  signOut,
+  test,
+} from "./fixtures";
 
 test("bottom menu fits phones and tablets and follows navigation", async ({
   page,
@@ -17,9 +24,9 @@ test("bottom menu fits phones and tablets and follows navigation", async ({
     await expect(menu.locator("a, button")).toHaveText([
       "学習ノート",
       "復習",
-      "練習",
-      "単語帳",
-      "メニュー",
+      "LINE 連携",
+      "クイック質問",
+      "会話ノート",
     ]);
     // The header stays one row: the main links move to the bottom tabs.
     await expect(
@@ -29,10 +36,10 @@ test("bottom menu fits phones and tablets and follows navigation", async ({
     expect(header!.height).toBeLessThanOrEqual(50);
     const bounds = await menu.boundingBox();
     expect(bounds!.y + bounds!.height).toBe(900);
-    const practiceTab = await menu
-      .getByRole("link", { name: "練習" })
+    const middleTab = await menu
+      .getByRole("link", { name: "LINE 連携" })
       .boundingBox();
-    expect(practiceTab!.x + practiceTab!.width / 2).toBeCloseTo(width / 2, 0);
+    expect(middleTab!.x + middleTab!.width / 2).toBeCloseTo(width / 2, 0);
     expect(
       await menu.evaluate((element) => {
         const body = document.body;
@@ -54,36 +61,32 @@ test("bottom menu fits phones and tablets and follows navigation", async ({
   }
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await menu.getByRole("link", { name: "練習" }).click();
-  await expect(page).toHaveURL(/\/practice$/);
-  await expect(menu.getByRole("link", { name: "練習" })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
-  await page.getByRole("link", { name: "量詞を練習" }).click();
-  await expect(page).toHaveURL(/\/practice\/measure-words$/);
-  await expect(menu.getByRole("link", { name: "練習" })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
-  await menu.getByRole("link", { name: "復習" }).click();
-  await expect(page).toHaveURL(/\/review$/);
-  await expect(menu.getByRole("link", { name: "復習" })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
+  for (const [name, url] of [
+    ["会話ノート", /\/conversations$/],
+    ["クイック質問", /\/quick-question$/],
+    ["LINE 連携", /\/account\/line$/],
+    ["復習", /\/review$/],
+  ] as const) {
+    await menu.getByRole("link", { name }).click();
+    await expect(page).toHaveURL(url);
+    await expect(menu.getByRole("link", { name })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  }
 
-  // The last tab opens the menu with everything else, above the tabs.
-  await menu.getByRole("button", { name: "メニュー" }).click();
-  const siteMenu = page.getByRole("menu", { name: "メニュー" });
-  await expect(siteMenu).toBeVisible();
-  const menuBox = await siteMenu.boundingBox();
-  const tabsBox = await menu.boundingBox();
-  expect(menuBox!.y + menuBox!.height).toBeLessThanOrEqual(tabsBox!.y);
-  await siteMenu.getByRole("menuitem", { name: "クイック質問" }).click();
-  await expect(page).toHaveURL(/\/quick-question$/);
+  // Practice and the vocabulary have no tab: the header's menu has them.
+  const siteMenu = await openSiteMenu(page);
+  await siteMenu.getByRole("menuitem", { name: "練習の一覧" }).click();
+  await expect(page).toHaveURL(/\/practice$/);
   await expect(siteMenu).toBeHidden();
   await expect(menu.locator("[aria-current=page]")).toHaveCount(0);
+  await (
+    await openSiteMenu(page)
+  )
+    .getByRole("menuitem", { name: "単語帳" })
+    .click();
+  await expect(page).toHaveURL(/\/vocabulary$/);
 
   await page.goto("/logs/trash");
   await expect(menu.getByRole("link", { name: "学習ノート" })).toHaveAttribute(
@@ -120,17 +123,17 @@ test("guest menu keeps five tabs without linking to restricted features", async 
   await asGuest(page);
   await expect(menu).toBeVisible();
   await expect(menu.locator("a, button")).toHaveCount(5);
-  await expect(menu.getByRole("link", { name: "練習" })).toHaveAttribute(
+  await expect(menu.getByRole("link")).toHaveCount(1);
+  await expect(menu.getByRole("link", { name: "学習ノート" })).toHaveAttribute(
     "href",
-    "/practice",
+    "/",
   );
-  await expect(menu.getByRole("button", { name: /復習/ })).toBeDisabled();
-  await expect(menu.getByRole("button", { name: /単語帳/ })).toBeDisabled();
-  await expect(menu.getByRole("link", { name: "復習" })).toHaveCount(0);
+  for (const name of [/復習/, /LINE 連携/, /クイック質問/, /会話ノート/])
+    await expect(menu.getByRole("button", { name })).toBeDisabled();
 
-  await menu.getByRole("button", { name: "メニュー" }).click();
-  const siteMenu = page.getByRole("menu", { name: "メニュー" });
+  const siteMenu = await openSiteMenu(page);
   await expect(siteMenu.getByRole("menuitem")).toHaveText([
+    "練習の一覧",
     "介詞の練習",
     "補語の練習",
     "量詞の練習",
