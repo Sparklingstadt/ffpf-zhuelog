@@ -19,6 +19,8 @@ import type {
 import {
   Choice,
   focusInPlace,
+  isOnControl,
+  isTypingOrShortcut,
   ProgressBar,
   SolvedExample,
 } from "@/presentation/components/practice/choice-practice";
@@ -189,20 +191,23 @@ export function ReviewSession({
     setSend({ status: "idle" });
   }
 
-  // Once the ratings show, the keys 1 to 4 pick them, as their buttons say.
-  // Typing in a field and shortcuts with a modifier are left alone.
+  // A wrong pick suggests もう一度, a clean pick or a turned word できた.
+  const suggested: ReviewRating = wrong.length > 0 ? 1 : 3;
+
+  // Once the ratings show, the keys 1 to 4 pick them, as their buttons say,
+  // and Space picks the suggested one. Typing in a field, shortcuts with a
+  // modifier and Space on a button (which presses that button) are left alone.
   const ratingOpen = card !== null && solved && send.status !== "sending";
   useEffect(() => {
     if (!ratingOpen) return;
     function onKeyDown(event: KeyboardEvent) {
-      if (event.altKey || event.ctrlKey || event.metaKey || event.repeat)
+      if (isTypingOrShortcut(event)) return;
+      if (event.key === " ") {
+        if (isOnControl(event)) return;
+        event.preventDefault();
+        void rate(suggested);
         return;
-      const target = event.target as HTMLElement | null;
-      if (
-        target?.isContentEditable ||
-        target?.closest("input, textarea, select")
-      )
-        return;
+      }
       const rating = Number(event.key);
       if (!isReviewRating(rating)) return;
       event.preventDefault();
@@ -248,8 +253,6 @@ export function ReviewSession({
     );
   }
 
-  // A wrong pick suggests もう一度, a clean pick or a turned word できた.
-  const suggested: ReviewRating = wrong.length > 0 ? 1 : 3;
   const ratings = (
     <>
       <p className="text-sm">どのくらい思い出せましたか？</p>
@@ -266,7 +269,9 @@ export function ReviewSession({
             variant={rating === suggested ? "default" : "outline"}
             ref={rating === suggested ? focusInPlace : undefined}
             disabled={send.status === "sending"}
-            aria-keyshortcuts={String(rating)}
+            aria-keyshortcuts={
+              rating === suggested ? `${rating} Space` : String(rating)
+            }
             onClick={() => void rate(rating)}
             className="h-12 gap-2"
           >
@@ -280,6 +285,10 @@ export function ReviewSession({
           </Button>
         ))}
       </div>
+      <p className="hidden text-xs text-muted-foreground sm:block">
+        Space で「
+        {REVIEW_RATINGS.find(({ rating }) => rating === suggested)?.label}」
+      </p>
       {send.status === "sending" ? (
         <p className="text-sm text-muted-foreground">保存しています…</p>
       ) : send.status === "error" ? (
@@ -292,7 +301,18 @@ export function ReviewSession({
 
   return (
     <div className="flex flex-col gap-6">
-      <ProgressBar done={index + 1} total={cards.length} />
+      <div className="flex items-center gap-4">
+        <ProgressBar
+          done={index + 1}
+          total={cards.length}
+          className="min-w-0 flex-1"
+        />
+        <p className="shrink-0 text-sm text-muted-foreground tabular-nums">
+          {cards.length - index - 1 > 0
+            ? `残り ${cards.length - index - 1}問`
+            : "最後の1問"}
+        </p>
+      </div>
       <Card className="py-10 sm:py-14">
         {card.type === "note" ? (
           <NoteCardContent

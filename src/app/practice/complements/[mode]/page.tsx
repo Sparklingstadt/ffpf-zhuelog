@@ -1,5 +1,3 @@
-import { ArrowLeft, History } from "lucide-react";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentViewerUser } from "@/composition/identity-container";
 import { isMemberRole } from "@/domain/identity/entities/authenticated-user";
@@ -10,13 +8,12 @@ import {
   isComplementMode,
 } from "@/domain/practice/complement-quiz";
 import { parseHskLevel } from "@/domain/practice/hsk-level";
-import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
 import { ComplementPractice } from "@/presentation/components/practice/complement-practice";
 import { readHskBasis } from "@/infrastructure/preferences/hsk-basis-cookie";
 import { HskBasisSwitch } from "@/presentation/components/practice/hsk-basis-switch";
 import { HskLevelPicker } from "@/presentation/components/practice/hsk-level-picker";
-import { Button } from "@/presentation/components/ui/button";
+import { PracticeBar } from "@/presentation/components/practice/practice-bar";
 
 export const dynamic = "force-dynamic";
 export default async function ComplementQuizPage({
@@ -42,34 +39,19 @@ export default async function ComplementQuizPage({
   const quiz = buildComplementQuiz(mode, 25, Math.random, filter);
   return (
     <PageShell user={user} width="4xl" dense>
-      <PageHeader
-        dense
+      <PracticeBar
         title={`${COMPLEMENT_MODES[mode].label}の練習`}
         description={`${COMPLEMENT_MODES[mode].description} 日本語の意味に合う補語を、4つの中から選んでください。HSK の級は、例文のいちばん難しい語で決めています。`}
-        actions={
-          <>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/practice/complements">
-                <ArrowLeft />
-                種類を選ぶ
-              </Link>
-            </Button>
-            {canSave ? (
-              <Button asChild variant="outline" size="sm">
-                <Link href="/practice/complements/records">
-                  <History />
-                  過去の記録
-                </Link>
-              </Button>
-            ) : null}
-          </>
+        exitHref="/practice/complements"
+        recordsHref={canSave ? "/practice/complements/records" : null}
+        levels={
+          <HskLevelPicker
+            path={`/practice/complements/${mode}`}
+            current={level}
+            counts={counts}
+            total={countComplementQuestions(mode)}
+          />
         }
-      />
-      <HskLevelPicker
-        path={`/practice/complements/${mode}`}
-        current={level}
-        counts={counts}
-        total={countComplementQuestions(mode)}
       />
       <HskBasisSwitch
         current={basis}

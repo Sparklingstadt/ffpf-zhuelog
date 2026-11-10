@@ -1,5 +1,3 @@
-import { History } from "lucide-react";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getCurrentViewerUser } from "@/composition/identity-container";
@@ -11,12 +9,11 @@ import {
 } from "@/domain/practice/aspect-particle-quiz";
 import { parseHskLevel } from "@/domain/practice/hsk-level";
 import { readHskBasis } from "@/infrastructure/preferences/hsk-basis-cookie";
-import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
 import { AspectParticlePractice } from "@/presentation/components/practice/aspect-particle-practice";
 import { HskBasisSwitch } from "@/presentation/components/practice/hsk-basis-switch";
 import { HskLevelPicker } from "@/presentation/components/practice/hsk-level-picker";
-import { Button } from "@/presentation/components/ui/button";
+import { PracticeBar } from "@/presentation/components/practice/practice-bar";
 
 export const dynamic = "force-dynamic";
 
@@ -40,26 +37,19 @@ export default async function AspectParticlePracticePage({
   const quiz = buildAspectParticleQuiz(25, Math.random, filter);
   return (
     <PageShell user={user} width="4xl" dense>
-      <PageHeader
-        dense
+      <PracticeBar
         title="了・过・着の練習"
         description={`${ASPECT_PARTICLE_PRACTICE.description} 日本語の意味に合うものを、4つの中から選んでください。HSK の級は、文のいちばん難しい語で決めています。`}
-        actions={
-          canSave ? (
-            <Button asChild variant="outline" size="sm">
-              <Link href="/practice/complements/records">
-                <History />
-                過去の記録
-              </Link>
-            </Button>
-          ) : undefined
+        exitHref="/practice"
+        recordsHref={canSave ? "/practice/complements/records" : null}
+        levels={
+          <HskLevelPicker
+            path={PATH}
+            current={level}
+            counts={counts}
+            total={countAspectParticleQuestions()}
+          />
         }
-      />
-      <HskLevelPicker
-        path={PATH}
-        current={level}
-        counts={counts}
-        total={countAspectParticleQuestions()}
       />
       <HskBasisSwitch current={basis} returnTo={returnTo} />
       {quiz.length === 0 ? (

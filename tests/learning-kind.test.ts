@@ -63,3 +63,22 @@ test("a translation note shows Japanese and Chinese without a diff", () => {
   assert.doesNotMatch(html, /添削なし/);
   assert.doesNotMatch(html, /<del|<ins/);
 });
+
+test("a correction note left as it was shows its sentence once in the body", () => {
+  const html = render(
+    toLearningEntry({
+      ...record,
+      originalText: "我去了学校。",
+      correctedText: "我去了学校。",
+    }),
+  );
+  assert.match(html, /添削なし/);
+  assert.doesNotMatch(html, /添削前/);
+  assert.match(html, /添削後/);
+});
+
+test("a corrected note shows the sentence before and after", () => {
+  const html = render(toLearningEntry(record));
+  assert.match(html, /添削前/);
+  assert.match(html, /添削後/);
+});

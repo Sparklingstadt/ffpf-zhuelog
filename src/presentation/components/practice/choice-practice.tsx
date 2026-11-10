@@ -180,24 +180,46 @@ export function ProgressBar({
   );
 }
 
+// Whether a key press is meant for a field or a shortcut of the browser, and
+// so not for a page's own keys.
+export function isTypingOrShortcut(event: KeyboardEvent) {
+  if (event.altKey || event.ctrlKey || event.metaKey || event.repeat)
+    return true;
+  const target = event.target as HTMLElement | null;
+  return Boolean(
+    target?.isContentEditable || target?.closest("input, textarea, select"),
+  );
+}
+
+// Whether the key press lands on a button or a link, which Enter and Space
+// already press.
+export function isOnControl(event: KeyboardEvent) {
+  const target = event.target as HTMLElement | null;
+  return Boolean(target?.closest("button, a, summary"));
+}
+
 export function Choice({
   preposition,
   compact,
   state,
   disabled,
   onPick,
+  shortcut,
 }: {
   preposition: string;
   compact: boolean;
   state: "idle" | "correct" | "wrong";
   disabled: boolean;
   onPick: () => void;
+  // The number key that picks it, when the page listens for one.
+  shortcut?: number;
 }) {
   return (
     <Button
       type="button"
       variant="outline"
       disabled={disabled}
+      aria-keyshortcuts={shortcut ? String(shortcut) : undefined}
       aria-label={
         state === "correct"
           ? `${preposition}（正解）`
@@ -366,6 +388,30 @@ export function ChoicePractice({
     showQuestion();
   }
 
+  // The keys 1 to 4 pick the choices in the order they show, and Enter goes
+  // on once the answer is found. Keys on a button or link are left to it, so
+  // Enter on the focused "next" counts once.
+  useEffect(() => {
+    if (!question) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (isTypingOrShortcut(event)) return;
+      if (event.key === "Enter") {
+        if (!solved || isOnControl(event)) return;
+        event.preventDefault();
+        next();
+        return;
+      }
+      const position = Number(event.key);
+      if (!Number.isInteger(position) || position < 1) return;
+      const choice = question!.choices[position - 1];
+      if (choice === undefined) return;
+      event.preventDefault();
+      pick(choice);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+
   function restart() {
     const startAt = Date.now();
     setQuiz(buildNextQuiz());
@@ -437,10 +483,11 @@ export function ChoicePractice({
                 lang="zh-CN"
                 className="grid w-full max-w-md grid-cols-2 gap-3"
               >
-                {question.choices.map((preposition) => (
+                {question.choices.map((preposition, position) => (
                   <Choice
                     key={preposition}
                     preposition={preposition}
+                    shortcut={position + 1}
                     compact={compactHeading}
                     state={
                       solved && preposition === question.answer
@@ -459,6 +506,10 @@ export function ChoicePractice({
                   ちがいます。もう一度選んでください。
                 </p>
               ) : null}
+              {/* Only where a keyboard is likely: wide screens with a mouse. */}
+              <p className="hidden text-xs text-muted-foreground lg:pointer-fine:block">
+                キーボードの 1〜4 で選べます · Enter で次の問題
+              </p>
             </CardContent>
           </Card>
 

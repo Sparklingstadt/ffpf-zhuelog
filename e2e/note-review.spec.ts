@@ -78,3 +78,32 @@ test("a note in the trash leaves the review until it is restored", async ({
   ).toBeVisible();
   await expect(page.getByText(note.text)).toHaveCount(1);
 });
+
+test("space rates a turned card as suggested, and the last card says so", async ({
+  page,
+  context,
+  db,
+}) => {
+  await seedNotes(db, adminOwnerId, [note]);
+  await asAdmin(context);
+  await page.goto(notePath);
+  await page.getByRole("button", { name: "復習に入れる" }).click();
+  await expect(page.getByText("今日の復習に入っています")).toBeVisible();
+
+  await page.goto("/review");
+  await expect(page.getByText("最後の1問")).toBeVisible();
+  await page.getByRole("button", { name: "めくる" }).click();
+  const suggested = page
+    .getByRole("group", { name: "思い出せた度合い" })
+    .getByRole("button", { name: "できた" });
+  await expect(suggested).toHaveAttribute("aria-keyshortcuts", "3 Space");
+  // Away from the buttons, so the page's own key is what answers.
+  await page.evaluate(() => (document.activeElement as HTMLElement).blur());
+  await page.keyboard.press("Space");
+  await expect(page.getByText("1問 復習しました")).toBeVisible();
+  const { rows } = await db.query(
+    `SELECT "rating" FROM "ReviewLog" WHERE "ownerId" = $1`,
+    [adminOwnerId],
+  );
+  expect(rows).toEqual([{ rating: 3 }]);
+});

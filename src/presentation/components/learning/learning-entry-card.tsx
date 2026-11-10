@@ -107,26 +107,30 @@ export function LearningEntryCard({
           <CardContent
             className={
               hasHints
-                ? "grid min-w-0 grid-cols-1 p-0 md:grid-cols-[minmax(0,1fr)_16rem]"
+                ? "grid min-w-0 grid-cols-1 p-0 md:grid-cols-[minmax(0,1fr)_16rem] lg:grid-cols-[minmax(0,1fr)_18rem]"
                 : "min-w-0 p-0"
             }
           >
             <div className="min-w-0 space-y-4 p-5 sm:p-6">
-              <div className="space-y-1.5">
-                <p className={sectionLabelClassName}>
-                  {diff ? "添削前" : "日本語"}
-                </p>
-                <p
-                  lang={diff ? "zh-Hans" : "ja"}
-                  className="text-base leading-7 text-muted-foreground"
-                >
-                  {diff ? (
-                    <DiffText segments={diff.original} />
-                  ) : (
-                    entry.originalText
-                  )}
-                </p>
-              </div>
+              {/* A note the correction left as it was would show the same
+                  sentence twice; it shows only the corrected one. */}
+              {diff && diff.changeCount === 0 ? null : (
+                <div className="space-y-1.5">
+                  <p className={sectionLabelClassName}>
+                    {diff ? "添削前" : "日本語"}
+                  </p>
+                  <p
+                    lang={diff ? "zh-Hans" : "ja"}
+                    className="text-base leading-7 text-muted-foreground"
+                  >
+                    {diff ? (
+                      <DiffText segments={diff.original} />
+                    ) : (
+                      entry.originalText
+                    )}
+                  </p>
+                </div>
+              )}
               <div className="space-y-1.5">
                 <p className="flex items-center gap-1.5 text-xs font-medium tracking-wider text-primary">
                   <span className="size-1.5 rounded-full bg-primary" />
@@ -135,7 +139,7 @@ export function LearningEntryCard({
                 </p>
                 <p
                   lang="zh-Hans"
-                  className="text-xl leading-9 font-medium sm:text-[1.375rem]"
+                  className="text-xl leading-9 font-semibold sm:text-2xl sm:leading-10 lg:text-[1.75rem] lg:leading-[2.75rem]"
                 >
                   {diff ? (
                     <DiffText segments={diff.corrected} />

@@ -126,3 +126,40 @@ test("a solved question shows the example's pinyin above it", async ({
     await pinyin.evaluate((el) => el.nextElementSibling?.getAttribute("lang")),
   ).toBe("zh-CN");
 });
+
+test("the keys 1 to 4 pick the choices and Enter goes on", async ({ page }) => {
+  await asGuest(page, "/practice/prepositions");
+  await page.goto("/practice/prepositions");
+  await expect(
+    page.getByRole("link", { name: "練習をやめる" }),
+  ).toHaveAttribute("href", "/practice");
+  const choices = page.getByRole("group", { name: "介詞を選ぶ" });
+  const buttons = choices.getByRole("button");
+  await expect(buttons).toHaveCount(4);
+  for (let i = 0; i < 4; i++)
+    await expect(buttons.nth(i)).toHaveAttribute(
+      "aria-keyshortcuts",
+      String(i + 1),
+    );
+  const first = await choices.innerText();
+
+  for (let key = 1; key <= 4; key++) {
+    await page.keyboard.press(String(key));
+    if (await choices.getByRole("button", { name: /（正解）$/ }).count()) break;
+  }
+  await expect(choices.getByRole("button", { name: /（正解）$/ })).toHaveCount(
+    1,
+  );
+  await expect(page.getByRole("progressbar", { name: "進捗" })).toHaveAttribute(
+    "aria-valuenow",
+    "1",
+  );
+  // Away from "next", so the page's own Enter is what goes on.
+  await page.evaluate(() => (document.activeElement as HTMLElement).blur());
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("button", { name: "次へ" })).toHaveCount(0);
+  await expect(choices.getByRole("button", { name: /（正解）$/ })).toHaveCount(
+    0,
+  );
+  await expect.poll(() => choices.innerText()).not.toBe(first);
+});
