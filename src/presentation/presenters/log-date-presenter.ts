@@ -35,3 +35,9 @@ export function formatTokyoTime(date: Date) {
     hour12: false,
   }).format(date);
 }
+
+// 「11/12」: the month and day in Tokyo, for short lists of recent things.
+export function formatTokyoMonthDay(date: Date) {
+  const { month, day } = getTokyoDateParts(date);
+  return `${month}/${day}`;
+}

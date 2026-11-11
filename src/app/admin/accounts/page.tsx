@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import {
@@ -15,7 +14,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/presentation/components/ui/card";
-import { AppHeader } from "@/presentation/components/layout/app-header";
+import { PageHeader } from "@/presentation/components/layout/page-header";
+import { PageShell } from "@/presentation/components/layout/page-shell";
 import { Button } from "@/presentation/components/ui/button";
 
 export const dynamic = "force-dynamic";
@@ -37,72 +37,68 @@ export default async function AdminAccountsPage({
   const accounts = await memberAccounts.listAccounts();
 
   return (
-    <>
-      <AppHeader user={user} />
-      <main className="flex-1">
-        <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-4 py-8 sm:px-6 sm:py-12">
-          <header className="space-y-2 border-b pb-6">
-            <Link
-              href="/"
-              className="text-sm text-muted-foreground hover:underline"
-            >
-              ← トップへ戻る
-            </Link>
-            <h1 className="text-3xl font-semibold tracking-tight">
-              アカウント管理
-            </h1>
-            <p className="text-sm leading-6 text-muted-foreground">
-              ID・パスワードでログインするアカウントを作成し、パスワードを再設定します。
-            </p>
-          </header>
+    <PageShell user={user} width="6xl">
+      <PageHeader
+        title="アカウント管理"
+        description="ID・パスワードでログインするアカウントを作成し、パスワードを再設定します。"
+        dense
+        actions={null}
+      />
 
-          {actAsFailed ? (
-            <p
-              role="alert"
-              className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-            >
-              この会員として操作できませんでした。会員が存在するか、API
-              が最新かを確認してください。
-            </p>
-          ) : null}
+      {actAsFailed ? (
+        <p
+          role="alert"
+          className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+        >
+          この会員として操作できませんでした。会員が存在するか、API
+          が最新かを確認してください。
+        </p>
+      ) : null}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>アカウントを作成</CardTitle>
-              <CardDescription>
-                作成したパスワードは作成直後の1回だけ表示されます。
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <CreateAccountForm />
-            </CardContent>
-          </Card>
+      <div className="grid items-start gap-6 lg:grid-cols-[22rem_minmax(0,1fr)]">
+        <Card>
+          <CardHeader>
+            <CardTitle>アカウントを作成</CardTitle>
+            <CardDescription>
+              作成したパスワードは作成直後の1回だけ表示されます。
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CreateAccountForm />
+          </CardContent>
+        </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>アカウント一覧</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {accounts.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  まだアカウントはありません。
-                </p>
-              ) : (
-                <ul className="divide-y">
-                  {accounts.map((account) => (
-                    <li
-                      key={account.id}
-                      className="space-y-3 py-4 first:pt-0 last:pb-0"
-                    >
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                        <span className="font-mono text-sm font-medium break-all">
-                          {account.loginId}
-                        </span>
-                        <span className="text-sm">{account.displayName}</span>
-                        <span className="text-xs text-muted-foreground sm:ml-auto">
-                          作成日 {dateFormat.format(account.createdAt)}
-                        </span>
-                      </div>
+        <Card className="min-w-0">
+          <CardHeader>
+            <CardTitle>
+              アカウント一覧{" "}
+              <span className="text-sm font-normal text-muted-foreground">
+                {accounts.length}件
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {accounts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                まだアカウントはありません。
+              </p>
+            ) : (
+              <ul className="divide-y">
+                {accounts.map((account) => (
+                  <li
+                    key={account.id}
+                    className="flex flex-wrap items-start gap-x-4 gap-y-3 py-4 first:pt-0 last:pb-0"
+                  >
+                    <div className="min-w-48 flex-1">
+                      <p className="font-mono text-sm font-medium break-all">
+                        {account.loginId}
+                      </p>
+                      <p className="text-sm">{account.displayName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        作成日 {dateFormat.format(account.createdAt)}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-start gap-2">
                       <form
                         action={startActingAsAction.bind(null, account.ownerId)}
                       >
@@ -121,14 +117,14 @@ export default async function AdminAccountsPage({
                         accountId={account.id}
                         loginId={account.loginId}
                       />
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </main>
-    </>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </PageShell>
   );
 }

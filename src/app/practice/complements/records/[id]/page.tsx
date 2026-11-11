@@ -1,15 +1,13 @@
 import { roundModeLabel } from "@/domain/practice/complement-record";
-import { ArrowLeft } from "lucide-react";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { complementRecords } from "@/composition/practice-container";
 import { accuracyPercent } from "@/domain/practice/preposition-record";
+import { Breadcrumbs } from "@/presentation/components/layout/breadcrumbs";
 import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
 import { PrepositionAnswerList } from "@/presentation/components/practice/preposition-answer-list";
 import { PrepositionStats } from "@/presentation/components/practice/preposition-stats";
-import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
 import { requirePracticeRecordUser } from "@/presentation/guards/practice-guard";
 import { formatTokyoDateTime } from "@/presentation/presenters/log-date-presenter";
@@ -33,16 +31,21 @@ export default async function ComplementRecordPage({
 
   return (
     <PageShell user={user} width="4xl">
+      <Breadcrumbs
+        items={[
+          { label: "練習", href: "/practice" },
+          {
+            label: "補語、量詞、了・过・着の記録",
+            href: "/practice/complements/records",
+          },
+          { label: formatTokyoDateTime(record.createdAt) },
+        ]}
+      />
       <PageHeader
         title={`${formatTokyoDateTime(record.createdAt)} の練習`}
         description={`${roundModeLabel(record.mode)} · ${record.questionCount}問中 ${record.firstTryCount}問を1回目で正解`}
-        actions={
-          <Button asChild variant="outline" size="sm">
-            <Link href="/practice/complements/records">
-              <ArrowLeft /> 記録の一覧へ
-            </Link>
-          </Button>
-        }
+        actions={null}
+        dense
       />
       <Card>
         <CardContent className="flex flex-col items-center gap-6">
