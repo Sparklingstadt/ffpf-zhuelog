@@ -31,6 +31,9 @@ type VocabularyEntry struct {
 	SourceEntryID string
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+	// NextReview is when the word's review card is next due, as
+	// ListVocabulary fills it in; zero when the word has no card.
+	NextReview time.Time
 }
 
 const vocabularyColumns = `"id", "language", "word", "pinyin", "meaning", "sourceEntryId", "createdAt", "updatedAt"`
@@ -52,14 +55,29 @@ func nullableText(s string) *string {
 	return &s
 }
 
-// ListVocabulary returns up to limit of the owner's entries, newest first.
+// ListVocabulary returns up to limit of the owner's entries, newest first,
+// each with when its review card is next due.
 func (s *Store) ListVocabulary(ctx context.Context, ownerID string, limit int) ([]VocabularyEntry, error) {
-	rows, err := s.pool.Query(ctx, `SELECT `+vocabularyColumns+` FROM "VocabularyEntry"
- WHERE "ownerId" = $1 ORDER BY "createdAt" DESC, "id" DESC LIMIT $2`, ownerID, limit)
+	rows, err := s.pool.Query(ctx, `SELECT `+vocabularyColumns+`, (SELECT r."due" FROM "ReviewItem" r
+   WHERE r."ownerId" = "VocabularyEntry"."ownerId" AND r."kind" = $3 AND r."targetId" = "VocabularyEntry"."id")
+ FROM "VocabularyEntry"
+ WHERE "ownerId" = $1 ORDER BY "createdAt" DESC, "id" DESC LIMIT $2`, ownerID, limit, ReviewKindVocabulary)
 	if err != nil {
 		return nil, fmt.Errorf("store: list vocabulary: %w", err)
 	}
-	out, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (VocabularyEntry, error) { return scanVocabulary(row) })
+	out, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (VocabularyEntry, error) {
+		var v VocabularyEntry
+		var source *string
+		var next *time.Time
+		err := row.Scan(&v.ID, &v.Language, &v.Word, &v.Pinyin, &v.Meaning, &source, &v.CreatedAt, &v.UpdatedAt, &next)
+		if source != nil {
+			v.SourceEntryID = *source
+		}
+		if next != nil {
+			v.NextReview = *next
+		}
+		return v, err
+	})
 	if err != nil {
 		return nil, fmt.Errorf("store: list vocabulary: %w", err)
 	}

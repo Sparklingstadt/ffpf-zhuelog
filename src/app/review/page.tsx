@@ -18,6 +18,7 @@ import {
 import { Alert, AlertDescription } from "@/presentation/components/ui/alert";
 import { Button } from "@/presentation/components/ui/button";
 import { genericErrorMessage } from "@/presentation/presenters/generic-error-message";
+import { formatInterval } from "@/presentation/presenters/review-schedule-presenter";
 
 export const dynamic = "force-dynamic";
 
@@ -38,20 +39,29 @@ async function loadDue(): Promise<DueReviews | null> {
 
 // The questions are shuffled here, so the server and the browser render the
 // same choices. Words and learning notes are flashcards. Items whose
-// question is gone from the data are skipped.
-function toCards(due: DueReviews): ReviewCard[] {
+// question is gone from the data are skipped. How long each answer puts an
+// item off is worked out here too, from the same moment.
+function toCards(due: DueReviews, now: Date): ReviewCard[] {
   return due.items.flatMap((item): ReviewCard[] => {
+    const nextIn = item.nextDue
+      ? ([
+          formatInterval(now, item.nextDue[0]),
+          formatInterval(now, item.nextDue[1]),
+          formatInterval(now, item.nextDue[2]),
+          formatInterval(now, item.nextDue[3]),
+        ] as const)
+      : null;
     if (item.kind === "vocabulary")
       return item.vocabulary
-        ? [{ type: "word", itemId: item.id, word: item.vocabulary }]
+        ? [{ type: "word", itemId: item.id, word: item.vocabulary, nextIn }]
         : [];
     if (item.kind === "entry")
       return item.entry
-        ? [{ type: "note", itemId: item.id, entry: item.entry }]
+        ? [{ type: "note", itemId: item.id, entry: item.entry, nextIn }]
         : [];
     const choice = reviewChoice(item.kind, item.targetId);
     if (!choice) return [];
-    return [{ type: "choice", itemId: item.id, ...choice }];
+    return [{ type: "choice", itemId: item.id, ...choice, nextIn }];
   });
 }
 
@@ -79,7 +89,7 @@ export default async function ReviewPage() {
       />
       {due ? (
         <ReviewSession
-          cards={toCards(due)}
+          cards={toCards(due, new Date())}
           remaining={due.count - due.items.length}
           answerReview={answerReviewAction}
         />

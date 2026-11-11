@@ -207,3 +207,65 @@ func TestStreakFrom(t *testing.T) {
 		}
 	}
 }
+
+func TestCountDueReviewItemsByKind(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	a := reviewOwner(t, s)
+	now := fixedNow()
+	if got, err := s.CountDueReviewItemsByKind(ctx, a, now); err != nil || len(got) != 0 {
+		t.Fatalf("nothing queued = %v, %v", got, err)
+	}
+	if _, err := s.EnqueueReviewItems(ctx, a, []ReviewTarget{
+		target("preposition", "P001:学校"), target("complement", "result-01"), target("complement", "result-02"),
+	}, now); err != nil {
+		t.Fatal(err)
+	}
+	// One queued for later is not due yet.
+	if _, err := s.EnqueueReviewItems(ctx, a, []ReviewTarget{target("complement", "result-03")}, now.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.CountDueReviewItemsByKind(ctx, a, now)
+	if err != nil || len(got) != 2 || got["preposition"] != 1 || got["complement"] != 2 {
+		t.Errorf("by kind = %v, %v", got, err)
+	}
+}
+
+func TestReviewDaysSaysWhichOfTheLastDaysHadAReview(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	a := reviewOwner(t, s)
+	// 2026-10-20 23:30 JST.
+	now := time.Date(2026, 10, 20, 14, 30, 0, 0, time.UTC)
+	if days, err := s.ReviewDays(ctx, a, now, 7); err != nil || len(days) != 7 || days[6] {
+		t.Fatalf("no reviews = %v, %v", days, err)
+	}
+	if _, err := s.EnqueueReviewItems(ctx, a, []ReviewTarget{target("complement", "result-01")}, now.AddDate(0, 0, -10)); err != nil {
+		t.Fatal(err)
+	}
+	due, _ := s.ListDueReviewItems(ctx, a, now, 10)
+	// Oct 12 JST (before the 7 days), Oct 15 and Oct 20 JST (Oct 19 15:10 UTC is 00:10 Oct 20 JST).
+	for _, at := range []time.Time{
+		time.Date(2026, 10, 12, 3, 0, 0, 0, time.UTC),
+		time.Date(2026, 10, 15, 3, 0, 0, 0, time.UTC),
+		time.Date(2026, 10, 19, 15, 10, 0, 0, time.UTC),
+	} {
+		if _, err := s.pool.Exec(ctx, `INSERT INTO "ReviewLog"
+ ("id", "ownerId", "itemId", "rating", "state", "due", "stability", "difficulty", "scheduledDays", "reviewedAt")
+ VALUES ($1, $2, $3, 3, 0, $4, 0, 0, 0, $4)`, newUUID(), a, due[0].ID, dbTime(at)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	days, err := s.ReviewDays(ctx, a, now, 7)
+	// Oct 14 to Oct 20.
+	want := []bool{false, true, false, false, false, false, true}
+	if err != nil || len(days) != 7 {
+		t.Fatalf("days = %v, %v", days, err)
+	}
+	for i := range want {
+		if days[i] != want[i] {
+			t.Errorf("days = %v, want %v", days, want)
+			break
+		}
+	}
+}

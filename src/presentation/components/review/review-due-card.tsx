@@ -3,17 +3,32 @@ import Link from "next/link";
 
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
+import { cn } from "@/presentation/lib/utils";
+import {
+  dueByGroup,
+  recentDays,
+} from "@/presentation/presenters/review-schedule-presenter";
 
 // The top of the home: today's reviews as the main card, with its count
-// large and the one primary button, and beside it the review streak and the
-// ways to the study log and the vocabulary book.
+// large, what it is made of and the one primary button, and beside it the
+// review streak, the last 7 days and the ways to the study log and the
+// vocabulary book.
 export function ReviewDueCard({
   count,
   streakDays,
+  byKind = {},
+  recent = [],
+  now,
 }: {
   count: number;
   streakDays: number;
+  byKind?: Readonly<Record<string, number>>;
+  // Whether each of the last days had a review, oldest first.
+  recent?: readonly boolean[];
+  now: Date;
 }) {
+  const groups = dueByGroup(byKind);
+  const days = recentDays(recent, now);
   return (
     <section
       aria-labelledby="review-due-heading"
@@ -37,11 +52,30 @@ export function ReviewDueCard({
               </span>
               <span className="text-base">問</span>
             </p>
-            <p className="max-w-md text-sm leading-6 text-muted-foreground">
-              {count > 0
-                ? "練習で間違えた問題、単語帳の語句、復習に入れた学習ノートの期日が来ています。"
-                : "期日が来ているものはありません。練習で間違えた問題、単語帳の語句、復習に入れた学習ノートがここに入ります。"}
-            </p>
+            {count > 0 && groups.length > 0 ? (
+              <ul
+                aria-label="復習の内訳"
+                className="flex flex-wrap gap-1.5 pt-1 text-xs"
+              >
+                {groups.map((group) => (
+                  <li
+                    key={group.label}
+                    className="rounded-full bg-muted px-2.5 py-1 text-muted-foreground"
+                  >
+                    {group.label}{" "}
+                    <span className="font-semibold text-foreground tabular-nums">
+                      {group.count}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="max-w-md text-sm leading-6 text-muted-foreground">
+                {count > 0
+                  ? "練習で間違えた問題、単語帳の語句、復習に入れた学習ノートの期日が来ています。"
+                  : "期日が来ているものはありません。練習で間違えた問題、単語帳の語句、復習に入れた学習ノートがここに入ります。"}
+              </p>
+            )}
           </div>
           {count > 0 ? (
             <Button asChild size="lg" className="h-12 px-7 text-base">
@@ -68,6 +102,34 @@ export function ReviewDueCard({
             </span>
             日
           </p>
+          {days.length > 0 ? (
+            <ol
+              aria-label="この7日間"
+              className="grid w-full grid-cols-7 gap-1.5 text-center text-[11px] text-muted-foreground max-md:order-last"
+            >
+              {days.map((day, i) => (
+                <li
+                  key={i}
+                  className={cn(
+                    "flex flex-col items-center gap-1",
+                    i === days.length - 1 && "font-semibold text-foreground",
+                  )}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "size-6 rounded-md",
+                      day.reviewed ? "bg-primary" : "bg-muted",
+                    )}
+                  />
+                  <span aria-hidden="true">{day.label}</span>
+                  <span className="sr-only">
+                    {day.date} {day.reviewed ? "復習した" : "復習なし"}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          ) : null}
           <div className="flex flex-wrap gap-2">
             <Button asChild variant="outline" size="sm">
               <Link href="/study-log">

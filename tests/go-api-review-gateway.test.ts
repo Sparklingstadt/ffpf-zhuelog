@@ -123,3 +123,56 @@ test("a learning note's item carries the note", async () => {
     ["了の位置", "二つ目"],
   );
 });
+
+test("listDue carries the counts by kind, the recent days and each item's next dues", async () => {
+  const nextDue = [
+    "2026-11-05T10:01:00.000Z",
+    "2026-11-05T10:06:00.000Z",
+    "2026-11-05T10:10:00.000Z",
+    "2026-11-20T10:00:00.000Z",
+  ];
+  const { call } = fakeCall({
+    count: 3,
+    byKind: { vocabulary: 2, entry: 1 },
+    streakDays: 1,
+    recentDays: [false, false, false, false, false, true, true],
+    items: [{ ...itemJson, nextDue }, itemJson],
+  });
+  const due = await createReviewGateway(call).listDue(20);
+  assert.deepEqual(due.byKind, { vocabulary: 2, entry: 1 });
+  assert.deepEqual(due.recentDays, [
+    false,
+    false,
+    false,
+    false,
+    false,
+    true,
+    true,
+  ]);
+  assert.deepEqual(
+    due.items[0].nextDue,
+    nextDue.map((d) => new Date(d)),
+  );
+  assert.equal(due.items[1].nextDue, null);
+});
+
+test("an older Go without the summary still reads", async () => {
+  const { call } = fakeCall({ count: 0, streakDays: 0, items: [] });
+  const due = await createReviewGateway(call).listDue(20);
+  assert.deepEqual(due.byKind, {});
+  assert.deepEqual(due.recentDays, []);
+});
+
+test("countDue and entriesInReview read their own routes", async () => {
+  const count = fakeCall({ count: 4 });
+  assert.equal(await createReviewGateway(count.call).countDue(), 4);
+  assert.deepEqual(count.calls, [
+    { path: "/v1/reviews/count", method: "GET", body: undefined },
+  ]);
+  const entries = fakeCall({ entryIds: ["c1", "c2"] });
+  const ids = await createReviewGateway(entries.call).entriesInReview();
+  assert.deepEqual([...ids], ["c1", "c2"]);
+  assert.deepEqual(entries.calls, [
+    { path: "/v1/reviews/entries", method: "GET", body: undefined },
+  ]);
+});

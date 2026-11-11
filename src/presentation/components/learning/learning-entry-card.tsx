@@ -1,5 +1,6 @@
 import { CalendarDays, ChevronDown, Clock3 } from "lucide-react";
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
 import { SpeakButton } from "@/presentation/components/speech/speak-button";
@@ -22,6 +23,8 @@ type LearningEntryCardProps = {
   href?: string;
   linkLabel?: string;
   defaultOpen?: boolean;
+  // Buttons for the note at the foot of the card, before the link.
+  actions?: ReactNode;
 };
 
 // The light theme's primary and destructive are too pale for small text on
@@ -56,6 +59,7 @@ export function LearningEntryCard({
   href,
   linkLabel = "ノートを開く",
   defaultOpen = true,
+  actions,
 }: LearningEntryCardProps) {
   const translation = entry.kind === "translation";
   // A translation has no differences to show: skip the diff entirely.
@@ -188,12 +192,17 @@ export function LearningEntryCard({
                 {formatTokyoDateTime(entry.createdAt)} JST
               </time>
             </div>
-            {href ? (
-              <Button asChild variant="ghost" size="sm" className="ml-auto">
-                <Link href={href}>
-                  <CalendarDays /> {linkLabel}
-                </Link>
-              </Button>
+            {actions || href ? (
+              <div className="ml-auto flex flex-wrap items-center gap-1">
+                {actions}
+                {href ? (
+                  <Button asChild variant="ghost" size="sm">
+                    <Link href={href}>
+                      <CalendarDays /> {linkLabel}
+                    </Link>
+                  </Button>
+                ) : null}
+              </div>
             ) : null}
           </CardFooter>
         </div>

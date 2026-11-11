@@ -18,14 +18,23 @@ export type ReviewItem = {
   lastReview: Date | null;
   vocabulary: VocabularyCard | null;
   entry: LearningEntry | null;
+  // When each answer, もう一度 to 簡単, would bring the item back; null when
+  // Go could not tell (only the due list says).
+  nextDue: readonly [Date, Date, Date, Date] | null;
 };
 
 export type DueReviews = {
   // Every item due now, which may be more than items holds.
   count: number;
+  // count by kind ("entry", "vocabulary", "preposition", "complement");
+  // kinds with nothing due are absent.
+  byKind: Readonly<Record<string, number>>;
   // Days in a row, Japan time, with at least one review, up to today or
   // yesterday.
   streakDays: number;
+  // Whether there was a review on each of the last 7 days, Japan time,
+  // oldest first; the last is today.
+  recentDays: readonly boolean[];
   items: ReviewItem[];
 };
 
