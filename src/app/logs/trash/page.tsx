@@ -1,5 +1,4 @@
-import { ArrowLeft, RotateCcw, Trash2 } from "lucide-react";
-import Link from "next/link";
+import { RotateCcw, Trash2 } from "lucide-react";
 
 import { learningNotes } from "@/composition/learning-container";
 import {
@@ -8,6 +7,7 @@ import {
   restoreLearningEntryAction,
 } from "@/presentation/actions/note-trash-actions";
 import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
+import { Breadcrumbs } from "@/presentation/components/layout/breadcrumbs";
 import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
 import { LearningEntryCard } from "@/presentation/components/learning/learning-entry-card";
@@ -18,7 +18,6 @@ import {
   purgeConfirmMessage,
   emptyConfirmMessage,
 } from "@/presentation/components/records/trash-list";
-import { Button } from "@/presentation/components/ui/button";
 import { requireNonGuestOwner } from "@/presentation/guards/record-owner-guard";
 import { formatTokyoDateTime } from "@/presentation/presenters/log-date-presenter";
 
@@ -36,17 +35,19 @@ export default async function LearningTrashPage() {
     owner.kind === "self" ? await learningNotes.listTrashed() : null;
 
   return (
-    <PageShell user={user} width="5xl">
+    <PageShell user={user} width="4xl">
+      <Breadcrumbs
+        items={[
+          { label: "日付別の学習ノート", href: "/logs" },
+          { label: "ゴミ箱" },
+        ]}
+      />
       <PageHeader
         title="学習ノートのゴミ箱"
         description={trash ? `ゴミ箱：${trash.total}件` : null}
+        dense
         actions={
           <>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/logs">
-                <ArrowLeft /> 日付一覧へ
-              </Link>
-            </Button>
             {trash && trash.total > 0 ? (
               <NoteActionForm
                 action={emptyLearningTrashAction}
@@ -67,6 +68,9 @@ export default async function LearningTrashPage() {
         <TrashEmpty />
       ) : (
         <>
+          <p className="text-sm text-muted-foreground">
+            元に戻すと、元の日付と番号のまま学習ノートに戻ります。完全に削除すると、復習の記録も消え、戻せません。
+          </p>
           <TrashOverflow shown={trash.entries.length} total={trash.total} />
           <div className="grid gap-4">
             {trash.entries.map((entry) => (

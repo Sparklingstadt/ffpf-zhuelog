@@ -1,4 +1,4 @@
-import { ArrowLeft, Download } from "lucide-react";
+import { Download } from "lucide-react";
 import Link from "next/link";
 
 import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
@@ -26,41 +26,52 @@ export default async function LearningCsvImportPage() {
   );
 
   return (
-    <PageShell user={user} width="4xl">
+    <PageShell user={user} width="6xl">
       <PageHeader
         title="CSVをインポート"
         description="UTF-8のCSVファイルを選んで、自分の学習ノートに学習文を一括登録します。"
-        actions={
-          <>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/">
-                <ArrowLeft /> ホームへ
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/export">
-                <Download /> CSVでエクスポート
-              </Link>
-            </Button>
-          </>
-        }
+        dense
+        actions={null}
       />
 
       {owner.kind !== "self" ? (
         <ReauthNotice subject="学習ノート" />
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>CSVファイル</CardTitle>
-            <CardDescription>
-              インポートした学習文は、ホームと日付一覧に表示されます。
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <CsvImportForm />
-            <CsvFormatGuide />
-          </CardContent>
-        </Card>
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
+          <div className="flex min-w-0 flex-col gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>CSVファイル</CardTitle>
+                <CardDescription>
+                  インポートした学習文は、ホームと日付一覧に表示されます。
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <CsvImportForm />
+              </CardContent>
+            </Card>
+            <Card className="py-5">
+              <CardContent className="flex flex-wrap items-center gap-4">
+                <div className="min-w-60 flex-1">
+                  <h2 className="font-semibold">書き出す</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    学習ノートを選んで、取り込みと同じ形の CSV で保存します。
+                  </p>
+                </div>
+                <Button asChild variant="outline">
+                  <Link href="/export">
+                    <Download /> CSVでエクスポート
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+          <Card>
+            <CardContent>
+              <CsvFormatGuide />
+            </CardContent>
+          </Card>
+        </div>
       )}
     </PageShell>
   );
