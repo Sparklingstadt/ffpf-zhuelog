@@ -17,7 +17,10 @@ type Reviews interface {
 	EnqueueReviewItems(ctx context.Context, ownerID string, targets []store.ReviewTarget, now time.Time) (int, error)
 	ListDueReviewItems(ctx context.Context, ownerID string, now time.Time, limit int) ([]store.ReviewItem, error)
 	CountDueReviewItems(ctx context.Context, ownerID string, now time.Time) (int, error)
+	CountDueReviewItemsByKind(ctx context.Context, ownerID string, now time.Time) (map[string]int, error)
 	ReviewStreak(ctx context.Context, ownerID string, now time.Time) (int, error)
+	ReviewDays(ctx context.Context, ownerID string, now time.Time, days int) ([]bool, error)
+	EntryIDsInReview(ctx context.Context, ownerID string) ([]string, error)
 	RecordReview(ctx context.Context, ownerID, itemID, logID string, rating review.Rating, now time.Time) (store.ReviewItem, error)
 	EntryInReview(ctx context.Context, ownerID, entryID string) (bool, error)
 	AddEntryReview(ctx context.Context, ownerID, entryID string, now time.Time) error
@@ -34,6 +37,10 @@ const (
 
 	reviewDueDefaultLimit = 20
 	reviewDueMaxLimit     = 100
+
+	// reviewRecentDays is how many days, up to today, the due list says
+	// whether the owner reviewed on.
+	reviewRecentDays = 7
 )
 
 // prepositionReviewTargets are the missed questions of a preposition round
@@ -86,6 +93,9 @@ type reviewItemJSON struct {
 	Vocabulary *vocabularyJSON `json:"vocabulary,omitempty"`
 	// Entry is the note an "entry" item names; absent otherwise.
 	Entry *entryJSON `json:"entry,omitempty"`
+	// NextDue is when the item would next be due after each answer, by
+	// rating (もう一度, 難しい, できた, 簡単); only in the due list.
+	NextDue []string `json:"nextDue,omitempty"`
 }
 
 func toReviewItemJSON(it store.ReviewItem) reviewItemJSON {
@@ -108,13 +118,17 @@ func toReviewItemJSON(it store.ReviewItem) reviewItemJSON {
 	return out
 }
 
-// listDueReviews returns how many of the owner's items are due now, the
-// first of them (?limit=, 1 to 100, default 20) with the longest overdue
-// first, and how many days in a row (Japan time) the owner has reviewed.
+// listDueReviews returns how many of the owner's items are due now, in all
+// and by kind, the first of them (?limit=, 1 to 100, default 20) with the
+// longest overdue first and when each answer would bring each back, how many
+// days in a row (Japan time) the owner has reviewed, and whether they
+// reviewed on each of the last 7 days, oldest first.
 func listDueReviews(rv Reviews, now func() time.Time) http.Handler {
 	type response struct {
 		Count      int              `json:"count"`
+		ByKind     map[string]int   `json:"byKind"`
 		StreakDays int              `json:"streakDays"`
+		RecentDays []bool           `json:"recentDays"`
 		Items      []reviewItemJSON `json:"items"`
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -128,10 +142,14 @@ func listDueReviews(rv Reviews, now func() time.Time) http.Handler {
 			limit = n
 		}
 		owner, at := principalFrom(r.Context()).OwnerID, now()
-		count, err := rv.CountDueReviewItems(r.Context(), owner, at)
+		byKind, err := rv.CountDueReviewItemsByKind(r.Context(), owner, at)
 		if err != nil {
 			writeServiceError(w, r, err)
 			return
+		}
+		count := 0
+		for _, n := range byKind {
+			count += n
 		}
 		items, err := rv.ListDueReviewItems(r.Context(), owner, at, limit)
 		if err != nil {
@@ -143,11 +161,58 @@ func listDueReviews(rv Reviews, now func() time.Time) http.Handler {
 			writeServiceError(w, r, err)
 			return
 		}
-		out := response{Count: count, StreakDays: streak, Items: make([]reviewItemJSON, len(items))}
+		recent, err := rv.ReviewDays(r.Context(), owner, at, reviewRecentDays)
+		if err != nil {
+			writeServiceError(w, r, err)
+			return
+		}
+		out := response{Count: count, ByKind: byKind, StreakDays: streak, RecentDays: recent, Items: make([]reviewItemJSON, len(items))}
 		for i, it := range items {
 			out.Items[i] = toReviewItemJSON(it)
+			// A card FSRS cannot schedule only loses its preview; it can
+			// still be answered and shown.
+			dues, err := review.NextDues(it.Card, at)
+			if err != nil {
+				continue
+			}
+			out.Items[i].NextDue = make([]string, len(dues))
+			for j, due := range dues {
+				out.Items[i].NextDue[j] = formatTime(due)
+			}
 		}
 		writeJSON(w, http.StatusOK, out)
+	})
+}
+
+// countDueReviews is only how many of the owner's items are due now, for
+// the badge on every page.
+func countDueReviews(rv Reviews, now func() time.Time) http.Handler {
+	type response struct {
+		Count int `json:"count"`
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n, err := rv.CountDueReviewItems(r.Context(), principalFrom(r.Context()).OwnerID, now())
+		if err != nil {
+			writeServiceError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, response{Count: n})
+	})
+}
+
+// listEntriesInReview are the ids of the owner's notes in their review
+// queue, so a list of notes can say which are in it.
+func listEntriesInReview(rv Reviews) http.Handler {
+	type response struct {
+		EntryIDs []string `json:"entryIds"`
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ids, err := rv.EntryIDsInReview(r.Context(), principalFrom(r.Context()).OwnerID)
+		if err != nil {
+			writeServiceError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, response{EntryIDs: ids})
 	})
 }
 

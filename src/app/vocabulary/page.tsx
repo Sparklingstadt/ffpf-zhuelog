@@ -23,6 +23,7 @@ import {
 import { VocabularyAddForm } from "@/presentation/components/vocabulary/vocabulary-add-form";
 import { VocabularyList } from "@/presentation/components/vocabulary/vocabulary-list";
 import { genericErrorMessage } from "@/presentation/presenters/generic-error-message";
+import { formatNextReview } from "@/presentation/presenters/review-schedule-presenter";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,20 @@ async function loadVocabulary(): Promise<VocabularyEntry[] | null> {
     console.error("VOCABULARY_UNAVAILABLE", error.status, error.code);
     return null;
   }
+}
+
+// When each word with a review card comes back, labelled by Tokyo day.
+function nextReviewLabels(
+  entries: VocabularyEntry[],
+  now: Date,
+): Record<string, string> {
+  return Object.fromEntries(
+    entries.flatMap((entry) =>
+      entry.nextReview
+        ? [[entry.id, formatNextReview(entry.nextReview, now)]]
+        : [],
+    ),
+  );
 }
 
 // Members' and admins' own words. Guests have no book, so they go home.
@@ -77,6 +92,7 @@ export default async function VocabularyPage() {
       ) : (
         <VocabularyList
           entries={entries}
+          nextReviews={nextReviewLabels(entries, new Date())}
           deleteVocabulary={deleteVocabularyAction}
         />
       )}

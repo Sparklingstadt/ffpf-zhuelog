@@ -208,6 +208,55 @@ func (s *Store) CountDueReviewItems(ctx context.Context, ownerID string, now tim
 	return n, nil
 }
 
+// CountDueReviewItemsByKind is CountDueReviewItems split by kind ("entry",
+// "vocabulary", "preposition", "complement"). Kinds with nothing due are
+// absent.
+func (s *Store) CountDueReviewItemsByKind(ctx context.Context, ownerID string, now time.Time) (map[string]int, error) {
+	rows, err := s.pool.Query(ctx, `SELECT "kind", count(*) FROM "ReviewItem"
+ WHERE "ownerId" = $1 AND "due" <= $2 AND `+notTrashedEntry("$3")+` GROUP BY "kind"`,
+		ownerID, dbTime(now), ReviewKindEntry)
+	if err != nil {
+		return nil, fmt.Errorf("store: count due review items by kind: %w", err)
+	}
+	out := map[string]int{}
+	var kind string
+	var n int
+	_, err = pgx.ForEachRow(rows, []any{&kind, &n}, func() error {
+		out[kind] = n
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("store: count due review items by kind: %w", err)
+	}
+	return out, nil
+}
+
+// ReviewDays says, for each of the days days up to today in Japan time,
+// oldest first, whether the owner answered at least one review that day.
+func (s *Store) ReviewDays(ctx context.Context, ownerID string, now time.Time, days int) ([]bool, error) {
+	today := dateOnly(now.In(jst))
+	first := today.AddDate(0, 0, -(days - 1))
+	rows, err := s.pool.Query(ctx, `SELECT DISTINCT ("reviewedAt" + interval '9 hours')::date AS "day"
+ FROM "ReviewLog" WHERE "ownerId" = $1 AND "reviewedAt" >= $2`,
+		ownerID, dbTime(first))
+	if err != nil {
+		return nil, fmt.Errorf("store: review days: %w", err)
+	}
+	reviewed, err := pgx.CollectRows(rows, pgx.RowTo[time.Time])
+	if err != nil {
+		return nil, fmt.Errorf("store: review days: %w", err)
+	}
+	out := make([]bool, days)
+	for _, d := range reviewed {
+		day := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, jst)
+		i := int(day.Sub(first).Hours() / 24)
+		if i >= 0 && i < days {
+			out[i] = true
+		}
+	}
+	return out, nil
+}
+
 // RecordReview applies an answer rated rating at now to the owner's item and
 // logs it under logID, in one transaction. A retry with the same logID
 // returns the item as it stands without answering again. Another owner's

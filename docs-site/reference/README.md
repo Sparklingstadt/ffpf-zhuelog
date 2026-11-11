@@ -54,6 +54,8 @@
 | GET      | [`/v1/complement-records/{id}`](./practice.md#補語の記録-api)                                  | 会員・admin           | ×        | 200  | 補語の練習記録 1 件                                |
 | PUT      | [`/v1/complement-records/{id}`](./practice.md#補語の記録-api)                                  | 会員・admin           | ×        | 200  | 補語の練習記録を保存                               |
 | GET      | [`/v1/reviews/due`](./reviews.md#get-v1-reviews-due)                                           | 会員・admin           | ×        | 200  | 期日が来た復習の問題                               |
+| GET      | [`/v1/reviews/count`](./reviews.md#get-v1-reviews-count)                                       | 会員・admin           | ×        | 200  | 期日が来た問題の数だけ                             |
+| GET      | [`/v1/reviews/entries`](./reviews.md#get-v1-reviews-entries)                                   | 会員・admin           | ×        | 200  | 復習に入れている学習ノートの ID                    |
 | POST     | [`/v1/reviews/{itemId}`](./reviews.md#post-v1-reviews-itemid)                                  | 会員・admin           | ×        | 200  | 復習の問題に答える                                 |
 | GET      | [`/v1/entries/{id}/review`](./reviews.md#get-v1-entries-id-review)                             | 会員・admin           | ×        | 200  | ノートが復習に入っているか                         |
 | PUT      | [`/v1/entries/{id}/review`](./reviews.md#put-v1-entries-id-review)                             | 会員・admin           | ×        | 204  | ノートを復習に入れる                               |

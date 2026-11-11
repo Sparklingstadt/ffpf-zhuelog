@@ -69,6 +69,21 @@ func Next(c Card, r Rating, now time.Time) (Card, error) {
 	return fromFSRS(info.Card), nil
 }
 
+// NextDues is when c would next be due after each answer at now, indexed by
+// rating minus one (もう一度, 難しい, できた, 簡単), so the buttons can say
+// how long each puts the item off.
+func NextDues(c Card, now time.Time) ([4]time.Time, error) {
+	var out [4]time.Time
+	for r := Again; r <= Easy; r++ {
+		next, err := Next(c, r, now)
+		if err != nil {
+			return out, err
+		}
+		out[r-1] = next.Due
+	}
+	return out, nil
+}
+
 func toFSRS(c Card) fsrs.Card {
 	return fsrs.Card{
 		Due:            c.Due,

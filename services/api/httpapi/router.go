@@ -290,6 +290,8 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	// put in them (always their own; a note in the trash is 404).
 	if d.Reviews != nil {
 		private("GET /v1/reviews/due", authed(listDueReviews(d.Reviews, d.Now)))
+		private("GET /v1/reviews/count", authed(countDueReviews(d.Reviews, d.Now)))
+		private("GET /v1/reviews/entries", authed(listEntriesInReview(d.Reviews)))
 		private("POST /v1/reviews/{itemId}", authed(answerReview(d.Reviews, d.Now)))
 		private("GET /v1/entries/{id}/review", authed(entryReviewStatus(d.Reviews)))
 		private("PUT /v1/entries/{id}/review", authed(addEntryReview(d.Reviews, d.Now)))

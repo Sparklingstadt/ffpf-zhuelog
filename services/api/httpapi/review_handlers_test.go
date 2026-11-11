@@ -22,7 +22,10 @@ type fakeReviews struct {
 	enqueueErr error
 	due        []store.ReviewItem
 	count      int
+	byKind     map[string]int
 	streak     int
+	recent     []bool
+	entryIDs   []string
 	listLimit  int
 	owner      string
 	now        time.Time
@@ -56,6 +59,25 @@ func (f *fakeReviews) ListDueReviewItems(_ context.Context, ownerID string, now 
 
 func (f *fakeReviews) CountDueReviewItems(_ context.Context, ownerID string, now time.Time) (int, error) {
 	return f.count, nil
+}
+
+func (f *fakeReviews) CountDueReviewItemsByKind(_ context.Context, ownerID string, now time.Time) (map[string]int, error) {
+	if f.byKind == nil {
+		return map[string]int{"complement": f.count}, nil
+	}
+	return f.byKind, nil
+}
+
+func (f *fakeReviews) ReviewDays(_ context.Context, ownerID string, now time.Time, days int) ([]bool, error) {
+	if f.recent == nil {
+		return make([]bool, days), nil
+	}
+	return f.recent, nil
+}
+
+func (f *fakeReviews) EntryIDsInReview(_ context.Context, ownerID string) ([]string, error) {
+	f.owner = ownerID
+	return f.entryIDs, nil
 }
 
 func (f *fakeReviews) ReviewStreak(_ context.Context, ownerID string, now time.Time) (int, error) {
@@ -318,5 +340,54 @@ func TestDueEntryItemsCarryTheirNote(t *testing.T) {
 	}
 	if _, ok := got.Items[1]["entry"]; ok {
 		t.Errorf("a complement item carries an entry: %s", w.Body.String())
+	}
+}
+
+func TestListDueReviewsSaysByKindTheRecentDaysAndWhenEachAnswerBringsItBack(t *testing.T) {
+	at := time.Date(2026, 11, 5, 0, 0, 0, 0, time.UTC)
+	rv := &fakeReviews{
+		byKind: map[string]int{"vocabulary": 2, "entry": 1},
+		recent: []bool{false, true, false, false, true, false, true},
+		due: []store.ReviewItem{{
+			ID: testReviewItemID, ReviewTarget: store.ReviewTarget{Language: "zh", Kind: "complement", TargetID: "result-01"},
+			Card: review.NewCard(at),
+		}},
+	}
+	h, clk := reviewRouter(t, auth.RoleMember, Deps{Reviews: rv})
+	w := do(h, "GET", "/v1/reviews/due", "", jsonAuth)
+	var got struct {
+		Count      int            `json:"count"`
+		ByKind     map[string]int `json:"byKind"`
+		RecentDays []bool         `json:"recentDays"`
+		Items      []struct {
+			NextDue []string `json:"nextDue"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil || w.Code != http.StatusOK {
+		t.Fatalf("due = %d %s (%v)", w.Code, w.Body.String(), err)
+	}
+	if got.Count != 3 || got.ByKind["vocabulary"] != 2 || got.ByKind["entry"] != 1 || len(got.RecentDays) != 7 || !got.RecentDays[6] {
+		t.Errorf("summary = %+v", got)
+	}
+	if len(got.Items) != 1 || len(got.Items[0].NextDue) != 4 {
+		t.Fatalf("items = %s", w.Body.String())
+	}
+	dues, _ := review.NextDues(review.NewCard(at), clk.Now())
+	for i, due := range dues {
+		if got.Items[0].NextDue[i] != formatTime(due) {
+			t.Errorf("nextDue[%d] = %s, want %s", i, got.Items[0].NextDue[i], formatTime(due))
+		}
+	}
+}
+
+func TestCountDueReviewsAndEntriesInReview(t *testing.T) {
+	rv := &fakeReviews{count: 5, entryIDs: []string{"centry1", "centry2"}}
+	h, _ := reviewRouter(t, auth.RoleMember, Deps{Reviews: rv})
+	if w := do(h, "GET", "/v1/reviews/count", "", jsonAuth); w.Code != http.StatusOK || w.Body.String() != `{"count":5}` {
+		t.Errorf("count = %d %q", w.Code, w.Body.String())
+	}
+	if w := do(h, "GET", "/v1/reviews/entries", "", jsonAuth); w.Code != http.StatusOK ||
+		w.Body.String() != `{"entryIds":["centry1","centry2"]}` || rv.owner != testOwner {
+		t.Errorf("entries = %d %q (owner %s)", w.Code, w.Body.String(), rv.owner)
 	}
 }

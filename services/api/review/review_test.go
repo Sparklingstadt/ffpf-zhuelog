@@ -94,3 +94,27 @@ func TestNextRejectsInvalidInput(t *testing.T) {
 		t.Error("an answer before the last review was accepted")
 	}
 }
+
+func TestNextDuesMatchesEachAnswer(t *testing.T) {
+	now := time.Date(2026, 11, 11, 9, 0, 0, 0, time.UTC)
+	c := NewCard(now)
+	dues, err := NextDues(c, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for r := Again; r <= Easy; r++ {
+		next, err := Next(c, r, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !dues[r-1].Equal(next.Due) {
+			t.Errorf("rating %d: NextDues = %v, Next = %v", r, dues[r-1], next.Due)
+		}
+	}
+	// A better answer never brings the item back sooner.
+	for i := 1; i < 4; i++ {
+		if dues[i].Before(dues[i-1]) {
+			t.Errorf("due for rating %d (%v) is before rating %d (%v)", i+1, dues[i], i, dues[i-1])
+		}
+	}
+}

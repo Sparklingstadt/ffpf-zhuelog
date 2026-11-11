@@ -48,6 +48,25 @@ func (s *Store) EntryInReview(ctx context.Context, ownerID, entryID string) (boo
 	return in, nil
 }
 
+// EntryIDsInReview are the ids of the owner's notes in their review queue,
+// leaving out notes in the trash.
+func (s *Store) EntryIDsInReview(ctx context.Context, ownerID string) ([]string, error) {
+	rows, err := s.pool.Query(ctx, `SELECT r."targetId" FROM "ReviewItem" r
+ JOIN "LearningEntry" e ON e."id" = r."targetId" AND e."ownerId" = r."ownerId" AND e."deletedAt" IS NULL
+ WHERE r."ownerId" = $1 AND r."kind" = $2 ORDER BY r."targetId"`, ownerID, ReviewKindEntry)
+	if err != nil {
+		return nil, fmt.Errorf("store: entry ids in review: %w", err)
+	}
+	out, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return nil, fmt.Errorf("store: entry ids in review: %w", err)
+	}
+	if out == nil {
+		out = []string{}
+	}
+	return out, nil
+}
+
 // AddEntryReview puts the owner's note in their review queue as a new card,
 // due at now. A note already there keeps its card as it is. A note that is
 // not theirs, does not exist or is in the trash returns ErrNotFound.

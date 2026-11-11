@@ -71,6 +71,11 @@ func TestPutVocabularyAddsAWordAndItsCard(t *testing.T) {
 	if err != nil || len(list) != 1 || list[0].ID != e.ID {
 		t.Fatalf("list = %+v, %v", list, err)
 	}
+	// The list says when the word's card is next due: after the 簡単 answer.
+	after, _ := s.ListDueReviewItems(ctx, a, now.AddDate(1, 0, 0), 10)
+	if len(after) != 1 || !list[0].NextReview.Equal(after[0].Due) || !list[0].NextReview.After(now) {
+		t.Errorf("next review = %v, card = %+v", list[0].NextReview, after)
+	}
 }
 
 func TestDeleteVocabularyTakesItsCard(t *testing.T) {

@@ -264,3 +264,37 @@ func TestAnEntryItemWithoutItsNoteIsListedBare(t *testing.T) {
 		t.Errorf("count = %d", n)
 	}
 }
+
+func TestEntryIDsInReviewLeavesOutTheTrash(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	a, b := reviewOwner(t, s), reviewOwner(t, s)
+	now := fixedNow()
+	notes := createEntries(t, s, a, now.Add(-time.Hour), 3, 0)
+	if ids, err := s.EntryIDsInReview(ctx, a); err != nil || len(ids) != 0 {
+		t.Fatalf("none = %v, %v", ids, err)
+	}
+	for _, n := range notes[:2] {
+		if err := s.AddEntryReview(ctx, a, n.ID, now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ids, err := s.EntryIDsInReview(ctx, a)
+	if err != nil || len(ids) != 2 {
+		t.Fatalf("ids = %v, %v", ids, err)
+	}
+	for _, id := range ids {
+		if id != notes[0].ID && id != notes[1].ID {
+			t.Errorf("unexpected id %s in %v", id, ids)
+		}
+	}
+	if other, err := s.EntryIDsInReview(ctx, b); err != nil || len(other) != 0 {
+		t.Errorf("another owner = %v, %v", other, err)
+	}
+	if _, err := s.pool.Exec(ctx, `UPDATE "LearningEntry" SET "deletedAt" = $2 WHERE "id" = $1`, notes[0].ID, dbTime(now)); err != nil {
+		t.Fatal(err)
+	}
+	if ids, err := s.EntryIDsInReview(ctx, a); err != nil || len(ids) != 1 || ids[0] != notes[1].ID {
+		t.Errorf("after trashing one = %v, %v", ids, err)
+	}
+}

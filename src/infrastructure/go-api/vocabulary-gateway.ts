@@ -5,9 +5,13 @@ import type {
 
 import { goApiAuthed, type GoApiCall } from "./authed";
 
-type EntryJson = Omit<VocabularyEntry, "createdAt" | "updatedAt"> & {
+type EntryJson = Omit<
+  VocabularyEntry,
+  "createdAt" | "updatedAt" | "nextReview"
+> & {
   createdAt: string;
   updatedAt: string;
+  nextReview?: string;
 };
 
 const toEntry = (json: EntryJson): VocabularyEntry => ({
@@ -19,6 +23,7 @@ const toEntry = (json: EntryJson): VocabularyEntry => ({
   sourceEntryId: json.sourceEntryId,
   createdAt: new Date(json.createdAt),
   updatedAt: new Date(json.updatedAt),
+  nextReview: json.nextReview ? new Date(json.nextReview) : null,
 });
 
 const path = (id: string) => `/v1/vocabulary/${encodeURIComponent(id)}`;

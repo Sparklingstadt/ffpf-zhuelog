@@ -1,22 +1,26 @@
-import { BookOpenText, Database } from "lucide-react";
+import { BookOpenText, Database, Repeat } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { learningNotes } from "@/composition/learning-container";
 import { reviews } from "@/composition/review-container";
+import { isMemberRole } from "@/domain/identity/entities/authenticated-user";
 import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
 import {
   isEntrySearchEmpty,
   parseEntrySearch,
   type EntrySearch,
 } from "@/domain/learning/entry-search";
+import type { DueReviews } from "@/domain/review/review-item";
 import { GoApiError } from "@/infrastructure/go-api/client";
+import { setNoteReviewAction } from "@/presentation/actions/note-review-actions";
 import type { ViewedOwner } from "@/infrastructure/go-api/learning-gateway";
 import { loadRecordOwnerView } from "@/composition/record-owner-options";
 import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { PageShell } from "@/presentation/components/layout/page-shell";
 import { EntrySearchForm } from "@/presentation/components/learning/entry-search-form";
 import { LearningEntryCard } from "@/presentation/components/learning/learning-entry-card";
+import { NoteActionForm } from "@/presentation/components/records/note-action-form";
 import { RecordOwnerControls } from "@/presentation/components/records/record-owner-controls";
 import { ReviewDueCard } from "@/presentation/components/review/review-due-card";
 import { Alert, AlertDescription } from "@/presentation/components/ui/alert";
@@ -54,16 +58,28 @@ async function loadEntries(
 
 // How many reviews are due and the review streak, or null when Go cannot
 // say: the home then just leaves the card out.
-async function loadDueReviews(): Promise<{
-  count: number;
-  streakDays: number;
-} | null> {
+async function loadDueReviews(): Promise<Pick<
+  DueReviews,
+  "count" | "streakDays" | "byKind" | "recentDays"
+> | null> {
   try {
-    const { count, streakDays } = await reviews.listDue(1);
-    return { count, streakDays };
+    const { count, streakDays, byKind, recentDays } = await reviews.listDue(1);
+    return { count, streakDays, byKind, recentDays };
   } catch (error) {
     if (!(error instanceof GoApiError)) throw error;
     console.error("REVIEW_COUNT_UNAVAILABLE", error.status, error.code);
+    return null;
+  }
+}
+
+// The ids of the user's notes in their review queue, so each card can offer
+// to put it in or take it out; null when Go cannot say (no button then).
+async function loadNotesInReview(): Promise<Set<string> | null> {
+  try {
+    return await reviews.entriesInReview();
+  } catch (error) {
+    if (!(error instanceof GoApiError)) throw error;
+    console.error("NOTES_IN_REVIEW_UNAVAILABLE", error.status, error.code);
     return null;
   }
 }
@@ -126,12 +142,16 @@ export default async function Home({ searchParams }: HomeProps) {
   }
 
   const ownNotes = owner.kind === "self";
-  const [{ entries, total, loadFailed }, view, dueReviews] = await Promise.all([
-    loadEntries(owner, search),
-    loadRecordOwnerView(user, owner),
-    // Only the user's own queue; an admin viewing a member sees no card.
-    ownNotes ? loadDueReviews() : Promise.resolve(null),
-  ]);
+  // Only the user's own queue; an admin viewing a member sees no card and no
+  // review buttons.
+  const ownQueue = ownNotes && isMemberRole(user.role);
+  const [{ entries, total, loadFailed }, view, dueReviews, inReview] =
+    await Promise.all([
+      loadEntries(owner, search),
+      loadRecordOwnerView(user, owner),
+      ownQueue ? loadDueReviews() : Promise.resolve(null),
+      ownQueue ? loadNotesInReview() : Promise.resolve(null),
+    ]);
 
   return (
     <PageShell user={user} width="6xl" spacious>
@@ -139,6 +159,9 @@ export default async function Home({ searchParams }: HomeProps) {
         <ReviewDueCard
           count={dueReviews.count}
           streakDays={dueReviews.streakDays}
+          byKind={dueReviews.byKind}
+          recent={dueReviews.recentDays}
+          now={new Date()}
         />
       )}
 
@@ -214,6 +237,23 @@ export default async function Home({ searchParams }: HomeProps) {
                 }
                 href={withRecordOwner(getLogDateHref(entry.createdAt), owner)}
                 linkLabel="この日の一覧"
+                actions={
+                  inReview ? (
+                    <NoteActionForm
+                      action={setNoteReviewAction}
+                      fields={{
+                        id: entry.id,
+                        inReview: String(!inReview.has(entry.id)),
+                      }}
+                      label={
+                        inReview.has(entry.id) ? "復習から外す" : "復習に入れる"
+                      }
+                      pendingLabel="変更中…"
+                      icon={<Repeat />}
+                      variant="ghost"
+                    />
+                  ) : null
+                }
               />
             ))}
           </div>

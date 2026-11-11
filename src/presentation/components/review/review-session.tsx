@@ -29,7 +29,7 @@ import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
 
-export type ReviewCard =
+export type ReviewCard = (
   | {
       type: "choice";
       itemId: string;
@@ -55,7 +55,12 @@ export type ReviewCard =
       type: "note";
       itemId: string;
       entry: LearningEntry;
-    };
+    }
+) & {
+  // How long each answer, もう一度 to 簡単, puts the item off (「10分後」),
+  // for the rating buttons; absent when Go could not tell.
+  nextIn?: readonly [string, string, string, string] | null;
+};
 
 // The front and, once turned, the back of a learning note's card.
 function NoteCardContent({
@@ -273,15 +278,22 @@ export function ReviewSession({
               rating === suggested ? `${rating} Space` : String(rating)
             }
             onClick={() => void rate(rating)}
-            className="h-12 gap-2"
+            className="h-auto min-h-12 flex-col gap-0.5 py-1.5"
           >
-            {label}
-            <kbd
-              aria-hidden
-              className="hidden rounded border border-current/25 px-1.5 font-mono text-xs leading-5 opacity-70 sm:inline"
-            >
-              {rating}
-            </kbd>
+            <span className="flex items-center gap-2">
+              {label}
+              <kbd
+                aria-hidden
+                className="hidden rounded border border-current/25 px-1.5 font-mono text-xs leading-5 opacity-70 sm:inline"
+              >
+                {rating}
+              </kbd>
+            </span>
+            {card.nextIn ? (
+              <span className="text-xs font-normal opacity-80">
+                {card.nextIn[rating - 1]}
+              </span>
+            ) : null}
           </Button>
         ))}
       </div>

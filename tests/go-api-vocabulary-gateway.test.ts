@@ -37,6 +37,15 @@ test("list maps dates", async () => {
   assert.equal(list[0].word, "认真");
   assert.deepEqual(list[0].createdAt, new Date("2026-11-05T12:00:00.000Z"));
   assert.deepEqual(list[0].updatedAt, new Date("2026-11-05T13:00:00.000Z"));
+  assert.equal(list[0].nextReview, null);
+});
+
+test("list carries when each word comes back", async () => {
+  const { call } = fakeCall({
+    entries: [{ ...entryJson, nextReview: "2026-11-20T00:00:00.000Z" }],
+  });
+  const list = await createVocabularyGateway(call).list();
+  assert.deepEqual(list[0].nextReview, new Date("2026-11-20T00:00:00.000Z"));
 });
 
 test("save PUTs under the id and sends the source only when there is one", async () => {

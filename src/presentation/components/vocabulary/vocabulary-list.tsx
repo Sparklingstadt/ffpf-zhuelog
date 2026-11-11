@@ -14,9 +14,12 @@ import { matchesVocabulary } from "@/presentation/presenters/vocabulary-search";
 // meaning that narrows the cards as it is typed.
 export function VocabularyList({
   entries,
+  nextReviews = {},
   deleteVocabulary,
 }: {
   entries: VocabularyEntry[];
+  // When each word comes back, by id (「明日」「11/20」), made on the server.
+  nextReviews?: Readonly<Record<string, string>>;
   deleteVocabulary: (
     previous: ActionState,
     formData: FormData,
@@ -81,6 +84,14 @@ export function VocabularyList({
               </div>
               <p className="text-sm text-muted-foreground">{entry.pinyin}</p>
               <p className="text-sm">{entry.meaning}</p>
+              {nextReviews[entry.id] ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  次の復習{" "}
+                  <span className="text-foreground">
+                    {nextReviews[entry.id]}
+                  </span>
+                </p>
+              ) : null}
             </li>
           ))}
         </ul>
