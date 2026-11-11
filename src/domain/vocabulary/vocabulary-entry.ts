@@ -9,6 +9,8 @@ export type VocabularyEntry = {
   sourceEntryId: string | null;
   createdAt: Date;
   updatedAt: Date;
+  // When its review card is next due, in the list only; null otherwise.
+  nextReview: Date | null;
 };
 
 // What a review card of kind "vocabulary" shows.

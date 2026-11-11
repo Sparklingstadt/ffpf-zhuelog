@@ -7,6 +7,7 @@ import { siteUrl } from "@/infrastructure/config/environment";
 import { ThemeBootstrap } from "@/presentation/components/theme/theme-bootstrap";
 import { ActingBanner } from "@/presentation/components/layout/acting-banner";
 import { BottomNavigation } from "@/presentation/components/layout/bottom-navigation";
+import { renderedAt } from "@/presentation/components/layout/rendered-at";
 import { DemoBanner } from "@/presentation/components/layout/demo-banner";
 import "./globals.css";
 
@@ -71,7 +72,13 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <ActingBanner user={user} />
         <DemoBanner user={user} />
         {children}
-        {user ? <BottomNavigation role={user.role} demo={user.demo} /> : null}
+        {user ? (
+          <BottomNavigation
+            role={user.role}
+            demo={user.demo}
+            renderedAt={renderedAt()}
+          />
+        ) : null}
       </body>
     </html>
   );

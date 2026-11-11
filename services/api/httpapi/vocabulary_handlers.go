@@ -46,6 +46,9 @@ type vocabularyJSON struct {
 	SourceEntryID *string `json:"sourceEntryId"`
 	CreatedAt     string  `json:"createdAt"`
 	UpdatedAt     string  `json:"updatedAt"`
+	// NextReview is when the word's review card is next due, in the list
+	// only; absent when unknown or the word has no card.
+	NextReview *string `json:"nextReview,omitempty"`
 }
 
 func toVocabularyJSON(v store.VocabularyEntry) vocabularyJSON {
@@ -56,6 +59,10 @@ func toVocabularyJSON(v store.VocabularyEntry) vocabularyJSON {
 	if v.SourceEntryID != "" {
 		source := v.SourceEntryID
 		out.SourceEntryID = &source
+	}
+	if !v.NextReview.IsZero() {
+		next := formatTime(v.NextReview)
+		out.NextReview = &next
 	}
 	return out
 }

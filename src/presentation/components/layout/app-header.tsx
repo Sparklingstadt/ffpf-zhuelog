@@ -9,6 +9,7 @@ import {
 } from "@/presentation/components/layout/github-mark";
 import { MAIN_TAB_ICONS } from "@/presentation/components/layout/main-tab-icons";
 import { SiteMenu } from "@/presentation/components/layout/site-menu";
+import { ReviewCountBadge } from "@/presentation/components/review/review-count-badge";
 import { ThemeSwitcher } from "@/presentation/components/theme/theme-switcher";
 import { Button } from "@/presentation/components/ui/button";
 import {
@@ -20,7 +21,13 @@ import {
 
 // The four main pages and the AI questions, with text, on screens wide enough to have no bottom
 // tabs (xl); below that the tabs carry them and the header stays one row.
-function MainLinks({ user }: { user: AuthenticatedUser }) {
+function MainLinks({
+  user,
+  renderedAt,
+}: {
+  user: AuthenticatedUser;
+  renderedAt?: number;
+}) {
   const ai = aiHeaderLink(user.role, { demo: user.demo });
   return (
     <nav
@@ -29,7 +36,12 @@ function MainLinks({ user }: { user: AuthenticatedUser }) {
     >
       {mainTabs(user.role).map((tab) =>
         tab.href ? (
-          <HeaderLink key={tab.page} tab={tab} href={tab.href} />
+          <HeaderLink
+            key={tab.page}
+            tab={tab}
+            href={tab.href}
+            renderedAt={renderedAt}
+          />
         ) : null,
       )}
       {ai ? (
@@ -49,7 +61,15 @@ function MainLinks({ user }: { user: AuthenticatedUser }) {
   );
 }
 
-function HeaderLink({ tab, href }: { tab: MainTab; href: string }) {
+function HeaderLink({
+  tab,
+  href,
+  renderedAt,
+}: {
+  tab: MainTab;
+  href: string;
+  renderedAt?: number;
+}) {
   const Icon = MAIN_TAB_ICONS[tab.page];
   return (
     <Button
@@ -61,6 +81,9 @@ function HeaderLink({ tab, href }: { tab: MainTab; href: string }) {
       <CurrentLink href={href} page={tab.page}>
         <Icon />
         {tab.headerLabel}
+        {tab.page === "review" ? (
+          <ReviewCountBadge renderedAt={renderedAt} />
+        ) : null}
       </CurrentLink>
     </Button>
   );
@@ -69,7 +92,14 @@ function HeaderLink({ tab, href }: { tab: MainTab; href: string }) {
 // The bar at the top of every page: the app name, the main pages and the
 // menu. Without a user (sign-in) it shows the repository link and the theme
 // switcher instead, which the menu holds otherwise.
-export function AppHeader({ user }: { user?: AuthenticatedUser | null }) {
+export function AppHeader({
+  user,
+  renderedAt,
+}: {
+  user?: AuthenticatedUser | null;
+  // When the server rendered the page, so the review count follows actions.
+  renderedAt?: number;
+}) {
   return (
     <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur-md">
       <div className="mx-auto flex h-12 w-full max-w-6xl items-center gap-x-4 px-4 sm:px-6 lg:px-8">
@@ -82,7 +112,7 @@ export function AppHeader({ user }: { user?: AuthenticatedUser | null }) {
           </span>
           学习録
         </Link>
-        {user ? <MainLinks user={user} /> : null}
+        {user ? <MainLinks user={user} renderedAt={renderedAt} /> : null}
         <div className="ml-auto flex min-w-0 items-center gap-1">
           {user ? (
             <SiteMenu

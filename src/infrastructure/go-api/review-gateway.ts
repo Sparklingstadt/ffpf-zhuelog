@@ -9,10 +9,11 @@ import { toLearningEntry, type GoEntryJson } from "./learning-json";
 
 type ItemJson = Omit<
   ReviewItem,
-  "due" | "lastReview" | "vocabulary" | "entry"
+  "due" | "lastReview" | "vocabulary" | "entry" | "nextDue"
 > & {
   due: string;
   lastReview: string | null;
+  nextDue?: string[];
   vocabulary?: { id: string; word: string; pinyin: string; meaning: string };
   entry?: GoEntryJson;
 };
@@ -36,6 +37,15 @@ const toItem = (json: ItemJson): ReviewItem => ({
       }
     : null,
   entry: json.entry ? toLearningEntry(json.entry) : null,
+  nextDue:
+    json.nextDue?.length === 4
+      ? [
+          new Date(json.nextDue[0]),
+          new Date(json.nextDue[1]),
+          new Date(json.nextDue[2]),
+          new Date(json.nextDue[3]),
+        ]
+      : null,
 });
 
 // The review queue is always the signed-in user's own (the token's owner in
@@ -47,16 +57,36 @@ export function createReviewGateway(call: GoApiCall = goApiAuthed) {
     async listDue(limit: number): Promise<DueReviews> {
       const json = await call<{
         count: number;
+        byKind?: Record<string, number>;
         streakDays: number;
+        recentDays?: boolean[];
         items: ItemJson[];
       }>(`/v1/reviews/due?limit=${encodeURIComponent(String(limit))}`, {
         method: "GET",
       });
       return {
         count: json.count,
+        byKind: json.byKind ?? {},
         streakDays: json.streakDays,
+        recentDays: json.recentDays ?? [],
         items: json.items.map(toItem),
       };
+    },
+
+    // Only how many items are due now, for the badge in the header.
+    async countDue(): Promise<number> {
+      const json = await call<{ count: number }>("/v1/reviews/count", {
+        method: "GET",
+      });
+      return json.count;
+    },
+
+    // The ids of the user's learning notes in their review queue.
+    async entriesInReview(): Promise<Set<string>> {
+      const json = await call<{ entryIds: string[] }>("/v1/reviews/entries", {
+        method: "GET",
+      });
+      return new Set(json.entryIds);
     },
 
     // Go applies the answer once per logId, so a retry is safe.

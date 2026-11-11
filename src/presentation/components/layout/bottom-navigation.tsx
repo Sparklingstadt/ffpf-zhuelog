@@ -9,6 +9,7 @@ import {
   bottomPageOf,
   bottomTabs,
 } from "@/presentation/presenters/site-navigation";
+import { ReviewCountBadge } from "@/presentation/components/review/review-count-badge";
 import { cn } from "@/presentation/lib/utils";
 
 const tabBase =
@@ -22,9 +23,12 @@ const tabInteractive =
 export function BottomNavigation({
   role,
   demo = false,
+  renderedAt,
 }: {
   role: AppRole;
   demo?: boolean;
+  // When the server rendered the page, so the review count follows actions.
+  renderedAt?: number;
 }) {
   const current = bottomPageOf(usePathname());
 
@@ -41,6 +45,14 @@ export function BottomNavigation({
             <>
               <Icon className="size-5 shrink-0" aria-hidden="true" />
               <span className="max-w-full">{tab.label}</span>
+              {/* After the name, so it reads 「復習（29問）」; drawn on the
+                  icon's corner. */}
+              {tab.page === "review" && tab.href ? (
+                <ReviewCountBadge
+                  renderedAt={renderedAt}
+                  className="absolute top-2 left-[calc(50%+0.25rem)] bg-destructive text-white"
+                />
+              ) : null}
             </>
           );
           return tab.href ? (
@@ -51,6 +63,7 @@ export function BottomNavigation({
               className={cn(
                 tabBase,
                 tabInteractive,
+                "relative",
                 active ? "bg-primary/10 text-primary" : "text-muted-foreground",
               )}
             >
