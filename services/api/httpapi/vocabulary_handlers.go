@@ -118,7 +118,7 @@ func putVocabulary(vs Vocabulary, now func() time.Time) http.Handler {
 		SourceEntryID string `json:"sourceEntryId"`
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathValueMsg(w, r, "id", validConversationID, msgVocabularyNotFound)
+		id, ok := pathValueMsg(w, r, "id", validUUID, msgVocabularyNotFound)
 		if !ok {
 			return
 		}
@@ -141,10 +141,8 @@ func putVocabulary(vs Vocabulary, now func() time.Time) http.Handler {
 		switch {
 		case errors.Is(err, store.ErrVocabularyExists):
 			writeError(w, http.StatusConflict, codeVocabularyExists, msgVocabularyExists)
-		case errors.Is(err, store.ErrNotFound):
-			writeError(w, http.StatusNotFound, codeNotFound, msgVocabularyNotFound)
 		case err != nil:
-			writeServiceError(w, r, err)
+			writeStoreError(w, r, err, msgVocabularyNotFound)
 		default:
 			writeJSON(w, http.StatusOK, toVocabularyJSON(saved))
 		}
@@ -154,17 +152,13 @@ func putVocabulary(vs Vocabulary, now func() time.Time) http.Handler {
 // deleteVocabulary removes a word and its review card.
 func deleteVocabulary(vs Vocabulary) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathValueMsg(w, r, "id", validConversationID, msgVocabularyNotFound)
+		id, ok := pathValueMsg(w, r, "id", validUUID, msgVocabularyNotFound)
 		if !ok {
 			return
 		}
 		err := vs.DeleteVocabulary(r.Context(), principalFrom(r.Context()).OwnerID, id)
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusNotFound, codeNotFound, msgVocabularyNotFound)
-			return
-		}
 		if err != nil {
-			writeServiceError(w, r, err)
+			writeStoreError(w, r, err, msgVocabularyNotFound)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)

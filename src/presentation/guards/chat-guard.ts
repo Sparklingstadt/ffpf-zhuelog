@@ -4,7 +4,7 @@ import { conversationNotes } from "@/composition/chat-container";
 import { getCurrentViewerUser } from "@/composition/identity-container";
 import type { ConversationSummary } from "@/domain/chat/conversation";
 import { isMemberRole } from "@/domain/identity/entities/authenticated-user";
-import { ChatUnavailableError } from "@/infrastructure/go-api/conversation-gateway";
+import { ChatUnavailableError } from "@/domain/chat/chat-unavailable";
 
 // The chat and conversation notes exist for members and admins: a signed-out
 // visitor goes to `signInPath`, a guest gets a 404.

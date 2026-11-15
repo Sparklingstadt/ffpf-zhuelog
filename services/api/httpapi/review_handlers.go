@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -234,17 +233,13 @@ func answerReview(rv Reviews, now func() time.Time) http.Handler {
 			return
 		}
 		rating := review.Rating(req.Rating)
-		if !validConversationID(req.LogID) || !rating.Valid() {
+		if !validUUID(req.LogID) || !rating.Valid() {
 			writeError(w, http.StatusBadRequest, codeInvalidRequest, msgReviewInvalid)
 			return
 		}
 		it, err := rv.RecordReview(r.Context(), principalFrom(r.Context()).OwnerID, itemID, req.LogID, rating, now())
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusNotFound, codeNotFound, msgReviewNotFound)
-			return
-		}
 		if err != nil {
-			writeServiceError(w, r, err)
+			writeStoreError(w, r, err, msgReviewNotFound)
 			return
 		}
 		writeJSON(w, http.StatusOK, toReviewItemJSON(it))

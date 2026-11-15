@@ -1,10 +1,10 @@
-// A finished round of preposition practice, as the Go API keeps it for
-// members and admins.
+// A finished practice round, as the Go API keeps it for members and admins.
+// Every practice shares these shapes; complement rounds add their mode.
 
-// One question of the round and the wrong prepositions picked before the
+// One question of the round and the wrong choices picked before the
 // answer, in the order they were picked. id is the question's id in the
 // practice data; rounds saved before it was kept have none.
-export type PrepositionAnswer = {
+export type ChoiceAnswer = {
   id?: string;
   answer: string;
   noun: string;
@@ -12,7 +12,7 @@ export type PrepositionAnswer = {
   misses: string[];
 };
 
-export type PrepositionScore = {
+export type RoundScore = {
   questionCount: number;
   // Questions answered without a miss.
   firstTryCount: number;
@@ -20,22 +20,22 @@ export type PrepositionScore = {
   missCount: number;
 };
 
-export type PrepositionRecordSummary = PrepositionScore & {
+export type PracticeRecordSummary = RoundScore & {
   id: string;
   elapsedMs: number;
   startedAt: Date;
   createdAt: Date;
 };
 
-export type PrepositionRecord = PrepositionRecordSummary & {
-  questions: PrepositionAnswer[];
+export type PracticeRecord = PracticeRecordSummary & {
+  questions: ChoiceAnswer[];
 };
 
 // What a round keeps of a question once it is answered.
 export function answerOf(
-  question: Pick<PrepositionAnswer, "id" | "answer" | "noun" | "prompt">,
+  question: Pick<ChoiceAnswer, "id" | "answer" | "noun" | "prompt">,
   misses: string[],
-): PrepositionAnswer {
+): ChoiceAnswer {
   return {
     id: question.id,
     answer: question.answer,
@@ -48,7 +48,7 @@ export function answerOf(
 // Counted as Go counts them when it saves the round.
 export function scoreRound(
   answers: readonly { misses: readonly string[] }[],
-): PrepositionScore {
+): RoundScore {
   return {
     questionCount: answers.length,
     firstTryCount: answers.filter((answer) => answer.misses.length === 0)

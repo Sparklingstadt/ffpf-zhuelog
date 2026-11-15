@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -57,17 +56,13 @@ func listQuestions(qs Questions, model string) http.Handler {
 }
 func getQuestion(qs Questions) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathValueMsg(w, r, "id", validConversationID, "質問ノートが見つかりません。")
+		id, ok := pathValueMsg(w, r, "id", validUUID, "質問ノートが見つかりません。")
 		if !ok {
 			return
 		}
 		q, err := qs.GetQuestion(r.Context(), principalFrom(r.Context()).OwnerID, id)
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, 404, codeNotFound, "質問ノートが見つかりません。")
-			return
-		}
 		if err != nil {
-			writeServiceError(w, r, err)
+			writeStoreError(w, r, err, "質問ノートが見つかりません。")
 			return
 		}
 		writeJSON(w, 200, toQuestionJSON(q))
@@ -75,7 +70,7 @@ func getQuestion(qs Questions) http.Handler {
 }
 func putQuestion(qs Questions, model string, now func() time.Time) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathValueMsg(w, r, "id", validConversationID, "質問ノートが見つかりません。")
+		id, ok := pathValueMsg(w, r, "id", validUUID, "質問ノートが見つかりません。")
 		if !ok {
 			return
 		}
@@ -95,12 +90,8 @@ func putQuestion(qs Questions, model string, now func() time.Time) http.Handler 
 		q, err := qs.PutQuestion(r.Context(), principalFrom(r.Context()).OwnerID, store.Question{
 			QuestionSummary: store.QuestionSummary{ID: id, Question: question, ModelName: model}, Answer: answer,
 		}, now())
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, 404, codeNotFound, "質問ノートが見つからないか、すでに保存されています。")
-			return
-		}
 		if err != nil {
-			writeServiceError(w, r, err)
+			writeStoreError(w, r, err, "質問ノートが見つからないか、すでに保存されています。")
 			return
 		}
 		writeJSON(w, 200, toQuestionJSON(q))

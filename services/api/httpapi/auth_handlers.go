@@ -45,29 +45,6 @@ func (s *jsonString) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// decodeBody reads exactly one JSON object from the request body into dst,
-// rejecting null and other non-objects, unknown fields and any data after the
-// object.
-func decodeBody(r *http.Request, dst any) error {
-	var raw json.RawMessage
-	dec := json.NewDecoder(r.Body)
-	if err := dec.Decode(&raw); err != nil {
-		return err
-	}
-	if err := dec.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		if err == nil {
-			err = errors.New("httpapi: unexpected data after JSON value")
-		}
-		return err
-	}
-	if len(raw) == 0 || raw[0] != '{' {
-		return errInvalidBody
-	}
-	inner := json.NewDecoder(bytes.NewReader(raw))
-	inner.DisallowUnknownFields()
-	return inner.Decode(dst)
-}
-
 func loginGitHub(a Auth) http.Handler {
 	type request struct {
 		Code         jsonString `json:"code"`

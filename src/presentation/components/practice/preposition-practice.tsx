@@ -1,8 +1,7 @@
 "use client";
 import type { HskFilter } from "@/domain/practice/hsk-level";
-import type { PrepositionQuestion } from "@/domain/practice/preposition-quiz";
-import { buildQuiz } from "@/domain/practice/preposition-quiz";
-import { savePrepositionRoundAction } from "@/presentation/actions/preposition-record-actions";
+import type { ChoiceQuestion } from "@/domain/practice/choice-question";
+import { savePrepositionRoundAction } from "@/presentation/actions/practice-record-actions";
 import { ChoicePractice } from "./choice-practice";
 
 export function PrepositionPractice({
@@ -10,7 +9,7 @@ export function PrepositionPractice({
   canSave,
   filter,
 }: {
-  initialQuiz: PrepositionQuestion[];
+  initialQuiz: ChoiceQuestion[];
   canSave: boolean;
   // The HSK level the questions are of and how it is decided, or null for
   // every question.
@@ -20,9 +19,8 @@ export function PrepositionPractice({
     <ChoicePractice
       initialQuiz={initialQuiz}
       canSave={canSave}
-      buildNextQuiz={() =>
-        buildQuiz(initialQuiz.length, Math.random, undefined, filter)
-      }
+      quizKind="preposition"
+      level={filter?.level ?? null}
       saveRound={savePrepositionRoundAction}
       recordsHref="/practice/prepositions/records"
       choiceLabel="介詞を選ぶ"

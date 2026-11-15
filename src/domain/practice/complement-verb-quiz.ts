@@ -1,12 +1,13 @@
 import { COMPLEMENT_VERB_USAGES } from "./complement-verb-data";
 import { inHskFilter, type HskFilter } from "./hsk-level";
+import { examplePinyinOf } from "./preposition-quiz";
 import {
   BLANK,
   CHOICE_COUNT,
-  examplePinyinOf,
-  type PrepositionQuestion,
+  type ChoiceQuestion,
   type Random,
-} from "./preposition-quiz";
+  shuffled,
+} from "./choice-question";
 
 // The "動詞から選ぶ" (verb) mode of complement practice: the questions are
 // built like the preposition ones, from a verb and a meaning, with the
@@ -37,15 +38,6 @@ export function verbQuestionId(usageId: string, verb: string) {
 
 export function isVerbQuestionId(id: string) {
   return id.startsWith(ID_PREFIX);
-}
-
-function shuffled<T>(items: readonly T[], random: Random): T[] {
-  const result = [...items];
-  for (let i = result.length - 1; i > 0; i--) {
-    const j = Math.floor(random() * (i + 1));
-    [result[i], result[j]] = [result[j], result[i]];
-  }
-  return result;
 }
 
 // Every category a complement is used in.
@@ -93,7 +85,7 @@ export function complementVerbQuestion(
   pair: ComplementVerbUsage["pairs"][number],
   random: Random = Math.random,
   usages: readonly ComplementVerbUsage[] = COMPLEMENT_VERB_USAGES,
-): PrepositionQuestion {
+): ChoiceQuestion {
   const { phrase, at } = pair;
   const answer = usage.complement;
   const wrong = shuffled(
@@ -121,7 +113,7 @@ export function complementVerbQuestionById(
   id: string,
   random: Random = Math.random,
   usages: readonly ComplementVerbUsage[] = COMPLEMENT_VERB_USAGES,
-): PrepositionQuestion | null {
+): ChoiceQuestion | null {
   if (!isVerbQuestionId(id)) return null;
   const rest = id.slice(ID_PREFIX.length);
   const at = rest.indexOf(":");
@@ -147,9 +139,9 @@ export function buildComplementVerbQuiz(
   random: Random = Math.random,
   usages: readonly ComplementVerbUsage[] = COMPLEMENT_VERB_USAGES,
   filter: HskFilter | null = null,
-): PrepositionQuestion[] {
+): ChoiceQuestion[] {
   const seen = new Set<string>();
-  const questions: PrepositionQuestion[] = [];
+  const questions: ChoiceQuestion[] = [];
   for (const usage of shuffled(usages, random)) {
     if (questions.length >= count) break;
     if (seen.has(usage.complement)) continue;

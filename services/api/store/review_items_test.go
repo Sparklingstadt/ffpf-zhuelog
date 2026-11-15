@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/jst"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/review"
 )
 
@@ -189,7 +190,7 @@ func TestReviewStreakCountsDaysInJapanTime(t *testing.T) {
 
 func TestStreakFrom(t *testing.T) {
 	day := func(m time.Month, d int) time.Time { return time.Date(2026, m, d, 0, 0, 0, 0, time.UTC) }
-	today := time.Date(2026, 11, 1, 0, 0, 0, 0, jst)
+	today := time.Date(2026, 11, 1, 0, 0, 0, 0, jst.Location)
 	for name, tc := range map[string]struct {
 		days []time.Time
 		want int

@@ -7,12 +7,12 @@ import { z } from "zod";
 import { conversationNotes } from "@/composition/chat-container";
 import { getCurrentViewerUser } from "@/composition/identity-container";
 import { isMemberRole } from "@/domain/identity/entities/authenticated-user";
-import { GoApiError } from "@/infrastructure/go-api/client";
 import {
   actionSuccess,
   actionUnauthorized,
   attemptGoAction,
-  goFailureMessage,
+  attemptGoResult,
+  type ActionResult,
   type ActionState,
 } from "@/presentation/controllers/action-state";
 import { accountForbiddenMessage } from "@/presentation/presenters/account-action-errors";
@@ -34,8 +34,7 @@ const conversationInput = z.object({
 });
 
 export type SaveConversationInput = z.infer<typeof conversationInput>;
-export type SaveConversationResult =
-  { ok: true } | { ok: false; message: string };
+export type SaveConversationResult = ActionResult;
 
 const invalidConversation = "会話の形式または上限を確認してください。";
 
@@ -53,25 +52,15 @@ export async function saveConversationAction(
     return { ok: false, message: accountForbiddenMessage };
   const parsed = conversationInput.safeParse(input);
   if (!parsed.success) return { ok: false, message: invalidConversation };
-  try {
+  // No revalidatePath: it would re-render /chat under the open chat. The
+  // conversation pages are dynamic and read Go on every visit.
+  return attemptGoResult("CONVERSATION_SAVE_FAILED", async () => {
     await conversationNotes.save({
       ...parsed.data,
       createdAt: new Date(parsed.data.createdAt),
       updatedAt: new Date(),
     });
-    // No revalidatePath: it would re-render /chat under the open chat. The
-    // conversation pages are dynamic and read Go on every visit.
-    return { ok: true };
-  } catch (error) {
-    // Anything but a Go failure (including Next's redirect) is rethrown.
-    if (!(error instanceof GoApiError)) throw error;
-    if (error.status === 403)
-      return { ok: false, message: accountForbiddenMessage };
-    return {
-      ok: false,
-      message: goFailureMessage("CONVERSATION_SAVE_FAILED", error),
-    };
-  }
+  });
 }
 
 export async function deleteConversationAction(

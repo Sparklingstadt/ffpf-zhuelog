@@ -110,3 +110,19 @@ test("the import check catches each forbidden form", () => {
     "pg",
   ]);
 });
+
+// Pages and UI components reach the Go API through composition and the
+// presentation actions and controllers; eslint.config.mjs says the same.
+test("pages and UI components never import the Go API gateways", () => {
+  const files = readdirSync(root, { recursive: true, encoding: "utf8" })
+    .map((path) => path.replaceAll("\\", "/"))
+    .filter((path) => /\.(ts|tsx)$/.test(path))
+    .filter((path) => /^(app|presentation\/components)\//.test(path));
+  assert.ok(files.length > 0);
+  const offenders = files.flatMap((path) =>
+    moduleSpecifiers(readFileSync(`${root}${path}`, "utf8"))
+      .filter((specifier) => /^@\/infrastructure\/go-api(\/|$)/.test(specifier))
+      .map((specifier) => `${path}: ${specifier}`),
+  );
+  assert.deepEqual(offenders, []);
+});

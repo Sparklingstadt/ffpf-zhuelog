@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 
 import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
-import type { PrepositionQuestion } from "@/domain/practice/preposition-quiz";
+import type { ChoiceQuestion } from "@/domain/practice/choice-question";
 import {
   isReviewRating,
   REVIEW_RATINGS,
@@ -17,17 +17,18 @@ import type {
   AnswerReviewResult,
 } from "@/presentation/actions/review-actions";
 import {
-  Choice,
-  focusInPlace,
-  isOnControl,
-  isTypingOrShortcut,
+  ChoiceGrid,
   ProgressBar,
   SolvedExample,
-} from "@/presentation/components/practice/choice-practice";
+  useChoicePicks,
+  WrongPickNotice,
+} from "@/presentation/components/practice/choice-parts";
 import { SpeakButton } from "@/presentation/components/speech/speak-button";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
+import { focusInPlace } from "@/presentation/lib/focus";
+import { isOnControl, isTypingOrShortcut } from "@/presentation/lib/keyboard";
 
 export type ReviewCard = (
   | {
@@ -36,7 +37,7 @@ export type ReviewCard = (
       // "介詞", "補語" (the verb mode) or the complement's kind, shown
       // above the question.
       label: string;
-      question: PrepositionQuestion;
+      question: ChoiceQuestion;
       // The hand-written complement modes' prompts are whole sentences and
       // use the smaller heading; prepositions and the verb mode show their
       // noun or verb large.
@@ -145,9 +146,15 @@ type SendState =
 // meaning, then turn it over. Either way, then say how well it was recalled
 // (もう一度・難しい・できた・簡単). The rating goes to Go under a log id made
 // for the card, so a retried send counts once.
+//
+// The cards are held for the whole pass. A server action that revalidates
+// (saving a word from a card does) re-renders the page with the due list
+// as it is now, without the cards already answered; taking it mid-pass
+// would slide the next card under the open one, shown as solved. A new list
+// is taken only once the pass is over, as 続けて復習する brings.
 export function ReviewSession({
-  cards,
-  remaining,
+  cards: loadedCards,
+  remaining: loadedRemaining,
   answerReview,
 }: {
   cards: ReviewCard[];
@@ -155,22 +162,36 @@ export function ReviewSession({
   remaining: number;
   answerReview: (input: AnswerReviewInput) => Promise<AnswerReviewResult>;
 }) {
+  const [session, setSession] = useState({
+    cards: loadedCards,
+    remaining: loadedRemaining,
+  });
+  const [lastLoaded, setLastLoaded] = useState(loadedCards);
   const [index, setIndex] = useState(0);
-  const [wrong, setWrong] = useState<string[]>([]);
-  const [solved, setSolved] = useState(false);
+  const {
+    wrong,
+    solved,
+    pick: pickChoice,
+    reset: resetPicks,
+    reveal,
+  } = useChoicePicks();
   const [logId, setLogId] = useState(() => crypto.randomUUID());
   const [send, setSend] = useState<SendState>({ status: "idle" });
+
+  if (lastLoaded !== loadedCards) {
+    setLastLoaded(loadedCards);
+    if (index >= session.cards.length) {
+      setSession({ cards: loadedCards, remaining: loadedRemaining });
+      setIndex(0);
+      resetPicks();
+    }
+  }
+  const { cards, remaining } = session;
 
   const card = index < cards.length ? cards[index] : null;
 
   function pick(choice: string) {
-    if (!card || card.type !== "choice" || solved || wrong.includes(choice))
-      return;
-    if (choice !== card.question.answer) {
-      setWrong((picked) => [...picked, choice]);
-      return;
-    }
-    setSolved(true);
+    if (card?.type === "choice") pickChoice(card.question, choice);
   }
 
   async function rate(rating: ReviewRating) {
@@ -190,8 +211,7 @@ export function ReviewSession({
       return;
     }
     setIndex((i) => i + 1);
-    setWrong([]);
-    setSolved(false);
+    resetPicks();
     setLogId(crypto.randomUUID());
     setSend({ status: "idle" });
   }
@@ -330,7 +350,7 @@ export function ReviewSession({
           <NoteCardContent
             entry={card.entry}
             turned={solved}
-            onTurn={() => setSolved(true)}
+            onTurn={() => reveal()}
             ratings={ratings}
           />
         ) : card.type === "word" ? (
@@ -361,11 +381,7 @@ export function ReviewSession({
               {solved ? (
                 ratings
               ) : (
-                <Button
-                  size="lg"
-                  onClick={() => setSolved(true)}
-                  ref={focusInPlace}
-                >
+                <Button size="lg" onClick={() => reveal()} ref={focusInPlace}>
                   めくる
                 </Button>
               )}
@@ -423,29 +439,14 @@ function ChoiceCard({
         </p>
       </div>
 
-      <div
-        role="group"
-        aria-label="選択肢"
-        lang="zh-CN"
-        className="grid w-full max-w-md grid-cols-2 gap-3"
-      >
-        {question.choices.map((choice) => (
-          <Choice
-            key={choice}
-            preposition={choice}
-            compact={card.compact}
-            state={
-              solved && choice === question.answer
-                ? "correct"
-                : wrong.includes(choice)
-                  ? "wrong"
-                  : "idle"
-            }
-            disabled={solved || wrong.includes(choice)}
-            onPick={() => onPick(choice)}
-          />
-        ))}
-      </div>
+      <ChoiceGrid
+        question={question}
+        wrong={wrong}
+        solved={solved}
+        compact={card.compact}
+        label="選択肢"
+        onPick={onPick}
+      />
 
       <div
         className="flex min-h-9 flex-col items-center gap-4 text-center"
@@ -467,11 +468,9 @@ function ChoiceCard({
             </div>
             {ratings}
           </>
-        ) : wrong.length > 0 ? (
-          <p className="text-sm text-destructive">
-            ちがいます。もう一度選んでください。
-          </p>
-        ) : null}
+        ) : (
+          <WrongPickNotice wrong={wrong} solved={solved} />
+        )}
       </div>
     </CardContent>
   );

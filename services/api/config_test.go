@@ -381,6 +381,21 @@ func TestLoadConfigChatModelDefaultAndOverride(t *testing.T) {
 	}
 }
 
+func TestLoadConfigLearningModelDefaultAndOverride(t *testing.T) {
+	cfg, err := LoadConfig(getenvFrom(validEnv()))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.OpenAILearningModel != "gpt-5-mini" {
+		t.Errorf("default OpenAILearningModel = %q", cfg.OpenAILearningModel)
+	}
+	env := validEnv()
+	env["OPENAI_LEARNING_MODEL"] = " gpt-y "
+	if cfg, err = LoadConfig(getenvFrom(env)); err != nil || cfg.OpenAILearningModel != "gpt-y" {
+		t.Errorf("OpenAILearningModel = %q, err %v", cfg.OpenAILearningModel, err)
+	}
+}
+
 func ffpfEnv() map[string]string {
 	return map[string]string{
 		"FFPF_ID_ISSUER":        "https://portal.ffpf.example",

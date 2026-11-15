@@ -25,6 +25,16 @@ const innerLayerBoundaries = [
   },
 ];
 
+// Pages and UI components reach the Go API only through composition and the
+// presentation actions and controllers, never through its gateways directly.
+const goApiBoundary = [
+  {
+    group: ["@/infrastructure/go-api", "@/infrastructure/go-api/**"],
+    message:
+      "画面（app・presentation/components）から Go API の gateway を直接 import しないでください。composition か presentation の actions・controllers を通し、型やエラーは domain から import してください。",
+  },
+];
+
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
@@ -35,6 +45,15 @@ const eslintConfig = defineConfig([
     ],
     rules: {
       "no-restricted-imports": ["error", { patterns: innerLayerBoundaries }],
+    },
+  },
+  {
+    files: [
+      "src/app/**/*.{ts,tsx,mts}",
+      "src/presentation/components/**/*.{ts,tsx,mts}",
+    ],
+    rules: {
+      "no-restricted-imports": ["error", { patterns: goApiBoundary }],
     },
   },
   // Override default ignores of eslint-config-next.

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -538,5 +539,133 @@ func TestPasswordLoginThrottleUsesWebClientIP(t *testing.T) {
 	}
 	if last := clients[len(clients)-1]; last != "203.0.113.2" {
 		t.Fatalf("password login client = %q, want the forwarded IP", last)
+	}
+}
+
+// fakeThrottle is a Throttle that records each call and answers with allow
+// (or err).
+type fakeThrottle struct {
+	mu    sync.Mutex
+	calls []throttleCall
+	allow func(key string) bool
+	err   error
+}
+
+type throttleCall struct {
+	key    string
+	limit  int
+	window time.Duration
+	now    time.Time
+}
+
+func (f *fakeThrottle) ConsumeThrottle(_ context.Context, key string, limit int, window time.Duration, now time.Time) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls = append(f.calls, throttleCall{key, limit, window, now})
+	if f.err != nil {
+		return false, f.err
+	}
+	return f.allow == nil || f.allow(key), nil
+}
+
+func throttleRouter(t *testing.T, a Auth, th Throttle, c *clock) (http.Handler, *bytes.Buffer) {
+	t.Helper()
+	buf := &bytes.Buffer{}
+	return NewRouter(Deps{Auth: a, DB: fakePinger{}, Throttle: th, Logger: slog.New(slog.NewJSONHandler(buf, nil)), Now: c.Now}), buf
+}
+
+// With a Throttle, the route limits are counted there (shared by every
+// instance), under keys that cannot meet auth.Service's own.
+func TestRouteRateLimitsUseThrottle(t *testing.T) {
+	a := accountAuth(func(context.Context, auth.Principal, string, string, string) error {
+		return auth.ErrInvalidCurrentPassword
+	})
+	a.password = func(context.Context, string, string, string) (auth.TokenPair, error) {
+		return auth.TokenPair{}, auth.ErrUnauthorized
+	}
+	a.refresh = func(context.Context, string) (auth.TokenPair, error) { return auth.TokenPair{}, auth.ErrUnauthorized }
+	c := newClock()
+	th := &fakeThrottle{}
+	h, _ := throttleRouter(t, a, th, c)
+	xff := map[string]string{"X-Forwarded-For": "203.0.113.9"}
+
+	for _, tc := range []struct {
+		method, path, body string
+		headers            map[string]string
+		key                string
+		limit              int
+	}{
+		{http.MethodPost, "/v1/auth/password", `{"loginId":"someone","password":"pw"}`, xff, "route:auth:203.0.113.9", authRateLimit},
+		{http.MethodPost, "/v1/auth/github", `{}`, xff, "route:auth:203.0.113.9", authRateLimit},
+		{http.MethodPost, "/v1/auth/ffpf", `{}`, xff, "route:auth:203.0.113.9", authRateLimit},
+		{http.MethodPost, "/v1/auth/logout", `{"refreshToken":"x"}`, xff, "route:auth:203.0.113.9", authRateLimit},
+		{http.MethodPost, "/v1/auth/guest", "", xff, "route:auth:203.0.113.9", authRateLimit},
+		{http.MethodPost, "/v1/auth/demo", "", xff, "route:auth:203.0.113.9", authRateLimit},
+		{http.MethodPost, passwordPath, passwordBody("old", "new password!", "new password!"),
+			map[string]string{"Authorization": "Bearer tok", "X-Forwarded-For": "203.0.113.9"}, "route:auth:203.0.113.9", authRateLimit},
+		{http.MethodPost, "/v1/auth/refresh", `{"refreshToken":"x"}`, xff, "route:refresh:203.0.113.9", refreshRateLimit},
+	} {
+		th.calls = nil
+		do(h, tc.method, tc.path, tc.body, tc.headers)
+		want := []throttleCall{{tc.key, tc.limit, authRateWindow, c.Now()}}
+		if fmt.Sprint(th.calls) != fmt.Sprint(want) {
+			t.Errorf("%s: throttle calls = %v, want %v", tc.path, th.calls, want)
+		}
+	}
+
+	// Routes outside the sign-in group are not counted.
+	th.calls = nil
+	do(h, http.MethodGet, "/v1/auth/demo", "", xff)
+	do(h, http.MethodGet, "/health", "", xff)
+	if len(th.calls) != 0 {
+		t.Errorf("throttle calls = %v, want none", th.calls)
+	}
+}
+
+// Over the limit, the answer is the in-memory limiter's: 429 rate_limited,
+// and the handler is not reached.
+func TestRouteRateLimitThrottleRefuses(t *testing.T) {
+	var reached bool
+	a := &fakeAuth{password: func(context.Context, string, string, string) (auth.TokenPair, error) {
+		reached = true
+		return auth.TokenPair{}, auth.ErrUnauthorized
+	}}
+	th := &fakeThrottle{allow: func(string) bool { return false }}
+	h, _ := throttleRouter(t, a, th, newClock())
+	memory, _ := testRouter(t, a, fakePinger{}, nil)
+	body := `{"loginId":"someone","password":"pw"}`
+	for range authRateLimit {
+		do(memory, http.MethodPost, "/v1/auth/password", body, nil)
+	}
+	reached = false
+
+	got := do(h, http.MethodPost, "/v1/auth/password", body, nil)
+	want := do(memory, http.MethodPost, "/v1/auth/password", body, nil)
+	wantError(t, got, http.StatusTooManyRequests, "rate_limited")
+	if reached {
+		t.Error("the handler was reached")
+	}
+	if got.Body.String() != want.Body.String() || fmt.Sprint(got.Header()) != fmt.Sprint(want.Header()) {
+		t.Errorf("throttle answer = %v %q, in-memory answer = %v %q", got.Header(), got.Body, want.Header(), want.Body)
+	}
+}
+
+// When the throttle cannot be read, the request is answered 503 like any
+// other unreachable database, and the error is logged.
+func TestRouteRateLimitThrottleFails(t *testing.T) {
+	var reached bool
+	a := &fakeAuth{refresh: func(context.Context, string) (auth.TokenPair, error) {
+		reached = true
+		return testPair, nil
+	}}
+	th := &fakeThrottle{err: errors.New("db-down-detail")}
+	h, buf := throttleRouter(t, a, th, newClock())
+
+	wantError(t, do(h, http.MethodPost, "/v1/auth/refresh", `{"refreshToken":"x"}`, nil), http.StatusServiceUnavailable, "unavailable")
+	if reached {
+		t.Error("the handler was reached")
+	}
+	if !strings.Contains(buf.String(), "db-down-detail") || !strings.Contains(buf.String(), `"level":"ERROR"`) {
+		t.Errorf("log = %s, want the throttle error at error level", buf.String())
 	}
 }

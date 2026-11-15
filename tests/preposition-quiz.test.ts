@@ -2,14 +2,16 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { PREPOSITION_USAGES } from "../src/domain/practice/preposition-data";
 import {
-  BLANK,
   buildQuestion,
   buildQuiz,
   categoriesOf,
-  CHOICE_COUNT,
-  progressPercent,
   wrongChoicesFor,
 } from "../src/domain/practice/preposition-quiz";
+import {
+  BLANK,
+  CHOICE_COUNT,
+  progressPercent,
+} from "../src/domain/practice/choice-question";
 
 // Deterministic stand-in for Math.random.
 function seeded(seed: number) {

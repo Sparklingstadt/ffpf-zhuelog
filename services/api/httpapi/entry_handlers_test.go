@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/jst"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
 
@@ -332,7 +333,7 @@ func TestListEntriesHandler(t *testing.T) {
 	})
 
 	t.Run("sharedAt is formatted when present", func(t *testing.T) {
-		shared := time.Date(2026, 10, 2, 3, 4, 5, 600_000_000, time.FixedZone("JST", 9*3600))
+		shared := time.Date(2026, 10, 2, 3, 4, 5, 600_000_000, jst.Location)
 		e := sampleEntry("e0", base)
 		e.SharedAt = &shared
 		h, _ := entriesRouter(t, &fakeEntries{list: func(context.Context, string, *store.Cursor, int) ([]store.Entry, error) {

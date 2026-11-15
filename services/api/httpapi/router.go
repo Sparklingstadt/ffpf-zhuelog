@@ -17,6 +17,8 @@ var (
 	_ Follows = (*store.Store)(nil)
 	_ Pinger  = (*store.Store)(nil)
 
+	_ Throttle = (*store.Store)(nil)
+
 	_ Accounts       = (*store.Store)(nil)
 	_ PasswordHasher = (*auth.PasswordVerifier)(nil)
 )
@@ -77,6 +79,12 @@ type Accounts interface {
 	SetPassword(ctx context.Context, id, hash string, now time.Time) error
 }
 
+// Throttle is the fixed-window counter in the database (*store.Store), so a
+// limit holds across every instance of the API rather than per process.
+type Throttle interface {
+	ConsumeThrottle(ctx context.Context, key string, limit int, window time.Duration, now time.Time) (bool, error)
+}
+
 // Pinger checks that the database is reachable.
 type Pinger interface {
 	Ping(ctx context.Context) error
@@ -97,6 +105,9 @@ type Deps struct {
 	// WebProxySecret, when non-empty, lets the Next.js web server forward the
 	// end user's IP (see clientKeyFunc).
 	WebProxySecret []byte
+	// Throttle counts the per-client limits of the sign-in routes and of
+	// refresh; nil counts them in this process only (local runs and tests).
+	Throttle Throttle
 	// Line serves the LINE routes; nil means LINE is not configured and the
 	// routes are not registered. LineChannelSecret verifies webhook
 	// signatures and CronSecret guards GET /v1/line/drain.
@@ -181,11 +192,11 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	// public registers a route that needs no authentication.
 	public := func(pattern string, h http.Handler) { handle(route{pattern: pattern}, h) }
 	// limited applies the per-client rate limit.
-	limiter := NewRateLimiter(authRateLimit, authRateWindow, d.Now)
+	limiter := newLimiter(d.Throttle, "route:auth:", authRateLimit, authRateWindow, d.Now)
 	clientKey := clientKeyFunc(d.WebProxySecret)
 	limited := func(h http.Handler) http.Handler { return rateLimit(limiter, clientKey, h) }
 	// refreshLimited is the separate per-client limit for POST /v1/auth/refresh.
-	refreshLimiter := NewRateLimiter(refreshRateLimit, authRateWindow, d.Now)
+	refreshLimiter := newLimiter(d.Throttle, "route:refresh:", refreshRateLimit, authRateWindow, d.Now)
 	refreshLimited := func(h http.Handler) http.Handler { return rateLimit(refreshLimiter, clientKey, h) }
 	// authed requires a valid token and rejects ?user= with 400; the safe default.
 	authed := func(h http.Handler) http.Handler { return requireAuth(d.Auth, false, rejectUserParam(h)) }
@@ -205,14 +216,13 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 		handle(route{pattern: pattern, authed: true, closedToDemo: true}, wrap(notDemo(d.Auth, h)))
 	}
 
-	// Production and the ALB health check use /health; /healthz is kept for
-	// local use.
+	// /health checks the database too; /healthz is kept for local use.
 	health := healthz(d.DB)
 	public("GET /health", health)
 	public("GET /healthz", health)
-	// The ALB health check uses /ping, which does not touch the database: a
-	// DB check every few seconds would keep Neon from ever suspending, and a
-	// database outage would make ECS replace healthy tasks.
+	// /ping does not touch the database, for frequent liveness checks (for
+	// example a container health check): a DB check every few seconds would
+	// keep Neon from ever suspending.
 	public("GET /ping", ping())
 
 	public("POST /v1/auth/github", limited(loginGitHub(d.Auth)))
@@ -278,13 +288,13 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 
 	// Finished rounds of preposition practice, for members and admins.
 	// Guests may practice in the web, but nothing of theirs is saved.
-	private("GET /v1/preposition-records", authed(listPrepositionRecords(d.PrepositionRecords)))
-	private("GET /v1/preposition-records/{id}", authed(getPrepositionRecord(d.PrepositionRecords)))
-	private("PUT /v1/preposition-records/{id}", authed(putPrepositionRecord(d.PrepositionRecords, d.Reviews, d.Now)))
+	private("GET /v1/preposition-records", authed(listPracticeRecords(prepositionPractice(d.PrepositionRecords))))
+	private("GET /v1/preposition-records/{id}", authed(getPracticeRecord(prepositionPractice(d.PrepositionRecords))))
+	private("PUT /v1/preposition-records/{id}", authed(putPracticeRecord(prepositionPractice(d.PrepositionRecords), d.Reviews, d.Now)))
 
-	private("GET /v1/complement-records", authed(listComplementRecords(d.ComplementRecords)))
-	private("GET /v1/complement-records/{id}", authed(getComplementRecord(d.ComplementRecords)))
-	private("PUT /v1/complement-records/{id}", authed(putComplementRecord(d.ComplementRecords, d.Reviews, d.Now)))
+	private("GET /v1/complement-records", authed(listPracticeRecords(complementPractice(d.ComplementRecords))))
+	private("GET /v1/complement-records/{id}", authed(getPracticeRecord(complementPractice(d.ComplementRecords))))
+	private("PUT /v1/complement-records/{id}", authed(putPracticeRecord(complementPractice(d.ComplementRecords), d.Reviews, d.Now)))
 
 	// Today's reviews, for members and admins, and the learning notes they
 	// put in them (always their own; a note in the trash is 404).

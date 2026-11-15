@@ -84,3 +84,15 @@ func TestNoUsageAndErrorStatusesReportNothing(t *testing.T) {
 		}
 	}
 }
+
+func TestModelOverrideIsSentAndReported(t *testing.T) {
+	o, _ := serve(t, http.StatusOK, withUsage(t, outputBody(t, validJSON("correctedText")), 1, 2))
+	o.Model = "gpt-other"
+	ctx, got := recording()
+	if _, err := o.Generate(ctx, KindCorrection, testText); err != nil {
+		t.Fatal(err)
+	}
+	if len(*got) != 1 || (*got)[0].Model != "gpt-other" {
+		t.Fatalf("reports = %+v, want one for gpt-other", *got)
+	}
+}

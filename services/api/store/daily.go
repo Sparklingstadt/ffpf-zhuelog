@@ -4,10 +4,16 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/jst"
 )
 
-// jst is Japan Standard Time, fixed at UTC+9 (no daylight saving).
-var jst = time.FixedZone("JST", 9*3600)
+// jstDay is the SQL for the JST calendar date of col, a TIMESTAMP column that
+// holds UTC (the columns are TIMESTAMP(3) without time zone, so the 9 hours
+// are added rather than using AT TIME ZONE).
+func jstDay(col string) string {
+	return "(" + col + " + interval '9 hours')::date"
+}
 
 // LogDate is a calendar date in JST.
 type LogDate struct {
@@ -22,8 +28,8 @@ type LogDateCount struct {
 
 // dayRange returns [start, end) of the JST date d as UTC DB times.
 func (d LogDate) dayRange() (time.Time, time.Time) {
-	start := time.Date(d.Year, time.Month(d.Month), d.Day, 0, 0, 0, 0, jst)
-	end := time.Date(d.Year, time.Month(d.Month), d.Day+1, 0, 0, 0, 0, jst)
+	start := time.Date(d.Year, time.Month(d.Month), d.Day, 0, 0, 0, 0, jst.Location)
+	end := time.Date(d.Year, time.Month(d.Month), d.Day+1, 0, 0, 0, 0, jst.Location)
 	return dbTime(start), dbTime(end)
 }
 
@@ -31,7 +37,7 @@ func (d LogDate) dayRange() (time.Time, time.Time) {
 // trash, newest date first, with the number of entries on each.
 func (s *Store) ListLogDates(ctx context.Context, ownerID string) ([]LogDateCount, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT ("createdAt" + interval '9 hours')::date AS d, count(*)
+		`SELECT `+jstDay(`"createdAt"`)+` AS d, count(*)
 		 FROM "LearningEntry"
 		 WHERE "ownerId" = $1 AND "deletedAt" IS NULL
 		 GROUP BY d ORDER BY d DESC`, ownerID)

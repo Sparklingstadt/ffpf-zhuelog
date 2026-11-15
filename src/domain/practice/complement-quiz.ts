@@ -11,11 +11,8 @@ import {
   type HskFilter,
   type HskLevel,
 } from "./hsk-level";
-import {
-  examplePinyinOf,
-  type PrepositionQuestion,
-  type Random,
-} from "./preposition-quiz";
+import { examplePinyinOf } from "./preposition-quiz";
+import { type ChoiceQuestion, type Random, shuffled } from "./choice-question";
 
 export const COMPLEMENT_MODES = {
   result: {
@@ -103,15 +100,6 @@ export function complementUsageLevel(
   return hskLevelOf(basis, sentenceOf(q));
 }
 
-function shuffled<T>(values: readonly T[], random: Random): T[] {
-  const out = [...values];
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(random() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-}
-
 // Construct on the server initially to keep hydration deterministic. Each retry
 // creates a new order and choice positions in the browser.
 export function buildComplementQuiz(
@@ -119,7 +107,7 @@ export function buildComplementQuiz(
   count = 25,
   random: Random = Math.random,
   filter: HskFilter | null = null,
-): PrepositionQuestion[] {
+): ChoiceQuestion[] {
   if (mode === "verb")
     return buildComplementVerbQuiz(
       Math.max(0, Math.floor(count)),
@@ -141,7 +129,7 @@ export function buildComplementQuiz(
 export function complementQuestion(
   q: ComplementUsage,
   random: Random = Math.random,
-): PrepositionQuestion {
+): ChoiceQuestion {
   const example = q.prompt.replace("（　）", q.answer);
   return {
     id: q.id,

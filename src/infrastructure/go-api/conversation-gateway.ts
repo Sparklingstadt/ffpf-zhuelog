@@ -1,3 +1,4 @@
+import { ChatUnavailableError } from "@/domain/chat/chat-unavailable";
 import type {
   Conversation,
   ConversationMessage,
@@ -8,12 +9,7 @@ import { goApiAuthed, type GoApiCall } from "./authed";
 import { GoApiError } from "./client";
 
 // Go has no chat routes (OPENAI_API_KEY is not set).
-export class ChatUnavailableError extends Error {
-  constructor() {
-    super("The Go API has no chat");
-    this.name = "ChatUnavailableError";
-  }
-}
+export { ChatUnavailableError };
 
 type SummaryJson = Omit<ConversationSummary, "createdAt" | "updatedAt"> & {
   createdAt: string;

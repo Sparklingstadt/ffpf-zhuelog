@@ -23,19 +23,19 @@ func (s *Store) StudyLog(ctx context.Context, ownerID string, from, to LogDate) 
 	start, _ := from.dayRange()
 	_, end := to.dayRange()
 	rows, err := s.pool.Query(ctx, `SELECT "day", sum("reviews"), sum("practice"), sum("notes"), sum("words") FROM (
-  SELECT ("reviewedAt" + interval '9 hours')::date AS "day", 1 AS "reviews", 0 AS "practice", 0 AS "notes", 0 AS "words"
+  SELECT `+jstDay(`"reviewedAt"`)+` AS "day", 1 AS "reviews", 0 AS "practice", 0 AS "notes", 0 AS "words"
   FROM "ReviewLog" WHERE "ownerId" = $1 AND "reviewedAt" >= $2 AND "reviewedAt" < $3
   UNION ALL
-  SELECT ("createdAt" + interval '9 hours')::date, 0, "questionCount", 0, 0
+  SELECT `+jstDay(`"createdAt"`)+`, 0, "questionCount", 0, 0
   FROM "PrepositionPracticeRecord" WHERE "ownerId" = $1 AND "createdAt" >= $2 AND "createdAt" < $3
   UNION ALL
-  SELECT ("createdAt" + interval '9 hours')::date, 0, "questionCount", 0, 0
+  SELECT `+jstDay(`"createdAt"`)+`, 0, "questionCount", 0, 0
   FROM "ComplementPracticeRecord" WHERE "ownerId" = $1 AND "createdAt" >= $2 AND "createdAt" < $3
   UNION ALL
-  SELECT ("createdAt" + interval '9 hours')::date, 0, 0, 1, 0
+  SELECT `+jstDay(`"createdAt"`)+`, 0, 0, 1, 0
   FROM "LearningEntry" WHERE "ownerId" = $1 AND "deletedAt" IS NULL AND "createdAt" >= $2 AND "createdAt" < $3
   UNION ALL
-  SELECT ("createdAt" + interval '9 hours')::date, 0, 0, 0, 1
+  SELECT `+jstDay(`"createdAt"`)+`, 0, 0, 0, 1
   FROM "VocabularyEntry" WHERE "ownerId" = $1 AND "createdAt" >= $2 AND "createdAt" < $3
 ) AS "activity" GROUP BY "day" ORDER BY "day"`, ownerID, start, end)
 	if err != nil {

@@ -2,7 +2,7 @@ import { BookOpen, CircleHelp } from "lucide-react";
 import Link from "next/link";
 import { questionNotes } from "@/composition/question-container";
 import type { QuestionSummary } from "@/domain/chat/question";
-import { ChatUnavailableError } from "@/infrastructure/go-api/conversation-gateway";
+import { ChatUnavailableError } from "@/domain/chat/chat-unavailable";
 import { requireChatUser } from "@/presentation/guards/chat-guard";
 import { formatTokyoDateTime } from "@/presentation/presenters/log-date-presenter";
 import { AiSideNav } from "@/presentation/components/chat/ai-side-nav";

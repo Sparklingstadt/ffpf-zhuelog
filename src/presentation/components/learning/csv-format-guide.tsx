@@ -3,10 +3,7 @@ const csvExample = `最初の文,添削後の文,ピンイン,ヒント1,ヒン�
 
 export function CsvFormatGuide() {
   return (
-    <section
-      aria-labelledby="csv-format-title"
-      className="space-y-4 border-t pt-5"
-    >
+    <section aria-labelledby="csv-format-title" className="space-y-4">
       <div className="space-y-1">
         <h3 id="csv-format-title" className="text-sm font-medium">
           対応するCSV形式

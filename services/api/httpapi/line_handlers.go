@@ -12,7 +12,6 @@ import (
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/line"
-	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
 
 // LineService is what the LINE handlers need from *linebot.Service.
@@ -33,7 +32,8 @@ const (
 
 	// lineWriteTimeout is how long the webhook and drain handlers may take to
 	// answer. It is longer than the server's 30 s WriteTimeout (a generation
-	// can take 20 s) and matches the 60 s maximum duration in vercel.json.
+	// can take 20 s) and stays well under Vercel's default maximum duration
+	// (300 s with Fluid compute; vercel.json does not set one).
 	lineWriteTimeout = 60 * time.Second
 	// drainBudget is how long a drain pass may run, leaving room under
 	// lineWriteTimeout to prune and answer.
@@ -126,12 +126,8 @@ func lineReviewNotify(svc LineService, on bool) http.Handler {
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		err := svc.SetReviewNotify(r.Context(), principalFrom(r.Context()).OwnerID, on)
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusNotFound, codeNotFound, msgLineNotLinked)
-			return
-		}
 		if err != nil {
-			writeServiceError(w, r, err)
+			writeStoreError(w, r, err, msgLineNotLinked)
 			return
 		}
 		writeJSON(w, http.StatusOK, response{ReviewNotify: on})

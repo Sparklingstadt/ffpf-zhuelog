@@ -28,6 +28,8 @@ test("the queue's count, make-up, days and next dates show where they are used",
     page,
     '"今天我很busy。","今天我很忙。","Jīntiān wǒ hěn máng.","忙＝忙しい"',
   );
+  // upload only presses the button; the home must load after the note is in.
+  await expect(page.getByText("1件の学習文を登録しました。")).toBeVisible();
   await page.goto("/");
   await page.getByRole("button", { name: "復習に入れる" }).click();
   await expect(
