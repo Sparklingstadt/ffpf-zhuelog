@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"slices"
 	"sort"
 	"testing"
 )
@@ -83,5 +84,64 @@ func TestListAndCountEntriesFilter(t *testing.T) {
 	}
 	if len(rest[0].Hints) == 0 || created[0].ID == "" {
 		t.Error("filtered notes keep their hints")
+	}
+}
+
+// The search uses LIKE (so a trigram index can serve it), but %, _ and \ in
+// the search term are literal characters, as they were with strpos: each
+// matches only the note that contains it.
+func TestEntryFilterLikeCharactersAreLiteral(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	owner := newOwner(t, s)
+	createTied(t, s, owner, []EntryDraft{
+		{Kind: "correction", OriginalText: "百分之百 100%", CorrectedText: "c1", Pinyin: "p1", Hints: []string{"h"}},
+		{Kind: "correction", OriginalText: "snake_case", CorrectedText: "c2", Pinyin: "p2", Hints: []string{"h"}},
+		{Kind: "correction", OriginalText: `C:\path`, CorrectedText: "c3", Pinyin: "p3", Hints: []string{"h"}},
+		{Kind: "correction", OriginalText: "plain 1000 snakeXcase Cpath", CorrectedText: "c4", Pinyin: "p4", Hints: []string{`hint 50\% off_line`}},
+	}, fixedNow())
+
+	for _, tc := range []struct {
+		query string
+		want  []string
+	}{
+		{"%", []string{"百分之百 100%", "plain 1000 snakeXcase Cpath"}}, // the hint has 50\%
+		{"0%", []string{"百分之百 100%"}},
+		{"%%", nil},
+		{"_", []string{"snake_case", "plain 1000 snakeXcase Cpath"}}, // the hint has off_line
+		{"e_c", []string{"snake_case"}},
+		{`\`, []string{`C:\path`, "plain 1000 snakeXcase Cpath"}}, // the hint has 50\%
+		{`:\p`, []string{`C:\path`}},
+		{`\%`, []string{"plain 1000 snakeXcase Cpath"}},
+		{`\\`, nil},
+		{"SNAKE_CASE", []string{"snake_case"}},
+	} {
+		{
+			f := EntryFilter{Query: tc.query}
+			list, err := s.ListEntries(ctx, owner, f, nil, 50)
+			if err != nil {
+				t.Fatal(err)
+			}
+			n, err := s.CountEntries(ctx, owner, f)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := make([]string, len(list))
+			for i, e := range list {
+				got[i] = e.OriginalText
+			}
+			sort.Strings(got)
+			want := append([]string(nil), tc.want...)
+			sort.Strings(want)
+			if len(got) != len(want) || n != len(want) || !slices.Equal(got, want) {
+				t.Errorf("query %q: list %q, count %d; want %q", tc.query, got, n, want)
+			}
+		}
+	}
+	// Hint-only search escapes the same way.
+	for query, want := range map[string]int{`\%`: 1, "_": 1, "%": 1, "x%": 0} {
+		if n, err := s.CountEntries(ctx, owner, EntryFilter{Hint: query}); err != nil || n != want {
+			t.Errorf("hint %q: count %d, %v; want %d", query, n, err, want)
+		}
 	}
 }

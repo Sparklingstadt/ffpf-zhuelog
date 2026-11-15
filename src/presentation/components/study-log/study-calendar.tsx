@@ -5,6 +5,8 @@ import {
   type StudyDay,
   type YearMonth,
 } from "@/domain/study-log/study-log";
+import Link from "next/link";
+
 import { cn } from "@/presentation/lib/utils";
 
 const WEEKDAYS = ["月", "火", "水", "木", "金", "土", "日"];
@@ -18,7 +20,7 @@ const LEVEL_CLASS = [
   "bg-primary text-primary-foreground",
 ] as const;
 
-function describe(day: StudyDay | undefined): string {
+export function describe(day: StudyDay | undefined): string {
   if (!day || studyTotal(day) === 0) return "学習なし";
   const parts = [
     day.reviews ? `復習${day.reviews}回` : "",
@@ -35,10 +37,16 @@ export function StudyCalendar({
   month,
   days,
   today,
+  selected,
+  dayHref,
 }: {
   month: YearMonth;
   days: readonly StudyDay[];
   today: string;
+  // The day shown beside the calendar, outlined.
+  selected?: string;
+  // Days of the month open that day beside the calendar.
+  dayHref?: (date: string) => string;
 }) {
   const byDate = new Map(days.map((d) => [d.date, d]));
   return (
@@ -73,13 +81,24 @@ export function StudyCalendar({
                 data-date={cell.date}
                 data-total={total}
                 className={cn(
-                  "flex aspect-square min-w-0 flex-col items-center justify-center rounded-md text-xs sm:text-sm",
+                  "relative flex aspect-square min-w-0 flex-col items-center justify-center rounded-md text-xs sm:text-sm",
                   LEVEL_CLASS[studyLevel(total)],
                   !cell.inMonth && "opacity-40",
                   cell.date === today &&
+                    "font-bold underline underline-offset-4",
+                  cell.date === selected &&
                     "ring-2 ring-foreground ring-offset-2 ring-offset-background",
                 )}
               >
+                {dayHref && cell.inMonth && cell.date <= today ? (
+                  <Link
+                    href={dayHref(cell.date)}
+                    aria-current={cell.date === selected ? "date" : undefined}
+                    className="absolute inset-0 rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                  >
+                    <span className="sr-only">{cell.date}を見る</span>
+                  </Link>
+                ) : null}
                 <span className="font-medium">{cell.day}</span>
                 {total > 0 ? (
                   <span className="font-mono text-[10px] leading-none sm:text-xs">

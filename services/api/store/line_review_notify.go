@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/jst"
 )
 
 // ReviewNotifyTarget is a LINE account whose owner asked for the morning
@@ -45,7 +47,7 @@ func (s *Store) SetLineReviewNotify(ctx context.Context, ownerID string, on bool
 // jstDate is the JST calendar date of t, as midnight UTC (how pgx reads and
 // writes a DATE).
 func jstDate(t time.Time) time.Time {
-	j := t.In(jst)
+	j := t.In(jst.Location)
 	return time.Date(j.Year(), j.Month(), j.Day(), 0, 0, 0, 0, time.UTC)
 }
 

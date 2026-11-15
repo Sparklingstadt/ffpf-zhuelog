@@ -132,7 +132,7 @@ func TestPrepositionRecordSaveListAndGet(t *testing.T) {
 func TestPrepositionRecordPutRejectsInvalidRounds(t *testing.T) {
 	h, _ := prepositionRouter(t, auth.RoleAdmin, &fakePrepositionRecords{})
 	path := "/v1/preposition-records/" + testConversationID
-	many := make([]map[string]any, maxPrepositionQuestions+1)
+	many := make([]map[string]any, maxPracticeQuestions+1)
 	for i := range many {
 		many[i] = question("在")
 	}
@@ -140,17 +140,17 @@ func TestPrepositionRecordPutRejectsInvalidRounds(t *testing.T) {
 		"no questions":       prepositionBody(t, 1000),
 		"too many questions": prepositionBody(t, 1000, many...),
 		"negative time":      prepositionBody(t, -1, question("在")),
-		"over a day":         prepositionBody(t, int(maxPrepositionElapsed/time.Millisecond)+1, question("在")),
+		"over a day":         prepositionBody(t, int(maxPracticeElapsed/time.Millisecond)+1, question("在")),
 		"no answer":          prepositionBody(t, 1000, question("")),
 		"answer as a miss":   prepositionBody(t, 1000, question("在", "在")),
 		"repeated miss":      prepositionBody(t, 1000, question("在", "把", "把")),
 		"four misses":        prepositionBody(t, 1000, question("在", "把", "被", "对", "向")),
 		"empty miss":         prepositionBody(t, 1000, question("在", "")),
 		"long prompt": prepositionBody(t, 1000, map[string]any{
-			"answer": "在", "noun": "学校", "prompt": strings.Repeat("字", maxPrepositionPrompt+1),
+			"answer": "在", "noun": "学校", "prompt": strings.Repeat("字", maxPracticePrompt+1),
 		}),
 		"long id": prepositionBody(t, 1000, map[string]any{
-			"id": strings.Repeat("a", maxPrepositionID+1), "answer": "在", "noun": "学校", "prompt": "p",
+			"id": strings.Repeat("a", maxPracticeID+1), "answer": "在", "noun": "学校", "prompt": "p",
 		}),
 		"bad startedAt": `{"startedAt":"yesterday","elapsedMs":1,"questions":[{"answer":"在","noun":"学校","prompt":"p"}]}`,
 		"not JSON":      `{`,
@@ -170,7 +170,7 @@ func TestPrepositionRecordPutKeepsTheQuestionID(t *testing.T) {
 	rs := &fakePrepositionRecords{}
 	h, _ := prepositionRouter(t, auth.RoleMember, rs)
 	withID := question("在")
-	withID["id"] = strings.Repeat("a", maxPrepositionID)
+	withID["id"] = strings.Repeat("a", maxPracticeID)
 
 	w := do(h, "PUT", "/v1/preposition-records/"+testConversationID, prepositionBody(t, 1000, withID), jsonAuth)
 	if w.Code != http.StatusOK {

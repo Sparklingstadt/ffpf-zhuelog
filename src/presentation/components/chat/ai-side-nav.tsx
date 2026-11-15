@@ -17,8 +17,10 @@ export function AiSideNav({
   showTabs: boolean;
   // The way to start anew, under the tabs.
   action?: ReactNode;
-  title: string;
-  children: ReactNode;
+  // The heading of the saved notes under it; none when the page itself
+  // lists them.
+  title?: string;
+  children?: ReactNode;
 }) {
   const tab = (href: string, label: string, here: boolean) => (
     <Link
@@ -43,9 +45,11 @@ export function AiSideNav({
         </nav>
       ) : null}
       {action}
-      <h2 className="pt-2 text-xs font-semibold text-muted-foreground">
-        {title}
-      </h2>
+      {title ? (
+        <h2 className="pt-2 text-xs font-semibold text-muted-foreground">
+          {title}
+        </h2>
+      ) : null}
       {children}
     </aside>
   );

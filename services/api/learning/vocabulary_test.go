@@ -33,7 +33,7 @@ func TestDraftVocabularySendsTheWordAndSentenceAsData(t *testing.T) {
 		t.Errorf("input = %v", gotReq["input"])
 	}
 	format, _ := gotReq["text"].(map[string]any)["format"].(map[string]any)
-	if gotReq["model"] != model || format["name"] != "vocabulary_card_draft" || format["strict"] != true {
+	if gotReq["model"] != DefaultModel || format["name"] != "vocabulary_card_draft" || format["strict"] != true {
 		t.Errorf("request = %v", gotReq)
 	}
 }

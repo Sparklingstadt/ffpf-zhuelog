@@ -157,29 +157,26 @@ func insertDemoSeed(ctx context.Context, tx pgx.Tx, owner string, seed DemoSeed)
  VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`,
 			c.ID, owner, c.Title, c.ModelName, c.Ended, string(messages), dbTime(c.CreatedAt), dbTime(c.UpdatedAt))
 	}
-	for _, r := range seed.PrepositionRecords {
-		firstTry, misses := demoScore(len(r.Questions), func(i int) int { return len(r.Questions[i].Misses) })
-		questions, err := json.Marshal(r.Questions)
+	queueRound := func(k practiceKind, r PracticeRecordSummary, qs []PracticeQuestion) error {
+		r.QuestionCount = len(qs)
+		r.FirstTryCount, r.MissCount = demoScore(len(qs), func(i int) int { return len(qs[i].Misses) })
+		questions, err := json.Marshal(qs)
 		if err != nil {
 			return err
 		}
-		b.Queue(`INSERT INTO "PrepositionPracticeRecord"
- ("id", "ownerId", "questionCount", "firstTryCount", "missCount", "elapsedMs", "questions", "startedAt", "createdAt")
- VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9)`,
-			r.ID, owner, len(r.Questions), firstTry, misses, r.ElapsedMs, string(questions),
-			dbTime(r.StartedAt), dbTime(r.CreatedAt))
+		sql, args := k.insert(owner, r, string(questions), r.CreatedAt)
+		b.Queue(sql, args...)
+		return nil
+	}
+	for _, r := range seed.PrepositionRecords {
+		if err := queueRound(prepositionPractice, r.PrepositionRecordSummary, r.Questions); err != nil {
+			return err
+		}
 	}
 	for _, r := range seed.ComplementRecords {
-		firstTry, misses := demoScore(len(r.Questions), func(i int) int { return len(r.Questions[i].Misses) })
-		questions, err := json.Marshal(r.Questions)
-		if err != nil {
+		if err := queueRound(complementPractice, r.ComplementRecordSummary, r.Questions); err != nil {
 			return err
 		}
-		b.Queue(`INSERT INTO "ComplementPracticeRecord"
- ("id", "ownerId", "mode", "questionCount", "firstTryCount", "missCount", "elapsedMs", "questions", "startedAt", "createdAt")
- VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10)`,
-			r.ID, owner, r.Mode, len(r.Questions), firstTry, misses, r.ElapsedMs, string(questions),
-			dbTime(r.StartedAt), dbTime(r.CreatedAt))
 	}
 	return execBatch(ctx, tx, b)
 }

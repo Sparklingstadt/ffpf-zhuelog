@@ -1,3 +1,4 @@
+import { PRACTICE_QUESTION_COUNT } from "@/domain/practice/choice-question";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentViewerUser } from "@/composition/identity-container";
 import { isMemberRole } from "@/domain/identity/entities/authenticated-user";
@@ -36,7 +37,12 @@ export default async function ComplementQuizPage({
     5: countComplementQuestions(mode, { level: 5, basis }),
     6: countComplementQuestions(mode, { level: 6, basis }),
   };
-  const quiz = buildComplementQuiz(mode, 25, Math.random, filter);
+  const quiz = buildComplementQuiz(
+    mode,
+    PRACTICE_QUESTION_COUNT,
+    Math.random,
+    filter,
+  );
   return (
     <PageShell user={user} width="4xl" dense>
       <PracticeBar

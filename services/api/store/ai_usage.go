@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/jst"
 )
 
 // AIUsage is one OpenAI call: whom it was for, the feature (an aiusage
@@ -44,8 +46,8 @@ func (s *Store) RecordAIUsage(ctx context.Context, u AIUsage, now time.Time) err
 // (year, month), by owner, feature and model. Owners with the most tokens
 // come first.
 func (s *Store) AIUsageMonth(ctx context.Context, year, month int) ([]AIUsageTotal, error) {
-	from := dbTime(time.Date(year, time.Month(month), 1, 0, 0, 0, 0, jst))
-	to := dbTime(time.Date(year, time.Month(month)+1, 1, 0, 0, 0, 0, jst))
+	from := dbTime(time.Date(year, time.Month(month), 1, 0, 0, 0, 0, jst.Location))
+	to := dbTime(time.Date(year, time.Month(month)+1, 1, 0, 0, 0, 0, jst.Location))
 	rows, err := s.pool.Query(ctx,
 		`SELECT u."ownerId", coalesce(m."displayName", ''), u."feature", u."model",
 		        count(*), sum(u."inputTokens"), sum(u."outputTokens"),

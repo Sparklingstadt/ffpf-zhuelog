@@ -3,6 +3,8 @@ package learning
 import (
 	"context"
 	"encoding/json"
+
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/openai"
 )
 
 const (
@@ -37,7 +39,7 @@ var vocabularySchema = map[string]any{
 func (o *OpenAI) DraftVocabulary(ctx context.Context, word, sentence string) (VocabularyDraft, error) {
 	input, err := json.Marshal(map[string]string{"word": word, "sentence": sentence})
 	if err != nil {
-		return VocabularyDraft{}, newError("OPENAI_REQUEST_FAILED", false)
+		return VocabularyDraft{}, openai.Fail(openai.CodeRequestFailed)
 	}
 	out, err := o.respond(ctx, vocabularyInstructions, "vocabulary_card_draft", vocabularySchema, string(input))
 	if err != nil {
@@ -45,7 +47,7 @@ func (o *OpenAI) DraftVocabulary(ctx context.Context, word, sentence string) (Vo
 	}
 	d, ok := parseVocabularyDraft(out)
 	if !ok {
-		return VocabularyDraft{}, newError("OPENAI_INVALID_RESPONSE", false)
+		return VocabularyDraft{}, openai.Fail(openai.CodeInvalidResponse)
 	}
 	return d, nil
 }

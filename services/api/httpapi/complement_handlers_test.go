@@ -132,7 +132,7 @@ func TestComplementRecordSaveListAndGet(t *testing.T) {
 func TestComplementRecordPutRejectsInvalidRounds(t *testing.T) {
 	h, _ := complementRouter(t, auth.RoleAdmin, &fakeComplementRecords{})
 	path := "/v1/complement-records/" + testConversationID
-	many := make([]map[string]any, maxComplementQuestions+1)
+	many := make([]map[string]any, maxPracticeQuestions+1)
 	for i := range many {
 		many[i] = complementQuestion("在")
 	}
@@ -141,17 +141,17 @@ func TestComplementRecordPutRejectsInvalidRounds(t *testing.T) {
 		"no questions":       complementBody(t, 1000),
 		"too many questions": complementBody(t, 1000, many...),
 		"negative time":      complementBody(t, -1, complementQuestion("在")),
-		"over a day":         complementBody(t, int(maxComplementElapsed/time.Millisecond)+1, complementQuestion("在")),
+		"over a day":         complementBody(t, int(maxPracticeElapsed/time.Millisecond)+1, complementQuestion("在")),
 		"no answer":          complementBody(t, 1000, complementQuestion("")),
 		"answer as a miss":   complementBody(t, 1000, complementQuestion("在", "在")),
 		"repeated miss":      complementBody(t, 1000, complementQuestion("在", "把", "把")),
 		"four misses":        complementBody(t, 1000, complementQuestion("在", "把", "被", "对", "向")),
 		"empty miss":         complementBody(t, 1000, complementQuestion("在", "")),
 		"long prompt": complementBody(t, 1000, map[string]any{
-			"answer": "在", "noun": "学校", "prompt": strings.Repeat("字", maxComplementPrompt+1),
+			"answer": "在", "noun": "学校", "prompt": strings.Repeat("字", maxPracticePrompt+1),
 		}),
 		"long id": complementBody(t, 1000, map[string]any{
-			"id": strings.Repeat("a", maxComplementID+1), "answer": "在", "noun": "学校", "prompt": "p",
+			"id": strings.Repeat("a", maxPracticeID+1), "answer": "在", "noun": "学校", "prompt": "p",
 		}),
 		"bad startedAt": `{"startedAt":"yesterday","elapsedMs":1,"questions":[{"answer":"在","noun":"学校","prompt":"p"}]}`,
 		"not JSON":      `{`,
@@ -187,7 +187,7 @@ func TestComplementRecordPutKeepsTheQuestionID(t *testing.T) {
 	rs := &fakeComplementRecords{}
 	h, _ := complementRouter(t, auth.RoleMember, rs)
 	withID := complementQuestion("在")
-	withID["id"] = strings.Repeat("a", maxComplementID)
+	withID["id"] = strings.Repeat("a", maxPracticeID)
 
 	w := do(h, "PUT", "/v1/complement-records/"+testConversationID, complementBody(t, 1000, withID), jsonAuth)
 	if w.Code != http.StatusOK {

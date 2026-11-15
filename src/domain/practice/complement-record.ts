@@ -1,22 +1,15 @@
 import { ASPECT_PARTICLE_PRACTICE } from "./aspect-particle-quiz";
 import { COMPLEMENT_MODES, type ComplementMode } from "./complement-quiz";
 import { MEASURE_WORD_PRACTICE } from "./measure-word-quiz";
-import type {
-  PrepositionAnswer,
-  PrepositionRecordSummary,
-} from "./preposition-record";
-export type ComplementAnswer = PrepositionAnswer;
-export type ComplementRecordSummary = PrepositionRecordSummary & {
+import type { ChoiceAnswer, PracticeRecordSummary } from "./practice-record";
+export type ComplementAnswer = ChoiceAnswer;
+export type ComplementRecordSummary = PracticeRecordSummary & {
   mode: ComplementRoundMode;
 };
 export type ComplementRecord = ComplementRecordSummary & {
   questions: ComplementAnswer[];
 };
-export {
-  accuracyPercent,
-  formatElapsed,
-  scoreRound,
-} from "./preposition-record";
+export { accuracyPercent, formatElapsed, scoreRound } from "./practice-record";
 
 // The modes a saved round may have: the complement modes, "measure" for the
 // measure-word practice and "aspect" for the 了・过・着 practice, whose

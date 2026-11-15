@@ -1,4 +1,5 @@
 import { BookOpenText, Database, Repeat } from "lucide-react";
+import { loadOr } from "@/presentation/controllers/load-or";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -12,9 +13,8 @@ import {
   type EntrySearch,
 } from "@/domain/learning/entry-search";
 import type { DueReviews } from "@/domain/review/review-item";
-import { GoApiError } from "@/infrastructure/go-api/client";
 import { setNoteReviewAction } from "@/presentation/actions/note-review-actions";
-import type { ViewedOwner } from "@/infrastructure/go-api/learning-gateway";
+import type { ViewedOwner } from "@/domain/learning/viewed-owner";
 import { loadRecordOwnerView } from "@/composition/record-owner-options";
 import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { PageShell } from "@/presentation/components/layout/page-shell";
@@ -46,14 +46,14 @@ async function loadEntries(
   total: number;
   loadFailed: boolean;
 }> {
-  try {
-    const result = await learningNotes.listRecent(owner, 100, search);
-    return { ...result, loadFailed: false };
-  } catch (error) {
-    if (!(error instanceof GoApiError)) throw error;
-    console.error("LEARNING_ENTRIES_UNAVAILABLE", error.status, error.code);
-    return { entries: [], total: 0, loadFailed: true };
-  }
+  return loadOr(
+    "LEARNING_ENTRIES_UNAVAILABLE",
+    async () => {
+      const result = await learningNotes.listRecent(owner, 100, search);
+      return { ...result, loadFailed: false };
+    },
+    { entries: [], total: 0, loadFailed: true },
+  );
 }
 
 // How many reviews are due and the review streak, or null when Go cannot
@@ -62,26 +62,25 @@ async function loadDueReviews(): Promise<Pick<
   DueReviews,
   "count" | "streakDays" | "byKind" | "recentDays"
 > | null> {
-  try {
-    const { count, streakDays, byKind, recentDays } = await reviews.listDue(1);
-    return { count, streakDays, byKind, recentDays };
-  } catch (error) {
-    if (!(error instanceof GoApiError)) throw error;
-    console.error("REVIEW_COUNT_UNAVAILABLE", error.status, error.code);
-    return null;
-  }
+  return loadOr(
+    "REVIEW_COUNT_UNAVAILABLE",
+    async () => {
+      const { count, streakDays, byKind, recentDays } =
+        await reviews.listDue(1);
+      return { count, streakDays, byKind, recentDays };
+    },
+    null,
+  );
 }
 
 // The ids of the user's notes in their review queue, so each card can offer
 // to put it in or take it out; null when Go cannot say (no button then).
 async function loadNotesInReview(): Promise<Set<string> | null> {
-  try {
-    return await reviews.entriesInReview();
-  } catch (error) {
-    if (!(error instanceof GoApiError)) throw error;
-    console.error("NOTES_IN_REVIEW_UNAVAILABLE", error.status, error.code);
-    return null;
-  }
+  return loadOr(
+    "NOTES_IN_REVIEW_UNAVAILABLE",
+    () => reviews.entriesInReview(),
+    null,
+  );
 }
 
 type HomeProps = {

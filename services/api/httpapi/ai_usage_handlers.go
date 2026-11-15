@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/aiusage"
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/jst"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
 
@@ -57,7 +58,7 @@ var monthPattern = regexp.MustCompile(`^(\d{4})-(\d{2})$`)
 // parseMonth reads "YYYY-MM"; an empty string is the JST month of now.
 func parseMonth(s string, now time.Time) (year, month int, ok bool) {
 	if s == "" {
-		t := now.In(time.FixedZone("JST", 9*3600))
+		t := now.In(jst.Location)
 		return t.Year(), int(t.Month()), true
 	}
 	m := monthPattern.FindStringSubmatch(s)

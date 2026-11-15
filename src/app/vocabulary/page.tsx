@@ -1,11 +1,11 @@
 import { Database } from "lucide-react";
+import { loadOr } from "@/presentation/controllers/load-or";
 import { redirect } from "next/navigation";
 
 import { getCurrentViewerUser } from "@/composition/identity-container";
 import { vocabulary } from "@/composition/vocabulary-container";
 import { isMemberRole } from "@/domain/identity/entities/authenticated-user";
 import type { VocabularyEntry } from "@/domain/vocabulary/vocabulary-entry";
-import { GoApiError } from "@/infrastructure/go-api/client";
 import {
   deleteVocabularyAction,
   draftVocabularyAction,
@@ -30,13 +30,7 @@ export const dynamic = "force-dynamic";
 // Go being unavailable (or failing) still shows the page with a notice. Any
 // other error, including the redirect to /signin, is rethrown.
 async function loadVocabulary(): Promise<VocabularyEntry[] | null> {
-  try {
-    return await vocabulary.list();
-  } catch (error) {
-    if (!(error instanceof GoApiError)) throw error;
-    console.error("VOCABULARY_UNAVAILABLE", error.status, error.code);
-    return null;
-  }
+  return loadOr("VOCABULARY_UNAVAILABLE", () => vocabulary.list(), null);
 }
 
 // When each word with a review card comes back, labelled by Tokyo day.

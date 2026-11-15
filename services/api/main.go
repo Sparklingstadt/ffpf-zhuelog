@@ -16,14 +16,16 @@ import (
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/chat"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/demo"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/httpapi"
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/httpclient"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/learning"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/line"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/linebot"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
 
-// shutdownTimeout stays well under ECS's stop timeout (30 seconds by default)
-// between SIGTERM and SIGKILL.
+// shutdownTimeout is how long in-flight requests get after SIGTERM. It stays
+// short so a container runtime (see Dockerfile) does not SIGKILL first; on
+// Vercel the platform manages the process instead.
 const shutdownTimeout = 8 * time.Second
 
 func main() {
@@ -46,12 +48,7 @@ func main() {
 // follows redirects, so a request body or header that carries a secret cannot
 // be replayed to a redirect target.
 func newNoRedirectHTTPClient(timeout time.Duration) *http.Client {
-	return &http.Client{
-		Timeout: timeout,
-		CheckRedirect: func(*http.Request, []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
+	return httpclient.NoRedirect(nil, timeout)
 }
 
 // newGitHubHTTPClient builds the client used to talk to GitHub.
@@ -94,6 +91,7 @@ func newLineService(cfg Config, db *store.Store, allow auth.Allowlist, logger *s
 			HTTP:    newNoRedirectHTTPClient(20 * time.Second),
 			BaseURL: cfg.OpenAIBaseURL,
 			APIKey:  cfg.OpenAIAPIKey,
+			Model:   cfg.OpenAILearningModel,
 		},
 		Messenger:  messenger,
 		Quota:      messenger,
@@ -176,6 +174,7 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 		StudyLog:           db,
 		AIUsage:            db,
 		WebProxySecret:     cfg.WebProxySecret,
+		Throttle:           db,
 		// The cron secret guards the LINE drain and the demo reset.
 		CronSecret: cfg.CronSecret,
 	}
@@ -208,6 +207,7 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 			HTTP:    newNoRedirectHTTPClient(20 * time.Second),
 			BaseURL: cfg.OpenAIBaseURL,
 			APIKey:  cfg.OpenAIAPIKey,
+			Model:   cfg.OpenAILearningModel,
 		}
 		deps.ChatModel = cfg.OpenAIChatModel
 	}

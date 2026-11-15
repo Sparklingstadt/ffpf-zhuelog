@@ -11,3 +11,5 @@ export type SaveQuestionInput = {
   answer: string;
 };
 export const MAX_QUESTION_CHARS = 4000;
+// The longest answer a question note keeps, as Go's chat.MaxAnswerChars.
+export const MAX_ANSWER_CHARS = 20_000;

@@ -1,9 +1,9 @@
-import { formatElapsed } from "@/domain/practice/preposition-record";
+import { formatElapsed } from "@/domain/practice/practice-record";
 
 // The accuracy, the misses and the time of a round, during it and after.
 // accuracy is null before the first answer. During the round ("sm") they
 // are one line beside the progress bar; the result shows them as tiles.
-export function PrepositionStats({
+export function RoundStats({
   accuracy,
   missCount,
   elapsedMs,

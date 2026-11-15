@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -45,10 +44,6 @@ const (
 	maxConversationModelName = 150
 	maxConversationMessageID = 200
 )
-
-var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
-
-func validConversationID(s string) bool { return uuidPattern.MatchString(s) }
 
 // chatLine is one line of the NDJSON answer: "delta" with the next piece of
 // text, then "done", or "error" with a message once text has been sent.
@@ -182,17 +177,13 @@ func listConversations(cs Conversations, chatModel string) http.Handler {
 
 func getConversation(cs Conversations) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathValueMsg(w, r, "id", validConversationID, msgConversationNotFound)
+		id, ok := pathValueMsg(w, r, "id", validUUID, msgConversationNotFound)
 		if !ok {
 			return
 		}
 		c, err := cs.GetConversation(r.Context(), principalFrom(r.Context()).OwnerID, id)
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusNotFound, codeNotFound, msgConversationNotFound)
-			return
-		}
 		if err != nil {
-			writeServiceError(w, r, err)
+			writeStoreError(w, r, err, msgConversationNotFound)
 			return
 		}
 		writeJSON(w, http.StatusOK, toConversationJSON(c))
@@ -210,7 +201,7 @@ func putConversation(cs Conversations, now func() time.Time) http.Handler {
 		Messages  []store.ConversationMessage `json:"messages"`
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathValueMsg(w, r, "id", validConversationID, msgConversationNotFound)
+		id, ok := pathValueMsg(w, r, "id", validUUID, msgConversationNotFound)
 		if !ok {
 			return
 		}
@@ -231,12 +222,8 @@ func putConversation(cs Conversations, now func() time.Time) http.Handler {
 			},
 			Messages: req.Messages,
 		}, now())
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusNotFound, codeNotFound, msgConversationNotFound)
-			return
-		}
 		if err != nil {
-			writeServiceError(w, r, err)
+			writeStoreError(w, r, err, msgConversationNotFound)
 			return
 		}
 		writeJSON(w, http.StatusOK, toConversationJSON(saved))
@@ -283,17 +270,13 @@ func validConversation(title, modelName string, msgs []store.ConversationMessage
 
 func deleteConversation(cs Conversations) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathValueMsg(w, r, "id", validConversationID, msgConversationNotFound)
+		id, ok := pathValueMsg(w, r, "id", validUUID, msgConversationNotFound)
 		if !ok {
 			return
 		}
 		err := cs.DeleteConversation(r.Context(), principalFrom(r.Context()).OwnerID, id)
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusNotFound, codeNotFound, msgConversationNotFound)
-			return
-		}
 		if err != nil {
-			writeServiceError(w, r, err)
+			writeStoreError(w, r, err, msgConversationNotFound)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)

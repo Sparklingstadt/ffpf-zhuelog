@@ -192,6 +192,63 @@ test("missed verb-mode complement questions come back on the review page like pr
   expect(logs).toEqual([{ rating: 4 }]);
 });
 
+// Saving a word refreshes the page's data, and the due list no longer has
+// the cards already answered. The open session must stay on its own card,
+// unanswered cards included, rather than slide to the next one as solved.
+test("adding a word from a solved card leaves the session where it was", async ({
+  page,
+  db,
+}) => {
+  const accountId = await createMember(db, "taro", "太郎", "member-password-1");
+  const owner = memberOwnerId(accountId);
+  const prompts = [
+    "我听（　）了老师的解释。",
+    "我终于找（　）钥匙了。",
+    "今天的作业已经做（　）了。",
+  ];
+  for (const [i, targetId] of ["result-01", "result-02", "result-03"].entries())
+    await db.query(
+      `INSERT INTO "ReviewItem"
+       ("id", "ownerId", "language", "kind", "targetId", "due", "state", "createdAt", "updatedAt")
+       VALUES ('c' || substr(md5(random()::text), 1, 24), $1, 'zh', 'complement', $2,
+               now() - make_interval(mins => $3), 0, now(), now())`,
+      [owner, targetId, 10 - i],
+    );
+  await asMember(page, "taro", "member-password-1");
+
+  await page.goto("/review");
+  const ratings = page.getByRole("group", { name: "思い出せた度合い" });
+  await expect(page.getByText("1 / 3")).toBeVisible();
+  await expect(page.getByText(prompts[0])).toBeVisible();
+  await pickUntilRight(page, "選択肢");
+  await ratings.getByRole("button", { name: "簡単" }).click();
+
+  await expect(page.getByText("2 / 3")).toBeVisible();
+  await expect(page.getByText(prompts[1])).toBeVisible();
+  await pickUntilRight(page, "選択肢");
+  await page.getByText("例文の語句を単語帳に入れる").click();
+  await page.getByRole("textbox", { name: "語句" }).fill("钥匙");
+  await page.getByRole("textbox", { name: "ピンイン" }).fill("yàoshi");
+  await page.getByRole("textbox", { name: "意味" }).fill("鍵");
+  await page.getByRole("button", { name: "単語帳に入れる" }).click();
+  await expect(page.getByText("「钥匙」を単語帳に入れました。")).toBeVisible();
+
+  // Still the second card, solved; the third has not been touched.
+  await expect(page.getByText("2 / 3")).toBeVisible();
+  await expect(page.getByText(prompts[1])).toBeVisible();
+  await expect(page.getByText(prompts[2])).toHaveCount(0);
+  await ratings.getByRole("button", { name: "できた" }).click();
+
+  await expect(page.getByText("3 / 3")).toBeVisible();
+  await expect(page.getByText(prompts[2])).toBeVisible();
+  await expect(ratings).toHaveCount(0);
+  await expect(
+    page.getByRole("group", { name: "選択肢" }).getByRole("button", {
+      name: /（正解）$/,
+    }),
+  ).toHaveCount(0);
+});
+
 test("guests have no review queue", async ({ page }) => {
   await asGuest(page);
   await page.goto("/review");

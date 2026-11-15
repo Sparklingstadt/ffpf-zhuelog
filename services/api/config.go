@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/learning"
 )
 
 const minJWTSecretBytes = 32
@@ -17,6 +18,10 @@ const (
 	// defaultChatModel is the model of the admin chat unless OPENAI_CHAT_MODEL
 	// names another.
 	defaultChatModel = "gpt-6.1-sol"
+	// defaultLearningModel is the model of the LINE bot's corrections and
+	// translations and of the vocabulary drafts unless OPENAI_LEARNING_MODEL
+	// names another.
+	defaultLearningModel = learning.DefaultModel
 )
 
 // Config holds the API server settings read from the environment.
@@ -47,6 +52,7 @@ type Config struct {
 	LineChannelAccessToken string
 	OpenAIAPIKey           string
 	OpenAIChatModel        string
+	OpenAILearningModel    string
 	// CronSecret is optional: the bearer secret the scheduler presents to the
 	// LINE retry endpoint. Unset means that endpoint always answers 401.
 	CronSecret []byte
@@ -164,6 +170,9 @@ func LoadConfig(getenv func(string) string) (Config, error) {
 	}
 	if cfg.OpenAIChatModel = get("OPENAI_CHAT_MODEL"); cfg.OpenAIChatModel == "" {
 		cfg.OpenAIChatModel = defaultChatModel
+	}
+	if cfg.OpenAILearningModel = get("OPENAI_LEARNING_MODEL"); cfg.OpenAILearningModel == "" {
+		cfg.OpenAILearningModel = defaultLearningModel
 	}
 	if lineSecret != "" {
 		cfg.LineChannelSecret = []byte(lineSecret)

@@ -52,6 +52,7 @@ Web 用とは別の OAuth App を新しく作ります。GitHub の **Settings �
 | `LINE_CHANNEL_ACCESS_TOKEN`   | LINE の長期のチャネルアクセストークン                                                                   |
 | `OPENAI_API_KEY`              | OpenAI の API キー                                                                                      |
 | `OPENAI_CHAT_MODEL`           | 会話練習のモデル（任意。無ければ `gpt-6.1-sol`）。「8. 会話練習」を参照                                 |
+| `OPENAI_LEARNING_MODEL`       | LINE の添削・翻訳と単語帳の下書きのモデル（任意。無ければ `gpt-5-mini`）                                |
 | `CRON_SECRET`                 | 拾い直しの Cron の認証用の秘密。Vercel が Cron の呼び出しに `Authorization: Bearer <値>` を付けます     |
 
 - `DATABASE_URL` は、手で入れなくても、チームの **Storage** タブで Web が使っている Neon のストアを開き、**Connect Project** から Go API のプロジェクトをつなぐと入ります（pooled の接続文字列です。`channel_binding=require` が付いていても Go API はそのまま使えます）。
