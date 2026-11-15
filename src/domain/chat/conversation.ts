@@ -27,6 +27,9 @@ export type Conversation = ConversationSummary & {
 export const MAX_MESSAGES = 40;
 // Counted in characters (code points), as Go counts runes.
 export const MAX_TOTAL_CHARS = 40_000;
+// How long one message typed into the chat may be. Only the input box limits
+// it; Go checks the total above.
+export const MAX_INPUT_CHARS = 4_000;
 const MAX_TITLE_CHARS = 80;
 
 export function conversationTitle(text: string): string {

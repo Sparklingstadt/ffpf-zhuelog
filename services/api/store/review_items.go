@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/jst"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/review"
 )
 
@@ -146,8 +147,8 @@ func (s *Store) ListDueReviewItems(ctx context.Context, ownerID string, now time
 // last day is yesterday still counts, so it does not drop to 0 until a whole
 // day goes by without a review.
 func (s *Store) ReviewStreak(ctx context.Context, ownerID string, now time.Time) (int, error) {
-	today := dateOnly(now.In(jst))
-	rows, err := s.pool.Query(ctx, `SELECT DISTINCT ("reviewedAt" + interval '9 hours')::date AS "day"
+	today := dateOnly(now.In(jst.Location))
+	rows, err := s.pool.Query(ctx, `SELECT DISTINCT `+jstDay(`"reviewedAt"`)+` AS "day"
  FROM "ReviewLog" WHERE "ownerId" = $1 AND "reviewedAt" > $2 ORDER BY "day" DESC`,
 		ownerID, dbTime(today.AddDate(-reviewStreakMaxDays, 0, 0)))
 	if err != nil {
@@ -234,9 +235,9 @@ func (s *Store) CountDueReviewItemsByKind(ctx context.Context, ownerID string, n
 // ReviewDays says, for each of the days days up to today in Japan time,
 // oldest first, whether the owner answered at least one review that day.
 func (s *Store) ReviewDays(ctx context.Context, ownerID string, now time.Time, days int) ([]bool, error) {
-	today := dateOnly(now.In(jst))
+	today := dateOnly(now.In(jst.Location))
 	first := today.AddDate(0, 0, -(days - 1))
-	rows, err := s.pool.Query(ctx, `SELECT DISTINCT ("reviewedAt" + interval '9 hours')::date AS "day"
+	rows, err := s.pool.Query(ctx, `SELECT DISTINCT `+jstDay(`"reviewedAt"`)+` AS "day"
  FROM "ReviewLog" WHERE "ownerId" = $1 AND "reviewedAt" >= $2`,
 		ownerID, dbTime(first))
 	if err != nil {
@@ -248,7 +249,7 @@ func (s *Store) ReviewDays(ctx context.Context, ownerID string, now time.Time, d
 	}
 	out := make([]bool, days)
 	for _, d := range reviewed {
-		day := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, jst)
+		day := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, jst.Location)
 		i := int(day.Sub(first).Hours() / 24)
 		if i >= 0 && i < days {
 			out[i] = true

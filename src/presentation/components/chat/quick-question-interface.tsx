@@ -2,13 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  useEffect,
-  useRef,
-  useState,
-  type FormEvent,
-  type KeyboardEvent,
-} from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { BookOpen, Plus, Send, Square } from "lucide-react";
 import {
   MAX_QUESTION_CHARS,
@@ -16,7 +10,7 @@ import {
 } from "@/domain/chat/question";
 import { saveQuestionAction } from "@/presentation/actions/question-actions";
 import { ChatMessage } from "./chat-message";
-import { readChatStream, readFailureText } from "./chat-stream";
+import { streamChat, submitOnEnter } from "./chat-stream";
 import { Button } from "@/presentation/components/ui/button";
 import {
   Card,
@@ -36,6 +30,8 @@ const EXAMPLES = [
 ] as const;
 const FAILURE =
   "回答を受信できませんでした。質問を確認して、もう一度送信してください。";
+const STOPPED =
+  "回答を停止しました。途中の回答は保存されません。もう一度送信できます。";
 
 export function QuickQuestionInterface({ chatModel }: { chatModel: string }) {
   const [input, setInput] = useState("");
@@ -94,47 +90,31 @@ export function QuickQuestionInterface({ chatModel }: { chatModel: string }) {
     setAnswer("");
     setNotice("");
     setStatus("asking");
-    let received = "";
-    // The server's own reason (a rate limit, a quota) when it gave one.
-    let failure = FAILURE;
-    try {
-      const response = await fetch("/api/quick-question", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ messages: [{ role: "user", text }] }),
-        signal: controller.signal,
-      });
-      if (!response.ok || !response.body) {
-        failure = await readFailureText(response, FAILURE);
-        throw new Error(failure);
-      }
-      const result = await readChatStream(response.body, (delta) => {
-        received += delta;
+    const result = await streamChat({
+      endpoint: "/api/quick-question",
+      messages: [{ role: "user", text }],
+      signal: controller.signal,
+      onText: (received) => {
         if (mounted.current) setAnswer(received);
-      });
-      if (typeof result === "object") failure = result.error;
-      if (result !== "done" || !received.trim()) throw new Error(failure);
-      if (!mounted.current) return;
-      const value = {
-        id: crypto.randomUUID(),
-        question: text,
-        answer: received,
-      };
-      setNote(value);
-      setInput("");
-      await save(value);
-    } catch {
-      if (!mounted.current) return;
+      },
+      texts: { failure: FAILURE, cut: FAILURE, stopped: STOPPED },
+    });
+    if (abort.current === controller) abort.current = null;
+    if (!mounted.current) return;
+    if (!result.ok) {
       setStatus("idle");
-      setNotice(
-        controller.signal.aborted
-          ? "回答を停止しました。途中の回答は保存されません。もう一度送信できます。"
-          : failure,
-      );
+      setNotice(result.message);
       locked.current = false;
-    } finally {
-      if (abort.current === controller) abort.current = null;
+      return;
     }
+    const value = {
+      id: crypto.randomUUID(),
+      question: text,
+      answer: result.text,
+    };
+    setNote(value);
+    setInput("");
+    await save(value);
   }
 
   function startNew() {
@@ -145,16 +125,6 @@ export function QuickQuestionInterface({ chatModel }: { chatModel: string }) {
     setNote(null);
     setNotice("");
     setStatus("idle");
-  }
-  function keyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (
-      event.key === "Enter" &&
-      !event.shiftKey &&
-      !event.nativeEvent.isComposing
-    ) {
-      event.preventDefault();
-      event.currentTarget.form?.requestSubmit();
-    }
   }
 
   return (
@@ -283,7 +253,7 @@ export function QuickQuestionInterface({ chatModel }: { chatModel: string }) {
               placeholder="中国語の疑問を入力…"
               value={input}
               onChange={(e) => setInput(e.currentTarget.value)}
-              onKeyDown={keyDown}
+              onKeyDown={submitOnEnter}
               disabled={busy}
               maxLength={MAX_QUESTION_CHARS}
               className="min-h-28 resize-y"

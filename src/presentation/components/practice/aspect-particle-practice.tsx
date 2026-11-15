@@ -1,7 +1,7 @@
 "use client";
 import type { HskFilter } from "@/domain/practice/hsk-level";
 import type { ChoiceQuestion } from "@/domain/practice/choice-question";
-import { saveComplementRoundAction } from "@/presentation/actions/complement-record-actions";
+import { saveComplementRoundAction } from "@/presentation/actions/practice-record-actions";
 import { ChoicePractice } from "./choice-practice";
 
 // The 了・过・着 practice. Its prompts are whole sentences, shown small as

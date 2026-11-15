@@ -17,9 +17,11 @@ import type {
   AnswerReviewResult,
 } from "@/presentation/actions/review-actions";
 import {
-  Choice,
+  ChoiceGrid,
   ProgressBar,
   SolvedExample,
+  useChoicePicks,
+  WrongPickNotice,
 } from "@/presentation/components/practice/choice-parts";
 import { SpeakButton } from "@/presentation/components/speech/speak-button";
 import { Badge } from "@/presentation/components/ui/badge";
@@ -166,8 +168,13 @@ export function ReviewSession({
   });
   const [lastLoaded, setLastLoaded] = useState(loadedCards);
   const [index, setIndex] = useState(0);
-  const [wrong, setWrong] = useState<string[]>([]);
-  const [solved, setSolved] = useState(false);
+  const {
+    wrong,
+    solved,
+    pick: pickChoice,
+    reset: resetPicks,
+    reveal,
+  } = useChoicePicks();
   const [logId, setLogId] = useState(() => crypto.randomUUID());
   const [send, setSend] = useState<SendState>({ status: "idle" });
 
@@ -176,8 +183,7 @@ export function ReviewSession({
     if (index >= session.cards.length) {
       setSession({ cards: loadedCards, remaining: loadedRemaining });
       setIndex(0);
-      setWrong([]);
-      setSolved(false);
+      resetPicks();
     }
   }
   const { cards, remaining } = session;
@@ -185,13 +191,7 @@ export function ReviewSession({
   const card = index < cards.length ? cards[index] : null;
 
   function pick(choice: string) {
-    if (!card || card.type !== "choice" || solved || wrong.includes(choice))
-      return;
-    if (choice !== card.question.answer) {
-      setWrong((picked) => [...picked, choice]);
-      return;
-    }
-    setSolved(true);
+    if (card?.type === "choice") pickChoice(card.question, choice);
   }
 
   async function rate(rating: ReviewRating) {
@@ -211,8 +211,7 @@ export function ReviewSession({
       return;
     }
     setIndex((i) => i + 1);
-    setWrong([]);
-    setSolved(false);
+    resetPicks();
     setLogId(crypto.randomUUID());
     setSend({ status: "idle" });
   }
@@ -351,7 +350,7 @@ export function ReviewSession({
           <NoteCardContent
             entry={card.entry}
             turned={solved}
-            onTurn={() => setSolved(true)}
+            onTurn={() => reveal()}
             ratings={ratings}
           />
         ) : card.type === "word" ? (
@@ -382,11 +381,7 @@ export function ReviewSession({
               {solved ? (
                 ratings
               ) : (
-                <Button
-                  size="lg"
-                  onClick={() => setSolved(true)}
-                  ref={focusInPlace}
-                >
+                <Button size="lg" onClick={() => reveal()} ref={focusInPlace}>
                   めくる
                 </Button>
               )}
@@ -444,29 +439,14 @@ function ChoiceCard({
         </p>
       </div>
 
-      <div
-        role="group"
-        aria-label="選択肢"
-        lang="zh-CN"
-        className="grid w-full max-w-md grid-cols-2 gap-3"
-      >
-        {question.choices.map((choice) => (
-          <Choice
-            key={choice}
-            preposition={choice}
-            compact={card.compact}
-            state={
-              solved && choice === question.answer
-                ? "correct"
-                : wrong.includes(choice)
-                  ? "wrong"
-                  : "idle"
-            }
-            disabled={solved || wrong.includes(choice)}
-            onPick={() => onPick(choice)}
-          />
-        ))}
-      </div>
+      <ChoiceGrid
+        question={question}
+        wrong={wrong}
+        solved={solved}
+        compact={card.compact}
+        label="選択肢"
+        onPick={onPick}
+      />
 
       <div
         className="flex min-h-9 flex-col items-center gap-4 text-center"
@@ -488,11 +468,9 @@ function ChoiceCard({
             </div>
             {ratings}
           </>
-        ) : wrong.length > 0 ? (
-          <p className="text-sm text-destructive">
-            ちがいます。もう一度選んでください。
-          </p>
-        ) : null}
+        ) : (
+          <WrongPickNotice wrong={wrong} solved={solved} />
+        )}
       </div>
     </CardContent>
   );

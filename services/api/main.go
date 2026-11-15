@@ -16,6 +16,7 @@ import (
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/chat"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/demo"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/httpapi"
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/httpclient"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/learning"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/line"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/linebot"
@@ -47,12 +48,7 @@ func main() {
 // follows redirects, so a request body or header that carries a secret cannot
 // be replayed to a redirect target.
 func newNoRedirectHTTPClient(timeout time.Duration) *http.Client {
-	return &http.Client{
-		Timeout: timeout,
-		CheckRedirect: func(*http.Request, []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
+	return httpclient.NoRedirect(nil, timeout)
 }
 
 // newGitHubHTTPClient builds the client used to talk to GitHub.
@@ -95,6 +91,7 @@ func newLineService(cfg Config, db *store.Store, allow auth.Allowlist, logger *s
 			HTTP:    newNoRedirectHTTPClient(20 * time.Second),
 			BaseURL: cfg.OpenAIBaseURL,
 			APIKey:  cfg.OpenAIAPIKey,
+			Model:   cfg.OpenAILearningModel,
 		},
 		Messenger:  messenger,
 		Quota:      messenger,
@@ -209,6 +206,7 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 			HTTP:    newNoRedirectHTTPClient(20 * time.Second),
 			BaseURL: cfg.OpenAIBaseURL,
 			APIKey:  cfg.OpenAIAPIKey,
+			Model:   cfg.OpenAILearningModel,
 		}
 		deps.ChatModel = cfg.OpenAIChatModel
 	}

@@ -12,7 +12,6 @@ import (
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/line"
-	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
 
 // LineService is what the LINE handlers need from *linebot.Service.
@@ -127,12 +126,8 @@ func lineReviewNotify(svc LineService, on bool) http.Handler {
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		err := svc.SetReviewNotify(r.Context(), principalFrom(r.Context()).OwnerID, on)
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusNotFound, codeNotFound, msgLineNotLinked)
-			return
-		}
 		if err != nil {
-			writeServiceError(w, r, err)
+			writeStoreError(w, r, err, msgLineNotLinked)
 			return
 		}
 		writeJSON(w, http.StatusOK, response{ReviewNotify: on})

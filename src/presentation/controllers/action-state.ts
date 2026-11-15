@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { GoApiError } from "@/infrastructure/go-api/client";
+import { accountForbiddenMessage } from "@/presentation/presenters/account-action-errors";
 import { genericErrorMessage } from "@/presentation/presenters/generic-error-message";
 
 // What a one-button Server Action reports back to its form.
@@ -58,5 +59,30 @@ export async function attemptGoAction(
     if (!(error instanceof GoApiError)) throw error;
     if (error.status === 403) return actionUnauthorized;
     return { status: "error", message: goFailureMessage(code, error) };
+  }
+}
+
+// What an action the browser calls directly (not through a form) reports.
+export type ActionResult = { ok: true } | { ok: false; message: string };
+
+// Runs such an action's Go call. Like attemptGoAction, only a GoApiError
+// becomes a result and anything else is rethrown. 403 means not allowed; a
+// 404 gets `notFound` when the action gives one; other failures go through
+// goFailureMessage.
+export async function attemptGoResult(
+  code: string,
+  run: () => Promise<unknown>,
+  { notFound }: { notFound?: string } = {},
+): Promise<ActionResult> {
+  try {
+    await run();
+    return { ok: true };
+  } catch (error) {
+    if (!(error instanceof GoApiError)) throw error;
+    if (error.status === 403)
+      return { ok: false, message: accountForbiddenMessage };
+    if (error.status === 404 && notFound)
+      return { ok: false, message: notFound };
+    return { ok: false, message: goFailureMessage(code, error) };
   }
 }

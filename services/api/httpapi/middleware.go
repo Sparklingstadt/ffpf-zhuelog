@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"crypto/subtle"
-	"errors"
 	"log/slog"
 	"net"
 	"net/http"
@@ -14,7 +13,6 @@ import (
 	"time"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
-	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
 
 const maxBodyBytes = 1 << 20
@@ -191,12 +189,8 @@ func actAs(w http.ResponseWriter, r *http.Request, a Auth, p auth.Principal, val
 		return auth.Principal{}, false
 	}
 	acting, err := a.ActAs(r.Context(), p, vals[0])
-	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, codeNotFound, msgMemberNotFound)
-		return auth.Principal{}, false
-	}
 	if err != nil {
-		writeServiceError(w, r, err)
+		writeStoreError(w, r, err, msgMemberNotFound)
 		return auth.Principal{}, false
 	}
 	loggerFrom(r.Context()).Info("acting as member",

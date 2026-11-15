@@ -1,3 +1,4 @@
+import { loadOr } from "@/presentation/controllers/load-or";
 import {
   BookPlus,
   ChevronLeft,
@@ -16,7 +17,6 @@ import {
   parseLogNumber,
 } from "@/domain/calendar/value-objects/log-date";
 import { isMemberRole } from "@/domain/identity/entities/authenticated-user";
-import { GoApiError } from "@/infrastructure/go-api/client";
 import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { shareLearningEntryAction } from "@/presentation/actions/follow-actions";
 import { setNoteReviewAction } from "@/presentation/actions/note-review-actions";
@@ -48,13 +48,11 @@ export const dynamic = "force-dynamic";
 // Whether the note is in the user's review queue. Go failing hides the
 // control rather than the note; any other error is rethrown.
 async function loadInReview(id: string): Promise<boolean | null> {
-  try {
-    return await learningNotes.isInReview(id);
-  } catch (error) {
-    if (!(error instanceof GoApiError)) throw error;
-    console.error("NOTE_REVIEW_UNAVAILABLE", error.status, error.code);
-    return null;
-  }
+  return loadOr(
+    "NOTE_REVIEW_UNAVAILABLE",
+    () => learningNotes.isInReview(id),
+    null,
+  );
 }
 
 type LogDetailPageProps = {

@@ -2,12 +2,12 @@ import { roundModeLabel } from "@/domain/practice/complement-record";
 import { notFound } from "next/navigation";
 
 import { complementRecords } from "@/composition/practice-container";
-import { accuracyPercent } from "@/domain/practice/preposition-record";
+import { accuracyPercent } from "@/domain/practice/practice-record";
 import { Breadcrumbs } from "@/presentation/components/layout/breadcrumbs";
 import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
-import { PrepositionAnswerList } from "@/presentation/components/practice/preposition-answer-list";
-import { PrepositionStats } from "@/presentation/components/practice/preposition-stats";
+import { ChoiceAnswerList } from "@/presentation/components/practice/choice-answer-list";
+import { RoundStats } from "@/presentation/components/practice/round-stats";
 import { Card, CardContent } from "@/presentation/components/ui/card";
 import { requirePracticeRecordUser } from "@/presentation/guards/practice-guard";
 import { formatTokyoDateTime } from "@/presentation/presenters/log-date-presenter";
@@ -49,7 +49,7 @@ export default async function ComplementRecordPage({
       />
       <Card>
         <CardContent className="flex flex-col items-center gap-6">
-          <PrepositionStats
+          <RoundStats
             accuracy={accuracyPercent(
               record.firstTryCount,
               record.questionCount,
@@ -58,7 +58,7 @@ export default async function ComplementRecordPage({
             elapsedMs={record.elapsedMs}
             size="lg"
           />
-          <PrepositionAnswerList
+          <ChoiceAnswerList
             answers={record.questions}
             choiceLabel="補語を選ぶ"
           />

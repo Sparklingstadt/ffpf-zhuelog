@@ -1,19 +1,19 @@
 import { Check, X } from "lucide-react";
 
-import type { PrepositionAnswer } from "@/domain/practice/preposition-record";
+import type { ChoiceAnswer } from "@/domain/practice/practice-record";
 import { BLANK } from "@/domain/practice/choice-question";
 import { cn } from "@/presentation/lib/utils";
 
 // A round's questions with the answer filled in and the wrong picks crossed
 // out: only those with a wrong pick (`onlyMissed`), or all of them in the
 // order asked.
-export function PrepositionAnswerList({
+export function ChoiceAnswerList({
   answers,
   onlyMissed = false,
   className,
   choiceLabel = "介詞を選ぶ",
 }: {
-  answers: readonly PrepositionAnswer[];
+  answers: readonly ChoiceAnswer[];
   onlyMissed?: boolean;
   className?: string;
   choiceLabel?: string;
@@ -80,7 +80,7 @@ export function PrepositionAnswerList({
 }
 
 // The prompt with its blank filled by the answer, which stands out.
-function FilledPrompt({ answer }: { answer: PrepositionAnswer }) {
+function FilledPrompt({ answer }: { answer: ChoiceAnswer }) {
   const at = answer.prompt.indexOf(BLANK);
   if (at < 0) return answer.prompt;
   return (

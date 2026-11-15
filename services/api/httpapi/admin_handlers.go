@@ -142,9 +142,6 @@ func resetAccountPassword(acc Accounts, h PasswordHasher, now func() time.Time) 
 		Password  string `json:"password"`
 		Generated bool   `json:"generated"`
 	}
-	notFound := func(w http.ResponseWriter) {
-		writeError(w, http.StatusNotFound, codeNotFound, msgAccountNotFound)
-	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req request
 		if err := decodeBody(r, &req); err != nil {
@@ -161,12 +158,8 @@ func resetAccountPassword(acc Accounts, h PasswordHasher, now func() time.Time) 
 			return
 		}
 		a, err := acc.FindPasswordAccountByID(r.Context(), id)
-		if errors.Is(err, store.ErrNotFound) {
-			notFound(w)
-			return
-		}
 		if err != nil {
-			writeServiceError(w, r, err)
+			writeStoreError(w, r, err, msgAccountNotFound)
 			return
 		}
 		hash, err := h.Hash(r.Context(), pw)
@@ -174,11 +167,8 @@ func resetAccountPassword(acc Accounts, h PasswordHasher, now func() time.Time) 
 			writeServiceError(w, r, err)
 			return
 		}
-		if err := acc.SetPassword(r.Context(), id, hash, now()); errors.Is(err, store.ErrNotFound) {
-			notFound(w)
-			return
-		} else if err != nil {
-			writeServiceError(w, r, err)
+		if err := acc.SetPassword(r.Context(), id, hash, now()); err != nil {
+			writeStoreError(w, r, err, msgAccountNotFound)
 			return
 		}
 		writeJSON(w, http.StatusOK, response{LoginID: a.LoginID, Password: pw, Generated: generated})

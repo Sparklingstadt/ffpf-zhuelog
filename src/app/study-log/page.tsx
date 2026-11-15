@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight, Database } from "lucide-react";
+import { loadOr } from "@/presentation/controllers/load-or";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -16,7 +17,6 @@ import {
   todayInJapan,
   type StudyDay,
 } from "@/domain/study-log/study-log";
-import { GoApiError } from "@/infrastructure/go-api/client";
 import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
 import { SelectedDay } from "@/presentation/components/study-log/selected-day";
@@ -38,13 +38,7 @@ type StudyLogPageProps = {
 // Go being unavailable (or failing) still shows the page with a notice. Any
 // other error, including the redirect to /signin, is rethrown.
 async function loadDays(from: string, to: string): Promise<StudyDay[] | null> {
-  try {
-    return await studyLog.list(from, to);
-  } catch (error) {
-    if (!(error instanceof GoApiError)) throw error;
-    console.error("STUDY_LOG_UNAVAILABLE", error.status, error.code);
-    return null;
-  }
+  return loadOr("STUDY_LOG_UNAVAILABLE", () => studyLog.list(from, to), null);
 }
 
 // A month of the signed-in member's or admin's study, as a calendar. Guests

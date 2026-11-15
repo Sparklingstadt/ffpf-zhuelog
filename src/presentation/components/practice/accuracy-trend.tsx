@@ -1,7 +1,7 @@
 import {
   accuracyPercent,
-  type PrepositionRecordSummary,
-} from "@/domain/practice/preposition-record";
+  type PracticeRecordSummary,
+} from "@/domain/practice/practice-record";
 import { Card, CardContent } from "@/presentation/components/ui/card";
 import { cn } from "@/presentation/lib/utils";
 
@@ -14,7 +14,7 @@ export function AccuracyTrend({
   records,
 }: {
   records: readonly Pick<
-    PrepositionRecordSummary,
+    PracticeRecordSummary,
     "id" | "firstTryCount" | "questionCount"
   >[];
 }) {

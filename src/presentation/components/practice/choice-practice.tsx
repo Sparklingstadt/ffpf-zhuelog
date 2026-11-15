@@ -11,23 +11,25 @@ import {
   accuracyPercent,
   answerOf,
   scoreRound,
-  type PrepositionAnswer,
-} from "@/domain/practice/preposition-record";
+  type ChoiceAnswer,
+} from "@/domain/practice/practice-record";
 import type {
-  SavePrepositionRoundInput,
-  SavePrepositionRoundResult,
-} from "@/presentation/actions/preposition-record-actions";
+  SavePracticeRoundInput,
+  SavePracticeRoundResult,
+} from "@/presentation/actions/practice-record-actions";
 import {
   nextPracticeQuizAction,
   type NextPracticeQuizResult,
 } from "@/presentation/actions/practice-quiz-actions";
 import {
-  Choice,
+  ChoiceGrid,
   ProgressBar,
   SolvedExample,
+  useChoicePicks,
+  WrongPickNotice,
 } from "@/presentation/components/practice/choice-parts";
-import { PrepositionAnswerList } from "@/presentation/components/practice/preposition-answer-list";
-import { PrepositionStats } from "@/presentation/components/practice/preposition-stats";
+import { ChoiceAnswerList } from "@/presentation/components/practice/choice-answer-list";
+import { RoundStats } from "@/presentation/components/practice/round-stats";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
 import { focusInPlace, scrollBehavior } from "@/presentation/lib/focus";
@@ -45,14 +47,14 @@ type FinishedRound = {
   id: string;
   startedAt: Date;
   elapsedMs: number;
-  questions: PrepositionAnswer[];
+  questions: ChoiceAnswer[];
 };
 
 // The round as it stands when its last question is answered, under a new id
 // that a retried save reuses.
 function finishRound(
   startedAt: number,
-  questions: PrepositionAnswer[],
+  questions: ChoiceAnswer[],
 ): FinishedRound {
   return {
     id: crypto.randomUUID(),
@@ -82,18 +84,22 @@ export function ChoicePractice({
   quizKind: PracticeQuizKind;
   level: HskLevel | null;
   saveRound: (
-    input: SavePrepositionRoundInput,
-  ) => Promise<SavePrepositionRoundResult>;
+    input: SavePracticeRoundInput,
+  ) => Promise<SavePracticeRoundResult>;
   recordsHref: string;
   choiceLabel: string;
   compactHeading?: boolean;
 }) {
   const [quiz, setQuiz] = useState(initialQuiz);
   const [index, setIndex] = useState(0);
-  const [wrong, setWrong] = useState<string[]>([]);
-  const [solved, setSolved] = useState(false);
+  const {
+    wrong,
+    solved,
+    pick: pickChoice,
+    reset: resetPicks,
+  } = useChoicePicks();
   // The questions answered so far, with their misses.
-  const [answers, setAnswers] = useState<PrepositionAnswer[]>([]);
+  const [answers, setAnswers] = useState<ChoiceAnswer[]>([]);
   // Both start at the same moment, so the server and the browser show 0:00.
   const [startedAt, setStartedAt] = useState(() => Date.now());
   const [now, setNow] = useState(() => Date.now());
@@ -150,13 +156,8 @@ export function ChoicePractice({
     }
   }
 
-  function pick(preposition: string) {
-    if (!question || solved || wrong.includes(preposition)) return;
-    if (preposition !== question.answer) {
-      setWrong((picked) => [...picked, preposition]);
-      return;
-    }
-    setSolved(true);
+  function pick(choice: string) {
+    if (!question || pickChoice(question, choice) !== "solved") return;
     const answered = [...answers, answerOf(question, wrong)];
     setAnswers(answered);
     if (index + 1 < total) return;
@@ -177,8 +178,7 @@ export function ChoicePractice({
 
   function next() {
     setIndex((current) => current + 1);
-    setWrong([]);
-    setSolved(false);
+    resetPicks();
     showQuestion();
   }
 
@@ -232,8 +232,7 @@ export function ChoicePractice({
     const startAt = Date.now();
     setQuiz(result.quiz);
     setIndex(0);
-    setWrong([]);
-    setSolved(false);
+    resetPicks();
     setAnswers([]);
     setStartedAt(startAt);
     setNow(startAt);
@@ -253,7 +252,7 @@ export function ChoicePractice({
         />
         {/* The result shows them again, larger. */}
         {finished ? null : (
-          <PrepositionStats
+          <RoundStats
             accuracy={accuracyPercent(score.firstTryCount, score.questionCount)}
             missCount={score.missCount + (solved ? 0 : wrong.length)}
             elapsedMs={elapsedMs}
@@ -292,36 +291,17 @@ export function ChoicePractice({
                 </p>
               </div>
 
-              <div
+              <ChoiceGrid
                 ref={choicesRef}
-                role="group"
-                aria-label={choiceLabel}
-                lang="zh-CN"
-                className="grid w-full max-w-md grid-cols-2 gap-3"
-              >
-                {question.choices.map((preposition, position) => (
-                  <Choice
-                    key={preposition}
-                    preposition={preposition}
-                    shortcut={position + 1}
-                    compact={compactHeading}
-                    state={
-                      solved && preposition === question.answer
-                        ? "correct"
-                        : wrong.includes(preposition)
-                          ? "wrong"
-                          : "idle"
-                    }
-                    disabled={solved || wrong.includes(preposition)}
-                    onPick={() => pick(preposition)}
-                  />
-                ))}
-              </div>
-              {!solved && wrong.length > 0 ? (
-                <p className="text-sm text-destructive" role="status">
-                  ちがいます。もう一度選んでください。
-                </p>
-              ) : null}
+                question={question}
+                wrong={wrong}
+                solved={solved}
+                compact={compactHeading}
+                label={choiceLabel}
+                onPick={pick}
+                shortcuts
+              />
+              <WrongPickNotice wrong={wrong} solved={solved} />
               {/* Only where a keyboard is likely: wide screens with a mouse. */}
               <p className="hidden text-xs text-muted-foreground lg:pointer-fine:block">
                 キーボードの 1〜4 で選べます · Enter で次の問題
@@ -384,7 +364,7 @@ export function ChoicePractice({
             <p className="text-2xl font-semibold tracking-tight">
               {total}問 終了！
             </p>
-            <PrepositionStats
+            <RoundStats
               accuracy={accuracyPercent(
                 score.firstTryCount,
                 score.questionCount,
@@ -400,7 +380,7 @@ export function ChoicePractice({
               </strong>{" "}
               / {total}
             </p>
-            <PrepositionAnswerList
+            <ChoiceAnswerList
               answers={answers}
               choiceLabel={choiceLabel}
               onlyMissed

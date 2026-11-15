@@ -6,7 +6,7 @@ import {
   answerOf,
   formatElapsed,
   scoreRound,
-} from "../src/domain/practice/preposition-record";
+} from "../src/domain/practice/practice-record";
 
 test("a round's score counts first-try answers and every wrong pick", () => {
   assert.deepEqual(scoreRound([]), {

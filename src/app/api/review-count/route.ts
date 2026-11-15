@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getCurrentViewerUser } from "@/composition/identity-container";
 import { reviews } from "@/composition/review-container";
 import { isMemberRole } from "@/domain/identity/entities/authenticated-user";
+import { GoApiError } from "@/infrastructure/go-api/client";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,10 @@ export async function GET() {
     const user = await getCurrentViewerUser();
     if (user && isMemberRole(user.role)) count = await reviews.countDue();
   } catch (error) {
-    console.error("REVIEW_COUNT_UNAVAILABLE", error);
+    // Any failure only hides the badge. Log codes, never the error itself.
+    if (error instanceof GoApiError)
+      console.error("REVIEW_COUNT_UNAVAILABLE", error.status, error.code);
+    else console.error("REVIEW_COUNT_UNAVAILABLE", (error as Error)?.name);
   }
   return NextResponse.json(
     { count },

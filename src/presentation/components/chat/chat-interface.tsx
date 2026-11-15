@@ -1,17 +1,12 @@
 "use client";
 
 import { Bot, Plus, Send, Sparkles, Square } from "lucide-react";
-import {
-  useEffect,
-  useRef,
-  useState,
-  type FormEvent,
-  type KeyboardEvent,
-} from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import {
   conversationTitle,
   fitsLimits,
+  MAX_INPUT_CHARS,
   type Conversation,
   type ConversationMessage,
 } from "@/domain/chat/conversation";
@@ -21,8 +16,8 @@ import {
 } from "@/presentation/actions/conversation-actions";
 import { ChatMessage } from "@/presentation/components/chat/chat-message";
 import {
-  readChatStream,
-  readFailureText,
+  streamChat,
+  submitOnEnter,
 } from "@/presentation/components/chat/chat-stream";
 import { Button } from "@/presentation/components/ui/button";
 import {
@@ -33,7 +28,6 @@ import {
 } from "@/presentation/components/ui/card";
 import { Textarea } from "@/presentation/components/ui/textarea";
 
-const MAX_INPUT_LENGTH = 4_000;
 const FAILURE = "ChatGPTから応答を受信できませんでした。";
 const CUT = "応答が途中で切れました。";
 const STOPPED = "応答を停止しました。";
@@ -183,47 +177,29 @@ export function ChatInterface({
     const controller = new AbortController();
     abort.current = controller;
     const started = generation.current;
-    let received = "";
-    let failure = "";
-    try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          messages: asked.map(({ role, text }) => ({ role, text })),
-        }),
-        signal: controller.signal,
-      });
-      if (!response.ok || !response.body) {
-        failure = await readFailureText(response, FAILURE);
-      } else {
-        const result = await readChatStream(response.body, (delta) => {
-          received += delta;
-          setAnswer(received);
-        });
-        if (result !== "done" || !received.trim())
-          failure = typeof result === "object" ? result.error : CUT;
-      }
-    } catch {
-      failure = controller.signal.aborted ? STOPPED : FAILURE;
-    } finally {
-      if (abort.current === controller) abort.current = null;
-    }
+    const result = await streamChat({
+      endpoint: "/api/chat",
+      messages: asked.map(({ role, text }) => ({ role, text })),
+      signal: controller.signal,
+      onText: setAnswer,
+      texts: { failure: FAILURE, cut: CUT, stopped: STOPPED },
+    });
+    if (abort.current === controller) abort.current = null;
     if (generation.current !== started) return;
     setBusy(false);
     setAnswer("");
 
-    if (failure) {
+    if (!result.ok) {
       // Leave the question out of the conversation so it can be sent again.
       setMessages(messages);
       setInput(question);
-      setCutAnswer(received);
-      setNotice(failure);
+      setCutAnswer(result.text);
+      setNotice(result.message);
       return;
     }
     const answered: ConversationMessage[] = [
       ...asked,
-      { id: crypto.randomUUID(), role: "assistant", text: received },
+      { id: crypto.randomUUID(), role: "assistant", text: result.text },
     ];
     setMessages(answered);
     // The answer that crosses the limits ends the conversation; Go accepts
@@ -253,17 +229,6 @@ export function ChatInterface({
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     void send(input);
-  }
-
-  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (
-      event.key === "Enter" &&
-      !event.shiftKey &&
-      !event.nativeEvent.isComposing
-    ) {
-      event.preventDefault();
-      event.currentTarget.form?.requestSubmit();
-    }
   }
 
   return (
@@ -358,9 +323,9 @@ export function ChatInterface({
             <Textarea
               value={input}
               onChange={(event) => setInput(event.currentTarget.value)}
-              onKeyDown={handleKeyDown}
+              onKeyDown={submitOnEnter}
               placeholder="メッセージを入力…"
-              maxLength={MAX_INPUT_LENGTH}
+              maxLength={MAX_INPUT_CHARS}
               disabled={busy}
               aria-label="ChatGPTへのメッセージ"
               className="min-h-24 resize-y"

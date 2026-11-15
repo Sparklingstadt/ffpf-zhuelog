@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/jst"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
 
@@ -64,7 +65,7 @@ func TestResetWithTheFixture(t *testing.T) {
 		}
 	}
 	logDate := func(t time.Time) store.LogDate {
-		t = t.In(jst)
+		t = t.In(jst.Location)
 		return store.LogDate{Year: t.Year(), Month: int(t.Month()), Day: t.Day()}
 	}
 	days, err := s.StudyLog(ctx, owner, logDate(now.AddDate(0, 0, -8)), logDate(now))

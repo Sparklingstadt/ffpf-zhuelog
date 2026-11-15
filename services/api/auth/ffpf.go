@@ -18,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/httpclient"
 )
 
 const (
@@ -372,12 +374,7 @@ func ffpfP256Key(x64, y64 string) (*ecdsa.PublicKey, bool) {
 // client secret) and returns the status and (size-limited) body. The
 // transport error is dropped: it can embed request details.
 func (c *FFPFClient) do(req *http.Request) (int, []byte, error) {
-	client := http.Client{Timeout: 10 * time.Second}
-	if c.HTTP != nil {
-		client = *c.HTTP
-	}
-	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	resp, err := client.Do(req)
+	resp, err := httpclient.NoRedirect(c.HTTP, 10*time.Second).Do(req)
 	if err != nil {
 		c.unavailable(req.Context(), "transport")
 		return 0, nil, ErrFFPFUnavailable

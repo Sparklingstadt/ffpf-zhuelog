@@ -4,8 +4,8 @@ import {
 } from "@/domain/practice/complement-record";
 import {
   accuracyPercent,
-  type PrepositionRecordSummary,
-} from "@/domain/practice/preposition-record";
+  type PracticeRecordSummary,
+} from "@/domain/practice/practice-record";
 
 // The four practices on the practice page.
 export type PracticeKind = "preposition" | "complement" | "measure" | "aspect";
@@ -34,7 +34,7 @@ export type RoundRow = {
 
 // Both kinds of saved rounds as one list, newest first.
 export function mergeRounds(
-  prepositions: readonly PrepositionRecordSummary[],
+  prepositions: readonly PracticeRecordSummary[],
   complements: readonly ComplementRecordSummary[],
 ): RoundRow[] {
   const rows: RoundRow[] = [

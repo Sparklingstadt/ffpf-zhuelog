@@ -1,7 +1,7 @@
 "use client";
 import type { HskFilter } from "@/domain/practice/hsk-level";
 import type { ChoiceQuestion } from "@/domain/practice/choice-question";
-import { savePrepositionRoundAction } from "@/presentation/actions/preposition-record-actions";
+import { savePrepositionRoundAction } from "@/presentation/actions/practice-record-actions";
 import { ChoicePractice } from "./choice-practice";
 
 export function PrepositionPractice({

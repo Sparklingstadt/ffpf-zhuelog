@@ -3,9 +3,12 @@
 package httpapi
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
+	"regexp"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
@@ -56,10 +59,8 @@ const (
 	msgChatFailed           = "ChatGPTから応答を受信できませんでした。"
 	msgConversationNotFound = "会話が見つかりません。"
 
-	msgComplementRecordInvalid   = "練習の記録の形式が不正です。"
-	msgComplementRecordNotFound  = "練習の記録が見つかりません。"
-	msgPrepositionRecordInvalid  = "練習の記録の形式が不正です。"
-	msgPrepositionRecordNotFound = "練習の記録が見つかりません。"
+	msgPracticeRecordInvalid  = "練習の記録の形式が不正です。"
+	msgPracticeRecordNotFound = "練習の記録が見つかりません。"
 
 	msgReviewInvalid  = "復習の回答の形式が不正です。"
 	msgReviewNotFound = "復習する問題が見つかりません。"
@@ -122,6 +123,16 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 	writeJSON(w, status, errorEnvelope{Error: errorBody{Code: code, Message: message}})
 }
 
+// writeStoreError answers a failed store call: 404 with notFoundMsg for
+// store.ErrNotFound, and writeServiceError's answer for any other error.
+func writeStoreError(w http.ResponseWriter, r *http.Request, err error, notFoundMsg string) {
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, codeNotFound, notFoundMsg)
+		return
+	}
+	writeServiceError(w, r, err)
+}
+
 // writeServiceError maps an error from the auth service or the store to its
 // HTTP response. Unrecognised errors are logged (they never contain secrets)
 // and reported to the client as a generic 500.
@@ -173,6 +184,13 @@ func writeForbidden(w http.ResponseWriter, msg string) {
 	writeError(w, http.StatusForbidden, codeForbidden, msg)
 }
 
+var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+
+// validUUID reports whether s is a UUID in lower-case hex (any version), the
+// form of the ids the browser makes for conversations, practice rounds,
+// vocabulary words, questions and review logs.
+func validUUID(s string) bool { return uuidPattern.MatchString(s) }
+
 // pathValue returns the named path value if valid accepts it; otherwise it
 // answers 404 itself and returns false, since such a value cannot name any row.
 func pathValue(w http.ResponseWriter, r *http.Request, name string, valid func(string) bool) (string, bool) {
@@ -187,6 +205,29 @@ func pathValueMsg(w http.ResponseWriter, r *http.Request, name string, valid fun
 		return "", false
 	}
 	return v, true
+}
+
+// decodeBody reads exactly one JSON object from the request body into dst,
+// rejecting null and other non-objects, unknown fields and any data after the
+// object.
+func decodeBody(r *http.Request, dst any) error {
+	var raw json.RawMessage
+	dec := json.NewDecoder(r.Body)
+	if err := dec.Decode(&raw); err != nil {
+		return err
+	}
+	if err := dec.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		if err == nil {
+			err = errors.New("httpapi: unexpected data after JSON value")
+		}
+		return err
+	}
+	if len(raw) == 0 || raw[0] != '{' {
+		return errInvalidBody
+	}
+	inner := json.NewDecoder(bytes.NewReader(raw))
+	inner.DisallowUnknownFields()
+	return inner.Decode(dst)
 }
 
 // writeBodyError answers a request body that could not be decoded: 413 when

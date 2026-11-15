@@ -1,4 +1,5 @@
 import { ArrowLeft, Database } from "lucide-react";
+import { loadOr } from "@/presentation/controllers/load-or";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -7,7 +8,6 @@ import { reviews } from "@/composition/review-container";
 import { isMemberRole } from "@/domain/identity/entities/authenticated-user";
 import { reviewChoice } from "@/domain/practice/review-question";
 import type { DueReviews } from "@/domain/review/review-item";
-import { GoApiError } from "@/infrastructure/go-api/client";
 import { answerReviewAction } from "@/presentation/actions/review-actions";
 import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
@@ -28,13 +28,11 @@ const SESSION_SIZE = 20;
 // Go being unavailable (or failing) still shows the page with a notice. Any
 // other error, including the redirect to /signin, is rethrown.
 async function loadDue(): Promise<DueReviews | null> {
-  try {
-    return await reviews.listDue(SESSION_SIZE);
-  } catch (error) {
-    if (!(error instanceof GoApiError)) throw error;
-    console.error("REVIEWS_UNAVAILABLE", error.status, error.code);
-    return null;
-  }
+  return loadOr(
+    "REVIEWS_UNAVAILABLE",
+    () => reviews.listDue(SESSION_SIZE),
+    null,
+  );
 }
 
 // The questions are shuffled here, so the server and the browser render the

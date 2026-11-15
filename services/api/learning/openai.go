@@ -3,17 +3,14 @@
 package learning
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
-	"net"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/aiusage"
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/openai"
 )
 
 const (
@@ -22,9 +19,9 @@ const (
 	KindCorrection  = "correction"
 	KindTranslation = "translation"
 
-	defaultBaseURL = "https://api.openai.com"
-	// model is fixed on the server; callers never choose it.
-	model          = "gpt-5-mini"
+	// DefaultModel is the model used when OpenAI.Model is empty. The model is
+	// set on the server (OPENAI_LEARNING_MODEL); callers never choose it.
+	DefaultModel   = "gpt-5-mini"
 	requestTimeout = 20 * time.Second
 	maxRespBody    = 1 << 20
 )
@@ -36,19 +33,10 @@ type Result struct {
 	Hints        []string
 }
 
-// Error is a generation failure. Its string is only the Code, so it never
-// carries the API key, the input text or the response body. Retryable is set
-// only for timeouts, transport failures and 5xx responses.
-type Error struct {
-	Code      string
-	Retryable bool
-}
-
-func (e *Error) Error() string { return e.Code }
-
-func newError(code string, retryable bool) *Error {
-	return &Error{Code: code, Retryable: retryable}
-}
+// Error is a generation failure (an *openai.Error). Its string is only the
+// Code, so it never carries the API key, the input text or the response body.
+// Retryable is set only for timeouts, transport failures and 5xx responses.
+type Error = openai.Error
 
 // OpenAI calls the OpenAI Responses API. HTTP should be set by main; nil uses a
 // client with a timeout. BaseURL defaults to https://api.openai.com and may end
@@ -57,6 +45,15 @@ type OpenAI struct {
 	HTTP    *http.Client
 	BaseURL string
 	APIKey  string
+	// Model defaults to DefaultModel.
+	Model string
+}
+
+func (o *OpenAI) model() string {
+	if o.Model == "" {
+		return DefaultModel
+	}
+	return o.Model
 }
 
 // Generate asks OpenAI for a correction or translation of text and returns the
@@ -64,7 +61,7 @@ type OpenAI struct {
 func (o *OpenAI) Generate(ctx context.Context, kind, text string) (Result, error) {
 	spec, ok := specs[kind]
 	if !ok {
-		return Result{}, newError("OPENAI_REQUEST_FAILED", false)
+		return Result{}, openai.Fail(openai.CodeRequestFailed)
 	}
 	out, err := o.respond(ctx, spec.instructions, spec.schemaName, spec.jsonSchema(), text)
 	if err != nil {
@@ -72,7 +69,7 @@ func (o *OpenAI) Generate(ctx context.Context, kind, text string) (Result, error
 	}
 	res, err := spec.parse(out)
 	if err != nil {
-		return Result{}, newError("OPENAI_INVALID_RESPONSE", false)
+		return Result{}, openai.Fail(openai.CodeInvalidResponse)
 	}
 	return res, nil
 }
@@ -83,7 +80,10 @@ func (o *OpenAI) respond(ctx context.Context, instructions, schemaName string, s
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	payload, err := json.Marshal(map[string]any{
+	model := o.model()
+	resp, err := openai.Request{
+		HTTP: o.HTTP, DefaultTimeout: requestTimeout, BaseURL: o.BaseURL, APIKey: o.APIKey,
+	}.Post(ctx, map[string]any{
 		"model":             model,
 		"instructions":      instructions,
 		"input":             input,
@@ -98,71 +98,23 @@ func (o *OpenAI) respond(ctx context.Context, instructions, schemaName string, s
 		}},
 	})
 	if err != nil {
-		return "", newError("OPENAI_REQUEST_FAILED", false)
-	}
-	base := o.BaseURL
-	if base == "" {
-		base = defaultBaseURL
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(base, "/")+"/v1/responses", bytes.NewReader(payload))
-	if err != nil {
-		return "", newError("OPENAI_REQUEST_FAILED", false)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+o.APIKey)
-
-	resp, err := o.client().Do(req)
-	if err != nil {
-		return "", transportError(ctx, err)
+		return "", err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		switch resp.StatusCode {
-		case http.StatusUnauthorized, http.StatusForbidden:
-			return "", newError("OPENAI_AUTH_FAILED", false)
-		case http.StatusTooManyRequests:
-			return "", newError("OPENAI_RATE_LIMITED", false)
-		}
-		// Only 5xx may succeed on a later attempt; other 4xx are our fault.
-		return "", newError("OPENAI_REQUEST_FAILED", resp.StatusCode >= 500)
-	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxRespBody+1))
 	if err != nil {
-		return "", transportError(ctx, err)
+		return "", openai.TransportError(ctx, err)
 	}
 	if len(body) > maxRespBody {
-		return "", newError("OPENAI_INVALID_RESPONSE", false)
+		return "", openai.Fail(openai.CodeInvalidResponse)
 	}
 	// The tokens are spent even when the answer turns out unusable.
-	reportUsage(ctx, body)
+	openai.ReportBodyUsage(ctx, model, body)
 	out, ok := outputText(body)
 	if !ok {
-		return "", newError("OPENAI_INVALID_RESPONSE", false)
+		return "", openai.Fail(openai.CodeInvalidResponse)
 	}
 	return out, nil
-}
-
-// client returns the caller's client with redirects disabled (the request
-// carries the API key), or a default one with a timeout.
-func (o *OpenAI) client() *http.Client {
-	c := &http.Client{Timeout: requestTimeout}
-	if o.HTTP != nil {
-		copied := *o.HTTP
-		c = &copied
-	}
-	c.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	return c
-}
-
-// transportError maps a failed round trip: any deadline is a timeout, everything
-// else (including cancellation) is a request failure; both are retryable.
-func transportError(ctx context.Context, err error) *Error {
-	var ne net.Error
-	if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) ||
-		(errors.As(err, &ne) && ne.Timeout()) {
-		return newError("OPENAI_TIMEOUT", true)
-	}
-	return newError("OPENAI_REQUEST_FAILED", true)
 }
 
 // outputText concatenates the output_text parts of a completed Responses API
@@ -196,21 +148,4 @@ func outputText(body []byte) (string, bool) {
 		}
 	}
 	return sb.String(), sb.Len() > 0
-}
-
-// reportUsage passes the token counts of a Responses API body to the
-// context's aiusage.Recorder. A body without usage reports nothing.
-func reportUsage(ctx context.Context, body []byte) {
-	var payload struct {
-		Usage *struct {
-			InputTokens  int `json:"input_tokens"`
-			OutputTokens int `json:"output_tokens"`
-		} `json:"usage"`
-	}
-	if json.Unmarshal(body, &payload) != nil || payload.Usage == nil {
-		return
-	}
-	aiusage.Report(ctx, aiusage.Usage{
-		Model: model, InputTokens: payload.Usage.InputTokens, OutputTokens: payload.Usage.OutputTokens,
-	})
 }

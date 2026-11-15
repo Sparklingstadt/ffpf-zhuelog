@@ -1,4 +1,5 @@
 import { ArrowRight, History } from "lucide-react";
+import { loadOr } from "@/presentation/controllers/load-or";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -18,9 +19,8 @@ import {
   countMeasureWordQuestions,
   MEASURE_WORD_PRACTICE,
 } from "@/domain/practice/measure-word-quiz";
-import { formatElapsed } from "@/domain/practice/preposition-record";
+import { formatElapsed } from "@/domain/practice/practice-record";
 import { countPrepositionQuestionsByLevel } from "@/domain/practice/preposition-quiz";
-import { GoApiError } from "@/infrastructure/go-api/client";
 import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
 import { Badge } from "@/presentation/components/ui/badge";
@@ -96,17 +96,17 @@ const PRACTICES: Practice[] = [
 // The saved rounds of both kinds, or none when Go cannot say: the cards
 // then just leave out the last round.
 async function loadRounds(): Promise<RoundRow[]> {
-  try {
-    const [prepositions, complements] = await Promise.all([
-      prepositionRecords.list(),
-      complementRecords.list(),
-    ]);
-    return mergeRounds(prepositions, complements);
-  } catch (error) {
-    if (!(error instanceof GoApiError)) throw error;
-    console.error("PRACTICE_RECORDS_UNAVAILABLE", error.status, error.code);
-    return [];
-  }
+  return loadOr(
+    "PRACTICE_RECORDS_UNAVAILABLE",
+    async () => {
+      const [prepositions, complements] = await Promise.all([
+        prepositionRecords.list(),
+        complementRecords.list(),
+      ]);
+      return mergeRounds(prepositions, complements);
+    },
+    [],
+  );
 }
 
 // The practices in one place, for the bottom tab and the header's 練習:

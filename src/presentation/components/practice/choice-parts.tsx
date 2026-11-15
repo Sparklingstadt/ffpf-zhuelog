@@ -187,3 +187,105 @@ export function Choice({
     </Button>
   );
 }
+
+// The wrong picks so far and whether the answer is found, for the question
+// on screen. A wrong pick is crossed out and the question stays until the
+// right one is picked.
+export function useChoicePicks() {
+  const [wrong, setWrong] = useState<string[]>([]);
+  const [solved, setSolved] = useState(false);
+
+  // What the pick did: "wrong", "solved", or null when it changes nothing
+  // (the answer is already found, or the choice was already crossed out).
+  function pick(
+    question: Pick<ChoiceQuestion, "answer">,
+    choice: string,
+  ): "wrong" | "solved" | null {
+    if (solved || wrong.includes(choice)) return null;
+    if (choice !== question.answer) {
+      setWrong((picked) => [...picked, choice]);
+      return "wrong";
+    }
+    setSolved(true);
+    return "solved";
+  }
+
+  function reset() {
+    setWrong([]);
+    setSolved(false);
+  }
+
+  // Shows the answer without a pick, as turning a word card over does.
+  function reveal() {
+    setSolved(true);
+  }
+
+  return { wrong, solved, pick, reset, reveal };
+}
+
+// The four choices of a question, each marked correct or crossed out as the
+// picks go.
+export function ChoiceGrid({
+  question,
+  wrong,
+  solved,
+  compact,
+  label,
+  onPick,
+  shortcuts = false,
+  ref,
+}: {
+  question: Pick<ChoiceQuestion, "answer" | "choices">;
+  wrong: readonly string[];
+  solved: boolean;
+  compact: boolean;
+  label: string;
+  onPick: (choice: string) => void;
+  // Whether the page listens for 1 to 4, so each choice names its key.
+  shortcuts?: boolean;
+  ref?: Ref<HTMLDivElement>;
+}) {
+  return (
+    <div
+      ref={ref}
+      role="group"
+      aria-label={label}
+      lang="zh-CN"
+      className="grid w-full max-w-md grid-cols-2 gap-3"
+    >
+      {question.choices.map((choice, position) => (
+        <Choice
+          key={choice}
+          preposition={choice}
+          shortcut={shortcuts ? position + 1 : undefined}
+          compact={compact}
+          state={
+            solved && choice === question.answer
+              ? "correct"
+              : wrong.includes(choice)
+                ? "wrong"
+                : "idle"
+          }
+          disabled={solved || wrong.includes(choice)}
+          onPick={() => onPick(choice)}
+        />
+      ))}
+    </div>
+  );
+}
+
+// Says a pick was wrong, until the answer is found.
+export function WrongPickNotice({
+  wrong,
+  solved,
+}: {
+  wrong: readonly string[];
+  solved: boolean;
+}) {
+  if (solved || wrong.length === 0) return null;
+  return (
+    <p className="text-sm text-destructive" role="status">
+      ちがいます。もう一度選んでください。
+    </p>
+  );
+}

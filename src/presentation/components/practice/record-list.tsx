@@ -4,14 +4,14 @@ import Link from "next/link";
 import {
   accuracyPercent,
   formatElapsed,
-  type PrepositionRecordSummary,
-} from "@/domain/practice/preposition-record";
+  type PracticeRecordSummary,
+} from "@/domain/practice/practice-record";
 import { formatTokyoDateTime } from "@/presentation/presenters/log-date-presenter";
 
 // The rounds of a practice as one table-like list, newest first: when, what
 // (「25問」, or 「了・过・着 · 25問」), then the accuracy, misses and time in
 // columns, each row opening the round.
-export function RecordList<R extends PrepositionRecordSummary>({
+export function RecordList<R extends PracticeRecordSummary>({
   records,
   hrefOf,
   labelOf,

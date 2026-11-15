@@ -12,14 +12,13 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/jst"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/review"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
 
 //go:embed seed.json
 var seedJSON []byte
-
-var jst = time.FixedZone("JST", 9*3600)
 
 // Store is the part of *store.Store a Resetter needs.
 type Store interface {
@@ -222,8 +221,8 @@ func (b *builder) at(t fixtureTime) time.Time {
 		b.fail(fmt.Errorf("bad time %d %q", t.Day, t.Time))
 		return b.now
 	}
-	today := b.now.In(jst)
-	day := time.Date(today.Year(), today.Month(), today.Day()-t.Day, clock.Hour(), clock.Minute(), 0, 0, jst)
+	today := b.now.In(jst.Location)
+	day := time.Date(today.Year(), today.Month(), today.Day()-t.Day, clock.Hour(), clock.Minute(), 0, 0, jst.Location)
 	if day.After(b.now) {
 		return b.now.Add(-time.Minute)
 	}

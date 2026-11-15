@@ -62,3 +62,83 @@ export async function readFailureText(
   }
   return fallback;
 }
+
+export type ChatStreamTexts = {
+  // Nothing usable came back (a network error, a body that is not JSON).
+  failure: string;
+  // The answer stopped before "done".
+  cut: string;
+  // The user pressed stop.
+  stopped: string;
+};
+
+export type StreamChatResult =
+  | { ok: true; text: string }
+  // `text` is what arrived before the answer failed, for showing dimmed.
+  | { ok: false; text: string; message: string };
+
+// Sends the conversation to a chat relay route and reads the answer as it
+// streams in, calling onText with the answer so far. Never throws: every
+// failure becomes a message for the user, the server's own when it gave one.
+export async function streamChat({
+  endpoint,
+  messages,
+  signal,
+  onText,
+  texts,
+  fetchFn = fetch,
+}: {
+  endpoint: string;
+  messages: readonly { role: string; text: string }[];
+  signal: AbortSignal;
+  onText: (text: string) => void;
+  texts: ChatStreamTexts;
+  fetchFn?: typeof fetch;
+}): Promise<StreamChatResult> {
+  let received = "";
+  try {
+    const response = await fetchFn(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ messages }),
+      signal,
+    });
+    if (!response.ok || !response.body)
+      return {
+        ok: false,
+        text: "",
+        message: await readFailureText(response, texts.failure),
+      };
+    const result = await readChatStream(response.body, (delta) => {
+      received += delta;
+      onText(received);
+    });
+    if (result === "done" && received.trim())
+      return { ok: true, text: received };
+    return {
+      ok: false,
+      text: received,
+      message: typeof result === "object" ? result.error : texts.cut,
+    };
+  } catch {
+    return {
+      ok: false,
+      text: received,
+      message: signal.aborted ? texts.stopped : texts.failure,
+    };
+  }
+}
+
+// Enter sends the form; Shift+Enter and Enter while composing (IME) do not.
+export function submitOnEnter(event: {
+  key: string;
+  shiftKey: boolean;
+  nativeEvent: { isComposing: boolean };
+  currentTarget: { form: HTMLFormElement | null };
+  preventDefault: () => void;
+}) {
+  if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing)
+    return;
+  event.preventDefault();
+  event.currentTarget.form?.requestSubmit();
+}

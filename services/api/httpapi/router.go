@@ -277,13 +277,13 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 
 	// Finished rounds of preposition practice, for members and admins.
 	// Guests may practice in the web, but nothing of theirs is saved.
-	private("GET /v1/preposition-records", authed(listPrepositionRecords(d.PrepositionRecords)))
-	private("GET /v1/preposition-records/{id}", authed(getPrepositionRecord(d.PrepositionRecords)))
-	private("PUT /v1/preposition-records/{id}", authed(putPrepositionRecord(d.PrepositionRecords, d.Reviews, d.Now)))
+	private("GET /v1/preposition-records", authed(listPracticeRecords(prepositionPractice(d.PrepositionRecords))))
+	private("GET /v1/preposition-records/{id}", authed(getPracticeRecord(prepositionPractice(d.PrepositionRecords))))
+	private("PUT /v1/preposition-records/{id}", authed(putPracticeRecord(prepositionPractice(d.PrepositionRecords), d.Reviews, d.Now)))
 
-	private("GET /v1/complement-records", authed(listComplementRecords(d.ComplementRecords)))
-	private("GET /v1/complement-records/{id}", authed(getComplementRecord(d.ComplementRecords)))
-	private("PUT /v1/complement-records/{id}", authed(putComplementRecord(d.ComplementRecords, d.Reviews, d.Now)))
+	private("GET /v1/complement-records", authed(listPracticeRecords(complementPractice(d.ComplementRecords))))
+	private("GET /v1/complement-records/{id}", authed(getPracticeRecord(complementPractice(d.ComplementRecords))))
+	private("PUT /v1/complement-records/{id}", authed(putPracticeRecord(complementPractice(d.ComplementRecords), d.Reviews, d.Now)))
 
 	// Today's reviews, for members and admins, and the learning notes they
 	// put in them (always their own; a note in the trash is 404).

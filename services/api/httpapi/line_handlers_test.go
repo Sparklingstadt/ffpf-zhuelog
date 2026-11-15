@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/jst"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/line"
 )
 
@@ -59,7 +60,7 @@ type fakeLine struct {
 	drainErr      error
 }
 
-var testCodeExpiry = time.Date(2026, 10, 20, 12, 10, 0, 123000000, time.FixedZone("JST", 9*3600))
+var testCodeExpiry = time.Date(2026, 10, 20, 12, 10, 0, 123000000, jst.Location)
 
 func (f *fakeLine) HandleEvent(ctx context.Context, ev line.Event, deadline time.Time) error {
 	f.handled = append(f.handled, ev)

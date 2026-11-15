@@ -2,20 +2,17 @@ package chat
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"net"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/aiusage"
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/openai"
 )
 
 const (
-	defaultBaseURL = "https://api.openai.com"
 	// requestTimeout bounds one whole answer, from the request to the last
 	// event.
 	requestTimeout = 60 * time.Second
@@ -23,12 +20,10 @@ const (
 	maxEventBytes = 1 << 20
 )
 
-// Error is a streaming failure. Its string is only the Code (the same codes as
-// the learning package), so it never carries the API key, the messages or the
-// response body.
-type Error struct{ Code string }
-
-func (e *Error) Error() string { return e.Code }
+// Error is a streaming failure (the same *openai.Error, and so the same
+// codes, as the learning package). Its string is only the Code, so it never
+// carries the API key, the messages or the response body.
+type Error = openai.Error
 
 // Streamer calls the OpenAI Responses API with stream: true. HTTP should be
 // set by main; nil uses a default client. BaseURL defaults to
@@ -64,7 +59,9 @@ func (s *Streamer) Stream(ctx context.Context, msgs []Message, emit func(text st
 	if instructions == "" {
 		instructions = SystemPrompt
 	}
-	payload, err := json.Marshal(map[string]any{
+	resp, err := openai.Request{
+		HTTP: s.HTTP, BaseURL: s.BaseURL, APIKey: s.APIKey, Accept: "text/event-stream",
+	}.Post(ctx, map[string]any{
 		"model":             s.Model,
 		"instructions":      instructions,
 		"input":             input,
@@ -74,33 +71,9 @@ func (s *Streamer) Stream(ctx context.Context, msgs []Message, emit func(text st
 		"reasoning":         map[string]any{"effort": "medium"},
 	})
 	if err != nil {
-		return &Error{"OPENAI_REQUEST_FAILED"}
-	}
-	base := s.BaseURL
-	if base == "" {
-		base = defaultBaseURL
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(base, "/")+"/v1/responses", bytes.NewReader(payload))
-	if err != nil {
-		return &Error{"OPENAI_REQUEST_FAILED"}
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "text/event-stream")
-	req.Header.Set("Authorization", "Bearer "+s.APIKey)
-
-	resp, err := s.client().Do(req)
-	if err != nil {
-		return transportError(ctx, err)
+		return err
 	}
 	defer resp.Body.Close()
-	switch {
-	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
-		return &Error{"OPENAI_AUTH_FAILED"}
-	case resp.StatusCode == http.StatusTooManyRequests:
-		return &Error{"OPENAI_RATE_LIMITED"}
-	case resp.StatusCode != http.StatusOK:
-		return &Error{"OPENAI_REQUEST_FAILED"}
-	}
 
 	sc := bufio.NewScanner(resp.Body)
 	sc.Buffer(make([]byte, 0, 64<<10), maxEventBytes)
@@ -115,7 +88,7 @@ func (s *Streamer) Stream(ctx context.Context, msgs []Message, emit func(text st
 			Response *finishedResponse `json:"response"`
 		}
 		if err := json.Unmarshal([]byte(strings.TrimSpace(data)), &ev); err != nil {
-			return &Error{"OPENAI_INVALID_RESPONSE"}
+			return openai.Fail(openai.CodeInvalidResponse)
 		}
 		switch ev.Type {
 		case "response.output_text.delta":
@@ -131,66 +104,38 @@ func (s *Streamer) Stream(ctx context.Context, msgs []Message, emit func(text st
 		case "response.incomplete":
 			s.reportUsage(ctx, ev.Response)
 			if s.RequireComplete {
-				return &Error{"OPENAI_INCOMPLETE_RESPONSE"}
+				return openai.Fail(openai.CodeIncompleteResponse)
 			}
 			return nil
 		case "response.failed", "error":
 			s.reportUsage(ctx, ev.Response)
-			return &Error{"OPENAI_INVALID_RESPONSE"}
+			return openai.Fail(openai.CodeInvalidResponse)
 		}
 	}
 	if err := sc.Err(); err != nil {
 		if errors.Is(err, bufio.ErrTooLong) {
-			return &Error{"OPENAI_INVALID_RESPONSE"}
+			return openai.Fail(openai.CodeInvalidResponse)
 		}
-		return transportError(ctx, err)
+		return openai.TransportError(ctx, err)
 	}
 	if ctx.Err() != nil {
-		return transportError(ctx, ctx.Err())
+		return openai.TransportError(ctx, ctx.Err())
 	}
 	// The stream ended without saying the answer was complete.
-	return &Error{"OPENAI_INVALID_RESPONSE"}
-}
-
-// client returns the caller's client with redirects disabled (the request
-// carries the API key), or a default one.
-func (s *Streamer) client() *http.Client {
-	c := &http.Client{}
-	if s.HTTP != nil {
-		copied := *s.HTTP
-		c = &copied
-	}
-	c.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	return c
-}
-
-// transportError maps a failed round trip or read: any deadline is a timeout,
-// everything else (including cancellation) is a request failure.
-func transportError(ctx context.Context, err error) *Error {
-	var ne net.Error
-	if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) ||
-		(errors.As(err, &ne) && ne.Timeout()) {
-		return &Error{"OPENAI_TIMEOUT"}
-	}
-	return &Error{"OPENAI_REQUEST_FAILED"}
+	return openai.Fail(openai.CodeInvalidResponse)
 }
 
 // reportUsage passes the token counts of a finished response to the context's
 // aiusage.Recorder. A response without usage reports nothing.
 func (s *Streamer) reportUsage(ctx context.Context, resp *finishedResponse) {
-	if resp == nil || resp.Usage == nil {
+	if resp == nil {
 		return
 	}
-	aiusage.Report(ctx, aiusage.Usage{
-		Model: s.Model, InputTokens: resp.Usage.InputTokens, OutputTokens: resp.Usage.OutputTokens,
-	})
+	openai.ReportUsage(ctx, s.Model, resp.Usage)
 }
 
 // finishedResponse is the part of the response in the final event that
 // carries the token counts.
 type finishedResponse struct {
-	Usage *struct {
-		InputTokens  int `json:"input_tokens"`
-		OutputTokens int `json:"output_tokens"`
-	} `json:"usage"`
+	Usage *openai.Usage `json:"usage"`
 }
