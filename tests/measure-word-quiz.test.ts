@@ -14,7 +14,7 @@ import {
   measureWordQuestion,
   measureWordUsageLevel,
 } from "../src/domain/practice/measure-word-quiz";
-import { BLANK } from "../src/domain/practice/preposition-quiz";
+import { BLANK } from "../src/domain/practice/choice-question";
 import {
   reviewChoice,
   reviewQuestion,

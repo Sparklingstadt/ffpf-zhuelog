@@ -6,12 +6,13 @@ import {
   type HskLevel,
 } from "./hsk-level";
 import { MEASURE_WORD_USAGES } from "./measure-word-data";
+import { examplePinyinOf } from "./preposition-quiz";
 import {
   BLANK,
-  examplePinyinOf,
-  type PrepositionQuestion,
+  type ChoiceQuestion,
   type Random,
-} from "./preposition-quiz";
+  shuffled,
+} from "./choice-question";
 
 // One measure-word question: the noun, its Japanese meaning, the phrase it is
 // counted in with BLANK where the measure word goes, and an example sentence
@@ -69,21 +70,12 @@ export function countMeasureWordQuestions(
   return usagesAt(filter).length;
 }
 
-function shuffled<T>(values: readonly T[], random: Random): T[] {
-  const out = [...values];
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(random() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-}
-
 // One question, its choices shuffled. The noun is shown large, as the
 // preposition practice shows its noun.
 export function measureWordQuestion(
   usage: MeasureWordUsage,
   random: Random = Math.random,
-): PrepositionQuestion {
+): ChoiceQuestion {
   return {
     id: usage.id,
     noun: usage.noun,
@@ -103,7 +95,7 @@ export function measureWordQuestion(
 export function measureWordQuestionById(
   id: string,
   random: Random = Math.random,
-): PrepositionQuestion | null {
+): ChoiceQuestion | null {
   const usage = MEASURE_WORD_USAGES.find((u) => u.id === id);
   return usage ? measureWordQuestion(usage, random) : null;
 }
@@ -115,7 +107,7 @@ export function buildMeasureWordQuiz(
   count = 25,
   random: Random = Math.random,
   filter: HskFilter | null = null,
-): PrepositionQuestion[] {
+): ChoiceQuestion[] {
   return shuffled(usagesAt(filter), random)
     .slice(0, Math.max(0, Math.floor(count)))
     .map((usage) => measureWordQuestion(usage, random));

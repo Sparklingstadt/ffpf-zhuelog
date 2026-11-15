@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 
+import { PRACTICE_QUESTION_COUNT } from "@/domain/practice/choice-question";
+
 import { getCurrentViewerUser } from "@/composition/identity-container";
 import { isMemberRole } from "@/domain/identity/entities/authenticated-user";
 import {
@@ -34,7 +36,11 @@ export default async function AspectParticlePracticePage({
     5: countAspectParticleQuestions({ level: 5, basis }),
     6: countAspectParticleQuestions({ level: 6, basis }),
   };
-  const quiz = buildAspectParticleQuiz(25, Math.random, filter);
+  const quiz = buildAspectParticleQuiz(
+    PRACTICE_QUESTION_COUNT,
+    Math.random,
+    filter,
+  );
   return (
     <PageShell user={user} width="4xl" dense>
       <PracticeBar

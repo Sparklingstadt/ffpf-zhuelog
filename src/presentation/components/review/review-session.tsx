@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 
 import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
-import type { PrepositionQuestion } from "@/domain/practice/preposition-quiz";
+import type { ChoiceQuestion } from "@/domain/practice/choice-question";
 import {
   isReviewRating,
   REVIEW_RATINGS,
@@ -18,16 +18,15 @@ import type {
 } from "@/presentation/actions/review-actions";
 import {
   Choice,
-  focusInPlace,
-  isOnControl,
-  isTypingOrShortcut,
   ProgressBar,
   SolvedExample,
-} from "@/presentation/components/practice/choice-practice";
+} from "@/presentation/components/practice/choice-parts";
 import { SpeakButton } from "@/presentation/components/speech/speak-button";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
+import { focusInPlace } from "@/presentation/lib/focus";
+import { isOnControl, isTypingOrShortcut } from "@/presentation/lib/keyboard";
 
 export type ReviewCard = (
   | {
@@ -36,7 +35,7 @@ export type ReviewCard = (
       // "介詞", "補語" (the verb mode) or the complement's kind, shown
       // above the question.
       label: string;
-      question: PrepositionQuestion;
+      question: ChoiceQuestion;
       // The hand-written complement modes' prompts are whole sentences and
       // use the smaller heading; prepositions and the verb mode show their
       // noun or verb large.

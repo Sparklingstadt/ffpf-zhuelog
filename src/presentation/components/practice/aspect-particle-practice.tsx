@@ -1,7 +1,6 @@
 "use client";
-import { buildAspectParticleQuiz } from "@/domain/practice/aspect-particle-quiz";
 import type { HskFilter } from "@/domain/practice/hsk-level";
-import type { PrepositionQuestion } from "@/domain/practice/preposition-quiz";
+import type { ChoiceQuestion } from "@/domain/practice/choice-question";
 import { saveComplementRoundAction } from "@/presentation/actions/complement-record-actions";
 import { ChoicePractice } from "./choice-practice";
 
@@ -14,7 +13,7 @@ export function AspectParticlePractice({
   canSave,
   filter,
 }: {
-  initialQuiz: PrepositionQuestion[];
+  initialQuiz: ChoiceQuestion[];
   canSave: boolean;
   // The HSK level the questions are of and how it is decided, or null for
   // every question.
@@ -25,9 +24,8 @@ export function AspectParticlePractice({
       initialQuiz={initialQuiz}
       canSave={canSave}
       compactHeading
-      buildNextQuiz={() =>
-        buildAspectParticleQuiz(initialQuiz.length, Math.random, filter)
-      }
+      quizKind="aspect-particle"
+      level={filter?.level ?? null}
       saveRound={(round) =>
         saveComplementRoundAction({ ...round, mode: "aspect" })
       }

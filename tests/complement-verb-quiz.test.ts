@@ -12,7 +12,7 @@ import {
   verbQuestionId,
   wrongComplementsFor,
 } from "../src/domain/practice/complement-verb-quiz";
-import { BLANK, CHOICE_COUNT } from "../src/domain/practice/preposition-quiz";
+import { BLANK, CHOICE_COUNT } from "../src/domain/practice/choice-question";
 
 // Deterministic stand-in for Math.random.
 function seeded(seed: number) {

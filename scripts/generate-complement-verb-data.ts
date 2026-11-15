@@ -15,7 +15,7 @@ import {
   type ComplementVerbUsage,
   wrongComplementsFor,
 } from "../src/domain/practice/complement-verb-quiz";
-import { CHOICE_COUNT } from "../src/domain/practice/preposition-quiz";
+import { CHOICE_COUNT } from "../src/domain/practice/choice-question";
 
 const output = new URL(
   "../src/domain/practice/complement-verb-data.ts",

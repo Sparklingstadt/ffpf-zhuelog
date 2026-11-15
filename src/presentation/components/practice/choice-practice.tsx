@@ -1,257 +1,45 @@
 "use client";
 
-import {
-  ArrowRight,
-  BookPlus,
-  Check,
-  History,
-  RotateCcw,
-  X,
-} from "lucide-react";
+import { ArrowRight, History, RotateCcw } from "lucide-react";
 import Link from "next/link";
-import {
-  useEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type Ref,
-} from "react";
+import { useEffect, useRef, useState } from "react";
 
+import type { ChoiceQuestion } from "@/domain/practice/choice-question";
+import type { HskLevel } from "@/domain/practice/hsk-level";
+import type { PracticeQuizKind } from "@/domain/practice/practice-quiz";
 import {
   accuracyPercent,
   answerOf,
   scoreRound,
   type PrepositionAnswer,
 } from "@/domain/practice/preposition-record";
-import {
-  progressPercent,
-  type PrepositionQuestion,
-} from "@/domain/practice/preposition-quiz";
 import type {
   SavePrepositionRoundInput,
   SavePrepositionRoundResult,
 } from "@/presentation/actions/preposition-record-actions";
 import {
-  getExamplePinyinSnapshot,
-  getServerExamplePinyinSnapshot,
-  setExamplePinyinPreference,
-  subscribeToExamplePinyin,
-} from "@/infrastructure/preferences/example-pinyin-store";
+  nextPracticeQuizAction,
+  type NextPracticeQuizResult,
+} from "@/presentation/actions/practice-quiz-actions";
+import {
+  Choice,
+  ProgressBar,
+  SolvedExample,
+} from "@/presentation/components/practice/choice-parts";
 import { PrepositionAnswerList } from "@/presentation/components/practice/preposition-answer-list";
 import { PrepositionStats } from "@/presentation/components/practice/preposition-stats";
-import { SpeakButton } from "@/presentation/components/speech/speak-button";
-import {
-  draftVocabularyAction,
-  saveVocabularyAction,
-} from "@/presentation/actions/vocabulary-actions";
-import { VocabularyAddForm } from "@/presentation/components/vocabulary/vocabulary-add-form";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
+import { focusInPlace, scrollBehavior } from "@/presentation/lib/focus";
+import { isOnControl, isTypingOrShortcut } from "@/presentation/lib/keyboard";
 import { cn } from "@/presentation/lib/utils";
-
-// Moves focus to the button that just appeared. Unlike autoFocus it does not
-// center the button: the page stays where it is, so the progress bar stays
-// in view, unless the button is out of sight (on a phone, below the bottom
-// tabs), when it scrolls just far enough to show it.
-export function focusInPlace(button: HTMLButtonElement | null) {
-  if (!button) return;
-  button.focus({ preventScroll: true });
-  button.scrollIntoView({ block: "nearest", behavior: scrollBehavior() });
-}
-
-function scrollBehavior(): ScrollBehavior {
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    ? "auto"
-    : "smooth";
-}
-
-// The example sentence of a solved question, with the pinyin of the whole
-// sentence above it when there is one. With the "hide" setting on, the
-// pinyin waits behind a button so the learner reads the sentence first.
-export function SolvedExample({
-  question,
-  canAddToVocabulary = false,
-}: {
-  question: Pick<
-    PrepositionQuestion,
-    "example" | "examplePinyin" | "translation"
-  >;
-  // Members and admins may pick words of the sentence into their vocabulary
-  // book in today's review. The practice leaves it out, to keep the
-  // question and "next" in view.
-  canAddToVocabulary?: boolean;
-}) {
-  const preference = useSyncExternalStore(
-    subscribeToExamplePinyin,
-    getExamplePinyinSnapshot,
-    getServerExamplePinyinSnapshot,
-  );
-  const [revealed, setRevealed] = useState(false);
-  const hidden = preference === "hidden";
-
-  return (
-    <>
-      {question.examplePinyin ? (
-        hidden && !revealed ? (
-          <p>
-            <button
-              type="button"
-              onClick={() => setRevealed(true)}
-              className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-            >
-              ピンインを見る
-            </button>
-          </p>
-        ) : (
-          <p lang="zh-Latn-pinyin" className="text-xs text-muted-foreground">
-            {question.examplePinyin}
-          </p>
-        )
-      ) : null}
-      <p lang="zh-CN" className="text-sm">
-        {question.example}
-        <SpeakButton text={question.example} className="ml-1 align-middle" />
-      </p>
-      <p className="text-sm text-muted-foreground">{question.translation}</p>
-      {question.examplePinyin ? (
-        <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={hidden}
-            onChange={(event) =>
-              setExamplePinyinPreference(
-                event.target.checked ? "hidden" : "shown",
-              )
-            }
-            className="size-3.5 accent-primary"
-          />
-          例文のピンインを最初は隠す
-        </label>
-      ) : null}
-      {canAddToVocabulary ? (
-        <details className="group mx-auto w-full max-w-xl rounded-lg border text-left">
-          <summary className="flex cursor-pointer list-none items-center justify-center gap-1.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground">
-            <BookPlus className="size-4" aria-hidden="true" />
-            例文の語句を単語帳に入れる
-          </summary>
-          <div className="border-t p-3">
-            <VocabularyAddForm
-              sentence={question.example}
-              draftVocabulary={draftVocabularyAction}
-              saveVocabulary={saveVocabularyAction}
-            />
-          </div>
-        </details>
-      ) : null}
-    </>
-  );
-}
-
-export function ProgressBar({
-  done,
-  total,
-  ref,
-  className,
-}: {
-  done: number;
-  total: number;
-  ref?: Ref<HTMLDivElement>;
-  className?: string;
-}) {
-  return (
-    <div ref={ref} className={cn("flex items-center gap-3", className)}>
-      <div
-        role="progressbar"
-        aria-label="進捗"
-        aria-valuemin={0}
-        aria-valuemax={total}
-        aria-valuenow={done}
-        className="h-2.5 flex-1 overflow-hidden rounded-full bg-muted"
-      >
-        <div
-          className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out"
-          style={{ width: `${progressPercent(done, total)}%` }}
-        />
-      </div>
-      <span className="w-14 shrink-0 text-right font-mono text-sm text-muted-foreground">
-        {done} / {total}
-      </span>
-    </div>
-  );
-}
-
-// Whether a key press is meant for a field or a shortcut of the browser, and
-// so not for a page's own keys.
-export function isTypingOrShortcut(event: KeyboardEvent) {
-  if (event.altKey || event.ctrlKey || event.metaKey || event.repeat)
-    return true;
-  const target = event.target as HTMLElement | null;
-  return Boolean(
-    target?.isContentEditable || target?.closest("input, textarea, select"),
-  );
-}
-
-// Whether the key press lands on a button or a link, which Enter and Space
-// already press.
-export function isOnControl(event: KeyboardEvent) {
-  const target = event.target as HTMLElement | null;
-  return Boolean(target?.closest("button, a, summary"));
-}
-
-export function Choice({
-  preposition,
-  compact,
-  state,
-  disabled,
-  onPick,
-  shortcut,
-}: {
-  preposition: string;
-  compact: boolean;
-  state: "idle" | "correct" | "wrong";
-  disabled: boolean;
-  onPick: () => void;
-  // The number key that picks it, when the page listens for one.
-  shortcut?: number;
-}) {
-  return (
-    <Button
-      type="button"
-      variant="outline"
-      disabled={disabled}
-      aria-keyshortcuts={shortcut ? String(shortcut) : undefined}
-      aria-label={
-        state === "correct"
-          ? `${preposition}（正解）`
-          : state === "wrong"
-            ? `${preposition}（不正解）`
-            : preposition
-      }
-      onClick={onPick}
-      className={cn(
-        "relative min-h-14 font-medium disabled:opacity-100 roomy:min-h-20",
-        compact
-          ? "h-auto whitespace-normal px-6 py-3 text-lg leading-relaxed roomy:py-4 roomy:text-xl"
-          : "h-14 text-2xl roomy:h-20 roomy:text-3xl",
-        state === "correct" &&
-          "border-primary bg-primary text-primary-foreground dark:border-primary dark:bg-primary",
-        state === "wrong" &&
-          "border-destructive/50 bg-destructive/10 text-destructive line-through dark:border-destructive/50 dark:bg-destructive/20",
-      )}
-    >
-      {preposition}
-      {state === "correct" ? (
-        <Check className="absolute top-2 right-2 size-5" />
-      ) : state === "wrong" ? (
-        <X className="absolute top-2 right-2 size-5" />
-      ) : null}
-    </Button>
-  );
-}
 
 type SaveState =
   | { status: "idle" | "saving" | "saved" }
   | { status: "error"; message: string };
+
+type NextRoundState =
+  { status: "idle" | "loading" } | { status: "error"; message: string };
 
 type FinishedRound = {
   id: string;
@@ -281,15 +69,18 @@ function finishRound(
 export function ChoicePractice({
   initialQuiz,
   canSave,
-  buildNextQuiz,
+  quizKind,
+  level,
   saveRound,
   recordsHref,
   choiceLabel,
   compactHeading = false,
 }: {
-  initialQuiz: PrepositionQuestion[];
+  initialQuiz: ChoiceQuestion[];
   canSave: boolean;
-  buildNextQuiz: () => PrepositionQuestion[];
+  // Which practice and HSK level "もう一度" asks the server for.
+  quizKind: PracticeQuizKind;
+  level: HskLevel | null;
   saveRound: (
     input: SavePrepositionRoundInput,
   ) => Promise<SavePrepositionRoundResult>;
@@ -308,6 +99,9 @@ export function ChoicePractice({
   const [now, setNow] = useState(() => Date.now());
   const [round, setRound] = useState<FinishedRound | null>(null);
   const [save, setSave] = useState<SaveState>({ status: "idle" });
+  const [nextRound, setNextRound] = useState<NextRoundState>({
+    status: "idle",
+  });
   const progress = useRef<HTMLDivElement>(null);
   const choicesRef = useRef<HTMLDivElement>(null);
 
@@ -412,9 +206,31 @@ export function ChoicePractice({
     return () => window.removeEventListener("keydown", onKeyDown);
   });
 
-  function restart() {
+  async function restart() {
+    if (nextRound.status === "loading") return;
+    setNextRound({ status: "loading" });
+    let result: NextPracticeQuizResult;
+    try {
+      result = await nextPracticeQuizAction(quizKind, level);
+    } catch {
+      result = {
+        ok: false,
+        message:
+          "次の問題を用意できませんでした。通信を確かめて、もう一度押してください。",
+      };
+    }
+    if (!result.ok || result.quiz.length === 0) {
+      setNextRound({
+        status: "error",
+        message: result.ok
+          ? "この級で出せる問題がありません。"
+          : result.message,
+      });
+      return;
+    }
+    setNextRound({ status: "idle" });
     const startAt = Date.now();
-    setQuiz(buildNextQuiz());
+    setQuiz(result.quiz);
     setIndex(0);
     setWrong([]);
     setSolved(false);
@@ -595,9 +411,24 @@ export function ChoicePractice({
               save={save}
               onRetry={round ? () => void store(round) : undefined}
             />
+            {nextRound.status === "error" ? (
+              <p role="alert" className="text-sm text-destructive">
+                {nextRound.message}
+              </p>
+            ) : null}
             <div className="flex flex-wrap justify-center gap-3">
-              <Button size="lg" onClick={restart} ref={focusInPlace}>
-                <RotateCcw /> もう一度
+              {/* Stays enabled while loading, so focus does not drop; a
+                  second press is ignored. */}
+              <Button
+                size="lg"
+                onClick={() => void restart()}
+                ref={focusInPlace}
+                aria-busy={nextRound.status === "loading"}
+              >
+                <RotateCcw />
+                {nextRound.status === "loading"
+                  ? "用意しています…"
+                  : "もう一度"}
               </Button>
               {canSave ? (
                 <Button asChild size="lg" variant="outline">

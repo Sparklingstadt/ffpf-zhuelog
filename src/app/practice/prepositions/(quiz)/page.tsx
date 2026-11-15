@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { getCurrentViewerUser } from "@/composition/identity-container";
 import { isMemberRole } from "@/domain/identity/entities/authenticated-user";
+import { PRACTICE_QUESTION_COUNT } from "@/domain/practice/choice-question";
 import { parseHskLevel } from "@/domain/practice/hsk-level";
 import {
   buildQuiz,
@@ -15,8 +16,6 @@ import { PracticeBar } from "@/presentation/components/practice/practice-bar";
 import { PrepositionPractice } from "@/presentation/components/practice/preposition-practice";
 
 export const dynamic = "force-dynamic";
-
-const QUESTION_COUNT = 25;
 
 // Uses no notes, so guests can practice too; only members' and admins'
 // rounds are recorded.
@@ -34,7 +33,12 @@ export default async function PrepositionPracticePage({
   const filter = level ? { level, basis } : null;
   const counts = countPrepositionQuestionsByLevel(basis);
   // Shuffled here so the server and browser render the same quiz.
-  const quiz = buildQuiz(QUESTION_COUNT, Math.random, undefined, filter);
+  const quiz = buildQuiz(
+    PRACTICE_QUESTION_COUNT,
+    Math.random,
+    undefined,
+    filter,
+  );
 
   return (
     <PageShell user={user} width="4xl" dense>

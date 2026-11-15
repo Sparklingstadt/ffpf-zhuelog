@@ -13,11 +13,8 @@ import {
   measureWordQuestionById,
 } from "./measure-word-quiz";
 import { PREPOSITION_USAGES } from "./preposition-data";
-import {
-  buildQuestion,
-  type PrepositionQuestion,
-  type Random,
-} from "./preposition-quiz";
+import { buildQuestion } from "./preposition-quiz";
+import { type ChoiceQuestion, type Random } from "./choice-question";
 
 // The practice question a review item names, with its choices shuffled (the
 // 了・过・着 ones keep their fixed order):
@@ -31,7 +28,7 @@ export function reviewQuestion(
   kind: string,
   targetId: string,
   random: Random = Math.random,
-): PrepositionQuestion | null {
+): ChoiceQuestion | null {
   if (kind === "preposition") {
     const at = targetId.indexOf(":");
     if (at <= 0) return null;
@@ -65,7 +62,7 @@ export function reviewChoice(
   kind: string,
   targetId: string,
   random: Random = Math.random,
-): { question: PrepositionQuestion; label: string; compact: boolean } | null {
+): { question: ChoiceQuestion; label: string; compact: boolean } | null {
   const question = reviewQuestion(kind, targetId, random);
   if (!question) return null;
   if (kind === "preposition")

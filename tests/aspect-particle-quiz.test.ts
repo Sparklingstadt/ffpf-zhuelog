@@ -17,7 +17,7 @@ import {
   roundModeLabel,
 } from "../src/domain/practice/complement-record";
 import { HSK_BASES, HSK_LEVELS } from "../src/domain/practice/hsk-level";
-import { BLANK } from "../src/domain/practice/preposition-quiz";
+import { BLANK } from "../src/domain/practice/choice-question";
 import {
   reviewChoice,
   reviewQuestion,

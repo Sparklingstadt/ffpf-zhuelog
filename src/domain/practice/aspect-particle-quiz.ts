@@ -6,12 +6,13 @@ import {
   type HskFilter,
   type HskLevel,
 } from "./hsk-level";
+import { examplePinyinOf } from "./preposition-quiz";
 import {
   BLANK,
-  examplePinyinOf,
-  type PrepositionQuestion,
+  type ChoiceQuestion,
   type Random,
-} from "./preposition-quiz";
+  shuffled,
+} from "./choice-question";
 
 // The choice for a sentence whose blank takes no particle.
 export const NO_PARTICLE = "なし";
@@ -84,7 +85,7 @@ export function countAspectParticleQuestions(
 // complement modes label theirs.
 export function aspectParticleQuestion(
   usage: AspectParticleUsage,
-): PrepositionQuestion {
+): ChoiceQuestion {
   const sentence = aspectParticleSentence(usage);
   return {
     id: usage.id,
@@ -102,20 +103,9 @@ export function aspectParticleQuestion(
 }
 
 // The question with this id, or null when the data no longer has it.
-export function aspectParticleQuestionById(
-  id: string,
-): PrepositionQuestion | null {
+export function aspectParticleQuestionById(id: string): ChoiceQuestion | null {
   const usage = ASPECT_PARTICLE_USAGES.find((u) => u.id === id);
   return usage ? aspectParticleQuestion(usage) : null;
-}
-
-function shuffled<T>(values: readonly T[], random: Random): T[] {
-  const out = [...values];
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(random() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
 }
 
 // `count` questions in random order, only those of the filter's level when
@@ -125,7 +115,7 @@ export function buildAspectParticleQuiz(
   count = 25,
   random: Random = Math.random,
   filter: HskFilter | null = null,
-): PrepositionQuestion[] {
+): ChoiceQuestion[] {
   return shuffled(usagesAt(filter), random)
     .slice(0, Math.max(0, Math.floor(count)))
     .map(aspectParticleQuestion);

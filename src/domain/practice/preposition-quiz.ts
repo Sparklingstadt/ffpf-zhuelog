@@ -7,6 +7,13 @@ import {
   type HskLevel,
 } from "./hsk-level";
 import { PREPOSITION_USAGES } from "./preposition-data";
+import {
+  BLANK,
+  CHOICE_COUNT,
+  shuffled,
+  type ChoiceQuestion,
+  type Random,
+} from "./choice-question";
 
 export type PrepositionCategory =
   | "場所・時間・起点"
@@ -44,44 +51,12 @@ const ALSO_IN: Record<string, readonly PrepositionCategory[]> = {
   冲着: ["相手・対象・話題・比較"],
 };
 
-export const CHOICE_COUNT = 4;
-
 // The pinyin scripts/generate-example-pinyin.ts wrote for an example
 // sentence of the complement or preposition data.
 export function examplePinyinOf(sentence: string): string {
   return Object.hasOwn(EXAMPLE_PINYIN, sentence)
     ? EXAMPLE_PINYIN[sentence]
     : "";
-}
-export const BLANK = "（　）";
-
-export type PrepositionQuestion = {
-  id: string;
-  noun: string;
-  meaning: string;
-  // The phrase with the preposition left out as BLANK.
-  prompt: string;
-  phrase: string;
-  answer: string;
-  pinyin: string;
-  example: string;
-  // Pinyin of the whole example; empty when the sentence has none yet.
-  examplePinyin: string;
-  translation: string;
-  // CHOICE_COUNT prepositions in display order; exactly one is the answer.
-  choices: string[];
-};
-
-// A random number in [0, 1), as Math.random returns.
-export type Random = () => number;
-
-function shuffled<T>(items: readonly T[], random: Random): T[] {
-  const result = [...items];
-  for (let i = result.length - 1; i > 0; i--) {
-    const j = Math.floor(random() * (i + 1));
-    [result[i], result[j]] = [result[j], result[i]];
-  }
-  return result;
 }
 
 // Every category a preposition is used in.
@@ -116,7 +91,7 @@ export function buildQuestion(
   pair: PrepositionUsage["pairs"][number],
   random: Random = Math.random,
   usages: readonly PrepositionUsage[] = PREPOSITION_USAGES,
-): PrepositionQuestion {
+): ChoiceQuestion {
   const { phrase, at } = pair;
   const answer = usage.preposition;
   const wrong = shuffled(wrongChoicesFor(answer, usages), random);
@@ -149,9 +124,9 @@ export function buildQuiz(
   random: Random = Math.random,
   usages: readonly PrepositionUsage[] = PREPOSITION_USAGES,
   filter: HskFilter | null = null,
-): PrepositionQuestion[] {
+): ChoiceQuestion[] {
   const seen = new Set<string>();
-  const questions: PrepositionQuestion[] = [];
+  const questions: ChoiceQuestion[] = [];
   for (const usage of shuffled(usages, random)) {
     if (questions.length >= count) break;
     if (seen.has(usage.preposition)) continue;
@@ -174,10 +149,4 @@ export function countPrepositionQuestionsByLevel(
     for (const pair of usage.pairs)
       counts[hskLevelOf(basis, pair.phrase, usage.example)]++;
   return counts;
-}
-
-// How far the progress bar reaches, 0 to 100.
-export function progressPercent(done: number, total: number) {
-  if (total <= 0) return 0;
-  return Math.min(100, Math.max(0, (done / total) * 100));
 }
