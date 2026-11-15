@@ -144,9 +144,15 @@ type SendState =
 // meaning, then turn it over. Either way, then say how well it was recalled
 // (もう一度・難しい・できた・簡単). The rating goes to Go under a log id made
 // for the card, so a retried send counts once.
+//
+// The cards are held for the whole pass. A server action that revalidates
+// (saving a word from a card does) re-renders the page with the due list
+// as it is now, without the cards already answered; taking it mid-pass
+// would slide the next card under the open one, shown as solved. A new list
+// is taken only once the pass is over, as 続けて復習する brings.
 export function ReviewSession({
-  cards,
-  remaining,
+  cards: loadedCards,
+  remaining: loadedRemaining,
   answerReview,
 }: {
   cards: ReviewCard[];
@@ -154,11 +160,27 @@ export function ReviewSession({
   remaining: number;
   answerReview: (input: AnswerReviewInput) => Promise<AnswerReviewResult>;
 }) {
+  const [session, setSession] = useState({
+    cards: loadedCards,
+    remaining: loadedRemaining,
+  });
+  const [lastLoaded, setLastLoaded] = useState(loadedCards);
   const [index, setIndex] = useState(0);
   const [wrong, setWrong] = useState<string[]>([]);
   const [solved, setSolved] = useState(false);
   const [logId, setLogId] = useState(() => crypto.randomUUID());
   const [send, setSend] = useState<SendState>({ status: "idle" });
+
+  if (lastLoaded !== loadedCards) {
+    setLastLoaded(loadedCards);
+    if (index >= session.cards.length) {
+      setSession({ cards: loadedCards, remaining: loadedRemaining });
+      setIndex(0);
+      setWrong([]);
+      setSolved(false);
+    }
+  }
+  const { cards, remaining } = session;
 
   const card = index < cards.length ? cards[index] : null;
 
