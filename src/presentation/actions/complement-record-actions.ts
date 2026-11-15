@@ -51,7 +51,7 @@ export async function saveComplementRoundAction(
       return { ok: false, message: accountForbiddenMessage };
     return {
       ok: false,
-      message: goFailureMessage("PREPOSITION_RECORD_SAVE_FAILED", error),
+      message: goFailureMessage("COMPLEMENT_RECORD_SAVE_FAILED", error),
     };
   }
 }

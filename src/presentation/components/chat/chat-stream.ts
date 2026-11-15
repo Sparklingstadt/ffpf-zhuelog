@@ -43,3 +43,22 @@ export async function readChatStream(
     void reader.cancel().catch(() => {});
   }
 }
+
+// Reads the error text of a failed chat relay response: the relay's
+// {error: string} or Go's {error: {message}}. Anything else gives fallback.
+export async function readFailureText(
+  response: Response,
+  fallback: string,
+): Promise<string> {
+  try {
+    const body = (await response.json()) as {
+      error?: string | { message?: string };
+    };
+    const error = body.error;
+    if (typeof error === "string" && error) return error;
+    if (typeof error === "object" && error?.message) return error.message;
+  } catch {
+    // Not JSON.
+  }
+  return fallback;
+}

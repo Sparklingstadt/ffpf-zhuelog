@@ -176,18 +176,6 @@ export function countPrepositionQuestionsByLevel(
   return counts;
 }
 
-// How many different prepositions a quiz of the level can ask, at most.
-export function countPrepositionsAt(
-  filter: HskFilter | null,
-  usages: readonly PrepositionUsage[] = PREPOSITION_USAGES,
-): number {
-  return new Set(
-    usages
-      .filter((usage) => pairsAt(usage, filter).length > 0)
-      .map((usage) => usage.preposition),
-  ).size;
-}
-
 // How far the progress bar reaches, 0 to 100.
 export function progressPercent(done: number, total: number) {
   if (total <= 0) return 0;

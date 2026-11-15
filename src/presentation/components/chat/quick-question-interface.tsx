@@ -16,7 +16,7 @@ import {
 } from "@/domain/chat/question";
 import { saveQuestionAction } from "@/presentation/actions/question-actions";
 import { ChatMessage } from "./chat-message";
-import { readChatStream } from "./chat-stream";
+import { readChatStream, readFailureText } from "./chat-stream";
 import { Button } from "@/presentation/components/ui/button";
 import {
   Card,
@@ -82,7 +82,9 @@ export function QuickQuestionInterface({ chatModel }: { chatModel: string }) {
     const text = input.trim();
     if (!text || locked.current || status !== "idle") return;
     if ([...text].length > MAX_QUESTION_CHARS) {
-      setNotice("質問は4,000文字以内で入力してください。");
+      setNotice(
+        `質問は${MAX_QUESTION_CHARS.toLocaleString("ja-JP")}文字以内で入力してください。`,
+      );
       return;
     }
     locked.current = true;
@@ -93,6 +95,8 @@ export function QuickQuestionInterface({ chatModel }: { chatModel: string }) {
     setNotice("");
     setStatus("asking");
     let received = "";
+    // The server's own reason (a rate limit, a quota) when it gave one.
+    let failure = FAILURE;
     try {
       const response = await fetch("/api/quick-question", {
         method: "POST",
@@ -100,12 +104,16 @@ export function QuickQuestionInterface({ chatModel }: { chatModel: string }) {
         body: JSON.stringify({ messages: [{ role: "user", text }] }),
         signal: controller.signal,
       });
-      if (!response.ok || !response.body) throw new Error(FAILURE);
+      if (!response.ok || !response.body) {
+        failure = await readFailureText(response, FAILURE);
+        throw new Error(failure);
+      }
       const result = await readChatStream(response.body, (delta) => {
         received += delta;
         if (mounted.current) setAnswer(received);
       });
-      if (result !== "done" || !received.trim()) throw new Error(FAILURE);
+      if (typeof result === "object") failure = result.error;
+      if (result !== "done" || !received.trim()) throw new Error(failure);
       if (!mounted.current) return;
       const value = {
         id: crypto.randomUUID(),
@@ -121,7 +129,7 @@ export function QuickQuestionInterface({ chatModel }: { chatModel: string }) {
       setNotice(
         controller.signal.aborted
           ? "回答を停止しました。途中の回答は保存されません。もう一度送信できます。"
-          : FAILURE,
+          : failure,
       );
       locked.current = false;
     } finally {

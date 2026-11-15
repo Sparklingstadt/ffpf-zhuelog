@@ -20,7 +20,10 @@ import {
   type SaveConversationInput,
 } from "@/presentation/actions/conversation-actions";
 import { ChatMessage } from "@/presentation/components/chat/chat-message";
-import { readChatStream } from "@/presentation/components/chat/chat-stream";
+import {
+  readChatStream,
+  readFailureText,
+} from "@/presentation/components/chat/chat-stream";
 import { Button } from "@/presentation/components/ui/button";
 import {
   Card,
@@ -63,22 +66,6 @@ function toSaveInput(
     createdAt: meta.createdAt ?? new Date().toISOString(),
     messages,
   };
-}
-
-// Reads the error text of a failed /api/chat: the relay's {error: string} or
-// Go's {error: {message}}.
-async function failureText(response: Response): Promise<string> {
-  try {
-    const body = (await response.json()) as {
-      error?: string | { message?: string };
-    };
-    const error = body.error;
-    if (typeof error === "string" && error) return error;
-    if (typeof error === "object" && error?.message) return error.message;
-  } catch {
-    // Not JSON.
-  }
-  return FAILURE;
 }
 
 // The user's chat with ChatGPT (members and admins). Every answer that arrives whole is saved
@@ -208,7 +195,7 @@ export function ChatInterface({
         signal: controller.signal,
       });
       if (!response.ok || !response.body) {
-        failure = await failureText(response);
+        failure = await readFailureText(response, FAILURE);
       } else {
         const result = await readChatStream(response.body, (delta) => {
           received += delta;

@@ -22,8 +22,9 @@ import (
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
 
-// shutdownTimeout stays well under ECS's stop timeout (30 seconds by default)
-// between SIGTERM and SIGKILL.
+// shutdownTimeout is how long in-flight requests get after SIGTERM. It stays
+// short so a container runtime (see Dockerfile) does not SIGKILL first; on
+// Vercel the platform manages the process instead.
 const shutdownTimeout = 8 * time.Second
 
 func main() {

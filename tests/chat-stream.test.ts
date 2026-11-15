@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { readChatStream } from "../src/presentation/components/chat/chat-stream";
+import {
+  readChatStream,
+  readFailureText,
+} from "../src/presentation/components/chat/chat-stream";
 
 function streamOf(...chunks: string[]) {
   const encoder = new TextEncoder();
@@ -72,4 +75,40 @@ test("readChatStream returns the error line's message", async () => {
 test("readChatStream treats a broken line as cut", async () => {
   const result = await readChatStream(streamOf("not json\n"), () => {});
   assert.equal(result, "cut");
+});
+
+test("readFailureText reads the relay's string error", async () => {
+  const response = Response.json(
+    { error: "上限に達しました。" },
+    { status: 429 },
+  );
+  assert.equal(
+    await readFailureText(response, "fallback"),
+    "上限に達しました。",
+  );
+});
+
+test("readFailureText reads Go's error message", async () => {
+  const response = Response.json(
+    { error: { code: "RATE_LIMITED", message: "少し待ってください。" } },
+    { status: 429 },
+  );
+  assert.equal(
+    await readFailureText(response, "fallback"),
+    "少し待ってください。",
+  );
+});
+
+test("readFailureText falls back when the body is not usable", async () => {
+  assert.equal(
+    await readFailureText(new Response("oops", { status: 502 }), "fallback"),
+    "fallback",
+  );
+  assert.equal(
+    await readFailureText(
+      Response.json({ error: "" }, { status: 500 }),
+      "fallback",
+    ),
+    "fallback",
+  );
 });

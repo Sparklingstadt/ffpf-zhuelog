@@ -205,14 +205,13 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 		handle(route{pattern: pattern, authed: true, closedToDemo: true}, wrap(notDemo(d.Auth, h)))
 	}
 
-	// Production and the ALB health check use /health; /healthz is kept for
-	// local use.
+	// /health checks the database too; /healthz is kept for local use.
 	health := healthz(d.DB)
 	public("GET /health", health)
 	public("GET /healthz", health)
-	// The ALB health check uses /ping, which does not touch the database: a
-	// DB check every few seconds would keep Neon from ever suspending, and a
-	// database outage would make ECS replace healthy tasks.
+	// /ping does not touch the database, for frequent liveness checks (for
+	// example a container health check): a DB check every few seconds would
+	// keep Neon from ever suspending.
 	public("GET /ping", ping())
 
 	public("POST /v1/auth/github", limited(loginGitHub(d.Auth)))
