@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { questionNotes } from "@/composition/question-container";
 import type { QuestionSummary } from "@/domain/chat/question";
-import { ChatUnavailableError } from "@/infrastructure/go-api/conversation-gateway";
+import { ChatUnavailableError } from "@/domain/chat/chat-unavailable";
 import { AiRecentList } from "@/presentation/components/chat/ai-recent-list";
 import { AiSideNav } from "@/presentation/components/chat/ai-side-nav";
 import { requireChatUser } from "@/presentation/guards/chat-guard";

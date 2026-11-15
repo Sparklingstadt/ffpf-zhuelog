@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 	"time"
 )
@@ -18,12 +17,6 @@ const (
 	defaultGitHubAPIURL   = "https://api.github.com"
 	githubMaxBody         = 1 << 20
 )
-
-// githubErrorCode matches GitHub's OAuth error codes (bad_verification_code,
-// redirect_uri_mismatch, ...). Anything else is logged as "unrecognized", so a
-// response that echoes the code, verifier or client secret (hex or base64url,
-// with digits or hyphens) never reaches the log.
-var githubErrorCode = regexp.MustCompile(`^[a-z_]{1,64}$`)
 
 // ErrGitHubUnavailable means GitHub could not be reached or returned something
 // unusable (network error, timeout, 5xx, malformed JSON).
@@ -98,11 +91,7 @@ func (g *GitHubClient) fetchToken(ctx context.Context, code, verifier, redirectU
 	}
 	if out.Error != "" {
 		if g.Logger != nil {
-			code := out.Error
-			if !githubErrorCode.MatchString(code) {
-				code = "unrecognized"
-			}
-			g.Logger.WarnContext(ctx, "github token exchange rejected", "github_error", code)
+			g.Logger.WarnContext(ctx, "github token exchange rejected", "github_error", loggableOAuthErrorCode(out.Error))
 		}
 		return "", ErrUnauthorized
 	}

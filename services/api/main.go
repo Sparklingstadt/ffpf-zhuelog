@@ -174,6 +174,7 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 		StudyLog:           db,
 		AIUsage:            db,
 		WebProxySecret:     cfg.WebProxySecret,
+		Throttle:           db,
 		// The cron secret guards the LINE drain and the demo reset.
 		CronSecret: cfg.CronSecret,
 	}

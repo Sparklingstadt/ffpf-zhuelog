@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 
 import { conversationNotes } from "@/composition/chat-container";
 import type { ConversationSummary } from "@/domain/chat/conversation";
-import { ChatUnavailableError } from "@/infrastructure/go-api/conversation-gateway";
+import { ChatUnavailableError } from "@/domain/chat/chat-unavailable";
 import { AiRecentList } from "@/presentation/components/chat/ai-recent-list";
 import { AiSideNav } from "@/presentation/components/chat/ai-side-nav";
 import { ChatInterface } from "@/presentation/components/chat/chat-interface";

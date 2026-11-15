@@ -1,29 +1,19 @@
-import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
+import type {
+  FollowDirectory,
+  FollowDirectoryMember,
+  FollowTimelineItem,
+  SharedLearningEntry,
+} from "@/domain/social/follow";
 
 import { goApiAuthed, type GoApiCall } from "./authed";
 import { GoApiError } from "./client";
 import { toLearningEntry, type GoEntryJson } from "./learning-json";
 
-// No login ID: it is half of a member's credentials, so other members only
-// see display names.
-export type FollowDirectoryMember = {
-  ownerId: string;
-  displayName: string;
-  following: boolean;
-  followsMe: boolean;
-};
-
-export type FollowDirectory = {
-  members: FollowDirectoryMember[];
-  followingCount: number;
-  followerCount: number;
-};
-
-export type SharedLearningEntry = LearningEntry & { ownerId: string };
-
-export type FollowTimelineItem = {
-  entry: SharedLearningEntry;
-  ownerName: string;
+export type {
+  FollowDirectory,
+  FollowDirectoryMember,
+  FollowTimelineItem,
+  SharedLearningEntry,
 };
 
 export type FollowResult = "followed" | "self" | "not-found";

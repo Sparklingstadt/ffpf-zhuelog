@@ -5,7 +5,6 @@ import (
 	"crypto/ecdh"
 	"crypto/ecdsa"
 	"crypto/elliptic"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -20,6 +19,7 @@ import (
 	"time"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/httpclient"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 const (
@@ -141,11 +141,7 @@ func (c *FFPFClient) fetchIDToken(ctx context.Context, code, verifier, redirectU
 			Error string `json:"error"`
 		}
 		_ = json.Unmarshal(body, &out)
-		code := out.Error
-		if !githubErrorCode.MatchString(code) {
-			code = "unrecognized"
-		}
-		return "", c.reject(ctx, "token_endpoint", "status", status, "ffpf_error", code)
+		return "", c.reject(ctx, "token_endpoint", "status", status, "ffpf_error", loggableOAuthErrorCode(out.Error))
 	case status < 200 || status > 299:
 		c.unavailable(ctx, "token_status", "status", status)
 		return "", ErrFFPFUnavailable
@@ -159,85 +155,97 @@ func (c *FFPFClient) fetchIDToken(ctx context.Context, code, verifier, redirectU
 	return *out.IDToken, nil
 }
 
-// verify checks the ID token's form, signature and claims.
+// ffpfClaims are the ID token claims read here. exp is a plain number (not
+// jwt.NumericDate, which also takes a numeric string), so "exp":"9999999999"
+// is refused as unreadable claims. nbf and iat are not read.
+type ffpfClaims struct {
+	Iss           string           `json:"iss"`
+	Aud           jwt.ClaimStrings `json:"aud"`
+	Exp           *float64         `json:"exp"`
+	Nonce         string           `json:"nonce"`
+	Sub           string           `json:"sub"`
+	Email         string           `json:"email"`
+	EmailVerified json.RawMessage  `json:"email_verified"`
+	Name          string           `json:"name"`
+}
+
+// errFFPFExpRange is an exp outside 0..2^53 seconds: not a time a portal would
+// mean, and kept out of the conversion.
+var errFFPFExpRange = errors.New("auth: ffpf exp out of range")
+
+func (cl *ffpfClaims) GetExpirationTime() (*jwt.NumericDate, error) {
+	if cl.Exp == nil {
+		return nil, nil
+	}
+	if *cl.Exp < 0 || *cl.Exp > 1<<53 {
+		return nil, errFFPFExpRange
+	}
+	return jwt.NewNumericDate(time.Unix(int64(*cl.Exp), 0)), nil
+}
+func (cl *ffpfClaims) GetIssuedAt() (*jwt.NumericDate, error)  { return nil, nil }
+func (cl *ffpfClaims) GetNotBefore() (*jwt.NumericDate, error) { return nil, nil }
+func (cl *ffpfClaims) GetIssuer() (string, error)              { return cl.Iss, nil }
+func (cl *ffpfClaims) GetSubject() (string, error)             { return cl.Sub, nil }
+func (cl *ffpfClaims) GetAudience() (jwt.ClaimStrings, error)  { return cl.Aud, nil }
+
+// ffpfHeaderReject is a header check the Keyfunc failed; its value is the
+// reason that is logged.
+type ffpfHeaderReject string
+
+func (r ffpfHeaderReject) Error() string { return "auth: ffpf id token header: " + string(r) }
+
+// verify checks the ID token's form, signature and claims. golang-jwt checks
+// alg (ES256 only, so neither "none" nor an HMAC keyed with the public key
+// gets in), the signature, iss, aud and exp; the Keyfunc checks typ and kid;
+// the rest is checked here.
 func (c *FFPFClient) verify(ctx context.Context, idToken, nonce string) (FFPFUser, error) {
+	// Three non-empty base64url segments, before the library sees it, so an
+	// unsigned "header.claims." is malformed rather than a wrong alg.
 	segments := strings.Split(idToken, ".")
 	if len(segments) != 3 {
 		return FFPFUser{}, c.reject(ctx, "malformed")
 	}
-	var decoded [3][]byte
-	for i, segment := range segments {
+	for _, segment := range segments {
 		if !ffpfJWTSegment.MatchString(segment) {
 			return FFPFUser{}, c.reject(ctx, "malformed")
 		}
-		data, err := ffpfStrictB64.DecodeString(segment)
-		if err != nil {
-			return FFPFUser{}, c.reject(ctx, "malformed")
+	}
+
+	var claims ffpfClaims
+	var keyErr error // what c.key returned; it has already logged
+	parser := jwt.NewParser(
+		jwt.WithValidMethods([]string{jwt.SigningMethodES256.Alg()}),
+		jwt.WithIssuer(c.issuer()),
+		jwt.WithAudience(c.ClientID),
+		jwt.WithExpirationRequired(),
+		// golang-jwt accepts while now < exp+leeway; a token is accepted up to
+		// and including exp+ffpfLeeway, so one more nanosecond.
+		jwt.WithLeeway(ffpfLeeway+time.Nanosecond),
+		jwt.WithTimeFunc(c.clock),
+		jwt.WithStrictDecoding(),
+	)
+	token, err := parser.ParseWithClaims(idToken, &claims, func(token *jwt.Token) (any, error) {
+		if typ := token.Header["typ"]; typ != nil && typ != "JWT" {
+			return nil, ffpfHeaderReject("typ")
 		}
-		decoded[i] = data
+		kid, _ := token.Header["kid"].(string)
+		if kid == "" {
+			return nil, ffpfHeaderReject("kid")
+		}
+		key, err := c.key(ctx, kid)
+		if err != nil {
+			keyErr = err
+			return nil, err
+		}
+		return key, nil
+	})
+	if keyErr != nil {
+		return FFPFUser{}, keyErr
 	}
-
-	var header struct {
-		Alg string  `json:"alg"`
-		Typ *string `json:"typ"`
-		Kid string  `json:"kid"`
-	}
-	if err := json.Unmarshal(decoded[0], &header); err != nil {
-		return FFPFUser{}, c.reject(ctx, "header")
-	}
-	// Only ES256, whatever the header says, so neither "none" nor an HMAC
-	// keyed with the public key gets in.
-	if header.Alg != "ES256" {
-		return FFPFUser{}, c.reject(ctx, "alg")
-	}
-	if header.Typ != nil && *header.Typ != "JWT" {
-		return FFPFUser{}, c.reject(ctx, "typ")
-	}
-	if header.Kid == "" {
-		return FFPFUser{}, c.reject(ctx, "kid")
-	}
-	key, err := c.key(ctx, header.Kid)
 	if err != nil {
-		return FFPFUser{}, err
-	}
-	// An ES256 signature is r‖s, 32 bytes each (RFC 7518 §3.4), not ASN.1.
-	sig := decoded[2]
-	if len(sig) != 64 {
-		return FFPFUser{}, c.reject(ctx, "signature")
-	}
-	digest := sha256.Sum256([]byte(segments[0] + "." + segments[1]))
-	r, s := new(big.Int).SetBytes(sig[:32]), new(big.Int).SetBytes(sig[32:])
-	if !ecdsa.Verify(key, digest[:], r, s) {
-		return FFPFUser{}, c.reject(ctx, "signature")
+		return FFPFUser{}, c.reject(ctx, ffpfRejectReason(err, token, &claims))
 	}
 
-	var claims struct {
-		Iss           string          `json:"iss"`
-		Aud           json.RawMessage `json:"aud"`
-		Exp           *float64        `json:"exp"`
-		Nonce         string          `json:"nonce"`
-		Sub           string          `json:"sub"`
-		Email         string          `json:"email"`
-		EmailVerified json.RawMessage `json:"email_verified"`
-		Name          string          `json:"name"`
-	}
-	if err := json.Unmarshal(decoded[1], &claims); err != nil {
-		return FFPFUser{}, c.reject(ctx, "claims")
-	}
-	if claims.Iss != c.issuer() {
-		return FFPFUser{}, c.reject(ctx, "iss")
-	}
-	if !ffpfAudienceHas(claims.Aud, c.ClientID) {
-		return FFPFUser{}, c.reject(ctx, "aud")
-	}
-	// exp is seconds since 1970; anything beyond 2^53 is not a time a portal
-	// would mean, and is kept out of the conversion.
-	if claims.Exp == nil || *claims.Exp < 0 || *claims.Exp > 1<<53 {
-		return FFPFUser{}, c.reject(ctx, "exp")
-	}
-	if c.clock().After(time.Unix(int64(*claims.Exp), 0).Add(ffpfLeeway)) {
-		return FFPFUser{}, c.reject(ctx, "exp")
-	}
 	if nonce == "" || claims.Nonce != nonce {
 		return FFPFUser{}, c.reject(ctx, "nonce")
 	}
@@ -258,22 +266,42 @@ func (c *FFPFClient) verify(ctx context.Context, idToken, nonce string) (FFPFUse
 	return FFPFUser{Sub: claims.Sub, Email: claims.Email, Name: name}, nil
 }
 
-// ffpfAudienceHas reports whether aud, a string or an array of strings
-// (RFC 7519 §4.1.3), names clientID.
-func ffpfAudienceHas(aud json.RawMessage, clientID string) bool {
-	var one string
-	if err := json.Unmarshal(aud, &one); err == nil {
-		return one == clientID
-	}
-	var many []string
-	if err := json.Unmarshal(aud, &many); err == nil {
-		for _, a := range many {
-			if a == clientID {
-				return true
-			}
+// ffpfRejectReason names, as the fixed word that is logged, what golang-jwt
+// refused. Claim checks are named in the order iss, aud, exp.
+func ffpfRejectReason(err error, token *jwt.Token, claims *ffpfClaims) string {
+	var header ffpfHeaderReject
+	var corrupt base64.CorruptInputError
+	switch {
+	case errors.As(err, &header):
+		return string(header)
+	case errors.Is(err, jwt.ErrTokenMalformed):
+		switch {
+		case errors.As(err, &corrupt):
+			return "malformed"
+		case token == nil || token.Header == nil:
+			return "header"
+		default:
+			return "claims"
+		}
+	case errors.Is(err, jwt.ErrTokenSignatureInvalid):
+		if errors.Is(err, jwt.ErrECDSAVerification) {
+			return "signature"
+		}
+		return "alg" // not ES256
+	case errors.Is(err, jwt.ErrTokenUnverifiable):
+		return "alg" // alg missing or unknown
+	case errors.Is(err, jwt.ErrTokenInvalidClaims):
+		missing := errors.Is(err, jwt.ErrTokenRequiredClaimMissing)
+		switch {
+		case errors.Is(err, jwt.ErrTokenInvalidIssuer) || missing && claims.Iss == "":
+			return "iss"
+		case errors.Is(err, jwt.ErrTokenInvalidAudience) || missing && (len(claims.Aud) == 0 || len(claims.Aud) == 1 && claims.Aud[0] == ""):
+			return "aud"
+		case errors.Is(err, jwt.ErrTokenExpired) || errors.Is(err, errFFPFExpRange) || missing && claims.Exp == nil:
+			return "exp"
 		}
 	}
-	return false
+	return "claims"
 }
 
 // key returns the portal's public key of kid. The JWKS is fetched when the

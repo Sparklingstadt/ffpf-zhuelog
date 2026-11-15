@@ -181,22 +181,33 @@ func entryFilterSQL(f EntryFilter, first int) (string, []any) {
 	if f.Kind != "" {
 		conds = append(conds, `"kind" = `+next(f.Kind))
 	}
+	// LIKE rather than strpos, so the trigram indexes on lower(...) can serve
+	// it; the term's %, _ and \ are escaped, so they match literally.
 	if f.Query != "" {
-		p := next(f.Query)
-		conds = append(conds, `(strpos(lower("originalText"), lower(`+p+`)) > 0
-		  OR strpos(lower("correctedText"), lower(`+p+`)) > 0
-		  OR strpos(lower("pinyin"), lower(`+p+`)) > 0
+		p := next(likeContains(f.Query))
+		conds = append(conds, `(lower("originalText") LIKE lower(`+p+`) ESCAPE '\'
+		  OR lower("correctedText") LIKE lower(`+p+`) ESCAPE '\'
+		  OR lower("pinyin") LIKE lower(`+p+`) ESCAPE '\'
 		  OR EXISTS (SELECT 1 FROM "Hint" h WHERE h."learningEntryId" = "LearningEntry"."id"
-		             AND strpos(lower(h."content"), lower(`+p+`)) > 0))`)
+		             AND lower(h."content") LIKE lower(`+p+`) ESCAPE '\'))`)
 	}
 	if f.Hint != "" {
 		conds = append(conds, `EXISTS (SELECT 1 FROM "Hint" h WHERE h."learningEntryId" = "LearningEntry"."id"
-		  AND strpos(lower(h."content"), lower(`+next(f.Hint)+`)) > 0)`)
+		  AND lower(h."content") LIKE lower(`+next(likeContains(f.Hint))+`) ESCAPE '\')`)
 	}
 	if len(conds) == 0 {
 		return "TRUE", nil
 	}
 	return strings.Join(conds, " AND "), args
+}
+
+// likeEscaper escapes the LIKE wildcards and the escape character itself.
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+// likeContains is the LIKE pattern (with ESCAPE '\') that matches any text
+// containing s literally.
+func likeContains(s string) string {
+	return "%" + likeEscaper.Replace(s) + "%"
 }
 
 // ListEntries returns the owner's notes outside the trash that match f,

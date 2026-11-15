@@ -1,7 +1,7 @@
 import { BookOpen, ChevronRight, CircleHelp, Plus } from "lucide-react";
 import Link from "next/link";
 import { questionNotes } from "@/composition/question-container";
-import { ChatUnavailableError } from "@/infrastructure/go-api/conversation-gateway";
+import { ChatUnavailableError } from "@/domain/chat/chat-unavailable";
 import type { QuestionSummary } from "@/domain/chat/question";
 import { requireChatUser } from "@/presentation/guards/chat-guard";
 import { formatTokyoDateTime } from "@/presentation/presenters/log-date-presenter";

@@ -17,6 +17,8 @@ var (
 	_ Follows = (*store.Store)(nil)
 	_ Pinger  = (*store.Store)(nil)
 
+	_ Throttle = (*store.Store)(nil)
+
 	_ Accounts       = (*store.Store)(nil)
 	_ PasswordHasher = (*auth.PasswordVerifier)(nil)
 )
@@ -77,6 +79,12 @@ type Accounts interface {
 	SetPassword(ctx context.Context, id, hash string, now time.Time) error
 }
 
+// Throttle is the fixed-window counter in the database (*store.Store), so a
+// limit holds across every instance of the API rather than per process.
+type Throttle interface {
+	ConsumeThrottle(ctx context.Context, key string, limit int, window time.Duration, now time.Time) (bool, error)
+}
+
 // Pinger checks that the database is reachable.
 type Pinger interface {
 	Ping(ctx context.Context) error
@@ -97,6 +105,9 @@ type Deps struct {
 	// WebProxySecret, when non-empty, lets the Next.js web server forward the
 	// end user's IP (see clientKeyFunc).
 	WebProxySecret []byte
+	// Throttle counts the per-client limits of the sign-in routes and of
+	// refresh; nil counts them in this process only (local runs and tests).
+	Throttle Throttle
 	// Line serves the LINE routes; nil means LINE is not configured and the
 	// routes are not registered. LineChannelSecret verifies webhook
 	// signatures and CronSecret guards GET /v1/line/drain.
@@ -181,11 +192,11 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	// public registers a route that needs no authentication.
 	public := func(pattern string, h http.Handler) { handle(route{pattern: pattern}, h) }
 	// limited applies the per-client rate limit.
-	limiter := NewRateLimiter(authRateLimit, authRateWindow, d.Now)
+	limiter := newLimiter(d.Throttle, "route:auth:", authRateLimit, authRateWindow, d.Now)
 	clientKey := clientKeyFunc(d.WebProxySecret)
 	limited := func(h http.Handler) http.Handler { return rateLimit(limiter, clientKey, h) }
 	// refreshLimited is the separate per-client limit for POST /v1/auth/refresh.
-	refreshLimiter := NewRateLimiter(refreshRateLimit, authRateWindow, d.Now)
+	refreshLimiter := newLimiter(d.Throttle, "route:refresh:", refreshRateLimit, authRateWindow, d.Now)
 	refreshLimited := func(h http.Handler) http.Handler { return rateLimit(refreshLimiter, clientKey, h) }
 	// authed requires a valid token and rejects ?user= with 400; the safe default.
 	authed := func(h http.Handler) http.Handler { return requireAuth(d.Auth, false, rejectUserParam(h)) }

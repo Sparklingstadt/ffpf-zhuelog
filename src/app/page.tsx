@@ -14,7 +14,7 @@ import {
 } from "@/domain/learning/entry-search";
 import type { DueReviews } from "@/domain/review/review-item";
 import { setNoteReviewAction } from "@/presentation/actions/note-review-actions";
-import type { ViewedOwner } from "@/infrastructure/go-api/learning-gateway";
+import type { ViewedOwner } from "@/domain/learning/viewed-owner";
 import { loadRecordOwnerView } from "@/composition/record-owner-options";
 import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { PageShell } from "@/presentation/components/layout/page-shell";

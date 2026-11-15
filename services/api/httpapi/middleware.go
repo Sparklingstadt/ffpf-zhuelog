@@ -317,12 +317,55 @@ func peerKey(r *http.Request) string {
 	return host
 }
 
-func rateLimit(rl *RateLimiter, key func(*http.Request) string, next http.Handler) http.Handler {
+// rateLimit answers 429 when the client (key) is over l's limit, and 503 when
+// l cannot tell (the throttle table is unreachable).
+func rateLimit(l limiter, key func(*http.Request) string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !rl.Allow(key(r)) {
+		allowed, err := l.allow(r.Context(), key(r))
+		if err != nil {
+			loggerFrom(r.Context()).Error("rate limit check failed", "error", err.Error())
+			writeError(w, http.StatusServiceUnavailable, codeUnavailable, msgUnavailable)
+			return
+		}
+		if !allowed {
 			writeError(w, http.StatusTooManyRequests, codeRateLimited, msgRateLimited)
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// limiter decides whether a client may make one more call.
+type limiter interface {
+	allow(ctx context.Context, key string) (bool, error)
+}
+
+// memoryLimiter counts in this process only.
+type memoryLimiter struct{ rl *RateLimiter }
+
+func (m memoryLimiter) allow(_ context.Context, key string) (bool, error) {
+	return m.rl.Allow(key), nil
+}
+
+// throttleLimiter counts in the database, so every instance shares the count.
+// prefix keeps its keys apart from other users of the throttle table.
+type throttleLimiter struct {
+	t      Throttle
+	prefix string
+	limit  int
+	window time.Duration
+	now    func() time.Time
+}
+
+func (l throttleLimiter) allow(ctx context.Context, key string) (bool, error) {
+	return l.t.ConsumeThrottle(ctx, l.prefix+key, l.limit, l.window, l.now())
+}
+
+// newLimiter counts limit calls per client in each window: in t under prefix
+// when t is set, otherwise in this process.
+func newLimiter(t Throttle, prefix string, limit int, window time.Duration, now func() time.Time) limiter {
+	if t == nil {
+		return memoryLimiter{NewRateLimiter(limit, window, now)}
+	}
+	return throttleLimiter{t: t, prefix: prefix, limit: limit, window: window, now: now}
 }

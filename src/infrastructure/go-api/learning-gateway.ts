@@ -1,3 +1,4 @@
+import type { ViewedOwner } from "@/domain/learning/viewed-owner";
 import type { LogDate } from "@/domain/calendar/value-objects/log-date";
 import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
 import {
@@ -17,7 +18,7 @@ import { toDate, toLearningEntry, type GoEntryJson } from "./learning-json";
 
 // Whose notes are read. Only another member's notes (an admin's view) add
 // ?user=; the user's own notes are the token's owner in Go.
-export type ViewedOwner = { kind: "self" | "other"; ownerId: string };
+export type { ViewedOwner };
 
 export type RecentLearningEntries = { entries: LearningEntry[]; total: number };
 

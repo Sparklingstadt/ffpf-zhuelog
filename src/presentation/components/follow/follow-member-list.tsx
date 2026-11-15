@@ -1,6 +1,6 @@
 import { UserMinus, UserPlus } from "lucide-react";
 
-import type { FollowDirectoryMember } from "@/infrastructure/go-api/social-gateway";
+import type { FollowDirectoryMember } from "@/domain/social/follow";
 import {
   followMemberAction,
   unfollowMemberAction,
