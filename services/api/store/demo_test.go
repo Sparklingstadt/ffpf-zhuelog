@@ -96,9 +96,9 @@ func TestResetDemoCreatesTheAccountAndSeeds(t *testing.T) {
 	}
 	owner := MemberOwnerID(id)
 
-	entries, err := s.ListEntries(ctx, owner, EntryFilter{}, nil, 10)
-	if err != nil || len(entries) != 1 || len(entries[0].Hints) != 2 || entries[0].CorrectedText != "我吃完饭了。" {
-		t.Fatalf("entries = %+v, %v", entries, err)
+	entries := liveNotes(t, s, owner)
+	if len(entries) != 1 || len(entries[0].Hints) != 2 || entries[0].CorrectedText != "我吃完饭了。" {
+		t.Fatalf("entries = %+v", entries)
 	}
 	due, err := s.ListDueReviewItems(ctx, owner, now, 10)
 	if err != nil || len(due) != 2 {
@@ -149,9 +149,7 @@ func TestResetDemoReplacesEverythingTheDemoOwns(t *testing.T) {
 	owner := MemberOwnerID(id)
 
 	// What visitors do during the day.
-	if _, _, err := s.CreateBatch(ctx, owner, []EntryDraft{draft("visitor", "h")}, now); err != nil {
-		t.Fatal(err)
-	}
+	createBatch(t, s, owner, []EntryDraft{draft("visitor", "h")}, now)
 	if _, err := s.PutQuestion(ctx, owner, Question{QuestionSummary: QuestionSummary{
 		ID: "0b6a3a52-3c55-4e0a-9d3c-2f0f6a1d7c99", Question: "q", ModelName: "m"}, Answer: "a"}, now); err != nil {
 		t.Fatal(err)
@@ -207,13 +205,13 @@ func TestResetDemoReplacesEverythingTheDemoOwns(t *testing.T) {
 		t.Errorf("%d review items, want 2", n)
 	}
 	// The seed is dated from the new reset.
-	entries, err := s.ListEntries(ctx, owner, EntryFilter{}, nil, 10)
-	if err != nil || len(entries) != 1 || !entries[0].CreatedAt.Equal(dbTime(later.Add(-48*time.Hour))) {
-		t.Fatalf("entries = %+v, %v", entries, err)
+	entries := liveNotes(t, s, owner)
+	if len(entries) != 1 || !entries[0].CreatedAt.Equal(dbTime(later.Add(-48*time.Hour))) {
+		t.Fatalf("entries = %+v", entries)
 	}
 	// Other members keep their notes, and the demo's sessions survive.
-	if _, err := s.GetEntry(ctx, other, otherEntries[0].ID); err != nil {
-		t.Errorf("another member's note: %v", err)
+	if _, ok := liveNote(t, s, other, otherEntries[0].ID); !ok {
+		t.Errorf("another member's note is gone")
 	}
 	if v, err := s.SessionVersion(ctx, id); err != nil || v != 4 {
 		t.Errorf("session version = %d, %v; want 4", v, err)

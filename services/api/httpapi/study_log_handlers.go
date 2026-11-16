@@ -15,6 +15,25 @@ type StudyLog interface {
 
 var _ StudyLog = (*store.Store)(nil)
 
+const (
+	minLogYear = 2000
+	maxLogYear = 9999
+)
+
+// parseLogDate accepts only a real calendar date written exactly as
+// zero-padded YYYY-MM-DD with a year in 2000..9999.
+func parseLogDate(s string) (store.LogDate, bool) {
+	t, err := time.Parse("2006-01-02", s)
+	if err != nil || t.Format("2006-01-02") != s || t.Year() < minLogYear || t.Year() > maxLogYear {
+		return store.LogDate{}, false
+	}
+	return store.LogDate{Year: t.Year(), Month: int(t.Month()), Day: t.Day()}, true
+}
+
+func formatLogDate(d store.LogDate) string {
+	return time.Date(d.Year, time.Month(d.Month), d.Day, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+}
+
 // maxStudyLogDays is the longest range one request reads: a calendar page
 // is six weeks, so three months leaves room.
 const maxStudyLogDays = 93

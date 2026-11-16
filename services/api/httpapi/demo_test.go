@@ -63,15 +63,12 @@ func TestDemoIsRefusedExactlyTheClosedRoutes(t *testing.T) {
 		"PUT /v1/line/review-notify",
 		"DELETE /v1/line/review-notify",
 		"POST /v1/account/password",
-		"PUT /v1/entries/{id}/share",
-		"DELETE /v1/entries/{id}/share",
 		"GET /v1/members",
 		"PUT /v1/follows/{ownerId}",
 		"DELETE /v1/follows/{ownerId}",
 		"GET /v1/timeline",
 	}
-	paths := strings.NewReplacer("{id}", testConversationID, "{itemId}", testConversationID, "{ownerId}", otherOwner,
-		"{date}", "2026-01-01", "{number}", "1")
+	paths := strings.NewReplacer("{id}", testConversationID, "{itemId}", testConversationID, "{ownerId}", otherOwner)
 
 	for _, demo := range []bool{true, false} {
 		d := allRoutesDeps(demoAuth(demo))
@@ -102,22 +99,17 @@ func TestDemoIsRefusedExactlyTheClosedRoutes(t *testing.T) {
 }
 
 func TestDemoKeepsItsOwnRecords(t *testing.T) {
-	var gotOwner string
-	entries := &fakeEntries{}
+	reviews := &fakeReviews{}
 	follows := &fakeFollows{listMembers: func(_ context.Context, viewer string) (store.MemberDirectory, error) {
 		return store.MemberDirectory{Members: []store.Member{}}, nil
 	}}
-	d := Deps{Entries: entries, Follows: follows}
+	d := Deps{Reviews: reviews, Follows: follows}
 
-	// The demo reads its notes, and the member directory is closed to it.
+	// The demo reads its reviews, and the member directory is closed to it.
 	d.Auth = demoAuth(true)
 	h, _, _ := routerWith(t, auth.RoleMember, d)
-	entries.list = func(_ context.Context, owner string, _ *store.Cursor, _ int) ([]store.Entry, error) {
-		gotOwner = owner
-		return nil, nil
-	}
-	if w := do(h, http.MethodGet, "/v1/entries", "", authHeader); w.Code != http.StatusOK || gotOwner != testOwner {
-		t.Fatalf("demo notes: %d for %q", w.Code, gotOwner)
+	if w := do(h, http.MethodGet, "/v1/reviews/due", "", authHeader); w.Code != http.StatusOK || reviews.owner != testOwner {
+		t.Fatalf("demo reviews: %d for %q", w.Code, reviews.owner)
 	}
 	w := do(h, http.MethodGet, "/v1/members", "", authHeader)
 	wantError(t, w, http.StatusForbidden, "forbidden")

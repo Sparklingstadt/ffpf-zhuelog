@@ -105,9 +105,7 @@ func TestEntryReviewIsOnlyForTheOwnersNotesOutOfTheTrash(t *testing.T) {
 	if err := s.AddEntryReview(ctx, a, mine, now); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.TrashEntry(ctx, a, trashed, now); err != nil {
-		t.Fatal(err)
-	}
+	trashNote(t, s, a, trashed, now)
 
 	for name, tc := range map[string]struct{ owner, id string }{
 		"another owner's": {b, mine},
@@ -156,9 +154,7 @@ func TestATrashedNoteLeavesTheReviewUntilRestored(t *testing.T) {
 		t.Fatalf("count before trash = %d", n)
 	}
 
-	if err := s.TrashEntry(ctx, a, notes[0].ID, later); err != nil {
-		t.Fatal(err)
-	}
+	trashNote(t, s, a, notes[0].ID, later)
 	due, err := s.ListDueReviewItems(ctx, a, later, 100)
 	if err != nil || len(due) != 2 {
 		t.Fatalf("due while trashed = %+v, %v", due, err)
@@ -176,9 +172,7 @@ func TestATrashedNoteLeavesTheReviewUntilRestored(t *testing.T) {
 		t.Errorf("limit 2 while trashed = %+v", due)
 	}
 
-	if _, err := s.RestoreEntry(ctx, a, notes[0].ID); err != nil {
-		t.Fatal(err)
-	}
+	restoreNote(t, s, a, notes[0].ID)
 	back := dueEntryItem(t, s, a, notes[0].ID, later)
 	if back == nil || back.ID != it.ID || back.Reps != 1 || back.State != answered.State ||
 		back.Stability != answered.Stability || !back.Due.Equal(answered.Due) || back.Entry == nil {
@@ -186,64 +180,6 @@ func TestATrashedNoteLeavesTheReviewUntilRestored(t *testing.T) {
 	}
 	if n, _ := s.CountDueReviewItems(ctx, a, later); n != 3 {
 		t.Errorf("count after restore = %d", n)
-	}
-}
-
-func TestDeletingANoteForGoodDeletesItsReviewItem(t *testing.T) {
-	s := testStore(t)
-	ctx := context.Background()
-	a := reviewOwner(t, s)
-	now := fixedNow()
-	notes := createEntries(t, s, a, now.Add(-time.Hour), 4, 1)
-	logs := map[string]string{}
-	for _, n := range notes {
-		if err := s.AddEntryReview(ctx, a, n.ID, now); err != nil {
-			t.Fatal(err)
-		}
-		it := dueEntryItem(t, s, a, n.ID, now)
-		logs[n.ID] = newUUID()
-		if _, err := s.RecordReview(ctx, a, it.ID, logs[n.ID], review.Again, now); err != nil {
-			t.Fatal(err)
-		}
-	}
-	itemOf := func(id string) int {
-		return countRows(t, s, `SELECT count(*) FROM "ReviewItem" WHERE "ownerId" = $1 AND "kind" = 'entry' AND "targetId" = $2`, a, id)
-	}
-	logOf := func(id string) int {
-		return countRows(t, s, `SELECT count(*) FROM "ReviewLog" WHERE "id" = $1`, logs[id])
-	}
-	for _, n := range notes[:3] {
-		if err := s.TrashEntry(ctx, a, n.ID, now); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	if err := s.PurgeEntry(ctx, a, notes[0].ID); err != nil {
-		t.Fatal(err)
-	}
-	if itemOf(notes[0].ID) != 0 || logOf(notes[0].ID) != 0 {
-		t.Errorf("purged note's item or log left")
-	}
-	if itemOf(notes[1].ID) != 1 || itemOf(notes[3].ID) != 1 {
-		t.Errorf("purge took another note's item")
-	}
-	if err := s.PurgeEntry(ctx, a, notes[0].ID); !errors.Is(err, ErrNotFound) {
-		t.Errorf("second purge: %v", err)
-	}
-
-	if n, err := s.EmptyTrash(ctx, a); err != nil || n != 2 {
-		t.Fatalf("empty trash = %d, %v", n, err)
-	}
-	for _, n := range notes[1:3] {
-		if itemOf(n.ID) != 0 || logOf(n.ID) != 0 {
-			t.Errorf("emptied note %s's item or log left", n.ID)
-		}
-	}
-	if itemOf(notes[3].ID) != 1 || logOf(notes[3].ID) != 1 {
-		t.Errorf("empty trash took the item of a note out of the trash")
-	}
-	if n, err := s.EmptyTrash(ctx, a); err != nil || n != 0 {
-		t.Errorf("empty trash again = %d, %v", n, err)
 	}
 }
 

@@ -31,20 +31,17 @@ func actAsHeaders(ownerID string) map[string]string {
 }
 
 func TestActAsWritesGoToTheMember(t *testing.T) {
-	var gotOwner string
+	rv := &fakeReviews{}
 	h, _, logs := routerWith(t, "", Deps{
-		Auth: actingAuth(auth.RoleAdmin),
-		Entries: &fakeEntries{emptyTrash: func(_ context.Context, owner string) (int, error) {
-			gotOwner = owner
-			return 0, nil
-		}},
+		Auth:    actingAuth(auth.RoleAdmin),
+		Reviews: rv,
 	})
-	w := do(h, http.MethodDelete, "/v1/trash", "", actAsHeaders(actedMember))
-	if w.Code != http.StatusOK {
+	w := do(h, http.MethodDelete, "/v1/entries/e1/review", "", actAsHeaders(actedMember))
+	if w.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, body %q", w.Code, w.Body.String())
 	}
-	if gotOwner != actedMember {
-		t.Fatalf("store owner = %q, want %q", gotOwner, actedMember)
+	if rv.owner != actedMember {
+		t.Fatalf("store owner = %q, want %q", rv.owner, actedMember)
 	}
 	if !strings.Contains(logs.String(), `"msg":"acting as member"`) ||
 		!strings.Contains(logs.String(), `"actor":"`+testOwner+`"`) ||

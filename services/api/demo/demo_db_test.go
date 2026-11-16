@@ -47,11 +47,10 @@ func TestResetWithTheFixture(t *testing.T) {
 		}
 	})
 
-	entries, err := s.ListEntries(ctx, owner, store.EntryFilter{}, nil, 100)
-	if err != nil || len(entries) != 12 {
-		t.Fatalf("%d notes, %v; want 12", len(entries), err)
+	if notes := countRows(t, url, `SELECT count(*) FROM "LearningEntry" WHERE "ownerId" = $1 AND "deletedAt" IS NULL`, owner); notes != 12 {
+		t.Fatalf("%d notes; want 12", notes)
 	}
-	if words := countWords(t, url, owner); words != 10 {
+	if words := countRows(t, url, `SELECT count(*) FROM "VocabularyEntry" WHERE "ownerId" = $1`, owner); words != 10 {
 		t.Fatalf("%d words; want 10", words)
 	}
 	due, err := s.ListDueReviewItems(ctx, owner, now, 100)
@@ -73,9 +72,9 @@ func TestResetWithTheFixture(t *testing.T) {
 	}
 }
 
-// countWords counts the owner's vocabulary words; the store no longer lists
-// them (the web owns the vocabulary book).
-func countWords(t *testing.T, url, owner string) int {
+// countRows runs a "SELECT count(*) ..." query and returns the count; the
+// store no longer lists notes or words (the web owns them).
+func countRows(t *testing.T, url, query string, args ...any) int {
 	t.Helper()
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, url)
@@ -84,7 +83,7 @@ func countWords(t *testing.T, url, owner string) int {
 	}
 	defer func() { _ = conn.Close(ctx) }()
 	var n int
-	if err := conn.QueryRow(ctx, `SELECT count(*) FROM "VocabularyEntry" WHERE "ownerId" = $1`, owner).Scan(&n); err != nil {
+	if err := conn.QueryRow(ctx, query, args...).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
 	return n

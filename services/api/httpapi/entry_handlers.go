@@ -3,9 +3,7 @@ package httpapi
 import (
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
@@ -55,7 +53,7 @@ func toEntryJSON(e store.Entry) entryJSON {
 	return out
 }
 
-// batchJSON is the batch object in the create-batch and CSV-import responses.
+// batchJSON is the batch object in the CSV-import response.
 type batchJSON struct {
 	ID         string `json:"id"`
 	ImportedAt string `json:"importedAt"`
@@ -63,14 +61,6 @@ type batchJSON struct {
 
 func toBatchJSON(b store.Batch) batchJSON {
 	return batchJSON{ID: b.ID, ImportedAt: formatTime(b.ImportedAt)}
-}
-
-func toEntriesJSON(entries []store.Entry) []entryJSON {
-	out := make([]entryJSON, len(entries))
-	for i, e := range entries {
-		out[i] = toEntryJSON(e)
-	}
-	return out
 }
 
 // decimalUpTo parses s as base-10 digits only (leading zeros allowed, so the
@@ -137,183 +127,4 @@ func paginate[T any](items []T, limit int, key func(T) store.Cursor) ([]T, *stri
 	items = items[:limit]
 	c := encodeCursor(key(items[limit-1]))
 	return items, &c
-}
-
-func listEntries(e Entries) http.Handler {
-	type response struct {
-		Entries    []entryJSON `json:"entries"`
-		NextCursor *string     `json:"nextCursor"`
-		Total      int         `json:"total"`
-	}
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		limit, after, ok := readListQuery(w, r)
-		if !ok {
-			return
-		}
-		filter, ok := readEntryFilter(r)
-		if !ok {
-			writeError(w, http.StatusBadRequest, codeInvalidRequest, msgInvalidEntryFilter)
-			return
-		}
-		owner, ok := readOwner(w, r)
-		if !ok {
-			return
-		}
-		// Count first: a note added between the two queries then makes the
-		// list longer, never total smaller than what the list returns.
-		total, err := e.CountEntries(r.Context(), owner, filter)
-		if err != nil {
-			writeServiceError(w, r, err)
-			return
-		}
-		entries, err := e.ListEntries(r.Context(), owner, filter, after, limit+1)
-		if err != nil {
-			writeServiceError(w, r, err)
-			return
-		}
-		entries, next := paginate(entries, limit, func(e store.Entry) store.Cursor {
-			return store.Cursor{CreatedAt: e.CreatedAt, ID: e.ID}
-		})
-		resp := response{Entries: toEntriesJSON(entries), NextCursor: next, Total: total}
-		writeJSON(w, http.StatusOK, resp)
-	})
-}
-
-// maxFilterRunes bounds the q and hint filters of GET /v1/entries.
-const maxFilterRunes = 100
-
-// runesWithin is s trimmed, and whether it has min to max characters.
-func runesWithin(s string, min, max int) (string, bool) {
-	s = strings.TrimSpace(s)
-	n := utf8.RuneCountInString(s)
-	return s, n >= min && n <= max
-}
-
-// readEntryFilter reads q, kind and hint. Each may appear once; q and hint
-// are trimmed and at most 100 characters, and kind is "correction" or
-// "translation". Empty values filter nothing.
-func readEntryFilter(r *http.Request) (store.EntryFilter, bool) {
-	q, err := url.ParseQuery(r.URL.RawQuery)
-	if err != nil {
-		return store.EntryFilter{}, false
-	}
-	one := func(key string) (string, bool) {
-		vals := q[key]
-		if len(vals) > 1 {
-			return "", false
-		}
-		if len(vals) == 0 {
-			return "", true
-		}
-		return runesWithin(vals[0], 0, maxFilterRunes)
-	}
-	var f store.EntryFilter
-	var ok1, ok2, ok3 bool
-	f.Query, ok1 = one("q")
-	f.Hint, ok2 = one("hint")
-	f.Kind, ok3 = one("kind")
-	if !ok1 || !ok2 || !ok3 {
-		return store.EntryFilter{}, false
-	}
-	if f.Kind != "" && f.Kind != "correction" && f.Kind != "translation" {
-		return store.EntryFilter{}, false
-	}
-	return f, true
-}
-
-func getEntry(e Entries) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathValue(w, r, "id", validID)
-		if !ok {
-			return
-		}
-		owner, ok := readOwner(w, r)
-		if !ok {
-			return
-		}
-		entry, err := e.GetEntry(r.Context(), owner, id)
-		if err != nil {
-			writeServiceError(w, r, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, toEntryJSON(entry))
-	})
-}
-
-func createBatch(e Entries, now func() time.Time) http.Handler {
-	type request struct {
-		Entries []entryBody `json:"entries"`
-	}
-	type response struct {
-		Batch   batchJSON   `json:"batch"`
-		Entries []entryJSON `json:"entries"`
-	}
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req request
-		if err := decodeBody(r, &req); err != nil {
-			writeBodyError(w, r, err)
-			return
-		}
-		if len(req.Entries) < 1 || len(req.Entries) > maxBatchEntries {
-			writeBadRequest(w)
-			return
-		}
-		drafts := make([]store.EntryDraft, len(req.Entries))
-		for i, b := range req.Entries {
-			d, err := validateDraft(b.draftInput())
-			if err != nil {
-				writeBadRequest(w)
-				return
-			}
-			drafts[i] = d
-		}
-		batch, entries, err := e.CreateBatch(r.Context(), principalFrom(r.Context()).OwnerID, drafts, now())
-		if err != nil {
-			writeServiceError(w, r, err)
-			return
-		}
-		writeJSON(w, http.StatusCreated, response{
-			Batch:   toBatchJSON(batch),
-			Entries: toEntriesJSON(entries),
-		})
-	})
-}
-
-func patchEntry(e Entries) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathValue(w, r, "id", validID)
-		if !ok {
-			return
-		}
-		var body entryBody
-		if err := decodeBody(r, &body); err != nil {
-			writeBodyError(w, r, err)
-			return
-		}
-		patch, err := validatePatch(body.patchInput())
-		if err != nil {
-			writeBadRequest(w)
-			return
-		}
-		entry, err := e.UpdateEntry(r.Context(), principalFrom(r.Context()).OwnerID, id, patch)
-		if err != nil {
-			writeServiceError(w, r, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, toEntryJSON(entry))
-	})
-}
-
-func deleteEntry(e Entries, now func() time.Time) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathValue(w, r, "id", validID)
-		if !ok {
-			return
-		}
-		if err := e.TrashEntry(r.Context(), principalFrom(r.Context()).OwnerID, id, now()); err != nil {
-			writeServiceError(w, r, err)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	})
 }

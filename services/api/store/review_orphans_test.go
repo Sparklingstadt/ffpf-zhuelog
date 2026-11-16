@@ -14,7 +14,8 @@ import (
 
 // ReviewItem names its target by kind and targetId, with no foreign key, so
 // every path that deletes a note or a word for good must delete its item too.
-// These tests run each such path and look for items (and logs) left behind.
+// These tests run each such path the Go API still has and look for items (and
+// logs) left behind; the web's purge and empty trash are tested there.
 
 // orphanReviews counts the owner's "entry" items whose note is gone, their
 // "vocabulary" items whose word is gone, and review logs whose item is gone.
@@ -74,44 +75,6 @@ func reviewCount(t *testing.T, s *Store, owner string) (items, logs int) {
 	t.Helper()
 	return countRows(t, s, `SELECT count(*) FROM "ReviewItem" WHERE "ownerId" = $1`, owner),
 		countRows(t, s, `SELECT count(*) FROM "ReviewLog" WHERE "ownerId" = $1`, owner)
-}
-
-func TestPurgeEntryLeavesNoOrphanReview(t *testing.T) {
-	s := testStore(t)
-	ctx := context.Background()
-	a := reviewOwner(t, s)
-	now := fixedNow()
-	notes := notesInReview(t, s, a, now, 2)
-	if err := s.TrashEntry(ctx, a, notes[0].ID, now); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.PurgeEntry(ctx, a, notes[0].ID); err != nil {
-		t.Fatal(err)
-	}
-	assertNoOrphanReviews(t, s, a)
-	if items, logs := reviewCount(t, s, a); items != 1 || logs != 1 {
-		t.Errorf("%d items and %d logs left, want the other note's 1 and 1", items, logs)
-	}
-}
-
-func TestEmptyTrashLeavesNoOrphanReview(t *testing.T) {
-	s := testStore(t)
-	ctx := context.Background()
-	a := reviewOwner(t, s)
-	now := fixedNow()
-	notes := notesInReview(t, s, a, now, 3)
-	for _, e := range notes[:2] {
-		if err := s.TrashEntry(ctx, a, e.ID, now); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if n, err := s.EmptyTrash(ctx, a); err != nil || n != 2 {
-		t.Fatalf("empty trash = %d, %v", n, err)
-	}
-	assertNoOrphanReviews(t, s, a)
-	if items, logs := reviewCount(t, s, a); items != 1 || logs != 1 {
-		t.Errorf("%d items and %d logs left, want the kept note's 1 and 1", items, logs)
-	}
 }
 
 func TestRemoveEntryReviewLeavesNoOrphanLog(t *testing.T) {

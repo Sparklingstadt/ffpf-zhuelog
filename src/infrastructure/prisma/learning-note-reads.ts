@@ -50,8 +50,8 @@ function toKind(kind: string): LearningKind {
   throw new Error("invalid learning entry kind in the database");
 }
 
-// The search's conditions on the alias-less "LearningEntry", ANDed, the way
-// Go's entryFilterSQL writes them. The lowering is done by the database (its
+// The search's conditions on the alias-less "LearningEntry", ANDed, as the
+// retired Go API's entryFilterSQL wrote them. The lowering is done by the database (its
 // ctype decides non-ASCII letters) and LIKE over lower(...) lets the trigram
 // indexes serve it. The query's ids come from a UNION, not an OR with an
 // EXISTS, so the planner can combine those indexes.

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/review"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
 
@@ -341,18 +342,27 @@ func TestImportCSVExtendsDeadlines(t *testing.T) {
 	}
 }
 
+// countingReviews counts RecordReview calls; it may be called from the
+// server's goroutines.
+type countingReviews struct {
+	*fakeReviews
+	answers atomic.Int32
+}
+
+func (c *countingReviews) RecordReview(ctx context.Context, ownerID, itemID, logID string, rating review.Rating, now time.Time) (store.ReviewItem, error) {
+	c.answers.Add(1)
+	return store.ReviewItem{ID: itemID, Card: review.Card{Due: now, State: review.Learning, Reps: 1, LastReview: now}}, nil
+}
+
 func TestOtherRoutesKeepServerDeadlines(t *testing.T) {
-	var creates atomic.Int32
-	e := &fakeEntries{create: func(_ context.Context, _ string, drafts []store.EntryDraft, now time.Time) (store.Batch, []store.Entry, error) {
-		creates.Add(1)
-		return store.Batch{ID: "b", ImportedAt: now}, make([]store.Entry, len(drafts)), nil
-	}}
-	h, _, _ := routerWith(t, auth.RoleMember, Deps{Entries: e})
+	rv := &countingReviews{fakeReviews: &fakeReviews{}}
+	h, _, _ := routerWith(t, auth.RoleMember, Deps{Reviews: rv})
 	srv := slowServer(t, h)
-	body := `{"entries":[{"kind":"correction","originalText":"a","correctedText":"b","pinyin":"c"}]}`
+	target := srv.URL + "/v1/reviews/" + testReviewItemID
+	body := `{"logId":"` + testConversationID + `","rating":3}`
 
 	// Positive control: the same body sent at once is accepted.
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/v1/batches", strings.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, target, strings.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -363,21 +373,21 @@ func TestOtherRoutesKeepServerDeadlines(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusCreated || creates.Load() != 1 {
-		t.Fatalf("control: status = %d, creates = %d", resp.StatusCode, creates.Load())
+	if resp.StatusCode != http.StatusOK || rv.answers.Load() != 1 {
+		t.Fatalf("control: status = %d, answers = %d", resp.StatusCode, rv.answers.Load())
 	}
 
 	// Sent slowly, it must not get through the 200 ms server deadlines.
-	resp, err = slowPost(t, srv.URL+"/v1/batches", "application/json", body)
+	resp, err = slowPost(t, target, "application/json", body)
 	if err == nil {
 		resp.Body.Close()
 		// The read deadline fires mid-body, so the handler may still answer 400.
-		if resp.StatusCode == http.StatusCreated {
-			t.Fatal("slow /v1/batches upload succeeded; server deadlines were extended")
+		if resp.StatusCode == http.StatusOK {
+			t.Fatal("slow review answer succeeded; server deadlines were extended")
 		}
 	}
-	if creates.Load() != 1 {
-		t.Fatalf("creates = %d, want 1 (only the control)", creates.Load())
+	if rv.answers.Load() != 1 {
+		t.Fatalf("answers = %d, want 1 (only the control)", rv.answers.Load())
 	}
 }
 

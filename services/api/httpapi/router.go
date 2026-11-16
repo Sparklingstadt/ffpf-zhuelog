@@ -40,24 +40,10 @@ type Auth interface {
 	IsDemo(ctx context.Context, p auth.Principal) (bool, error)
 }
 
-// Entries is what the handlers need from *store.Store.
+// Entries is what the handlers need from *store.Store for the notes: the
+// web reads and writes them itself, and the API only imports CSV files.
 type Entries interface {
-	ListEntries(ctx context.Context, ownerID string, f store.EntryFilter, after *store.Cursor, limit int) ([]store.Entry, error)
-	CountEntries(ctx context.Context, ownerID string, f store.EntryFilter) (int, error)
-	GetEntry(ctx context.Context, ownerID, id string) (store.Entry, error)
-	CreateBatch(ctx context.Context, ownerID string, drafts []store.EntryDraft, now time.Time) (store.Batch, []store.Entry, error)
 	CreateImportBatch(ctx context.Context, ownerID, fileName string, drafts []store.EntryDraft, now time.Time) (store.Batch, []store.Entry, error)
-	UpdateEntry(ctx context.Context, ownerID, id string, p store.EntryPatch) (store.Entry, error)
-	TrashEntry(ctx context.Context, ownerID, id string, now time.Time) error
-	ListTrashed(ctx context.Context, ownerID string, after *store.Cursor, limit int) ([]store.TrashedEntry, error)
-	CountTrashed(ctx context.Context, ownerID string) (int, error)
-	RestoreEntry(ctx context.Context, ownerID, id string) (store.Entry, error)
-	PurgeEntry(ctx context.Context, ownerID, id string) error
-	EmptyTrash(ctx context.Context, ownerID string) (int, error)
-	SetShared(ctx context.Context, ownerID, id string, shared bool, now time.Time) (store.Entry, error)
-	ListLogDates(ctx context.Context, ownerID string) ([]store.LogDateCount, error)
-	ListDailyEntries(ctx context.Context, ownerID string, d store.LogDate) ([]store.Entry, error)
-	GetDailyEntry(ctx context.Context, ownerID string, d store.LogDate, number int) (store.Entry, int, error)
 }
 
 // Follows is what the handlers need from *store.Store for the member
@@ -152,9 +138,8 @@ const (
 
 // route records how a pattern was registered, so tests can check every route.
 type route struct {
-	pattern   string
-	authed    bool // behind requireAuth
-	allowUser bool // accepts ?user= (only the five read routes)
+	pattern string
+	authed  bool // behind requireAuth
 	// allowGuest lets guest tokens through requireAuth. It is the only place
 	// that records it: every other authed route answers guests with 403.
 	allowGuest bool
@@ -246,11 +231,6 @@ func (r *registrar) private(pattern string, h http.Handler) {
 	r.handle(route{pattern: pattern, authed: true}, r.authed(h))
 }
 
-// privateReadUser registers an authed route whose handler honours ?user=.
-func (r *registrar) privateReadUser(pattern string, h http.Handler) {
-	r.handle(route{pattern: pattern, authed: true, allowUser: true}, requireAuth(r.d.Auth, false, h))
-}
-
 // adminOnly registers an authed route that answers non-admins with 403.
 func (r *registrar) adminOnly(pattern string, h http.Handler) { r.private(pattern, requireAdmin(h)) }
 
@@ -315,37 +295,17 @@ func (r *registrar) meRoute() {
 		requireAuth(r.d.Auth, true, rejectUserParam(me(r.d.Auth))))
 }
 
-// entryRoutes are the learning notes, their log dates, CSV import and the
-// trash.
+// entryRoutes is CSV import into the caller's own notes (admin and member).
+// Its body limit is 4 MiB + 256 KiB instead of 1 MiB; see limitBody. The web
+// reads, trashes and shares the notes itself.
 func (r *registrar) entryRoutes() {
-	e, now := r.d.Entries, r.d.Now
-	// Only these five read routes accept ?user=; every other authed route
-	// rejects it with 400 so it can never be mistaken for being honoured.
-	r.privateReadUser("GET /v1/entries", listEntries(e))
-	r.privateReadUser("GET /v1/entries/{id}", getEntry(e))
-	r.privateReadUser("GET /v1/log-dates", listLogDates(e))
-	r.privateReadUser("GET /v1/log-dates/{date}/entries", listDailyEntries(e))
-	r.privateReadUser("GET /v1/log-dates/{date}/entries/{number}", getDailyEntry(e))
-
-	r.private("POST /v1/batches", createBatch(e, now))
-	// CSV import into the caller's own notes (admin and member). Its body
-	// limit is 4 MiB + 256 KiB instead of 1 MiB; see limitBody.
-	r.private("POST "+csvImportPath, importCSV(e, now))
-	r.private("PATCH /v1/entries/{id}", patchEntry(e))
-	r.private("DELETE /v1/entries/{id}", deleteEntry(e, now))
-	r.private("GET /v1/trash", listTrash(e))
-	r.private("DELETE /v1/trash", emptyTrash(e))
-	r.private("POST /v1/trash/{id}/restore", restoreEntry(e))
-	r.private("DELETE /v1/trash/{id}", purgeEntry(e))
+	r.private("POST "+csvImportPath, importCSV(r.d.Entries, r.d.Now))
 }
 
-// memberRoutes are sharing, the member directory, follows and the timeline.
-// They reach other members, so the demo account (shared by strangers) has
-// none of them.
+// memberRoutes are the member directory, follows and the timeline. They reach
+// other members, so the demo account (shared by strangers) has none of them.
 func (r *registrar) memberRoutes() {
-	e, f, now := r.d.Entries, r.d.Follows, r.d.Now
-	r.notForDemo("PUT /v1/entries/{id}/share", shareEntry(e, now, true))
-	r.notForDemo("DELETE /v1/entries/{id}/share", shareEntry(e, now, false))
+	f, now := r.d.Follows, r.d.Now
 	r.notForDemo("GET /v1/members", listMembers(f))
 	r.notForDemo("PUT /v1/follows/{ownerId}", followMember(f, now))
 	r.notForDemo("DELETE /v1/follows/{ownerId}", unfollowMember(f))

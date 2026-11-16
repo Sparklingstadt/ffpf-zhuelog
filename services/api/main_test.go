@@ -212,10 +212,6 @@ type entryResp struct {
 	CorrectedText string `json:"correctedText"`
 }
 
-type listResp struct {
-	Entries []entryResp `json:"entries"`
-}
-
 // directConn opens a plain pgx connection for fixtures (Prisma's ?schema=
 // parameter is not accepted by pgx).
 func directConn(t *testing.T, rawURL string) *pgx.Conn {
@@ -384,43 +380,6 @@ func TestRunEndToEnd(t *testing.T) {
 		t.Fatalf("client throttle count = %d, want 2", n)
 	}
 
-	var created struct {
-		Entries []entryResp `json:"entries"`
-	}
-	if code := c.do("POST", "/v1/batches", first.AccessToken, map[string]any{
-		"entries": []map[string]any{{
-			"originalText": "你好吗", "correctedText": "你好吗？", "pinyin": "nǐ hǎo ma", "hints": []string{"greeting"},
-		}},
-	}, &created); code != http.StatusCreated {
-		t.Fatalf("create batch = %d", code)
-	}
-	if len(created.Entries) != 1 {
-		t.Fatalf("created %d entries", len(created.Entries))
-	}
-	id := created.Entries[0].ID
-
-	var list listResp
-	if code := c.do("GET", "/v1/entries", first.AccessToken, nil, &list); code != http.StatusOK || len(list.Entries) != 1 {
-		t.Fatalf("list = %d, %d entries; want 200, 1", code, len(list.Entries))
-	}
-
-	var patched entryResp
-	if code := c.do("PATCH", "/v1/entries/"+id, first.AccessToken,
-		map[string]string{"correctedText": "你好吗？！"}, &patched); code != http.StatusOK {
-		t.Fatalf("patch = %d", code)
-	}
-	if patched.CorrectedText != "你好吗？！" {
-		t.Errorf("patched correctedText = %q", patched.CorrectedText)
-	}
-
-	if code := c.do("DELETE", "/v1/entries/"+id, first.AccessToken, nil, nil); code != http.StatusNoContent {
-		t.Fatalf("delete = %d", code)
-	}
-	list = listResp{}
-	if code := c.do("GET", "/v1/entries", first.AccessToken, nil, &list); code != http.StatusOK || len(list.Entries) != 0 {
-		t.Fatalf("list after delete = %d, %d entries; want 200, 0", code, len(list.Entries))
-	}
-
 	var second tokens
 	if code := c.do("POST", "/v1/auth/refresh", "",
 		map[string]string{"refreshToken": first.RefreshToken}, &second); code != http.StatusOK {
@@ -430,24 +389,19 @@ func TestRunEndToEnd(t *testing.T) {
 		t.Errorf("refresh did not return a new pair: %+v", second)
 	}
 
-	// Follow round trip: B and C each share an entry, A follows B only.
+	// Follow round trip: B and C each share an entry, A follows B only. The
+	// web writes and shares notes, so they are inserted directly.
 	shareEntry := func(m member, text string) {
 		t.Helper()
-		var tk tokens
-		if code := c.do("POST", "/v1/auth/password", "",
-			map[string]string{"loginId": m.loginID, "password": "correct horse battery"}, &tk); code != http.StatusOK {
-			t.Fatalf("login %s = %d", m.loginID, code)
+		batchID, entryID := "cb"+m.accountID, "ce"+m.accountID
+		if _, err := conn.Exec(setup,
+			`INSERT INTO "ImportBatch" ("id", "fileName", "rowCount", "importedAt") VALUES ($1, 'e2e', 1, now())`, batchID); err != nil {
+			t.Fatalf("insert batch for %s: %v", m.loginID, err)
 		}
-		var made struct {
-			Entries []entryResp `json:"entries"`
-		}
-		if code := c.do("POST", "/v1/batches", tk.AccessToken, map[string]any{
-			"entries": []map[string]any{{"originalText": text, "correctedText": text + "!", "pinyin": "p"}},
-		}, &made); code != http.StatusCreated || len(made.Entries) != 1 {
-			t.Fatalf("create batch for %s = %d", m.loginID, code)
-		}
-		if code := c.do("PUT", "/v1/entries/"+made.Entries[0].ID+"/share", tk.AccessToken, nil, nil); code != http.StatusOK {
-			t.Fatalf("share = %d", code)
+		if _, err := conn.Exec(setup,
+			`INSERT INTO "LearningEntry" ("id", "originalText", "correctedText", "pinyin", "ownerId", "batchId", "sharedAt")
+			 VALUES ($1, $2, $3, 'p', $4, $5, now())`, entryID, text, text+"!", m.owner, batchID); err != nil {
+			t.Fatalf("insert shared note for %s: %v", m.loginID, err)
 		}
 	}
 	shareEntry(memberB, "from b")
