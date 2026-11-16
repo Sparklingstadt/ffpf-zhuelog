@@ -9,9 +9,8 @@ import {
   memberAccounts,
 } from "@/composition/identity-container";
 import { clientAddress } from "@/infrastructure/auth/client-address";
-import { GoApiError } from "@/infrastructure/go-api/client";
 import { signOutViaGo } from "@/infrastructure/go-api/go-api-session";
-import { goFailureMessage } from "@/presentation/controllers/action-state";
+import { attemptGo } from "@/presentation/controllers/action-state";
 import {
   accountForbiddenMessage,
   accountNotFoundMessage,
@@ -39,23 +38,16 @@ function field(formData: FormData, name: string) {
   return typeof value === "string" ? value : "";
 }
 
-// Turns a failed Go call into the form's error. Anything that is not a
-// GoApiError (including Next's redirect to /signin) is rethrown. Only fixed
+// Turns a failed Go call into the form's error (see attemptGo). Only fixed
 // codes are logged: the form data carries plaintext passwords.
 async function attemptAccountCall<T>(
   code: string,
   run: () => Promise<T>,
 ): Promise<{ ok: true; value: T } | { ok: false; state: FailedState }> {
-  try {
-    return { ok: true, value: await run() };
-  } catch (error) {
-    if (!(error instanceof GoApiError)) throw error;
-    if (error.status === 403) return { ok: false, state: forbidden };
-    return {
-      ok: false,
-      state: { status: "error", message: goFailureMessage(code, error) },
-    };
-  }
+  const attempt = await attemptGo(code, run);
+  return attempt.ok
+    ? attempt
+    : { ok: false, state: { status: "error", message: attempt.message } };
 }
 
 // The mutation has already succeeded, and the one-time password must still

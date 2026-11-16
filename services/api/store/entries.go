@@ -182,14 +182,21 @@ func entryFilterSQL(f EntryFilter, first int) (string, []any) {
 		conds = append(conds, `"kind" = `+next(f.Kind))
 	}
 	// LIKE rather than strpos, so the trigram indexes on lower(...) can serve
-	// it; the term's %, _ and \ are escaped, so they match literally.
+	// it; the term's %, _ and \ are escaped, so they match literally. The
+	// matching ids come from a UNION rather than an OR with an EXISTS over
+	// "Hint": with the EXISTS in the OR the planner cannot combine the three
+	// LearningEntry trigram indexes (BitmapOr) and can only test the owner's
+	// rows one by one.
 	if f.Query != "" {
 		p := next(likeContains(f.Query))
-		conds = append(conds, `(lower("originalText") LIKE lower(`+p+`) ESCAPE '\'
-		  OR lower("correctedText") LIKE lower(`+p+`) ESCAPE '\'
-		  OR lower("pinyin") LIKE lower(`+p+`) ESCAPE '\'
-		  OR EXISTS (SELECT 1 FROM "Hint" h WHERE h."learningEntryId" = "LearningEntry"."id"
-		             AND lower(h."content") LIKE lower(`+p+`) ESCAPE '\'))`)
+		conds = append(conds, `"id" IN (
+		    SELECT "id" FROM "LearningEntry"
+		     WHERE lower("originalText") LIKE lower(`+p+`) ESCAPE '\'
+		        OR lower("correctedText") LIKE lower(`+p+`) ESCAPE '\'
+		        OR lower("pinyin") LIKE lower(`+p+`) ESCAPE '\'
+		    UNION
+		    SELECT "learningEntryId" FROM "Hint"
+		     WHERE lower("content") LIKE lower(`+p+`) ESCAPE '\')`)
 	}
 	if f.Hint != "" {
 		conds = append(conds, `EXISTS (SELECT 1 FROM "Hint" h WHERE h."learningEntryId" = "LearningEntry"."id"

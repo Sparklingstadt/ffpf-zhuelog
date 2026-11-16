@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"sort"
@@ -9,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
 
 // TestOnlyReadRoutesAcceptUserParam walks every registered route and checks
@@ -174,4 +176,46 @@ func TestRoutesRejectGuests(t *testing.T) {
 	if want := []string{"GET /v1/me"}; strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("routes allowing guests\n got: %q\nwant: %q", got, want)
 	}
+}
+
+// TestSavedNotesReadableWithoutOpenAI builds the router the way main does
+// without OPENAI_API_KEY: the stores are there, the streamers are not. The
+// saved conversations and question notes are still served (and a
+// conversation can be deleted); the routes that call OpenAI, and saving, are
+// not registered.
+func TestSavedNotesReadableWithoutOpenAI(t *testing.T) {
+	conv := &fakeConversations{saved: map[string]store.Conversation{
+		testConversationID: {ConversationSummary: store.ConversationSummary{ID: testConversationID, Title: "t", ModelName: "gpt-old"}},
+	}}
+	qs := &fakeQuestions{saved: store.Question{QuestionSummary: store.QuestionSummary{ID: testConversationID, Question: "q", ModelName: "gpt-old"}, Answer: "a"}}
+	h, _, _ := routerWith(t, auth.RoleMember, Deps{Conversations: conv, Questions: qs})
+
+	for _, path := range []string{
+		"/v1/conversations", "/v1/conversations/" + testConversationID,
+		"/v1/questions", "/v1/questions/" + testConversationID,
+	} {
+		if w := do(h, "GET", path, "", jsonAuth); w.Code != http.StatusOK {
+			t.Errorf("GET %s = %d %s, want 200", path, w.Code, w.Body.String())
+		}
+	}
+	// The lists report no chat model, which tells the web the chat is off.
+	for _, path := range []string{"/v1/conversations", "/v1/questions"} {
+		var body struct {
+			ChatModel *string `json:"chatModel"`
+		}
+		if err := json.Unmarshal(do(h, "GET", path, "", jsonAuth).Body.Bytes(), &body); err != nil || body.ChatModel == nil || *body.ChatModel != "" {
+			t.Errorf("GET %s chatModel = %v (%v), want \"\"", path, body.ChatModel, err)
+		}
+	}
+	if w := do(h, "DELETE", "/v1/conversations/"+testConversationID, "", jsonAuth); w.Code != http.StatusNoContent {
+		t.Errorf("DELETE conversation = %d %s, want 204", w.Code, w.Body.String())
+	}
+
+	wantError(t, do(h, "POST", "/v1/chat", oneUserMessage, jsonAuth), http.StatusNotFound, "not_found")
+	wantError(t, do(h, "POST", "/v1/quick-question", oneUserMessage, jsonAuth), http.StatusNotFound, "not_found")
+	wantError(t, do(h, "POST", "/v1/vocabulary/draft", `{"word":"认真"}`, jsonAuth), http.StatusNotFound, "not_found")
+	// Saving answers 405: the path exists (GET), the method does not.
+	putConv := `{"title":"t","modelName":"m","ended":false,"createdAt":"2026-01-01T00:00:00Z","messages":[]}`
+	wantError(t, do(h, "PUT", "/v1/conversations/"+testConversationID, putConv, jsonAuth), http.StatusMethodNotAllowed, "method_not_allowed")
+	wantError(t, do(h, "PUT", "/v1/questions/"+testConversationID, `{"question":"q","answer":"a"}`, jsonAuth), http.StatusMethodNotAllowed, "method_not_allowed")
 }

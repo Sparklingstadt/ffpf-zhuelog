@@ -35,6 +35,16 @@ const goApiBoundary = [
   },
 ];
 
+// UI components take nothing from infrastructure at all: browser-side stores
+// come through composition/browser-preferences.ts.
+const componentBoundary = [
+  {
+    group: ["@/infrastructure", "@/infrastructure/**"],
+    message:
+      "UI コンポーネントから infrastructure を直接 import しないでください。composition（ブラウザの設定は composition/browser-preferences）か presentation の actions を通してください。",
+  },
+];
+
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
@@ -48,12 +58,15 @@ const eslintConfig = defineConfig([
     },
   },
   {
-    files: [
-      "src/app/**/*.{ts,tsx,mts}",
-      "src/presentation/components/**/*.{ts,tsx,mts}",
-    ],
+    files: ["src/app/**/*.{ts,tsx,mts}"],
     rules: {
       "no-restricted-imports": ["error", { patterns: goApiBoundary }],
+    },
+  },
+  {
+    files: ["src/presentation/components/**/*.{ts,tsx,mts}"],
+    rules: {
+      "no-restricted-imports": ["error", { patterns: componentBoundary }],
     },
   },
   // Override default ignores of eslint-config-next.
