@@ -29,3 +29,10 @@ export const VOCABULARY_LIMITS = {
   meaning: 200,
   sentence: 300,
 } as const;
+
+// Tokens one OpenAI call spent, to be recorded as AI usage.
+export type OpenAiUsage = {
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+};
