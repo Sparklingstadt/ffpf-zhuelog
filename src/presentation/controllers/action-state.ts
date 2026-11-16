@@ -6,6 +6,7 @@ import { QuestionForbiddenError } from "@/application/chat/question-notes";
 import { LearningForbiddenError } from "@/application/learning/learning-notes";
 import { PracticeForbiddenError } from "@/application/practice/practice-records";
 import { ReviewForbiddenError } from "@/application/review/review-queue";
+import { SocialForbiddenError } from "@/application/social/social-network";
 import { GoApiError } from "@/infrastructure/go-api/client";
 import { errorName } from "@/presentation/controllers/load-or";
 import { accountForbiddenMessage } from "@/presentation/presenters/account-action-errors";
@@ -62,8 +63,8 @@ function unexpectedFailureMessage(code: string, error: unknown): string {
 // Runs an action that calls the Go API or the database. Next's own errors
 // (the redirect to /signin, notFound) are rethrown. Go's 403,
 // LearningForbiddenError, ReviewForbiddenError, PracticeForbiddenError,
-// QuestionForbiddenError and ConversationForbiddenError are treated as not
-// being allowed; other Go failures go through goFailureMessage, anything
+// QuestionForbiddenError, ConversationForbiddenError and
+// SocialForbiddenError are treated as not being allowed; other Go failures go through goFailureMessage, anything
 // else gets the generic text.
 export async function attemptGoAction(
   code: string,
@@ -91,8 +92,8 @@ export type GoAttempt<T> =
 
 // Runs an action's Go or database call and keeps its value. Next's own
 // errors are rethrown. Go's 403, LearningForbiddenError,
-// ReviewForbiddenError, PracticeForbiddenError, QuestionForbiddenError and
-// ConversationForbiddenError mean not allowed; a Go 404 gets `notFound`
+// ReviewForbiddenError, PracticeForbiddenError, QuestionForbiddenError,
+// ConversationForbiddenError and SocialForbiddenError mean not allowed; a Go 404 gets `notFound`
 // when the action gives one; other Go failures go through goFailureMessage
 // and anything else gets the generic text, logging codes and error names
 // only.
@@ -132,6 +133,7 @@ function isForbidden(error: unknown): boolean {
     error instanceof PracticeForbiddenError ||
     error instanceof QuestionForbiddenError ||
     error instanceof ConversationForbiddenError ||
+    error instanceof SocialForbiddenError ||
     (error instanceof GoApiError && error.status === 403)
   );
 }

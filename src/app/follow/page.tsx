@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+
 import { socialNetwork } from "@/composition/social-container";
 import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { FollowMemberList } from "@/presentation/components/follow/follow-member-list";
@@ -14,8 +16,10 @@ export default async function FollowPage() {
     undefined,
     "/signin?callbackUrl=/follow",
   );
+  // The demo account has no follows; like guests it goes home.
+  if (user.demo) redirect("/");
 
-  // Go reads the follows of the token's owner.
+  // socialNetwork reads the signed-in user's follows.
   const [directory, timeline] =
     owner.kind === "self"
       ? await Promise.all([

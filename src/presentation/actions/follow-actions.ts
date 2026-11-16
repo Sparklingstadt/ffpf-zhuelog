@@ -19,7 +19,8 @@ export async function followMemberAction(
 ): Promise<ActionState> {
   const state = await handleFollow(formData, {
     getMember: getCurrentMemberUser,
-    // Go follows as the token's owner; the follower checked here is not sent.
+    // socialNetwork follows as the signed-in user; the follower checked here
+    // is not sent.
     run: (_followerId, followeeId) => socialNetwork.follow(followeeId),
   });
   if (state.status === "success") revalidatePath("/follow");
