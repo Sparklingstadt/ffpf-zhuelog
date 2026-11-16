@@ -36,3 +36,13 @@ export type OpenAiUsage = {
   inputTokens: number;
   outputTokens: number;
 };
+
+// What the user submits to save a word. The id comes from the client, so a
+// retried save is applied once; sourceEntryId is the note the word came from.
+export type VocabularyInput = {
+  id: string;
+  word: string;
+  pinyin: string;
+  meaning: string;
+  sourceEntryId?: string;
+};
