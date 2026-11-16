@@ -38,7 +38,7 @@ flowchart LR
 ```
 
 - ブラウザーが話す相手は Web だけです。Go API を直接は呼びません。
-- Web は DB に触りません。読み書きも、ログインも、AI も、すべて Go API を通します。
+- Web は、ログイン中の人を決めるために、実行時に DB のアカウント（`PasswordAccount`・`FfpfAccount`）を Prisma（`src/infrastructure/prisma/`）で読みます。アクセストークンも Web が自分で確かめます。ほかの読み書き、ログイン、AI は今も Go API を通します。機能は、設計書（[2026-11-16-deprecate-go-backend-design.md](superpowers/specs/2026-11-16-deprecate-go-backend-design.md)）の段階ごとに、Go から Web へ移していきます。
 - LINE は Go API に Webhook を送ります。添削の結果は Go API が LINE に push で返します。
 
 ## 2. Web と Go API を分けた理由

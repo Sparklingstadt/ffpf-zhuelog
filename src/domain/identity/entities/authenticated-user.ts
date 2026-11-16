@@ -15,9 +15,8 @@ export type AuthenticatedUser = {
   displayName?: string;
   accountId?: string;
   actingAs?: ActingAs;
-  // The admin asked to act as a member but the Go API did not confirm it
-  // (an older API, or a member that no longer exists): githubId is the
-  // admin's own.
+  // The admin asked to act as a member but the target is malformed or no
+  // longer exists: githubId is the admin's own.
   actAsIgnored?: boolean;
   // The demo account (a member): its data is shared by everyone trying the
   // demo, and the AI features, LINE, follows and password are closed to it.

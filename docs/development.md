@@ -6,7 +6,7 @@
 
 前提: Node.js 24 または 26、Docker Desktop、Go（`services/api/go.mod` の版）
 
-Web は DB に直接つながらず、ログインも学習ノートの読み書きも Go API で行います。手元では、ローカル専用の Go API（[docs/api-local.md](api-local.md)）を使います。
+ログインも学習ノートの読み書きも Go API で行います。ただし Web は、ログイン中の人を決めるために、Go が出すアクセストークンを `API_JWT_SECRET` で確かめ、DB のアカウントを Prisma で読みます。手元では、ローカル専用の Go API（[docs/api-local.md](api-local.md)）を使います。
 
 ```bash
 cp .env.example .env
@@ -18,7 +18,13 @@ pnpm run dev
 
 ブラウザで <http://localhost:3000> を開き、ゲストか、サンプルの会員（`docs/api-local.md` の表）でログインします。GitHub ログインは本物の OAuth App が要るので、手元では使えません。
 
-`.env` の `GO_API_URL`・`API_WEB_PROXY_SECRET`・`AUTH_URL`・`AUTH_GITHUB_ID` が Web の設定です（FFPF ID を試すときは `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID` も）。`DATABASE_URL` は Prisma のマイグレーションと seed だけが使います（`docker compose up -d` の開発用 DB）。
+`.env` の `GO_API_URL`・`API_WEB_PROXY_SECRET`・`AUTH_URL`・`AUTH_GITHUB_ID` が Web の設定です（FFPF ID を試すときは `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID` も）。`DATABASE_URL`・`API_JWT_SECRET`・`AUTH_ALLOWED_GITHUB_IDS`・`DEMO_LOGIN_ID` も Web が実行時に使います。アカウントはローカルの Go API の DB にあるので、`.env` では次のようにそろえます（値は `scripts/api-local-env.sh` にあります）。
+
+- `DATABASE_URL`: `API_LOCAL_DATABASE_URL`（`pnpm run api:db` の DB）と同じ値。
+- `API_JWT_SECRET`: `scripts/api-local-env.sh` の `API_JWT_SECRET` と同じ値。違うと Go が出したトークンを Web が確かめられず、ログインしても未ログインになります。
+- `AUTH_ALLOWED_GITHUB_IDS`・`DEMO_LOGIN_ID`: ローカルでは `0` と `demo`。
+
+Prisma のマイグレーションと seed は、同じ `DATABASE_URL` を使います（`docker compose up -d` の開発用 DB に対して実行するときは、そちらの URL に替えます）。
 
 ## 認証・認可の設定
 

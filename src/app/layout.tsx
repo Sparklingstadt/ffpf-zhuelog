@@ -43,7 +43,7 @@ export const metadata: Metadata = {
 };
 
 // The banner must never take the page down with it (an unreachable API is
-// the page's to report), and pages share the same cached GET /v1/me.
+// the page's to report), and pages share the same cached current-user lookup.
 async function bannerUser() {
   try {
     return await getCurrentViewerUser();

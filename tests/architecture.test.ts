@@ -58,14 +58,23 @@ test("application ports never expose HTTP types", () => {
   assert.deepEqual(http, []);
 });
 
-// The web reaches data only through the Go API: no Prisma, no Postgres
+// The web reaches the database only through infrastructure/prisma (the Go
+// API being moved here feature by feature): no Prisma outside it, no Postgres
 // driver and no Auth.js anywhere in src (the generated client aside).
-const forbiddenModule = (specifier: string) =>
+const prismaModule = (specifier: string) =>
   /^@\/generated\/prisma(\/|$)/.test(specifier) ||
   /(^|\/)generated\/prisma(\/|$)/.test(specifier) ||
-  /^@prisma\//.test(specifier) ||
+  /^@prisma\//.test(specifier);
+
+const forbiddenModule = (specifier: string) =>
+  prismaModule(specifier) ||
   /^pg(\/|$)/.test(specifier) ||
   /^next-auth(\/|$)/.test(specifier);
+
+const forbiddenIn = (path: string, specifier: string) =>
+  path.startsWith("infrastructure/prisma/")
+    ? forbiddenModule(specifier) && !prismaModule(specifier)
+    : forbiddenModule(specifier);
 
 const moduleSpecifiers = (text: string) =>
   [
@@ -74,7 +83,7 @@ const moduleSpecifiers = (text: string) =>
     ),
   ].map((match) => match[1]!);
 
-test("nothing in src imports Prisma, pg or next-auth", () => {
+test("only infrastructure/prisma imports Prisma; nothing imports pg or next-auth", () => {
   const files = readdirSync(root, { recursive: true, encoding: "utf8" })
     .map((path) => path.replaceAll("\\", "/"))
     .filter((path) => /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(path))
@@ -82,10 +91,19 @@ test("nothing in src imports Prisma, pg or next-auth", () => {
   assert.ok(files.length > 0);
   const offenders = files.flatMap((path) =>
     moduleSpecifiers(readFileSync(`${root}${path}`, "utf8"))
-      .filter(forbiddenModule)
+      .filter((specifier) => forbiddenIn(path, specifier))
       .map((specifier) => `${path}: ${specifier}`),
   );
   assert.deepEqual(offenders, []);
+});
+
+test("infrastructure/prisma may import Prisma but not pg or next-auth", () => {
+  const path = "infrastructure/prisma/prisma-client.ts";
+  assert.equal(forbiddenIn(path, "@prisma/adapter-pg"), false);
+  assert.equal(forbiddenIn(path, "../../generated/prisma/client"), false);
+  assert.equal(forbiddenIn(path, "pg"), true);
+  assert.equal(forbiddenIn(path, "next-auth"), true);
+  assert.equal(forbiddenIn("composition/x.ts", "@prisma/client"), true);
 });
 
 test("the import check catches each forbidden form", () => {
