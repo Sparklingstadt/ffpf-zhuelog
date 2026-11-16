@@ -31,7 +31,6 @@ export default defineUserConfig({
           "/reference/follows.md",
           "/reference/line.md",
           "/reference/chat.md",
-          "/reference/quick-questions.md",
           "/reference/study-log.md",
           "/reference/admin.md",
           "/reference/health.md",

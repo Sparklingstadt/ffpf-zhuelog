@@ -22,12 +22,11 @@ const DefaultBaseURL = "https://api.openai.com"
 
 // Error codes.
 const (
-	CodeRequestFailed      = "OPENAI_REQUEST_FAILED"
-	CodeAuthFailed         = "OPENAI_AUTH_FAILED"
-	CodeRateLimited        = "OPENAI_RATE_LIMITED"
-	CodeTimeout            = "OPENAI_TIMEOUT"
-	CodeInvalidResponse    = "OPENAI_INVALID_RESPONSE"
-	CodeIncompleteResponse = "OPENAI_INCOMPLETE_RESPONSE"
+	CodeRequestFailed   = "OPENAI_REQUEST_FAILED"
+	CodeAuthFailed      = "OPENAI_AUTH_FAILED"
+	CodeRateLimited     = "OPENAI_RATE_LIMITED"
+	CodeTimeout         = "OPENAI_TIMEOUT"
+	CodeInvalidResponse = "OPENAI_INVALID_RESPONSE"
 )
 
 // Error is a failed call. Its string is only the Code, so it never carries

@@ -1,4 +1,8 @@
+import type { Page, Request } from "@playwright/test";
+import { randomUUID } from "node:crypto";
+import { openAiStubURL } from "./environment";
 import {
+  adminOwnerId,
   asAdmin,
   asGuest,
   asMember,
@@ -6,6 +10,8 @@ import {
   expect,
   test,
 } from "./fixtures";
+
+const FAILURE = "ChatGPTから応答を受信できませんでした。";
 
 test("one quick question saves a private note and the next starts fresh", async ({
   page,
@@ -162,4 +168,185 @@ test("members cannot read another owner's note and guests cannot use quick quest
   ])
     expect((await guest.goto(path))?.status()).toBe(404);
   await guest.close();
+});
+
+// e2e/openai-stub.ts cuts an answer at "[incomplete]" (after one piece, with
+// usage) and refuses one at "[fail]" (500, no usage). Neither is saved; the
+// cut one is still billed.
+test("an answer OpenAI cuts or refuses is not saved", async ({
+  page,
+  context,
+  db,
+}) => {
+  await asAdmin(context);
+  await page.goto("/quick-question");
+  const input = page.getByLabel("クイック質問の内容");
+  const answered = () =>
+    page.waitForResponse(
+      (response) => new URL(response.url()).pathname === "/api/quick-question",
+    );
+
+  let response = answered();
+  await input.fill("[incomplete] 了？");
+  await input.press("Enter");
+  // Cut after text: a 200 whose last line is the error.
+  expect((await response).status()).toBe(200);
+  await expect(page.getByText(FAILURE)).toBeVisible();
+  await expect(
+    page.getByRole("article", { name: "ChatGPTのメッセージ" }),
+  ).toContainText("你好！");
+  await expect(input).toHaveValue("[incomplete] 了？");
+
+  response = answered();
+  await input.fill("[fail] 了？");
+  await input.press("Enter");
+  // Refused before any text: a 502 with Go's error body.
+  const refused = await response;
+  expect(refused.status()).toBe(502);
+  expect(await refused.json()).toEqual({
+    error: { code: "chat_failed", message: FAILURE },
+  });
+  await expect(page.getByText(FAILURE)).toBeVisible();
+  await expect(input).toHaveValue("[fail] 了？");
+
+  expect(
+    (await db.query('SELECT count(*)::int AS n FROM "QuickQuestion"')).rows[0]
+      .n,
+  ).toBe(0);
+  const { rows } = await db.query(
+    `SELECT "ownerId", "model", "inputTokens", "outputTokens" FROM "AiUsage"
+      WHERE "feature" = 'quick_question'`,
+  );
+  expect(rows).toEqual([
+    {
+      ownerId: adminOwnerId,
+      model: "gpt-6.1-sol",
+      inputTokens: 21,
+      outputTokens: 43,
+    },
+  ]);
+});
+
+// Keeps the Server Action POST that saves the note, to send it again.
+function captureSave(page: Page) {
+  const saves: Request[] = [];
+  page.on("request", (request) => {
+    if (
+      request.method() === "POST" &&
+      new URL(request.url()).pathname === "/quick-question" &&
+      request.headers()["next-action"]
+    )
+      saves.push(request);
+  });
+  return saves;
+}
+
+// A note id is the browser's: sending the same note again is fine, but the
+// same id with another answer, or from another member, changes nothing.
+test("a question note id cannot be overwritten", async ({
+  page,
+  context,
+  db,
+  browser,
+}) => {
+  await asAdmin(context);
+  await page.goto("/quick-question");
+  const saves = captureSave(page);
+  await page.getByLabel("クイック質問の内容").fill("了と过の違いは？");
+  await page.getByRole("button", { name: "質問する", exact: true }).click();
+  await expect(page.getByText("質問ノートに保存しました。")).toBeVisible();
+  expect(saves).toHaveLength(1);
+  const [save] = saves;
+  const notes =
+    'SELECT "id", "ownerId", "answer", "createdAt" FROM "QuickQuestion"';
+  const { rows: before } = await db.query(notes);
+  expect(before).toHaveLength(1);
+  expect(before[0].ownerId).toBe(adminOwnerId);
+
+  const retry = await page.request.fetch(save);
+  expect(retry.status()).toBe(200);
+  expect(await retry.text()).toContain('{"ok":true}');
+  expect((await db.query(notes)).rows).toEqual(before);
+
+  const body = save.postData() ?? "";
+  expect(body).toContain(before[0].answer);
+  const headers = save.headers();
+  const sendAs = (requester: Page, data: string) =>
+    requester.request.post(save.url(), {
+      headers: {
+        "next-action": headers["next-action"],
+        "content-type": headers["content-type"],
+        accept: headers["accept"],
+      },
+      data,
+    });
+  const changed = await sendAs(
+    page,
+    body.replace(before[0].answer, "書き換え"),
+  );
+  expect(await changed.text()).toContain(
+    "処理できませんでした。時間をおいてもう一度お試しください。",
+  );
+  expect((await db.query(notes)).rows).toEqual(before);
+
+  await createMember(db, "quick-member", "質問者", "member-password-1");
+  const other = await browser.newContext();
+  const otherPage = await other.newPage();
+  await asMember(otherPage, "quick-member", "member-password-1");
+  const stolen = await sendAs(otherPage, body);
+  expect(await stolen.text()).toContain(
+    "処理できませんでした。時間をおいてもう一度お試しください。",
+  );
+  expect((await db.query(notes)).rows).toEqual(before);
+  await other.close();
+});
+
+// Stopping an answer closes the browser's request; the web then stops its
+// own request to OpenAI. e2e/openai-stub.ts holds a "[hang]" answer open
+// after one piece and reports whether its caller closed the connection.
+// The stopped question is not sent again.
+test("stopping an answer stops the request to OpenAI", async ({
+  page,
+  context,
+  db,
+  request,
+}) => {
+  await asAdmin(context);
+  await page.goto("/quick-question");
+  const question = `[hang] ${randomUUID()}`;
+  const state = async () =>
+    (
+      (await (
+        await request.get(
+          `${openAiStubURL}/e2e/streams?message=${encodeURIComponent(question)}`,
+        )
+      ).json()) as { state: string }
+    ).state;
+
+  let asked = 0;
+  page.on("request", (sent) => {
+    if (new URL(sent.url()).pathname === "/api/quick-question") asked++;
+  });
+
+  const input = page.getByLabel("クイック質問の内容");
+  await input.fill(question);
+  await page.getByRole("button", { name: "質問する", exact: true }).click();
+  await expect(
+    page.getByRole("article", { name: "ChatGPTのメッセージ" }),
+  ).toContainText("你好！");
+  expect(await state()).toBe("open");
+
+  await page.getByRole("button", { name: "停止", exact: true }).click();
+  await expect(page.getByText(/回答を停止しました/)).toBeVisible();
+  await expect(input).toHaveValue(question);
+  await expect(
+    page.getByRole("button", { name: "質問する", exact: true }),
+  ).toBeEnabled();
+  // Well before the stub's own 30 s end.
+  await expect.poll(state, { timeout: 10_000 }).toBe("closed");
+  expect(asked).toBe(1);
+  expect(
+    (await db.query('SELECT count(*)::int AS n FROM "QuickQuestion"')).rows[0]
+      .n,
+  ).toBe(0);
 });

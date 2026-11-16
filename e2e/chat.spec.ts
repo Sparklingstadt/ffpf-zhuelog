@@ -179,3 +179,30 @@ test("a save that fails says so and is retried after the next answer", async ({
   await page.getByText("#1 第一").click();
   await expect(page.getByRole("article")).toHaveCount(4);
 });
+
+// e2e/openai-stub.ts holds a "[hang]" answer open after one piece. Stopping
+// it keeps the message to send again, without sending it by itself.
+test("stopping an answer does not send the message again", async ({
+  page,
+  context,
+}) => {
+  await asAdmin(context);
+  await page.goto("/chat");
+  let sent = 0;
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/chat") sent++;
+  });
+  const input = page.getByLabel("ChatGPTへのメッセージ");
+  await input.fill("[hang] 我今天很忙");
+  await input.press("Enter");
+  await expect(
+    page.getByRole("article", { name: "ChatGPTのメッセージ" }),
+  ).toContainText("你好！");
+  await page.getByRole("button", { name: "停止", exact: true }).click();
+  await expect(page.getByText("応答を停止しました。")).toBeVisible();
+  await expect(input).toHaveValue("[hang] 我今天很忙");
+  await expect(
+    page.getByRole("button", { name: "送信", exact: true }),
+  ).toBeEnabled();
+  expect(sent).toBe(1);
+});

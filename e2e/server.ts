@@ -46,8 +46,9 @@ async function main() {
     // Shows the FFPF ID button; sign-in completes against the local stub.
     FFPF_ID_ISSUER: ffpf.issuer,
     FFPF_ID_CLIENT_ID: ffpf.clientId,
-    // The web drafts vocabulary with OpenAI itself; the base URL is the
-    // loopback stub, so nothing leaves this machine.
+    // The web drafts vocabulary and answers quick questions with OpenAI
+    // itself; the base URL is the loopback stub, so nothing leaves this
+    // machine.
     OPENAI_API_KEY: "e2e-openai-api-key",
     OPENAI_API_BASE_URL: openAiStubURL,
     NODE_ENV: "production",

@@ -14,7 +14,10 @@ const line = (value: object) => encoder.encode(`${JSON.stringify(value)}\n`);
 // some text. It waits for the first piece, as Go wrote its headers with the
 // first line: a failure before it is a 502 JSON error instead. An answer
 // without pieces is a 200 with only "done". Cancelling the body (the browser
-// went away) returns the iterator, which stops the answer.
+// went away) returns the iterator, but an async generator handles that only
+// after the piece it is waiting for: the caller stops OpenAI sooner by
+// passing the request's signal to the pieces (e2e "stopping an answer stops
+// the request to OpenAI").
 export async function answerStreamResponse(
   pieces: AsyncIterable<string>,
 ): Promise<Response> {

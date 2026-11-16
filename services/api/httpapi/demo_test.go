@@ -42,7 +42,7 @@ func allRoutesDeps(a Auth) Deps {
 	return Deps{
 		Auth: a, Follows: &fakeFollows{},
 		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret,
-		QuickChat: &fakeChat{}, Questions: &fakeQuestions{}, Chat: &fakeChat{}, Conversations: &fakeConversations{},
+		Chat: &fakeChat{}, Conversations: &fakeConversations{},
 		StudyLog: &fakeStudyLog{}, AIUsage: &fakeAIUsage{}, DemoReset: &fakeDemoReset{},
 		Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
 	}.withDefaults()
@@ -54,7 +54,6 @@ func allRoutesDeps(a Auth) Deps {
 func TestDemoIsRefusedExactlyTheClosedRoutes(t *testing.T) {
 	want := []string{
 		"POST /v1/chat",
-		"POST /v1/quick-question",
 		"GET /v1/line/link",
 		"POST /v1/line/link-code",
 		"DELETE /v1/line/link",
@@ -97,18 +96,18 @@ func TestDemoIsRefusedExactlyTheClosedRoutes(t *testing.T) {
 }
 
 func TestDemoKeepsItsOwnRecords(t *testing.T) {
-	qs := &fakeQuestions{}
+	conv := &fakeConversations{}
 	follows := &fakeFollows{listMembers: func(_ context.Context, viewer string) (store.MemberDirectory, error) {
 		return store.MemberDirectory{Members: []store.Member{}}, nil
 	}}
-	d := Deps{Questions: qs, Follows: follows}
+	d := Deps{Conversations: conv, Follows: follows}
 
-	// The demo reads its own question notes, and the member directory is
-	// closed to it.
+	// The demo reads its own saved conversations, and the member directory
+	// is closed to it.
 	d.Auth = demoAuth(true)
 	h, _, _ := routerWith(t, auth.RoleMember, d)
-	if w := do(h, http.MethodGet, "/v1/questions", "", authHeader); w.Code != http.StatusOK || qs.owner != testOwner {
-		t.Fatalf("demo question notes: %d for %q", w.Code, qs.owner)
+	if w := do(h, http.MethodGet, "/v1/conversations", "", authHeader); w.Code != http.StatusOK || conv.listOwner != testOwner {
+		t.Fatalf("demo conversations: %d for %q", w.Code, conv.listOwner)
 	}
 	w := do(h, http.MethodGet, "/v1/members", "", authHeader)
 	wantError(t, w, http.StatusForbidden, "forbidden")

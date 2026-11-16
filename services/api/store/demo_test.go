@@ -155,8 +155,9 @@ func TestResetDemoReplacesEverythingTheDemoOwns(t *testing.T) {
 
 	// What visitors do during the day.
 	createBatch(t, s, owner, []EntryDraft{draft("visitor", "h")}, now)
-	if _, err := s.PutQuestion(ctx, owner, Question{QuestionSummary: QuestionSummary{
-		ID: "0b6a3a52-3c55-4e0a-9d3c-2f0f6a1d7c99", Question: "q", ModelName: "m"}, Answer: "a"}, now); err != nil {
+	// The web saves question notes now; the reset still deletes them.
+	if _, err := s.pool.Exec(ctx, `INSERT INTO "QuickQuestion" ("id", "ownerId", "question", "answer", "modelName", "createdAt")
+ VALUES ($1, $2, 'q', 'a', 'm', $3)`, "0b6a3a52-3c55-4e0a-9d3c-2f0f6a1d7c99", owner, dbTime(now)); err != nil {
 		t.Fatal(err)
 	}
 	other := newOwner(t, s)
