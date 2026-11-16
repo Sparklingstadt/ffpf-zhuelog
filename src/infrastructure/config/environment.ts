@@ -132,6 +132,12 @@ export function openAiConfig(): OpenAiConfig | undefined {
   return { apiKey, baseUrl, learningModel };
 }
 
+// Whether an OpenAI API key is set at all, to tell "not configured" from a
+// rejected OPENAI_API_BASE_URL.
+export function openAiKeySet(): boolean {
+  return Boolean(process.env.OPENAI_API_KEY?.trim());
+}
+
 function isLoopbackHttpUrl(raw: string): boolean {
   let url: URL;
   try {

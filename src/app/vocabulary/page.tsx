@@ -1,6 +1,5 @@
 import { Database } from "lucide-react";
-import { loadOr } from "@/presentation/controllers/load-or";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 
 import { getCurrentViewerUser } from "@/composition/identity-container";
 import { vocabulary } from "@/composition/vocabulary-container";
@@ -27,10 +26,19 @@ import { formatNextReview } from "@/presentation/presenters/review-schedule-pres
 
 export const dynamic = "force-dynamic";
 
-// Go being unavailable (or failing) still shows the page with a notice. Any
-// other error, including the redirect to /signin, is rethrown.
+// The database being unavailable (or failing) still shows the page with a
+// notice, logged by error name only. Next's own errors are rethrown.
 async function loadVocabulary(): Promise<VocabularyEntry[] | null> {
-  return loadOr("VOCABULARY_UNAVAILABLE", () => vocabulary.list(), null);
+  try {
+    return await vocabulary.list();
+  } catch (error) {
+    unstable_rethrow(error);
+    console.error(
+      "VOCABULARY_UNAVAILABLE",
+      error instanceof Error ? error.name : typeof error,
+    );
+    return null;
+  }
 }
 
 // When each word with a review card comes back, labelled by Tokyo day.

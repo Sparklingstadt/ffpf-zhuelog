@@ -92,6 +92,7 @@ export class TokenCurrentUserProvider implements CurrentUserProvider {
         loginId: account.loginId,
         displayName: account.displayName,
       },
+      actorId: claims.ownerId,
     };
   }
 

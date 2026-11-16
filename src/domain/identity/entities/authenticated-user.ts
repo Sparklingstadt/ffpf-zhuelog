@@ -15,6 +15,9 @@ export type AuthenticatedUser = {
   displayName?: string;
   accountId?: string;
   actingAs?: ActingAs;
+  // While an admin acts as a member: the admin's own GitHub ID, the person
+  // who is actually operating (AI usage is recorded under it).
+  actorId?: string;
   // The admin asked to act as a member but the target is malformed or no
   // longer exists: githubId is the admin's own.
   actAsIgnored?: boolean;

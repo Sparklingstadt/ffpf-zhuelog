@@ -1,36 +1,60 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 
+import {
+  VocabularyForbiddenError,
+  type DraftOutcome,
+} from "@/application/vocabulary/vocabulary-book";
 import { getCurrentViewerUser } from "@/composition/identity-container";
 import { vocabulary } from "@/composition/vocabulary-container";
 import { isMemberRole } from "@/domain/identity/entities/authenticated-user";
 import { VOCABULARY_LIMITS } from "@/domain/vocabulary/vocabulary-entry";
-import { GoApiError } from "@/infrastructure/go-api/client";
+import {
+  VocabularyExistsError,
+  VocabularyNotFoundError,
+} from "@/infrastructure/prisma/vocabulary-store";
 import {
   actionSuccess,
   actionUnauthorized,
-  attemptGoAction,
-  goFailureMessage,
   type ActionState,
 } from "@/presentation/controllers/action-state";
 import { accountForbiddenMessage } from "@/presentation/presenters/account-action-errors";
+import { genericErrorMessage } from "@/presentation/presenters/generic-error-message";
 
 type Failure = { ok: false; message: string };
+
+const notFoundMessage = "単語が見つかりません。";
+const existsMessage = "この語句はすでに単語帳にあります。";
+const draftUnavailableMessage =
+  "AIの下書きは今は使えません。ピンインと意味を入力してください。";
+const draftFailedMessage =
+  "ピンインと意味の下書きを作れませんでした。自分で入力するか、もう一度お試しください。";
 
 async function canUseVocabulary() {
   const user = await getCurrentViewerUser();
   return Boolean(user && isMemberRole(user.role));
 }
 
-// Go's own error for bad input or a word already saved; a fixed text for the
-// rest. Anything but a Go failure (including Next's redirect) is rethrown.
-function failure(code: string, error: unknown): Failure {
-  if (!(error instanceof GoApiError)) throw error;
-  if (error.status === 403)
+// The text for a failure the user cannot act on. Next's own errors (redirect,
+// notFound) are rethrown; the rest is logged by code and error name only.
+function unexpected(code: string, error: unknown): string {
+  unstable_rethrow(error);
+  console.error(code, error instanceof Error ? error.name : typeof error);
+  return genericErrorMessage;
+}
+
+// What a failed save tells the user.
+function saveFailure(error: unknown): Failure {
+  if (error instanceof VocabularyExistsError)
+    return { ok: false, message: existsMessage };
+  if (error instanceof VocabularyNotFoundError)
+    return { ok: false, message: notFoundMessage };
+  if (error instanceof VocabularyForbiddenError)
     return { ok: false, message: accountForbiddenMessage };
-  return { ok: false, message: goFailureMessage(code, error) };
+  return { ok: false, message: unexpected("VOCABULARY_SAVE_FAILED", error) };
 }
 
 const draftInput = z.object({
@@ -53,31 +77,22 @@ export async function draftVocabularyAction(
       ok: false,
       message: `語句は1〜${VOCABULARY_LIMITS.word}文字にしてください。`,
     };
+  let outcome: DraftOutcome;
   try {
-    const draft = await vocabulary.draft(
-      parsed.data.word,
-      parsed.data.sentence,
-    );
-    return { ok: true, ...draft };
+    outcome = await vocabulary.draft(parsed.data.word, parsed.data.sentence);
   } catch (error) {
-    // Without OpenAI the route is not there.
-    if (
-      error instanceof GoApiError &&
-      (error.status === 404 || error.status === 405)
-    )
-      return {
-        ok: false,
-        message:
-          "AIの下書きは今は使えません。ピンインと意味を入力してください。",
-      };
-    if (error instanceof GoApiError && error.status === 502)
-      return {
-        ok: false,
-        message:
-          "ピンインと意味の下書きを作れませんでした。自分で入力するか、もう一度お試しください。",
-      };
-    return failure("VOCABULARY_DRAFT_FAILED", error);
+    return {
+      ok: false,
+      message: unexpected("VOCABULARY_DRAFT_FAILED", error),
+    };
   }
+  if (outcome.ok) return { ok: true, ...outcome.draft };
+  const message = {
+    unavailable: draftUnavailableMessage,
+    failed: draftFailedMessage,
+    forbidden: accountForbiddenMessage,
+  }[outcome.reason];
+  return { ok: false, message };
 }
 
 const saveInput = z.object({
@@ -111,7 +126,7 @@ export async function saveVocabularyAction(
     revalidatePath("/vocabulary");
     return { ok: true };
   } catch (error) {
-    return failure("VOCABULARY_SAVE_FAILED", error);
+    return saveFailure(error);
   }
 }
 
@@ -122,11 +137,18 @@ export async function deleteVocabularyAction(
 ): Promise<ActionState> {
   if (!(await canUseVocabulary())) return actionUnauthorized;
   const id = z.uuid().safeParse(formData.get("id"));
-  if (!id.success)
-    return { status: "error", message: "単語が見つかりません。" };
-  return attemptGoAction("VOCABULARY_DELETE_FAILED", async () => {
+  if (!id.success) return { status: "error", message: notFoundMessage };
+  try {
     await vocabulary.remove(id.data);
-    revalidatePath("/vocabulary");
-    return actionSuccess;
-  });
+  } catch (error) {
+    if (error instanceof VocabularyNotFoundError)
+      return { status: "error", message: notFoundMessage };
+    if (error instanceof VocabularyForbiddenError) return actionUnauthorized;
+    return {
+      status: "error",
+      message: unexpected("VOCABULARY_DELETE_FAILED", error),
+    };
+  }
+  revalidatePath("/vocabulary");
+  return actionSuccess;
 }
