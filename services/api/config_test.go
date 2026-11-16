@@ -328,23 +328,15 @@ func TestLoadConfigCronSecretOptional(t *testing.T) {
 	}
 }
 
-func TestLoadConfigOpenAIAloneEnablesChatNotLine(t *testing.T) {
-	cfg, err := LoadConfig(getenvFrom(validEnv()))
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if cfg.ChatEnabled() {
-		t.Error("ChatEnabled() = true without OPENAI_API_KEY")
-	}
-
+func TestLoadConfigOpenAIAloneIsNotLine(t *testing.T) {
 	env := validEnv()
 	env["OPENAI_API_KEY"] = "openai-key"
-	cfg, err = LoadConfig(getenvFrom(env))
+	cfg, err := LoadConfig(getenvFrom(env))
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	if !cfg.ChatEnabled() || cfg.LineEnabled() {
-		t.Errorf("ChatEnabled() = %v, LineEnabled() = %v; want true, false", cfg.ChatEnabled(), cfg.LineEnabled())
+	if cfg.LineEnabled() {
+		t.Error("LineEnabled() = true with OPENAI_API_KEY alone")
 	}
 }
 
@@ -363,21 +355,6 @@ func TestLoadConfigLinePartialFails(t *testing.T) {
 	env["OPENAI_API_KEY"] = "openai-key"
 	if _, err := LoadConfig(getenvFrom(env)); err == nil {
 		t.Fatal("expected error for LINE without LINE_CHANNEL_ACCESS_TOKEN")
-	}
-}
-
-func TestLoadConfigChatModelDefaultAndOverride(t *testing.T) {
-	cfg, err := LoadConfig(getenvFrom(validEnv()))
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if cfg.OpenAIChatModel != "gpt-6.1-sol" {
-		t.Errorf("default OpenAIChatModel = %q", cfg.OpenAIChatModel)
-	}
-	env := validEnv()
-	env["OPENAI_CHAT_MODEL"] = " gpt-x "
-	if cfg, err = LoadConfig(getenvFrom(env)); err != nil || cfg.OpenAIChatModel != "gpt-x" {
-		t.Errorf("OpenAIChatModel = %q, err %v", cfg.OpenAIChatModel, err)
 	}
 }
 

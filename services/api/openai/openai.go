@@ -45,13 +45,12 @@ func Fail(code string) *Error { return &Error{Code: code} }
 // Request is one POST to /v1/responses. HTTP is the caller's client (nil
 // uses a new one with DefaultTimeout); redirects are never followed, since
 // the request carries the API key. BaseURL defaults to DefaultBaseURL and may
-// end with a slash. Accept, when set, is sent as the Accept header.
+// end with a slash.
 type Request struct {
 	HTTP           *http.Client
 	DefaultTimeout time.Duration
 	BaseURL        string
 	APIKey         string
-	Accept         string
 }
 
 // Post sends payload as JSON and returns the 200 response, whose body the
@@ -73,9 +72,6 @@ func (r Request) Post(ctx context.Context, payload any) (*http.Response, error) 
 		return nil, Fail(CodeRequestFailed)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if r.Accept != "" {
-		req.Header.Set("Accept", r.Accept)
-	}
 	req.Header.Set("Authorization", "Bearer "+r.APIKey)
 
 	resp, err := httpclient.NoRedirect(r.HTTP, r.DefaultTimeout).Do(req)

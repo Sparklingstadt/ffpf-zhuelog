@@ -84,16 +84,18 @@ test("anyone can try the members' pages in the demo, without AI", async ({
   await page.keyboard.press("Escape");
 
   // The web refuses the AI routes to the demo, even when called directly.
-  const answer = await page.evaluate(async () => {
-    const response = await fetch("/api/quick-question", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ messages: [{ role: "user", text: "你好" }] }),
-    });
-    return { status: response.status, body: await response.json() };
-  });
-  expect(answer.status).toBe(403);
-  expect(answer.body.error.message).toBe("デモでは使えません。");
+  for (const path of ["/api/quick-question", "/api/chat"]) {
+    const answer = await page.evaluate(async (path) => {
+      const response = await fetch(path, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ messages: [{ role: "user", text: "你好" }] }),
+      });
+      return { status: response.status, body: await response.json() };
+    }, path);
+    expect(answer.status, path).toBe(403);
+    expect(answer.body.error.message, path).toBe("デモでは使えません。");
+  }
 
   // Leaving the demo signs out.
   await banner.getByRole("button", { name: "デモを終える" }).click();

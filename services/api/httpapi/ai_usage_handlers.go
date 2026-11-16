@@ -7,51 +7,17 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/aiusage"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/jst"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
 
-// AIUsage is what the handlers need from *store.Store to record and sum up
-// the tokens OpenAI calls use.
+// AIUsage is what the handlers need from *store.Store to sum up the tokens
+// OpenAI calls use.
 type AIUsage interface {
-	RecordAIUsage(ctx context.Context, u store.AIUsage, now time.Time) error
 	AIUsageMonth(ctx context.Context, year, month int) ([]store.AIUsageTotal, error)
 }
 
 var _ AIUsage = (*store.Store)(nil)
-
-// recordTimeout bounds saving one usage row. The row is saved even when the
-// client has gone (a stopped chat still used its tokens).
-const recordTimeout = 5 * time.Second
-
-// trackAIUsage records every OpenAI call h makes as feature, for the person
-// who made the request: the admin, while an admin acts as a member. A nil
-// usage serves h as it is.
-func trackAIUsage(usage AIUsage, feature string, now func() time.Time, h http.Handler) http.Handler {
-	if usage == nil {
-		return h
-	}
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		p := principalFrom(r.Context())
-		owner := p.OwnerID
-		if p.ActorID != "" {
-			owner = p.ActorID
-		}
-		rec := func(ctx context.Context, u aiusage.Usage) {
-			ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), recordTimeout)
-			defer cancel()
-			err := usage.RecordAIUsage(ctx, store.AIUsage{
-				OwnerID: owner, Feature: feature, Model: u.Model,
-				InputTokens: u.InputTokens, OutputTokens: u.OutputTokens,
-			}, now())
-			if err != nil {
-				loggerFrom(r.Context()).Warn("ai usage not recorded", "feature", feature, "error", err.Error())
-			}
-		}
-		h.ServeHTTP(w, r.WithContext(aiusage.WithRecorder(r.Context(), rec)))
-	})
-}
 
 var monthPattern = regexp.MustCompile(`^(\d{4})-(\d{2})$`)
 

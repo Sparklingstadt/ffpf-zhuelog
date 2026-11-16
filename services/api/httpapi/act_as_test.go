@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
@@ -31,21 +32,23 @@ func actAsHeaders(ownerID string) map[string]string {
 }
 
 func TestActAsWritesGoToTheMember(t *testing.T) {
-	conv := &fakeConversations{}
+	var follower string
 	h, _, logs := routerWith(t, "", Deps{
 		Auth: actingAuth(auth.RoleAdmin),
-		// Saving a conversation is registered only with the chat.
-		Chat:          &fakeChat{},
-		Conversations: conv,
+		Follows: &fakeFollows{
+			memberExists: func(context.Context, string) (bool, error) { return true, nil },
+			follow: func(_ context.Context, followerID, _ string, _ time.Time) error {
+				follower = followerID
+				return nil
+			},
+		},
 	})
-	headers := actAsHeaders(actedMember)
-	headers["Content-Type"] = "application/json"
-	w := do(h, http.MethodPut, "/v1/conversations/"+testConversationID, savedBody, headers)
-	if w.Code != http.StatusOK {
+	w := do(h, http.MethodPut, "/v1/follows/password:x", "", actAsHeaders(actedMember))
+	if w.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, body %q", w.Code, w.Body.String())
 	}
-	if conv.putOwner != actedMember {
-		t.Fatalf("store owner = %q, want %q", conv.putOwner, actedMember)
+	if follower != actedMember {
+		t.Fatalf("follower = %q, want %q", follower, actedMember)
 	}
 	if !strings.Contains(logs.String(), `"msg":"acting as member"`) ||
 		!strings.Contains(logs.String(), `"actor":"`+testOwner+`"`) ||
@@ -95,7 +98,7 @@ func TestActAsRejections(t *testing.T) {
 
 	t.Run("member is refused on every authed route", func(t *testing.T) {
 		d := Deps{Auth: actingAuth(auth.RoleMember), Line: &fakeLine{}, LineChannelSecret: testLineSecret,
-			CronSecret: testCronSecret, Chat: &fakeChat{}, Conversations: &fakeConversations{}}
+			CronSecret: testCronSecret, Follows: &fakeFollows{}}
 		d = d.withDefaults()
 		mux, routes := newMux(d)
 		h := wrap(d, jsonMuxErrors(mux))

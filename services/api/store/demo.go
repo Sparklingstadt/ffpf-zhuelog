@@ -60,6 +60,34 @@ type DemoAnswer struct {
 	Before review.Card
 }
 
+// ConversationMessage, ConversationSummary and Conversation are the demo's
+// sample conversation. Conversations are read and written by the web since
+// stage 7.
+
+// ConversationMessage is one turn of a conversation. Role is "user" or
+// "assistant".
+type ConversationMessage struct {
+	ID   string `json:"id"`
+	Role string `json:"role"`
+	Text string `json:"text"`
+}
+
+// ConversationSummary is a conversation without its messages.
+type ConversationSummary struct {
+	ID        string
+	Title     string
+	ModelName string
+	Ended     bool
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// Conversation is a conversation with its messages.
+type Conversation struct {
+	ConversationSummary
+	Messages []ConversationMessage
+}
+
 // demoOwnedTables are the tables with an "ownerId" column whose rows the
 // reset deletes. Learning notes and hints go with their import batches, and
 // review logs with their items.

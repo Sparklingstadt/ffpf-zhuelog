@@ -29,7 +29,7 @@ test("an admin acting as a member saves the conversation as the member's", async
   await expect(banner).toContainText("テスト一郎");
   await expect(banner).toContainText("test01");
 
-  // The admin's own features stay: the chat is admin-only.
+  // The chat is the member's; the admin pays for it.
   await page.goto("/chat");
   const input = page.getByLabel("ChatGPTへのメッセージ");
   await input.fill("我今天很忙");
@@ -59,6 +59,11 @@ test("an admin acting as a member saves the conversation as the member's", async
     [adminOwnerId],
   );
   expect(rows[0].n).toBe(0);
+  // One usage row, the admin's: none on the member.
+  const { rows: usage } = await db.query(
+    `SELECT "ownerId" FROM "AiUsage" WHERE "feature" = 'chat'`,
+  );
+  expect(usage.map((row) => row.ownerId)).toEqual([adminOwnerId]);
 });
 
 // The note is the member's; the OpenAI usage is the admin's, who asked.

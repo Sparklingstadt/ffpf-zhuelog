@@ -126,8 +126,7 @@ async function startGoApi(): Promise<ChildProcess> {
       FFPF_ID_CLIENT_SECRET: ffpf.clientSecret,
       FFPF_ID_REDIRECT_URI: ffpf.redirectUri,
       // Go registers the LINE link routes only when LINE and OpenAI are
-      // configured, and the chat routes when OpenAI is. Dummy values and
-      // loopback base URLs (nothing listens on port 9; the OpenAI stub runs in
+      // configured. Dummy values and loopback base URLs (nothing listens on port 9; the OpenAI stub runs in
       // this process) make the routes exist without any call leaving this
       // machine.
       LINE_CHANNEL_SECRET: "e2e-line-channel-secret",

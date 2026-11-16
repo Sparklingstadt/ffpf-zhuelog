@@ -229,3 +229,5 @@ func wantError(t *testing.T, w *httptest.ResponseRecorder, status int, code stri
 		t.Fatalf("Cache-Control = %q, want no-store", got)
 	}
 }
+
+var jsonAuth = map[string]string{"Authorization": "Bearer tok", "Content-Type": "application/json"}
