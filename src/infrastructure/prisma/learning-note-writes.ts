@@ -9,7 +9,7 @@ export function reviewItemsToDelete(ownerId: string, ids: string[]) {
 // Interactive transaction limits for the purge writes. Prisma's default is a
 // 5 s timeout, too short for a cold Neon start or a big trash (Go allowed up
 // to its 30 s server limit).
-const TRANSACTION_OPTIONS = { maxWait: 5_000, timeout: 15_000 };
+export const TRANSACTION_OPTIONS = { maxWait: 5_000, timeout: 15_000 };
 
 // Every write names the owner and the note's state in its WHERE clause and is
 // decided by the number of rows it affected, so a concurrent trash, restore or

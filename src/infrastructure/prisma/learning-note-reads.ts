@@ -81,6 +81,53 @@ function searchCondition(search: EntrySearch | undefined): Prisma.Sql {
   return Prisma.sql`AND ${Prisma.join(conditions, " AND ")}`;
 }
 
+// The hints of the given notes in one query, each note's by position; [] for
+// a note without any.
+async function hintsByEntry(
+  client: Pick<PrismaClient, "hint">,
+  ids: string[],
+): Promise<Map<string, LearningHint[]>> {
+  const byEntry = new Map<string, LearningHint[]>(ids.map((id) => [id, []]));
+  if (ids.length === 0) return byEntry;
+  const hints = await client.hint.findMany({
+    where: { learningEntryId: { in: ids } },
+    select: { id: true, content: true, position: true, learningEntryId: true },
+    orderBy: [{ learningEntryId: "asc" }, { position: "asc" }],
+  });
+  for (const { learningEntryId, id, content, position } of hints) {
+    byEntry.get(learningEntryId)?.push({ id, content, position });
+  }
+  return byEntry;
+}
+
+// The owner's live (not trashed) notes among ids, with their hints, by id.
+// Takes the client so a transaction can read them in its own snapshot.
+export async function liveEntriesById(
+  client: Pick<PrismaClient, "learningEntry" | "hint">,
+  ownerId: string,
+  ids: string[],
+): Promise<Map<string, LearningEntry>> {
+  if (ids.length === 0) return new Map();
+  const rows = await client.learningEntry.findMany({
+    where: { ownerId, id: { in: ids }, deletedAt: null },
+    select: entrySelect,
+  });
+  const hints = await hintsByEntry(
+    client,
+    rows.map((row) => row.id),
+  );
+  return new Map(
+    rows.map((row) => [
+      row.id,
+      toEntry({
+        ...row,
+        kind: toKind(row.kind),
+        hints: hints.get(row.id) ?? [],
+      }),
+    ]),
+  );
+}
+
 // Reads the owner's learning notes the way the Go API's store does. Every
 // list is ordered in SQL, so ties on time are broken by the database's id
 // order.
@@ -90,24 +137,10 @@ export function createLearningNoteReads(db: () => PrismaClient) {
   async function withHints<R extends EntryRow>(
     rows: R[],
   ): Promise<(Omit<R, "kind"> & Pick<LearningEntry, "kind" | "hints">)[]> {
-    const byEntry = new Map<string, LearningHint[]>(
-      rows.map((row) => [row.id, []]),
+    const byEntry = await hintsByEntry(
+      db(),
+      rows.map((row) => row.id),
     );
-    if (rows.length > 0) {
-      const hints = await db().hint.findMany({
-        where: { learningEntryId: { in: rows.map((row) => row.id) } },
-        select: {
-          id: true,
-          content: true,
-          position: true,
-          learningEntryId: true,
-        },
-        orderBy: [{ learningEntryId: "asc" }, { position: "asc" }],
-      });
-      for (const { learningEntryId, id, content, position } of hints) {
-        byEntry.get(learningEntryId)?.push({ id, content, position });
-      }
-    }
     return rows.map((row) => ({
       ...row,
       kind: toKind(row.kind),
