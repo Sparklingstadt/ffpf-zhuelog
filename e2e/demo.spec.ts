@@ -1,28 +1,217 @@
 import {
+  createMember,
   expect,
   memberOwnerId,
   practicePrepositionRound,
+  seedNotes,
   test,
   upload,
 } from "./fixtures";
-import { cronSecret, demoLoginId, goApiURL } from "./environment";
+import { baseURL, cronSecret, demoLoginId } from "./environment";
+import type { Client } from "pg";
 
 // Puts the demo account back to its fixture, as the nightly cron does. The
 // db fixture empties the accounts before every test, so it runs each time.
-async function resetDemo() {
-  const response = await fetch(`${goApiURL}/v1/cron/demo-reset`, {
-    method: "POST",
+async function resetDemo(method = "POST") {
+  const response = await fetch(`${baseURL}/api/cron/demo-reset`, {
+    method,
     headers: { authorization: `Bearer ${cronSecret()}` },
   });
   expect(response.status).toBe(204);
 }
 
+async function demoAccount(db: Client) {
+  const { rows } = await db.query(
+    `SELECT id, "passwordHash", "displayName", "sessionVersion"
+       FROM "PasswordAccount" WHERE "loginId" = $1`,
+    [demoLoginId],
+  );
+  expect(rows).toHaveLength(1);
+  return rows[0] as {
+    id: string;
+    passwordHash: string;
+    displayName: string;
+    sessionVersion: number;
+  };
+}
+
+async function count(db: Client, sql: string, values: unknown[]) {
+  const { rows } = await db.query(sql, values);
+  return rows[0].n as number;
+}
+
+const liveNotes = `SELECT count(*)::int AS n FROM "LearningEntry" WHERE "ownerId" = $1 AND "deletedAt" IS NULL`;
+// Review items that name neither a note nor a word of their owner.
+const orphanItems = `SELECT count(*)::int AS n FROM "ReviewItem" i WHERE i."ownerId" = $1
+  AND NOT EXISTS (SELECT 1 FROM "LearningEntry" e WHERE i."kind" = 'entry' AND e."id" = i."targetId" AND e."ownerId" = i."ownerId")
+  AND NOT EXISTS (SELECT 1 FROM "VocabularyEntry" v WHERE i."kind" = 'vocabulary' AND v."id" = i."targetId" AND v."ownerId" = i."ownerId")`;
+
 test("the demo reset needs the cron secret", async () => {
-  const response = await fetch(`${goApiURL}/v1/cron/demo-reset`, {
+  const response = await fetch(`${baseURL}/api/cron/demo-reset`, {
     method: "POST",
     headers: { authorization: "Bearer wrong" },
   });
   expect(response.status).toBe(401);
+  expect(await response.text()).toBe(
+    '{"error":{"code":"unauthorized","message":"認証が必要です。"}}',
+  );
+  // Vercel Cron calls with GET.
+  await resetDemo("GET");
+});
+
+// Go: TestResetWithTheFixture (services/api/demo/demo_db_test.go).
+test("the reset seeds the demo as Go did", async ({ db }) => {
+  await resetDemo();
+  const account = await demoAccount(db);
+  expect(account.passwordHash).toBe("demo:no-password");
+  const owner = memberOwnerId(account.id);
+
+  expect(await count(db, liveNotes, [owner])).toBe(12);
+  expect(
+    await count(
+      db,
+      `SELECT count(*)::int AS n FROM "VocabularyEntry" WHERE "ownerId" = $1`,
+      [owner],
+    ),
+  ).toBe(10);
+  expect(
+    await count(
+      db,
+      `SELECT count(*)::int AS n FROM "ReviewItem" WHERE "ownerId" = $1 AND "due" <= now()`,
+      [owner],
+    ),
+  ).toBeGreaterThan(0);
+  expect(await count(db, orphanItems, [owner])).toBe(0);
+  for (const table of [
+    "ChatConversation",
+    "PrepositionPracticeRecord",
+    "ComplementPracticeRecord",
+  ])
+    expect(
+      await count(
+        db,
+        `SELECT count(*)::int AS n FROM "${table}" WHERE "ownerId" = $1`,
+        [owner],
+      ),
+      table,
+    ).toBe(table === "ComplementPracticeRecord" ? 1 : 2);
+  // Activity on most of the last seven Japan days.
+  expect(
+    await count(
+      db,
+      `SELECT count(DISTINCT ("at" + interval '9 hours')::date)::int AS n FROM (
+         SELECT "createdAt" AS "at" FROM "LearningEntry" WHERE "ownerId" = $1 AND "deletedAt" IS NULL
+         UNION ALL SELECT "createdAt" FROM "VocabularyEntry" WHERE "ownerId" = $1
+         UNION ALL SELECT "createdAt" FROM "PrepositionPracticeRecord" WHERE "ownerId" = $1
+         UNION ALL SELECT "createdAt" FROM "ComplementPracticeRecord" WHERE "ownerId" = $1
+         UNION ALL SELECT "reviewedAt" FROM "ReviewLog" WHERE "ownerId" = $1) AS "activity"
+       WHERE "at" >= now() - interval '8 days'`,
+      [owner],
+    ),
+  ).toBeGreaterThanOrEqual(5);
+});
+
+// Go: TestResetDemoReplacesEverythingTheDemoOwns (store/demo_test.go).
+test("the reset replaces only the demo's data", async ({ db }) => {
+  await resetDemo();
+  const before = await demoAccount(db);
+  const owner = memberOwnerId(before.id);
+
+  // What visitors did during the day: a note in review, a follow each way,
+  // an AI call, a LINE link code; and a password change elsewhere bumped the
+  // session version.
+  await db.query(
+    `INSERT INTO "ImportBatch" (id, "fileName", "rowCount") VALUES ('bvisitor', 'visitor.csv', 1)`,
+  );
+  await db.query(
+    `INSERT INTO "LearningEntry" (id, "originalText", "correctedText", pinyin, "ownerId", "batchId")
+     VALUES ('nvisitor', '訪問者', '访问者', 'fǎngwènzhě', $1, 'bvisitor')`,
+    [owner],
+  );
+  await db.query(
+    `INSERT INTO "ReviewItem" (id, "ownerId", language, kind, "targetId", due, "updatedAt")
+     VALUES ('ivisitor', $1, 'zh', 'entry', 'nvisitor', now(), now())`,
+    [owner],
+  );
+  const other = memberOwnerId(
+    await createMember(db, "other-member", "Other", "member-password-1"),
+  );
+  await seedNotes(db, other, [{ text: "别人的笔记" }]);
+  await db.query(
+    `INSERT INTO "Follow" ("followerId", "followeeId") VALUES ($1, $2), ($2, $1)`,
+    [owner, other],
+  );
+  await db.query(
+    `INSERT INTO "AiUsage" (id, "ownerId", feature, model, "inputTokens", "outputTokens")
+     VALUES ('uvisitor', $1, 'chat', 'gpt-test', 1, 1)`,
+    [owner],
+  );
+  await db.query(
+    `UPDATE "PasswordAccount" SET "sessionVersion" = 4 WHERE id = $1`,
+    [before.id],
+  );
+  await db.query(
+    `INSERT INTO "LineLinkCode" ("codeHash", "ownerId", role, "expiresAt")
+     VALUES ('hvisitor', $1, 'member', now() + interval '10 minutes')`,
+    [owner],
+  );
+
+  await resetDemo();
+
+  const after = await demoAccount(db);
+  expect(after.id).toBe(before.id);
+  expect(after.sessionVersion).toBe(4);
+  expect(await count(db, liveNotes, [owner])).toBe(12);
+  expect(
+    await count(
+      db,
+      `SELECT count(*)::int AS n FROM "LearningEntry" WHERE id = 'nvisitor'`,
+      [],
+    ),
+  ).toBe(0);
+  expect(
+    await count(
+      db,
+      `SELECT count(*)::int AS n FROM "ReviewItem" WHERE id = 'ivisitor'`,
+      [],
+    ),
+  ).toBe(0);
+  expect(await count(db, orphanItems, [owner])).toBe(0);
+  expect(await count(db, `SELECT count(*)::int AS n FROM "Follow"`, [])).toBe(
+    0,
+  );
+  expect(
+    await count(db, `SELECT count(*)::int AS n FROM "LineLinkCode"`, []),
+  ).toBe(0);
+  expect(
+    await count(
+      db,
+      `SELECT count(*)::int AS n FROM "AiUsage" WHERE "ownerId" = $1`,
+      [owner],
+    ),
+  ).toBe(1);
+  expect(await count(db, liveNotes, [other])).toBe(1);
+});
+
+// A member whose loginId is DEMO_LOGIN_ID is not overwritten (Go: ON CONFLICT
+// DO NOTHING); the demo sign-in refuses it, as it has a real password.
+test("an existing account keeps its password", async ({ db }) => {
+  const id = await createMember(
+    db,
+    demoLoginId,
+    "本当の会員",
+    "member-password-1",
+  );
+  const { rows } = await db.query(
+    `SELECT "passwordHash" FROM "PasswordAccount" WHERE id = $1`,
+    [id],
+  );
+  await resetDemo();
+  const after = await demoAccount(db);
+  expect(after.id).toBe(id);
+  expect(after.passwordHash).toBe(rows[0].passwordHash);
+  expect(after.displayName).toBe("本当の会員");
+  expect(await count(db, liveNotes, [memberOwnerId(id)])).toBe(12);
 });
 
 test("anyone can try the members' pages in the demo, without AI", async ({
