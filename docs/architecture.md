@@ -30,7 +30,7 @@ flowchart LR
   UI -->|HttpOnly Cookie| Web
   Web -->|Bearer JWT<br/>サーバー間| API
   API --> DB
-  Web -->|Prisma: アカウントの確認・単語帳・学習ノート・CSV の取り込み・復習・練習の記録・質問ノート・会話ノート・フォロー・タイムライン・学習ログ・AI の利用量の集計| DB
+  Web -->|Prisma: アカウントの確認・会員の管理・パスワード変更・単語帳・学習ノート・CSV の取り込み・復習・練習の記録・質問ノート・会話ノート・フォロー・タイムライン・学習ログ・AI の利用量の集計| DB
   Web -->|単語帳の下書き・クイック質問・チャット| OpenAI
   AI --> OpenAI
   LINE -->|Webhook| LINEBOT
@@ -40,7 +40,7 @@ flowchart LR
 ```
 
 - ブラウザーが話す相手は Web だけです。Go API を直接は呼びません。
-- Web は、ログイン中の人を決めるために、実行時に DB のアカウント（`PasswordAccount`・`FfpfAccount`）を Prisma（`src/infrastructure/prisma/`）で読みます。アクセストークンも Web が自分で確かめます。単語帳（一覧・保存・削除）と学習ノート（一覧・検索・カレンダー・日ごとの表示・ゴミ箱・共有・CSV の取り込み）と練習の記録（介詞・補語）も Prisma で読み書きし（CSV は Web が自分で検証・解析し、1 つのトランザクションで保存します）、「AI で下書き」・クイック質問・ChatGPT と話すは Web が OpenAI を直接呼んで、使った量を `AiUsage` に記録し、質問ノートと会話ノートも Prisma で読み書きし、フォロー（会員の一覧・タイムライン・フォローする／外す）も Prisma で読み書きし、学習ログ（カレンダー）と AI の利用量の月ごとの集計は Prisma で読むだけです。ほかの読み書きとログイン、LINE の AI（添削・翻訳）は今も Go API を通します。機能は、設計書（[2026-11-16-deprecate-go-backend-design.md](superpowers/specs/2026-11-16-deprecate-go-backend-design.md)）の段階ごとに、Go から Web へ移していきます。
+- Web は、ログイン中の人を決めるために、実行時に DB のアカウント（`PasswordAccount`・`FfpfAccount`）を Prisma（`src/infrastructure/prisma/`）で読みます。アクセストークンも Web が自分で確かめます。単語帳（一覧・保存・削除）と学習ノート（一覧・検索・カレンダー・日ごとの表示・ゴミ箱・共有・CSV の取り込み）と練習の記録（介詞・補語）も Prisma で読み書きし（CSV は Web が自分で検証・解析し、1 つのトランザクションで保存します）、「AI で下書き」・クイック質問・ChatGPT と話すは Web が OpenAI を直接呼んで、使った量を `AiUsage` に記録し、質問ノートと会話ノートも Prisma で読み書きし、フォロー（会員の一覧・タイムライン・フォローする／外す）も Prisma で読み書きし、会員の管理（作成・一覧・パスワードの再設定）と自分のパスワードの変更も Prisma で書き（ハッシュは Web が scrypt で Go と同じ形に作ります）、学習ログ（カレンダー）と AI の利用量の月ごとの集計は Prisma で読むだけです。ほかの読み書きとログイン、LINE の AI（添削・翻訳）は今も Go API を通します。機能は、設計書（[2026-11-16-deprecate-go-backend-design.md](superpowers/specs/2026-11-16-deprecate-go-backend-design.md)）の段階ごとに、Go から Web へ移していきます。
 - LINE は Go API に Webhook を送ります。添削の結果は Go API が LINE に push で返します。
 
 ## 2. Web と Go API を分けた理由
@@ -86,12 +86,12 @@ Web から Go API への呼び出しは `src/infrastructure/go-api/` にまと�
 
 ## 4. 認証
 
-| ログイン        | 中身                                                                                     |
-| --------------- | ---------------------------------------------------------------------------------------- |
-| GitHub OAuth    | PKCE つき。管理者は GitHub の数字の ID の許可リスト（`AUTH_ALLOWED_GITHUB_IDS`）で決める |
-| ID とパスワード | 管理者が発行する会員。パスワードは scrypt（N=2^15, r=8, p=1）                            |
-| FFPF ID         | 自作の ID 基盤の OpenID Connect。ES256 の署名、iss・aud・nonce・exp を確かめる           |
-| ゲスト          | データを持たない。練習だけ使える                                                         |
+| ログイン        | 中身                                                                                                                                                                                                                                                                   |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GitHub OAuth    | PKCE つき。管理者は GitHub の数字の ID の許可リスト（`AUTH_ALLOWED_GITHUB_IDS`）で決める                                                                                                                                                                               |
+| ID とパスワード | 管理者が発行する会員。パスワードは scrypt（N=2^15, r=8, p=1）。Web が `src/infrastructure/security/scrypt-password-hasher.ts` で書き、Go のログインが確かめる。`tests/fixtures/scrypt-golden.json`（Go の `password_golden_test.go` が書く）で両者が同じことを確かめる |
+| FFPF ID         | 自作の ID 基盤の OpenID Connect。ES256 の署名、iss・aud・nonce・exp を確かめる                                                                                                                                                                                         |
+| ゲスト          | データを持たない。練習だけ使える                                                                                                                                                                                                                                       |
 
 **トークン**
 
@@ -106,7 +106,7 @@ Web から Go API への呼び出しは `src/infrastructure/go-api/` にまと�
 
 **失効**
 
-- 会員はパスワードを変えると `sessionVersion` が上がり、古いトークンは次のリクエストで 401 になります。
+- 会員はパスワードを変えると `sessionVersion` が上がり、古いトークンは次のリクエストで 401 になります。管理者がパスワードを再設定したときも同じです。変更も再設定も、Web が 1 つの `UPDATE` でハッシュと `sessionVersion` を変えます。Go のログインと refresh も、Web も、次のリクエストで古いセッションを断ります。
 - 管理者は、許可リストから外れた時点で 403 になります。
 
 **試行回数**
@@ -206,7 +206,7 @@ sequenceDiagram
 
 ## 11. いまの課題
 
-- **入力の検証が 2 か所にある**：ログイン ID・パスワード・表示名の規則を、Web（zod）と Go の両方で持っています。Go が最後の砦で、Web は早く知らせるためですが、規則を変えるときは 2 か所を直す必要があります。
+- **入力の検証が 2 か所にある**：会員の作成とパスワードの規則は Web（`src/domain/identity/password-account.ts`）だけになりました。Go に残るのは、ログインのときのログイン ID の正規化（`NormalizeLoginID`、同じ規則）だけです。この規則を変えるときは、Web と Go の 2 か所を直す必要があります。
 - **外部キーがない**：管理者は DB に行を持たないので、`ownerId` に外部キーがありません。持ち主の整合性はコードで守っています（フォローは、相手のアカウントがあるときだけ行を足す 1 つの SQL）。
 - **Preview の DB**：Preview の Go API がどの DB を使うかについて、文書の記述が食い違っています（`api-deployment.md` の 62 行目と 80 行目）。どちらかにそろえる必要があります。
 - **CI がない**：GitHub Actions の CI は外しました。確認は lefthook のローカルの検査だけで、`pnpm audit` と `pnpm run build` は自動では走りません。
