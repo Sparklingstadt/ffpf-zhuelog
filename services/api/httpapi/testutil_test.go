@@ -14,6 +14,13 @@ import (
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
 )
 
+const (
+	testOwner  = "password:owner1"
+	otherOwner = "password:abcdefghij0123456789"
+)
+
+var authHeader = map[string]string{"Authorization": "Bearer tok"}
+
 // fakeAuth implements Auth with per-method hooks; an unset hook fails the test
 // by returning a sentinel error that maps to 500.
 type fakeAuth struct {

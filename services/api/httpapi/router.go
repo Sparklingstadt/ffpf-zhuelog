@@ -11,9 +11,8 @@ import (
 )
 
 var (
-	_ Auth    = (*auth.Service)(nil)
-	_ Follows = (*store.Store)(nil)
-	_ Pinger  = (*store.Store)(nil)
+	_ Auth   = (*auth.Service)(nil)
+	_ Pinger = (*store.Store)(nil)
 
 	_ Throttle = (*store.Store)(nil)
 
@@ -36,16 +35,6 @@ type Auth interface {
 	DemoEnabled() bool
 	LoginDemo(ctx context.Context, client string) (auth.TokenPair, error)
 	IsDemo(ctx context.Context, p auth.Principal) (bool, error)
-}
-
-// Follows is what the handlers need from *store.Store for the member
-// directory, follows and the timeline.
-type Follows interface {
-	ListMembers(ctx context.Context, viewerID string) (store.MemberDirectory, error)
-	MemberExists(ctx context.Context, ownerID string) (bool, error)
-	Follow(ctx context.Context, followerID, followeeID string, now time.Time) error
-	Unfollow(ctx context.Context, followerID, followeeID string) error
-	ListTimeline(ctx context.Context, viewerID string, after *store.Cursor, limit int) ([]store.TimelineItem, error)
 }
 
 // Accounts is what the handlers need from *store.Store for admin member
@@ -71,8 +60,7 @@ type Pinger interface {
 // Deps are the router's collaborators. A nil Logger means slog.Default() and a
 // nil Now means time.Now.
 type Deps struct {
-	Auth    Auth
-	Follows Follows
+	Auth Auth
 	// Accounts and Hasher serve the admin routes.
 	Accounts Accounts
 	Hasher   PasswordHasher
@@ -142,7 +130,6 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	r.authRoutes()
 	r.demoRoutes()
 	r.meRoute()
-	r.memberRoutes()
 	r.accountRoutes()
 	r.adminRoutes()
 	r.lineRoutes()
@@ -251,16 +238,6 @@ func (r *registrar) demoRoutes() {
 func (r *registrar) meRoute() {
 	r.handle(route{pattern: "GET /v1/me", authed: true, allowGuest: true},
 		requireAuth(r.d.Auth, true, rejectUserParam(me(r.d.Auth))))
-}
-
-// memberRoutes are the member directory, follows and the timeline. They reach
-// other members, so the demo account (shared by strangers) has none of them.
-func (r *registrar) memberRoutes() {
-	f, now := r.d.Follows, r.d.Now
-	r.notForDemo("GET /v1/members", listMembers(f))
-	r.notForDemo("PUT /v1/follows/{ownerId}", followMember(f, now))
-	r.notForDemo("DELETE /v1/follows/{ownerId}", unfollowMember(f))
-	r.notForDemo("GET /v1/timeline", listTimeline(f))
 }
 
 func (r *registrar) accountRoutes() {

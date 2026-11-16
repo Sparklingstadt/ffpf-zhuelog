@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
@@ -31,24 +30,16 @@ func actAsHeaders(ownerID string) map[string]string {
 	return map[string]string{"Authorization": "Bearer tok", actAsHeader: ownerID}
 }
 
-func TestActAsWritesGoToTheMember(t *testing.T) {
-	var follower string
-	h, _, logs := routerWith(t, "", Deps{
-		Auth: actingAuth(auth.RoleAdmin),
-		Follows: &fakeFollows{
-			memberExists: func(context.Context, string) (bool, error) { return true, nil },
-			follow: func(_ context.Context, followerID, _ string, _ time.Time) error {
-				follower = followerID
-				return nil
-			},
-		},
-	})
-	w := do(h, http.MethodPut, "/v1/follows/password:x", "", actAsHeaders(actedMember))
-	if w.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, body %q", w.Code, w.Body.String())
+func TestActAsIsLogged(t *testing.T) {
+	a := actingAuth(auth.RoleAdmin)
+	a.me = func(_ context.Context, p auth.Principal) (auth.Me, error) {
+		return auth.Me{OwnerID: p.OwnerID, Role: "admin", Login: "alice",
+			ActingAs: auth.ActingAs{OwnerID: p.OwnerID, LoginID: "test01", DisplayName: "テスト"}}, nil
 	}
-	if follower != actedMember {
-		t.Fatalf("follower = %q, want %q", follower, actedMember)
+	h, _, logs := routerWith(t, "", Deps{Auth: a})
+	w := do(h, http.MethodGet, "/v1/me", "", actAsHeaders(actedMember))
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, body %q", w.Code, w.Body.String())
 	}
 	if !strings.Contains(logs.String(), `"msg":"acting as member"`) ||
 		!strings.Contains(logs.String(), `"actor":"`+testOwner+`"`) ||
@@ -98,7 +89,7 @@ func TestActAsRejections(t *testing.T) {
 
 	t.Run("member is refused on every authed route", func(t *testing.T) {
 		d := Deps{Auth: actingAuth(auth.RoleMember), Line: &fakeLine{}, LineChannelSecret: testLineSecret,
-			CronSecret: testCronSecret, Follows: &fakeFollows{}}
+			CronSecret: testCronSecret}
 		d = d.withDefaults()
 		mux, routes := newMux(d)
 		h := wrap(d, jsonMuxErrors(mux))

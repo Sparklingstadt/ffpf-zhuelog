@@ -16,10 +16,6 @@
 | POST     | [`/v1/auth/logout`](./auth.md#post-v1-auth-logout)                                  | 公開                  | 204  | ログアウト                                         |
 | GET      | [`/v1/me`](./auth.md#get-v1-me)                                                     | 全員（ゲストも）      | 200  | 自分の情報                                         |
 | POST     | [`/v1/account/password`](./auth.md#post-v1-account-password)                        | 会員                  | 204  | 自分のパスワードの変更                             |
-| GET      | [`/v1/members`](./follows.md#get-v1-members)                                        | 全員                  | 200  | 会員の一覧                                         |
-| PUT      | [`/v1/follows/{ownerId}`](./follows.md#put-v1-follows-ownerid)                      | 全員                  | 204  | フォロー                                           |
-| DELETE   | [`/v1/follows/{ownerId}`](./follows.md#delete-v1-follows-ownerid)                   | 全員                  | 204  | フォローをやめる                                   |
-| GET      | [`/v1/timeline`](./follows.md#get-v1-timeline)                                      | 全員                  | 200  | タイムライン                                       |
 | POST     | [`/v1/line/webhook`](./line.md#post-v1-line-webhook)                                | 公開（LINE の署名）   | 200  | LINE からの通知を受けて添削・翻訳                  |
 | GET      | [`/v1/line/link`](./line.md#get-v1-line-link)                                       | 会員・admin           | 200  | LINE と連携しているか                              |
 | POST     | [`/v1/line/link-code`](./line.md#post-v1-line-link-code)                            | 会員・admin           | 200  | LINE の連携コードを出す                            |
@@ -55,46 +51,3 @@
 
 - 読み書きはすべて、トークンの `sub`（`ownerId`）で絞り込みます。**他人のノートは存在しないのと同じ `404`** です。
 - 認証つきのルートは、`?user=` が **付いているだけで** `400 invalid_request` です（無視されたと誤解しないようにするため）。admin が会員のノートを読むのは Web だけです。
-
-### ノートの形
-
-タイムラインなど、ノートを返すところはすべてこの形です。
-
-```json
-{
-  "id": "cmh0x5k2p0000abcd1234efgh",
-  "kind": "correction",
-  "originalText": "我昨天去了学校。",
-  "correctedText": "我昨天去学校了。",
-  "pinyin": "Wǒ zuótiān qù xuéxiào le.",
-  "hints": [
-    { "id": "cmh0x5k2p0001abcd1234efgh", "content": "了の位置", "position": 0 }
-  ],
-  "createdAt": "2026-10-20T03:04:05.678Z",
-  "sharedAt": null
-}
-```
-
-| フィールド      | 型             | 内容                                                   |
-| --------------- | -------------- | ------------------------------------------------------ |
-| `id`            | string         | ノートの ID（cuid）                                    |
-| `kind`          | string         | `correction`（添削）か `translation`（翻訳）           |
-| `originalText`  | string         | 最初の文                                               |
-| `correctedText` | string         | 添削後の文                                             |
-| `pinyin`        | string         | ピン音                                                 |
-| `hints`         | array          | ヒント。`position` の順（0 から）に並ぶ。無ければ `[]` |
-| `createdAt`     | string         | 作成時刻                                               |
-| `sharedAt`      | string \| null | 共有を始めた時刻。共有していなければ `null`            |
-
-### 一覧の続きの取得
-
-`GET /v1/timeline` はカーソル方式でページングします。
-
-| クエリ   | 内容                                                          |
-| -------- | ------------------------------------------------------------- |
-| `limit`  | 1 ページの件数。既定 50、1〜100 の 10 進の整数                |
-| `cursor` | 前のページの応答の `nextCursor`。省略するか空なら最初のページ |
-
-- 応答の `nextCursor` は、続きがあれば次のページのカーソル、無ければ `null` です。
-- カーソルは最後の要素の `(並びの時刻, id)` を base64url にしたものですが、中身に依存せず、そのまま渡してください。
-- `limit` や `cursor` が不正なとき、同じキーを 2 回以上付けたときは `400 invalid_request` です。

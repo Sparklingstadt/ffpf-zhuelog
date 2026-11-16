@@ -128,13 +128,6 @@ func restoreNote(t *testing.T, s *Store, owner, id string) {
 	 WHERE "id" = $1 AND "ownerId" = $2 AND "deletedAt" IS NOT NULL`, id, owner)
 }
 
-// shareNote shares one of the owner's notes outside the trash at at.
-func shareNote(t *testing.T, s *Store, owner, id string, at time.Time) {
-	t.Helper()
-	execOne(t, s, `UPDATE "LearningEntry" SET "sharedAt" = $3
-	 WHERE "id" = $1 AND "ownerId" = $2 AND "deletedAt" IS NULL`, id, owner, dbTime(at))
-}
-
 // execOne runs an UPDATE that must change exactly one row.
 func execOne(t *testing.T, s *Store, query string, args ...any) {
 	t.Helper()

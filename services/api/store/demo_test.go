@@ -161,10 +161,7 @@ func TestResetDemoReplacesEverythingTheDemoOwns(t *testing.T) {
 	}
 	other := newOwner(t, s)
 	otherEntries := createEntries(t, s, other, now, 1, 0)
-	if err := s.Follow(ctx, owner, other, now); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Follow(ctx, other, owner, now); err != nil {
+	if _, err := s.pool.Exec(ctx, `INSERT INTO "Follow" ("followerId", "followeeId", "createdAt") VALUES ($1, $2, $3), ($2, $1, $3)`, owner, other, dbTime(now)); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {

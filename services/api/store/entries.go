@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -37,12 +36,6 @@ type EntryDraft struct {
 	Hints         []string
 }
 
-// Cursor is the position after which a list page continues.
-type Cursor struct {
-	CreatedAt time.Time
-	ID        string
-}
-
 // Batch identifies an import batch created by queueImportBatch.
 type Batch struct {
 	ID         string
@@ -66,29 +59,10 @@ func dbTime(t time.Time) time.Time {
 
 const entryColumns = `"id", "kind", "originalText", "correctedText", "pinyin", "createdAt", "sharedAt"`
 
-// entryColumnsAs is entryColumns with every column qualified by alias.
-func entryColumnsAs(alias string) string {
-	cols := strings.Split(entryColumns, ", ")
-	for i, c := range cols {
-		cols[i] = alias + "." + c
-	}
-	return strings.Join(cols, ", ")
-}
-
 // entryDest returns the scan destinations for entryColumns, in order. Callers
 // append destinations for any extra columns.
 func entryDest(e *Entry) []any {
 	return []any{&e.ID, &e.Kind, &e.OriginalText, &e.CorrectedText, &e.Pinyin, &e.CreatedAt, &e.SharedAt}
-}
-
-// cursorArgs returns the SQL arguments for a keyset cursor; both are nil when
-// there is no cursor.
-func cursorArgs(after *Cursor) (*time.Time, *string) {
-	if after == nil {
-		return nil, nil
-	}
-	t := dbTime(after.CreatedAt)
-	return &t, &after.ID
 }
 
 // entryPtrs returns pointers to the elements of entries.

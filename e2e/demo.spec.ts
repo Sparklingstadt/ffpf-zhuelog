@@ -106,6 +106,10 @@ test("anyone can try the members' pages in the demo, without AI", async ({
     ),
   ).toHaveCount(0);
 
+  // The demo has no follows: /follow sends it home.
+  await page.goto("/follow");
+  await expect(page).toHaveURL((url) => url.pathname === "/");
+
   // Leaving the demo signs out.
   await banner.getByRole("button", { name: "デモを終える" }).click();
   await expect(page).toHaveURL(/\/signin(?:\?|$)/);

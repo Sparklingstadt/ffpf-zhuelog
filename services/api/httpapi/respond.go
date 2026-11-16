@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
@@ -20,7 +21,6 @@ const (
 	msgAdminOnly         = "管理者だけが利用できます。"
 	msgLineNotLinked     = "LINE と連携していません。先に連携してください。"
 	msgMembersOnly       = "この操作は会員だけが利用できます。"
-	msgSelfFollow        = "自分はフォローできません。"
 	msgBadRequest        = "リクエストが不正です。"
 	msgNotFound          = "見つかりません。"
 	msgMethodNotAllowed  = "このメソッドは使用できません。"
@@ -62,9 +62,13 @@ const (
 	codeFFPFUnavailable        = "ffpf_unavailable"
 	codePasswordMismatch       = "password_mismatch"
 	codeInvalidCurrentPassword = "invalid_current_password"
-	codeSelfFollow             = "self_follow"
 	codeLoginIDTaken           = "login_id_taken"
 )
+
+const timeLayout = "2006-01-02T15:04:05.000Z07:00"
+
+// formatTime writes a time as ISO 8601 UTC with milliseconds, like the web's Date#toISOString.
+func formatTime(t time.Time) string { return t.UTC().Format(timeLayout) }
 
 type errorEnvelope struct {
 	Error errorBody `json:"error"`
@@ -155,13 +159,9 @@ func writeForbidden(w http.ResponseWriter, msg string) {
 	writeError(w, http.StatusForbidden, codeForbidden, msg)
 }
 
-// pathValue returns the named path value if valid accepts it; otherwise it
-// answers 404 itself and returns false, since such a value cannot name any row.
-func pathValue(w http.ResponseWriter, r *http.Request, name string, valid func(string) bool) (string, bool) {
-	return pathValueMsg(w, r, name, valid, msgNotFound)
-}
-
-// pathValueMsg is pathValue with a resource-specific 404 message.
+// pathValueMsg returns the named path value if valid accepts it; otherwise it
+// answers 404 with msg itself and returns false, since such a value cannot
+// name any row.
 func pathValueMsg(w http.ResponseWriter, r *http.Request, name string, valid func(string) bool, msg string) (string, bool) {
 	v := r.PathValue(name)
 	if !valid(v) {
