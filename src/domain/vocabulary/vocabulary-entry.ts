@@ -29,3 +29,20 @@ export const VOCABULARY_LIMITS = {
   meaning: 200,
   sentence: 300,
 } as const;
+
+// Tokens one OpenAI call spent, to be recorded as AI usage.
+export type OpenAiUsage = {
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+};
+
+// What the user submits to save a word. The id comes from the client, so a
+// retried save is applied once; sourceEntryId is the note the word came from.
+export type VocabularyInput = {
+  id: string;
+  word: string;
+  pinyin: string;
+  meaning: string;
+  sourceEntryId?: string;
+};

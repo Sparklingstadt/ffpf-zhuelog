@@ -53,17 +53,6 @@ func TestUnusableAnswerStillReportsUsage(t *testing.T) {
 	}
 }
 
-func TestDraftVocabularyReportsUsage(t *testing.T) {
-	o, _ := serve(t, http.StatusOK, withUsage(t, outputBody(t, `{"pinyin":"xuéxí","meaning":"学ぶ"}`), 7, 8))
-	ctx, got := recording()
-	if _, err := o.DraftVocabulary(ctx, "学习", ""); err != nil {
-		t.Fatal(err)
-	}
-	if len(*got) != 1 || (*got)[0].InputTokens != 7 || (*got)[0].OutputTokens != 8 {
-		t.Fatalf("reports = %+v", *got)
-	}
-}
-
 func TestNoUsageAndErrorStatusesReportNothing(t *testing.T) {
 	for _, tc := range []struct {
 		status int

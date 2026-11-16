@@ -129,27 +129,6 @@ func TestRemoveEntryReviewLeavesNoOrphanLog(t *testing.T) {
 	}
 }
 
-func TestDeleteVocabularyLeavesNoOrphanReview(t *testing.T) {
-	s := testStore(t)
-	ctx := context.Background()
-	a := vocabularyOwner(t, s)
-	now := fixedNow()
-	gone, kept := word("认真", "まじめに"), word("吃饭", "ご飯を食べる")
-	for _, w := range []VocabularyEntry{gone, kept} {
-		if _, err := s.PutVocabulary(ctx, a, w, now); err != nil {
-			t.Fatal(err)
-		}
-		answerItem(t, s, a, ReviewKindVocabulary, w.ID, now)
-	}
-	if err := s.DeleteVocabulary(ctx, a, gone.ID); err != nil {
-		t.Fatal(err)
-	}
-	assertNoOrphanReviews(t, s, a)
-	if items, logs := reviewCount(t, s, a); items != 1 || logs != 1 {
-		t.Errorf("%d items and %d logs left, want the kept word's 1 and 1", items, logs)
-	}
-}
-
 // The reset replaces everything the demo owns, including what visitors put
 // in review during the day; nothing of theirs may survive as an orphan.
 func TestResetDemoLeavesNoOrphanReview(t *testing.T) {
@@ -164,9 +143,7 @@ func TestResetDemoLeavesNoOrphanReview(t *testing.T) {
 	owner := MemberOwnerID(id)
 	notesInReview(t, s, owner, now, 2)
 	w := word("认真", "まじめに")
-	if _, err := s.PutVocabulary(ctx, owner, w, now); err != nil {
-		t.Fatal(err)
-	}
+	addWord(t, s, owner, w, now)
 	answerItem(t, s, owner, ReviewKindVocabulary, w.ID, now)
 
 	if _, err := s.ResetDemo(ctx, loginID, smallDemoSeed(now), now); err != nil {

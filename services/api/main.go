@@ -170,7 +170,6 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 		PrepositionRecords: db,
 		ComplementRecords:  db,
 		Reviews:            db,
-		Vocabulary:         db,
 		StudyLog:           db,
 		AIUsage:            db,
 		// Saved conversations and question notes stay readable without
@@ -203,13 +202,6 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 		deps.QuickChat = &chat.Streamer{
 			HTTP: newNoRedirectHTTPClient(65 * time.Second), BaseURL: cfg.OpenAIBaseURL,
 			APIKey: cfg.OpenAIAPIKey, Model: cfg.OpenAIChatModel, Instructions: chat.QuickQuestionPrompt, RequireComplete: true,
-		}
-		// OpenAI's own 20 s limit applies per draft.
-		deps.VocabularyDrafter = &learning.OpenAI{
-			HTTP:    newNoRedirectHTTPClient(20 * time.Second),
-			BaseURL: cfg.OpenAIBaseURL,
-			APIKey:  cfg.OpenAIAPIKey,
-			Model:   cfg.OpenAILearningModel,
 		}
 		deps.ChatModel = cfg.OpenAIChatModel
 	}

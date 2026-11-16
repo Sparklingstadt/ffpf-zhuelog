@@ -44,7 +44,7 @@ func allRoutesDeps(a Auth) Deps {
 		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret,
 		QuickChat: &fakeChat{}, Questions: &fakeQuestions{}, Chat: &fakeChat{}, Conversations: &fakeConversations{},
 		PrepositionRecords: &fakePrepositionRecords{}, ComplementRecords: &fakeComplementRecords{},
-		Reviews: &fakeReviews{}, Vocabulary: &fakeVocabulary{}, VocabularyDrafter: &fakeDrafter{},
+		Reviews:  &fakeReviews{},
 		StudyLog: &fakeStudyLog{}, AIUsage: &fakeAIUsage{}, DemoReset: &fakeDemoReset{},
 		Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
 	}.withDefaults()
@@ -57,7 +57,6 @@ func TestDemoIsRefusedExactlyTheClosedRoutes(t *testing.T) {
 	want := []string{
 		"POST /v1/chat",
 		"POST /v1/quick-question",
-		"POST /v1/vocabulary/draft",
 		"GET /v1/line/link",
 		"POST /v1/line/link-code",
 		"DELETE /v1/line/link",
@@ -108,9 +107,9 @@ func TestDemoKeepsItsOwnRecords(t *testing.T) {
 	follows := &fakeFollows{listMembers: func(_ context.Context, viewer string) (store.MemberDirectory, error) {
 		return store.MemberDirectory{Members: []store.Member{}}, nil
 	}}
-	d := Deps{Entries: entries, Follows: follows, Vocabulary: &fakeVocabulary{}, VocabularyDrafter: &fakeDrafter{}}
+	d := Deps{Entries: entries, Follows: follows}
 
-	// The demo reads its notes and vocabulary and saves words by hand.
+	// The demo reads its notes, and the member directory is closed to it.
 	d.Auth = demoAuth(true)
 	h, _, _ := routerWith(t, auth.RoleMember, d)
 	entries.list = func(_ context.Context, owner string, _ *store.Cursor, _ int) ([]store.Entry, error) {
@@ -120,25 +119,15 @@ func TestDemoKeepsItsOwnRecords(t *testing.T) {
 	if w := do(h, http.MethodGet, "/v1/entries", "", authHeader); w.Code != http.StatusOK || gotOwner != testOwner {
 		t.Fatalf("demo notes: %d for %q", w.Code, gotOwner)
 	}
-	if w := do(h, http.MethodGet, "/v1/vocabulary", "", authHeader); w.Code != http.StatusOK {
-		t.Fatalf("demo vocabulary: %d %s", w.Code, w.Body.String())
-	}
-	if w := do(h, http.MethodPut, "/v1/vocabulary/"+testConversationID,
-		`{"word":"认真","pinyin":"rènzhēn","meaning":"まじめに"}`, jsonAuth); w.Code != http.StatusOK {
-		t.Fatalf("demo word: %d %s", w.Code, w.Body.String())
-	}
-	w := do(h, http.MethodPost, "/v1/vocabulary/draft", `{"word":"认真"}`, jsonAuth)
+	w := do(h, http.MethodGet, "/v1/members", "", authHeader)
 	wantError(t, w, http.StatusForbidden, "forbidden")
 	if msg := decodeError(t, w).Error.Message; msg != "デモでは使えません。" {
 		t.Fatalf("message = %q", msg)
 	}
 
-	// A normal member still gets the AI draft and the member directory.
+	// A normal member still gets the member directory.
 	d.Auth = demoAuth(false)
 	h, _, _ = routerWith(t, auth.RoleMember, d)
-	if w := do(h, http.MethodPost, "/v1/vocabulary/draft", `{"word":"认真"}`, jsonAuth); w.Code != http.StatusOK {
-		t.Fatalf("member draft: %d %s", w.Code, w.Body.String())
-	}
 	if w := do(h, http.MethodGet, "/v1/members", "", authHeader); w.Code != http.StatusOK {
 		t.Fatalf("member directory: %d %s", w.Code, w.Body.String())
 	}
@@ -147,8 +136,8 @@ func TestDemoKeepsItsOwnRecords(t *testing.T) {
 func TestDemoCheckErrorIsNotAPass(t *testing.T) {
 	a := tokenAuth(auth.RoleMember)
 	a.isDemo = func(context.Context, auth.Principal) (bool, error) { return false, errors.New("db down") }
-	h, _, _ := routerWith(t, auth.RoleMember, Deps{Auth: a, Vocabulary: &fakeVocabulary{}, VocabularyDrafter: &fakeDrafter{}})
-	wantError(t, do(h, http.MethodPost, "/v1/vocabulary/draft", `{"word":"认真"}`, jsonAuth), http.StatusInternalServerError, "internal")
+	h, _, _ := routerWith(t, auth.RoleMember, Deps{Auth: a, Follows: &fakeFollows{}})
+	wantError(t, do(h, http.MethodGet, "/v1/members", "", authHeader), http.StatusInternalServerError, "internal")
 }
 
 func TestDemoStatus(t *testing.T) {

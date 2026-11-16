@@ -11,10 +11,9 @@ import "context"
 // Features name what an OpenAI call was for. They are stored as they are, so
 // never rename one.
 const (
-	FeatureLine            = "line"
-	FeatureChat            = "chat"
-	FeatureQuickQuestion   = "quick_question"
-	FeatureVocabularyDraft = "vocabulary_draft"
+	FeatureLine          = "line"
+	FeatureChat          = "chat"
+	FeatureQuickQuestion = "quick_question"
 )
 
 // Usage is what one OpenAI call used.
