@@ -88,13 +88,16 @@ test("an admin acting as a member saves a practice round as the member's", async
     `SELECT "ownerId", "questions" FROM "PrepositionPracticeRecord"`,
   );
   expect(records.map((row) => row.ownerId)).toEqual([owner]);
-  const missed = (
-    records[0].questions as { id?: string; misses: string[] }[]
-  ).filter((q) => q.id && q.misses.length > 0);
+  // One review item per distinct `id:noun` target among the missed questions.
+  const missedTargets = new Set(
+    (records[0].questions as { id?: string; noun: string; misses: string[] }[])
+      .filter((q) => q.id && q.misses.length > 0)
+      .map((q) => `${q.id}:${q.noun}`),
+  );
   const count = async (sql: string, ownerId: string) =>
     (await db.query(sql, [ownerId])).rows[0].n as number;
   const items = `SELECT count(*)::int AS n FROM "ReviewItem" WHERE "ownerId" = $1`;
-  expect(await count(items, owner)).toBe(missed.length);
+  expect(await count(items, owner)).toBe(missedTargets.size);
   expect(await count(items, adminOwnerId)).toBe(0);
   expect(
     await count(

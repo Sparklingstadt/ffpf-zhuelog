@@ -27,19 +27,19 @@
 
 ## 技術構成
 
-| 部分         | 使っているもの                                                                                                              |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| Web          | Next.js 16（App Router、Server Components、Server Actions）、React 19、TypeScript、Tailwind CSS 4、shadcn/ui                |
-| API          | Go（標準の `net/http`）。ログイン、練習の記録、LINE、OpenAI のすべてを受け持ちます                                          |
-| DB           | PostgreSQL 17（本番は Neon）。スキーマとマイグレーションは Prisma 7。読み書きするのは Go API だけです                       |
-| 認証         | GitHub OAuth（PKCE）、ID とパスワード（scrypt）、FFPF ID（OpenID Connect）、ゲスト。Go が JWT と refresh token を発行します |
-| 外部サービス | OpenAI API、LINE Messaging API、Web Speech API（読み上げ）                                                                  |
-| テスト       | Node の test runner、Go の testing、Playwright（PC とスマホの幅）、lefthook                                                 |
-| デプロイ     | Vercel（Web と Go API の 2 プロジェクト）。本番のマイグレーションは Web のビルドで当てます                                  |
+| 部分         | 使っているもの                                                                                                                                                                 |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Web          | Next.js 16（App Router、Server Components、Server Actions）、React 19、TypeScript、Tailwind CSS 4、shadcn/ui                                                                   |
+| API          | Go（標準の `net/http`）。フォローとタイムライン、学習の記録、問題と一問一答、チャット、LINE、管理、ログイン、定期実行を受け持ちます                                            |
+| DB           | PostgreSQL 17（本番は Neon）。スキーマとマイグレーションは Prisma 7。Web はアカウント・単語帳・学習ノート（CSV を含む）・復習・練習の記録を、Go API はそれ以外を読み書きします |
+| 認証         | GitHub OAuth（PKCE）、ID とパスワード（scrypt）、FFPF ID（OpenID Connect）、ゲスト。Go が JWT と refresh token を発行します                                                    |
+| 外部サービス | OpenAI API、LINE Messaging API、Web Speech API（読み上げ）                                                                                                                     |
+| テスト       | Node の test runner、Go の testing、Playwright（PC とスマホの幅）、lefthook                                                                                                    |
+| デプロイ     | Vercel（Web と Go API の 2 プロジェクト）。本番のマイグレーションは Web のビルドで当てます                                                                                     |
 
 ## 設計の要点
 
-- **Web が DB に触るのは、ログイン中の人を決めるところと、単語帳と、学習ノート（CSV の取り込みを含む）と、復習だけ**：Web はアクセストークンを自分で確かめ、DB のアカウントを Prisma で読みます。単語帳（一覧・保存・削除）と学習ノート（一覧・検索・カレンダー・日ごとの表示・ゴミ箱・共有）と復習（今日の一覧・回答・ノートの出し入れ。FSRS の計算も Web）も Prisma で読み書きし、「AI で下書き」は Web が OpenAI を直接呼びます。それ以外のデータとログインは、今も Go API を通します（機能は段階ごとに Web へ移します）。Prisma を import してよいのは `src/infrastructure/prisma/` だけで、pg と next-auth は import できません。これをテストで確かめています。
+- **Web が DB に触るのは、ログイン中の人を決めるところと、単語帳と、学習ノート（CSV の取り込みを含む）と、復習と、練習の記録だけ**：Web はアクセストークンを自分で確かめ、DB のアカウントを Prisma で読みます。単語帳（一覧・保存・削除）と学習ノート（一覧・検索・カレンダー・日ごとの表示・ゴミ箱・共有）と復習（今日の一覧・回答・ノートの出し入れ。FSRS の計算も Web）も Prisma で読み書きし、「AI で下書き」は Web が OpenAI を直接呼びます。練習の記録（保存と、間違えた問題を復習に入れる処理を 1 つのトランザクションで）も同じです。それ以外のデータとログインは、今も Go API を通します（機能は段階ごとに Web へ移します）。Prisma を import してよいのは `src/infrastructure/prisma/` だけで、pg と next-auth は import できません。これをテストで確かめています。
 - **層を分ける**：Web のコードは `domain`・`application`・`infrastructure`・`presentation`・`composition` に分け、内側の層が Next.js や React に依存しないことを ESLint とテストで検査します。
 - **復習を 1 つの列にする**：学習ノート、練習の間違い、単語帳の語句を、同じ FSRS のカードとして 1 つの「今日の復習」に並べます。
 - **AI の費用を測ってから考える**：OpenAI を呼ぶ 4 か所のトークン数を記録し、料金や無料枠はその数字を見てから考える順にしました。

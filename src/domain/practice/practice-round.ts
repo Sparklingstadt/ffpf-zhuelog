@@ -50,7 +50,8 @@ export type CheckedRound = {
 // outside the BMP (two UTF-16 units) counts once.
 const length = (s: string) => [...s].length;
 
-// Go's boundedText (httpapi/practice_handlers.go): non-empty, at most max.
+// Non-empty and at most max characters (the rule the Go API used to apply;
+// see docs/superpowers/plans/2026-11-16-deprecate-go-stage5-go-reference.md).
 const bounded = (s: string, max: number) => {
   const n = length(s);
   return n > 0 && n <= max;
@@ -60,7 +61,7 @@ function isComplementRoundMode(mode: unknown): mode is ComplementRoundMode {
   return (COMPLEMENT_ROUND_MODES as readonly unknown[]).includes(mode);
 }
 
-// Go's validRound (httpapi/practice_handlers.go).
+// The round's numeric bounds (the rule the Go API used to apply).
 function validRound(
   maxAnswer: number,
   elapsedMs: number,
@@ -110,9 +111,9 @@ function savedQuestion(q: ChoiceAnswer): ChoiceAnswer {
   return saved;
 }
 
-// Go's putPracticeRecord checks and the counting of addPracticeRecord
-// (httpapi/practice_handlers.go, store/practice_records.go).
-// null when Go would have refused the round (400 or 404).
+// The checks on a submitted round and the counting of its questions, as the
+// Go API used to do them (see docs/superpowers/plans/2026-11-16-deprecate-go-stage5-go-reference.md).
+// null when the round must be refused.
 export function checkPracticeRound(
   kind: "preposition",
   round: PracticeRound & { mode?: unknown },
@@ -161,8 +162,8 @@ export type PracticeReviewTarget = {
   targetId: string;
 };
 
-// Go's prepositionReviewTargets and complementReviewTargets
-// (httpapi/practice_reviews.go).
+// Which missed questions become review targets (the rule the Go API used to
+// apply; see docs/superpowers/plans/2026-11-16-deprecate-go-stage5-go-reference.md).
 // The missed questions that name their question, once each, sorted by
 // targetId (see 設計者の判断 2). A preposition's use has several phrases, so
 // its target is the use and the noun ("P001:学校").
@@ -182,7 +183,7 @@ export function practiceReviewTargets(
 
 const text = (value: unknown) => (typeof value === "string" ? value : "");
 
-// Go's scan of the questions column (store/practice_records.go).
+// Reads the questions column back, as the Go API's scan did.
 // The questions of a saved row's JSON.
 export function choiceAnswersFrom(json: unknown): ChoiceAnswer[] {
   if (!Array.isArray(json)) return [];
