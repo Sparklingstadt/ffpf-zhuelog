@@ -46,6 +46,11 @@ function counter(): () => string {
 
 // The seed as JSON, the way Go's golden file writes it: dates as ISO strings,
 // no ids and no practice counts (the store computes those in Go).
+//
+// Whoever changes the seed: Go wrote a round's mode with omitempty, so a
+// complement round with mode "" has no mode in the golden file, while this
+// keeps mode: "" and the comparison fails on the keys. Edit the golden file
+// to match what Go would have written.
 function asGolden(seed: DemoSeed): unknown {
   const plain = JSON.parse(JSON.stringify(seed)) as Record<string, unknown>;
   const omit = (row: Record<string, unknown>, keys: string[]) => {

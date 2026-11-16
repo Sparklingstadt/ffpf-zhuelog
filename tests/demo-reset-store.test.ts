@@ -17,7 +17,10 @@ import {
 const flat = (text: string) => text.replace(/\s+/g, " ");
 
 // Go: TestDemoResetCoversEveryOwnerTable (store/review_orphans_test.go), read
-// from the schema rather than a migrated database.
+// from the schema rather than a migrated database. It only sees columns named
+// ownerId: a table that ties a row to its owner through another column (as
+// Follow does with followerId and followeeId) must be added to the reset by
+// hand. Go's test had the same limit.
 test("every owner table is emptied or kept on purpose", () => {
   const schema = readFileSync(
     join(import.meta.dirname, "..", "prisma", "schema.prisma"),
@@ -112,10 +115,10 @@ test("the reset empties exactly those tables, in one transaction", async () => {
   );
 
   assert.equal(await store.reset("demo", emptySeed, now), "cdemo");
-  assert.deepEqual(options(), { maxWait: 5000, timeout: 25000 });
+  assert.deepEqual(options(), { maxWait: 5000, timeout: 20000 });
   assert.deepEqual(DEMO_RESET_TRANSACTION_OPTIONS, {
     maxWait: 5000,
-    timeout: 25000,
+    timeout: 20000,
   });
 
   const raw = calls.filter((c) => c.model === "$raw");

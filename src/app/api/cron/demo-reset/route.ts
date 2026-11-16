@@ -3,7 +3,8 @@ import { cronSecret } from "@/infrastructure/config/environment";
 import { handleCronRequest } from "@/presentation/controllers/cron-controller";
 
 export const dynamic = "force-dynamic";
-// The reset's transaction gives up at 25 s (DEMO_RESET_TRANSACTION_OPTIONS).
+// The reset gives up after 25 s: 5 s waiting for a connection plus 20 s for
+// the transaction (DEMO_RESET_TRANSACTION_OPTIONS).
 export const maxDuration = 30;
 
 // The nightly demo reset (Go: GET and POST /v1/cron/demo-reset,

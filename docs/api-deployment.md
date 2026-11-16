@@ -152,8 +152,8 @@ Web は実行時に、次の値を使います。Web の Vercel プロジェク�
 | `DEMO_LOGIN_ID`             | デモアカウントのログイン ID（Go API の `DEMO_LOGIN_ID` と同じ）。Web ではデモのリセット（`/api/cron/demo-reset`）が使い、空ならそのルートは `404`。デモを使わないなら入れなくてよい |
 | `OPENAI_API_KEY`            | 単語帳の「AI で下書き」に使う OpenAI の API キー。Go API と同じ値でよい。無いと下書きは「今は使えません」になる                                                                     |
 | `OPENAI_LEARNING_MODEL`     | 単語帳の下書きと LINE の添削・翻訳のモデル（任意。無ければ `gpt-5-mini`。Go に入れていれば同じ値）                                                                                  |
-| `LINE_CHANNEL_SECRET`       | LINE の Messaging API のチャネルシークレット。Go と **同じ値**。**Production だけ**（下の注を参照）                                                                                 |
-| `LINE_CHANNEL_ACCESS_TOKEN` | LINE の長期のチャネルアクセストークン。Go と **同じ値**。**Production だけ**                                                                                                        |
+| `LINE_CHANNEL_SECRET`       | LINE の Messaging API のチャネルシークレット。以前 Go に入れていたのと **同じチャネルの値**。**Production だけ**（下の注を参照）                                                    |
+| `LINE_CHANNEL_ACCESS_TOKEN` | LINE の長期のチャネルアクセストークン。以前 Go に入れていたのと **同じチャネルの値**。**Production だけ**                                                                           |
 | `CRON_SECRET`               | `/api/cron/line-drain` と `/api/cron/demo-reset` の認証用の秘密。**Production だけ**。Vercel が Cron の呼び出しに `Authorization: Bearer <値>` を付ける                             |
 | `LINE_API_BASE_URL`         | テスト専用。LINE の API の接続先の差し替え（ループバックの URL だけ。本番には設定しない）                                                                                           |
 | `OPENAI_CHAT_MODEL`         | クイック質問と ChatGPT と話すのモデル（任意。無ければ `gpt-6.1-sol`）                                                                                                               |
@@ -494,7 +494,7 @@ curl -s -o /dev/null -w '%{http_code}' https://ffpf-zhuelog.sparklingstadt.com/a
 
 - Go だけを戻すと、Go の LINE のルートと Cron が戻ります。ただし、手順 3 の 6 で上の 7 つの値を Vercel から消したあとは、戻した Go はそれらの値を読めず、LINE も Cron も動きません（消した値は Vercel から読み戻せないので、動かすなら入れ直します）。動くとすれば、値を残している間だけです。ただし、Webhook の URL は Web を向いているので、Go の Webhook は使われません。Web に Cron が無いうちは、Go の拾い直しの Cron が動いても害はありません。
 - Web だけを戻すと、デモのリセットのルートが無くなり、Go にも無いので、リセットは手でもできなくなります（デモのデータは、そのときのまま残ります）。Web を戻すなら、Go も戻します。
-- 症状の見分け方：LINE の文に返事が無く、LINE Developers の Webhook の確認が `404` なら、Webhook が Go に向いたままです（手順 2 をやり直します）。「デモで試す」が「デモは今は利用できません。」になるなら、デモのアカウントが無いので、手順 3 の `curl` でリセットします。リセットの `curl` が `404` なら、Web の `DEMO_LOGIN_ID` がありません。`401` なら、`CRON_SECRET` が違います。
+- 症状の見分け方：LINE の文に返事が無く、LINE Developers の Webhook の確認が `404` なら、Webhook が Go に向いたままです（手順 2 をやり直します）。「デモで試す」が「デモは今は利用できません。」になるなら、デモのアカウントが無いので、手順 3 の `curl` でリセットします。リセットの `curl` が `404` なら、Web の `DEMO_LOGIN_ID` がありません。`401` なら、`CRON_SECRET` が違います。リセットの `curl` が `204` を返すのに「デモで試す」が「デモは今は利用できません。」になるなら、Web と Go の `DEMO_LOGIN_ID` が違います（Web がリセットしたのとは別の loginId を、Go のログインが探しています）。2 つが同じ値か確かめます。
 
 ##### 手順 4（10c のマージの前と後）
 
@@ -505,6 +505,7 @@ curl -s -o /dev/null -w '%{http_code}' https://ffpf-zhuelog.sparklingstadt.com/a
 - 手順 2 の前なら、Web だけを戻せば足ります。LINE の Webhook は Go に向いたままで、Go がまだ連携のルートも持っているからです。戻した Web の `/account/line` は、前の Web のとおり Go を呼びます。
 - 手順 2 のあとで Web だけを戻す場合は、**先に** LINE Developers の Webhook URL を Go（`https://ffpf-zhuelog-api.vercel.app/v1/line/webhook`）に戻します。戻さずに Web を戻すと、古い Web には Webhook のルートが無いので、LINE の文は `404` で失われます。
 - Go は、10a では何も変えていないので、戻す必要はありません。
+- ただし、10b を出したあとの Go には Webhook のルートがありません。Webhook URL を Go に戻す前に、Go も 10a の状態に戻します。
 
 ### Web のプレビュー（Preview）
 

@@ -155,6 +155,19 @@ test("the reset replaces only the demo's data", async ({ db }) => {
      VALUES ('hvisitor', $1, 'member', now() + interval '10 minutes')`,
     [owner],
   );
+  // Members' own follows and link codes, which the reset must leave alone.
+  const third = memberOwnerId(
+    await createMember(db, "third-member", "Third", "member-password-1"),
+  );
+  await db.query(
+    `INSERT INTO "Follow" ("followerId", "followeeId") VALUES ($1, $2)`,
+    [other, third],
+  );
+  await db.query(
+    `INSERT INTO "LineLinkCode" ("codeHash", "ownerId", role, "expiresAt")
+     VALUES ('hother', $1, 'member', now() + interval '10 minutes')`,
+    [other],
+  );
 
   await resetDemo();
 
@@ -177,12 +190,34 @@ test("the reset replaces only the demo's data", async ({ db }) => {
     ),
   ).toBe(0);
   expect(await count(db, orphanItems, [owner])).toBe(0);
-  expect(await count(db, `SELECT count(*)::int AS n FROM "Follow"`, [])).toBe(
-    0,
-  );
   expect(
-    await count(db, `SELECT count(*)::int AS n FROM "LineLinkCode"`, []),
+    await count(
+      db,
+      `SELECT count(*)::int AS n FROM "Follow" WHERE "followerId" = $1 OR "followeeId" = $1`,
+      [owner],
+    ),
   ).toBe(0);
+  expect(
+    await count(
+      db,
+      `SELECT count(*)::int AS n FROM "LineLinkCode" WHERE "ownerId" = $1`,
+      [owner],
+    ),
+  ).toBe(0);
+  expect(
+    await count(
+      db,
+      `SELECT count(*)::int AS n FROM "Follow" WHERE "followerId" = $1 AND "followeeId" = $2`,
+      [other, third],
+    ),
+  ).toBe(1);
+  expect(
+    await count(
+      db,
+      `SELECT count(*)::int AS n FROM "LineLinkCode" WHERE "ownerId" = $1`,
+      [other],
+    ),
+  ).toBe(1);
   expect(
     await count(
       db,

@@ -14,9 +14,11 @@ import type { DemoSeed, DemoCardHistory } from "../../domain/demo/demo-seed";
 import { Prisma, type PrismaClient } from "../../generated/prisma/client";
 import { newId } from "./new-id";
 
+// 5 s to start plus 20 s to run: 25 s in all, Go's demoResetTimeout, and
+// under the route's maxDuration of 30 s.
 export const DEMO_RESET_TRANSACTION_OPTIONS = {
   maxWait: 5_000,
-  timeout: 25_000,
+  timeout: 20_000,
 };
 
 // Owner-scoped tables the reset empties (Go: demoOwnedTables with
