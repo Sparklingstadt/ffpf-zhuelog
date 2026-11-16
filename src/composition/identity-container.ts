@@ -1,5 +1,3 @@
-import { cache } from "react";
-
 import { RequireAdminUser } from "@/application/identity/use-cases/require-admin-user";
 import { RequireMemberUser } from "@/application/identity/use-cases/require-member-user";
 import { RequireViewerUser } from "@/application/identity/use-cases/require-viewer-user";
@@ -9,11 +7,7 @@ import {
 } from "@/application/identity/use-cases/resolve-record-owner";
 import type { AuthenticatedUser } from "@/domain/identity/entities/authenticated-user";
 import type { CurrentUserProvider } from "@/application/identity/ports/current-user-provider";
-import { fetchMeOnce } from "@/infrastructure/go-api/act-as";
-import { GoApiCurrentUserProvider } from "@/infrastructure/go-api/go-api-current-user-provider";
 import {
-  readAccessToken,
-  readActAsCookie,
   signInAsDemoViaGo,
   signInAsGuestViaGo,
   signInWithFfpfViaGo,
@@ -26,16 +20,11 @@ import {
 import { isDemoAvailable } from "@/infrastructure/go-api/client";
 import { createAccountGateway } from "@/infrastructure/go-api/account-gateway";
 import { createAiUsageGateway } from "@/infrastructure/go-api/ai-usage-gateway";
+import { getCachedCurrentUser } from "./current-user";
 
-const goApiUserProvider = new GoApiCurrentUserProvider(
-  readAccessToken,
-  fetchMeOnce,
-  readActAsCookie,
-);
-// One GET /v1/me per request, however many guards and pages ask.
-const getGoApiUser = cache(() => goApiUserProvider.getCurrentUser());
+// Decided from the access token and the account tables, once per request.
 const currentUserProvider: CurrentUserProvider = {
-  getCurrentUser: getGoApiUser,
+  getCurrentUser: getCachedCurrentUser,
 };
 const requireAdminUser = new RequireAdminUser(currentUserProvider);
 const requireMemberUser = new RequireMemberUser(currentUserProvider);
