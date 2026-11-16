@@ -139,7 +139,30 @@ test("a conversation delete checks permission, the id and the result", async (t)
     { status: "error", message: shapeMessage },
   );
 
+  // The same ids save and delete: upper case is refused before the store,
+  // a lower-case id that is not a v4 UUID is passed through.
+  assert.deepEqual(
+    await handleConversationDelete(form({ id: id.toUpperCase() }), {
+      getViewer: member,
+      remove: never,
+    }),
+    { status: "error", message: shapeMessage },
+  );
+  const nonV4 = "0b7e3f5a-1c2d-1e5f-0a9b-0c1d2e3f4a5b";
   const removed: string[] = [];
+  assert.equal(
+    (
+      await handleConversationDelete(form({ id: nonV4 }), {
+        getViewer: member,
+        remove: async (conversationId) => {
+          removed.push(conversationId);
+          return true;
+        },
+      })
+    ).status,
+    "success",
+  );
+  assert.deepEqual(removed.splice(0), [nonV4]);
   assert.deepEqual(
     await handleConversationDelete(form({ id }), {
       getViewer: member,

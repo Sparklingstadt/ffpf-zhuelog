@@ -58,7 +58,7 @@ export type SaveConversationInput = {
 export type CheckedConversation = Omit<Conversation, "updatedAt">;
 
 // An ISO 8601 date-time in UTC with seconds, as Date.toISOString() and zod's
-// z.iso.datetime() write it.
+// z.iso.datetime() write it. Only the Z offset is accepted.
 const ISO_DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
 
 export function conversationTitle(text: string): string {
@@ -131,6 +131,9 @@ export function checkConversation(
   if (!ISO_DATE_TIME.test(input.createdAt)) return null;
   const createdAt = new Date(input.createdAt);
   if (Number.isNaN(createdAt.getTime())) return null;
+  // Date rolls 2026-02-30 and T24:00:00 over; Go's time.Parse refused them.
+  if (createdAt.toISOString().slice(0, 19) !== input.createdAt.slice(0, 19))
+    return null;
 
   const { messages } = input;
   if (messages.length === 0 || messages.length > MAX_MESSAGES) return null;

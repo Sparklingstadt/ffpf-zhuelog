@@ -63,9 +63,8 @@ function unexpectedFailureMessage(code: string, error: unknown): string {
 // (the redirect to /signin, notFound) are rethrown. Go's 403,
 // LearningForbiddenError, ReviewForbiddenError, PracticeForbiddenError,
 // QuestionForbiddenError and ConversationForbiddenError are treated as not
-// being allowed; other Go
-// failures go through goFailureMessage, anything else gets the generic
-// text.
+// being allowed; other Go failures go through goFailureMessage, anything
+// else gets the generic text.
 export async function attemptGoAction(
   code: string,
   run: () => Promise<ActionState>,

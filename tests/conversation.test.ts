@@ -126,12 +126,22 @@ test("a saved conversation is checked as Go checked it", () => {
     ],
   });
 
+  // A real leap day is fine.
+  assert.equal(
+    checkConversation(
+      saved({ createdAt: "2024-02-29T00:00:00Z" }),
+    )?.createdAt.toISOString(),
+    "2024-02-29T00:00:00.000Z",
+  );
+
   const base = saved().messages;
   const refused: [string, SaveConversationInput][] = [
     ["long title", saved({ title: "字".repeat(101) })],
     ["empty title", saved({ title: " " })],
     ["dup ids", saved({ messages: [base[0], { ...base[1], id: "m1" }] })],
     ["bad date", saved({ createdAt: "yesterday" })],
+    ["Feb 30", saved({ createdAt: "2026-02-30T00:00:00Z" })],
+    ["hour 24", saved({ createdAt: "2026-10-20T24:00:00Z" })],
     [
       "bad role",
       saved({

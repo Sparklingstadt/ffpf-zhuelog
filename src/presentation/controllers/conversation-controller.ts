@@ -87,7 +87,7 @@ export async function handleConversationDelete(
   },
 ): Promise<ActionState> {
   if (!(await canChat(deps.getViewer))) return actionUnauthorized;
-  const id = z.uuid().safeParse(formData.get("id"));
+  const id = z.string().regex(CONVERSATION_ID).safeParse(formData.get("id"));
   if (!id.success) return { status: "error", message: invalidConversation };
   return attemptGoAction("CONVERSATION_DELETE_FAILED", async () => {
     if (await deps.remove(id.data)) return actionSuccess;
