@@ -12,7 +12,7 @@ actions:
     type: secondary
 features:
   - title: Web も同じ API を使う
-    details: Web（Next.js）も、ログインとフォローなどをこの API で行います。学習ノートの一覧・ゴミ箱・共有・カレンダーと復習は Web が DB を直接読み書きし、この API には残っていません。
+    details: Web（Next.js）も、ログインとフォローなどをこの API で行います。学習ノートの一覧・ゴミ箱・共有・カレンダーと復習、学習ログと AI の利用量の集計は Web が DB を直接読み書きし、この API には残っていません。
   - title: アプリ向けのトークン
     details: GitHub（PKCE）とパスワードでログインし、15 分のアクセストークンと 30 日のリフレッシュトークンで呼び出します。
   - title: 依存の少ない Go
@@ -60,7 +60,7 @@ services/api/
 
 ## Web と API と DB
 
-Web（Next.js）は、ログイン中の人の確認、単語帳、学習ノート、復習については DB を Prisma で直接読み書きします。ログインやフォローなど、ほかのデータはこの API を通して行います。DB は本番の Neon です。
+Web（Next.js）は、ログイン中の人の確認、単語帳、学習ノート、復習、学習ログ、AI の利用量の集計については DB を Prisma で直接読み書きします。ログインやフォローなど、ほかのデータはこの API を通して行います。DB は本番の Neon です。
 
 - スキーマの管理は Prisma に一本化しています。Go は既存のテーブルを SQL で読み書きするだけで、テーブルの追加（API 用の `ApiRefreshToken` など）も Prisma のマイグレーションで行います。
 - Go が作る行の ID は Prisma と同じ cuid 形式なので、以前 Web が作った行と区別がつきません。
