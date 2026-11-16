@@ -5,6 +5,13 @@ import {
   entrySearchQuery,
   type EntrySearch,
 } from "@/domain/learning/entry-search";
+import type {
+  DailyLearningEntry,
+  LogDateSummary,
+  RecentLearningEntries,
+  TrashedLearningEntries,
+  TrashedLearningEntry,
+} from "@/domain/learning/learning-note-views";
 
 import {
   goApiAuthed,
@@ -20,17 +27,12 @@ import { toDate, toLearningEntry, type GoEntryJson } from "./learning-json";
 // ?user=; the user's own notes are the token's owner in Go.
 export type { ViewedOwner };
 
-export type RecentLearningEntries = { entries: LearningEntry[]; total: number };
-
-export type LogDateSummary = { date: LogDate; count: number };
-
-export type DailyLearningEntry = { entry: LearningEntry; total: number };
-
-export type TrashedLearningEntry = LearningEntry & { deletedAt: Date };
-
-export type TrashedLearningEntries = {
-  entries: TrashedLearningEntry[];
-  total: number;
+export type {
+  RecentLearningEntries,
+  LogDateSummary,
+  DailyLearningEntry,
+  TrashedLearningEntry,
+  TrashedLearningEntries,
 };
 
 type EntriesJson = { entries: GoEntryJson[]; total: number };
