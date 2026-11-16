@@ -1,5 +1,6 @@
 import { Prisma, type PrismaClient } from "../../generated/prisma/client";
 import type { LearningEntry } from "../../domain/learning/entities/learning-entry";
+import type { PracticeReviewTarget } from "../../domain/practice/practice-round";
 import { nextFsrsCard, type FsrsCard } from "../../domain/review/fsrs";
 import { REVIEW_ITEM_ID } from "../../domain/review/review-item";
 import type { VocabularyCard } from "../../domain/vocabulary/vocabulary-entry";
@@ -113,6 +114,55 @@ export function reviewLogRow(input: {
     scheduledDays: before.scheduledDays,
     reviewedAt: input.reviewedAt,
   };
+}
+
+// The one statement that puts practice mistakes in the owner's queue at now
+// (Go's EnqueueReviewItems, as one statement for the whole round): a new
+// target becomes a New card due now; a target due later is brought forward
+// to now with its FSRS columns kept; a target already due is left as it is,
+// updatedAt included. null when there are no targets.
+//
+// Prisma's upsert cannot put a WHERE on its update, so this is raw SQL. It
+// must stay one INSERT … ON CONFLICT DO UPDATE rather than a read and a
+// write: answering takes the item with FOR UPDATE and rewrites every FSRS
+// column, and ON CONFLICT DO UPDATE waits on that lock and then checks its
+// WHERE against the committed row, so neither write is lost.
+//
+// One statement cannot touch the same row twice, so the targets must be
+// distinct; they are also sorted, so two saves of the same targets lock the
+// rows in the same order. practiceReviewTargets does both. Every value is a
+// bound parameter: 9 per target, so the largest round (50 questions) binds
+// 450, far below Postgres's 65,535.
+export function enqueueReviewItemsSql(
+  ownerId: string,
+  targets: readonly PracticeReviewTarget[],
+  now: Date,
+  newItemId: () => string = newId,
+): Prisma.Sql | null {
+  if (targets.length === 0) return null;
+  const rows = targets.map(
+    (target) =>
+      Prisma.sql`(${newItemId()}, ${ownerId}, ${target.language}, ${target.kind}, ${target.targetId}, ${now}, ${0}, ${now}, ${now})`,
+  );
+  return Prisma.sql`
+    INSERT INTO "ReviewItem" ("id", "ownerId", "language", "kind", "targetId", "due", "state", "createdAt", "updatedAt")
+    VALUES ${Prisma.join(rows)}
+    ON CONFLICT ("ownerId", "language", "kind", "targetId") DO UPDATE
+    SET "due" = EXCLUDED."due", "updatedAt" = EXCLUDED."updatedAt"
+    WHERE "ReviewItem"."due" > EXCLUDED."due"`;
+}
+
+// Runs enqueueReviewItemsSql in the caller's transaction; the number of
+// items added or brought forward.
+export async function enqueueReviewItems(
+  tx: Prisma.TransactionClient,
+  ownerId: string,
+  targets: readonly PracticeReviewTarget[],
+  now: Date,
+): Promise<number> {
+  const sql = enqueueReviewItemsSql(ownerId, targets, now);
+  if (sql === null) return 0;
+  return tx.$executeRaw(sql);
 }
 
 // Locks the owner's live note until the transaction ends; false when there is
