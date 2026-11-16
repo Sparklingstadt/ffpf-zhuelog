@@ -105,3 +105,13 @@ export function demoLoginId(): string | undefined {
   const id = process.env.DEMO_LOGIN_ID?.trim();
   return id ? id : undefined;
 }
+
+// The database the web reads at runtime. DATABASE_URL stays the direct URL
+// that build-time migrations need; DATABASE_POOLED_URL, when set, is Neon's
+// pooled URL so serverless instances share a few connections.
+export function runtimeDatabaseUrl(): string | undefined {
+  const pooled = process.env.DATABASE_POOLED_URL?.trim();
+  if (pooled) return pooled;
+  const url = process.env.DATABASE_URL?.trim();
+  return url ? url : undefined;
+}

@@ -151,19 +151,20 @@ FFPF ID でのログインを使うときは、Web の Vercel プロジェクト
 
 Web は実行時に、次の値を使います。Web の Vercel プロジェクトの Production に入れます。
 
-| 名前                      | 内容                                                                                                            |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`            | Neon の接続文字列。実行時の読み取りに使う。pooled の URL か **確かめる**（下の注を参照）                        |
-| `API_JWT_SECRET`          | Go API と **同じ値**（32 バイト以上。足りないと、Web はトークンをすべて無効として扱い、全員が未ログインになる） |
-| `AUTH_ALLOWED_GITHUB_IDS` | 管理者にする GitHub ユーザーの数字の ID（カンマ区切り。Go API と同じ値。空なら管理者は誰も通らない）            |
-| `DEMO_LOGIN_ID`           | デモアカウントのログイン ID（Go API の `DEMO_LOGIN_ID` と同じ。デモを使わないなら入れなくてよい）               |
+| 名前                      | 内容                                                                                                                |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`            | Neon の direct の接続文字列。本番のビルドのマイグレーションに使う（`DATABASE_POOLED_URL` が無ければ実行時にも使う） |
+| `DATABASE_POOLED_URL`     | Neon の pooled の接続文字列（ホスト名に `-pooler` が付くもの）。実行時の読み取りに使う（下の注を参照）              |
+| `API_JWT_SECRET`          | Go API と **同じ値**（32 バイト以上。足りないと、Web はトークンをすべて無効として扱い、全員が未ログインになる）     |
+| `AUTH_ALLOWED_GITHUB_IDS` | 管理者にする GitHub ユーザーの数字の ID（カンマ区切り。Go API と同じ値。空なら管理者は誰も通らない）                |
+| `DEMO_LOGIN_ID`           | デモアカウントのログイン ID（Go API の `DEMO_LOGIN_ID` と同じ。デモを使わないなら入れなくてよい）                   |
 
 注意:
 
 - 値は、Go API のプロジェクトに入れているものと同じにします。Web だけ値が違うと、Go が出したトークンを Web が確かめられず、管理者やデモの判定もずれます。
-- `DATABASE_URL` が pooled か、マージの前に確かめます（ホスト名に `-pooler` が付くのが pooled です）。マイグレーション（`prisma migrate deploy`）は direct の URL を使うのが本来の形です。今の Production の値が **direct** のときは、実行時用に pooled の値を別の変数で足します。ただし、今の Web のコード（`src/infrastructure/prisma/prisma-client.ts`）が読むのは `DATABASE_URL` だけです。その場合は、実行時用の変数を読むコードの変更を先に入れてから、値を設定します。
+- `DATABASE_URL` は direct の URL のままにします（マイグレーション `prisma migrate deploy` は direct で動かします）。実行時は、Vercel がインスタンスを増やしても DB への接続が増えすぎないよう、pooled の URL を `DATABASE_POOLED_URL` に入れます。値は `DATABASE_URL` を写し、ホスト名の最初の区切り（`ep-xxxx`）の後ろに `-pooler` を付けたものです（例：`ep-cool-name-123456.ap-southeast-1.aws.neon.tech` → `ep-cool-name-123456-pooler.ap-southeast-1.aws.neon.tech`）。Neon のコンソールの Connect で「Connection pooling」をオンにしても同じ値が出ます。`DATABASE_POOLED_URL` が無いときは、Web は実行時も `DATABASE_URL` を使います。
 - 秘密の値は、このリポジトリのファイルやログに書きません。
-- 4 つ（`API_JWT_SECRET`（Go API と 1 バイトも違わない値）、`AUTH_ALLOWED_GITHUB_IDS`（数字の ID。Go API と同じ値）、`DEMO_LOGIN_ID`、`DATABASE_URL`）は、**マージ（本番のデプロイ）の前に** Web の Production に入れておきます。Vercel の環境変数は、変えたあとに再デプロイしないと効きません。
+- 5 つ（`API_JWT_SECRET`（Go API と 1 バイトも違わない値）、`AUTH_ALLOWED_GITHUB_IDS`（数字の ID。Go API と同じ値）、`DEMO_LOGIN_ID`、`DATABASE_URL`、`DATABASE_POOLED_URL`）は、**マージ（本番のデプロイ）の前に** Web の Production に入れておきます。Vercel の環境変数は、変えたあとに再デプロイしないと効きません。
 - 足りない・値が違うときの症状：`API_JWT_SECRET` が無い・違う・短いと、全員が未ログイン扱いになり、ログインしても `/signin` に戻ります。`DATABASE_URL` が無いと、会員向けのページがエラーになります。
 - Web に Auth.js の時代の `AUTH_ALLOWED_GITHUB_IDS` が残っていないか確かめます（下の「段階3のマージの前に行うこと」で残すとしている値です）。数字でない項目（ログイン名など）は捨てられ、管理者が権限を失います。数字の ID に直します。
 
