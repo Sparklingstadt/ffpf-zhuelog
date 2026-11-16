@@ -1,16 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { type FormEvent } from "react";
 import { BookOpen, Plus, Send, Square } from "lucide-react";
-import {
-  MAX_QUESTION_CHARS,
-  type SaveQuestionInput,
-} from "@/domain/chat/question";
-import { saveQuestionAction } from "@/presentation/actions/question-actions";
+import { MAX_QUESTION_CHARS } from "@/domain/chat/question";
 import { ChatMessage } from "./chat-message";
-import { streamChat, submitOnEnter } from "./chat-stream";
+import { submitOnEnter } from "./chat-stream";
+import { useQuickQuestion } from "./use-quick-question";
 import { Button } from "@/presentation/components/ui/button";
 import {
   Card,
@@ -20,111 +16,34 @@ import {
 } from "@/presentation/components/ui/card";
 import { Textarea } from "@/presentation/components/ui/textarea";
 
-type Status = "idle" | "asking" | "saving" | "saved" | "save-failed";
-
 // Starting points for a question; picking one puts it in the box to finish.
 const EXAMPLES = [
   { label: "この文は自然？", text: "次の文は自然な中国語ですか？\n" },
   { label: "似た語の違い", text: "「」と「」の違いは何ですか？" },
   { label: "量詞は？", text: "「」に使う量詞は何ですか？" },
 ] as const;
-const FAILURE =
-  "回答を受信できませんでした。質問を確認して、もう一度送信してください。";
-const STOPPED =
-  "回答を停止しました。途中の回答は保存されません。もう一度送信できます。";
 
+// The question, its answer and saving live in useQuickQuestion; this draws
+// them.
 export function QuickQuestionInterface({ chatModel }: { chatModel: string }) {
-  const [input, setInput] = useState("");
-  const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState("");
-  const [status, setStatus] = useState<Status>("idle");
-  const [notice, setNotice] = useState("");
-  const [note, setNote] = useState<SaveQuestionInput | null>(null);
-  const router = useRouter();
-  const abort = useRef<AbortController | null>(null);
-  const locked = useRef(false);
-  const mounted = useRef(true);
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-      abort.current?.abort();
-    };
-  }, []);
-  const busy = status === "asking" || status === "saving";
+  const {
+    input,
+    setInput,
+    question,
+    answer,
+    status,
+    busy,
+    notice,
+    note,
+    submit,
+    stop,
+    retrySave,
+    startNew,
+  } = useQuickQuestion();
 
-  async function save(value: SaveQuestionInput) {
-    setStatus("saving");
-    let ok = false;
-    try {
-      ok = (await saveQuestionAction(value)).ok;
-    } catch {
-      /* Keep the answer available to retry. */
-    }
-    if (!mounted.current) return;
-    // The page's list of question notes picks up the new one.
-    if (ok) router.refresh();
-    setStatus(ok ? "saved" : "save-failed");
-    setNotice(
-      ok
-        ? "質問ノートに保存しました。"
-        : "質問ノートに保存できませんでした。回答はこの画面に残っています。保存を再試行してください。",
-    );
-    locked.current = false;
-  }
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const text = input.trim();
-    if (!text || locked.current || status !== "idle") return;
-    if ([...text].length > MAX_QUESTION_CHARS) {
-      setNotice(
-        `質問は${MAX_QUESTION_CHARS.toLocaleString("ja-JP")}文字以内で入力してください。`,
-      );
-      return;
-    }
-    locked.current = true;
-    const controller = new AbortController();
-    abort.current = controller;
-    setQuestion(text);
-    setAnswer("");
-    setNotice("");
-    setStatus("asking");
-    const result = await streamChat({
-      endpoint: "/api/quick-question",
-      messages: [{ role: "user", text }],
-      signal: controller.signal,
-      onText: (received) => {
-        if (mounted.current) setAnswer(received);
-      },
-      texts: { failure: FAILURE, cut: FAILURE, stopped: STOPPED },
-    });
-    if (abort.current === controller) abort.current = null;
-    if (!mounted.current) return;
-    if (!result.ok) {
-      setStatus("idle");
-      setNotice(result.message);
-      locked.current = false;
-      return;
-    }
-    const value = {
-      id: crypto.randomUUID(),
-      question: text,
-      answer: result.text,
-    };
-    setNote(value);
-    setInput("");
-    await save(value);
-  }
-
-  function startNew() {
-    if (locked.current || status !== "saved") return;
-    setInput("");
-    setQuestion("");
-    setAnswer("");
-    setNote(null);
-    setNotice("");
-    setStatus("idle");
+    void submit();
   }
 
   return (
@@ -197,15 +116,7 @@ export function QuickQuestionInterface({ chatModel }: { chatModel: string }) {
           </p>
         ) : null}
         {status === "save-failed" && note ? (
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              if (locked.current) return;
-              locked.current = true;
-              void save(note);
-            }}
-          >
+          <Button type="button" variant="outline" onClick={retrySave}>
             保存を再試行
           </Button>
         ) : null}
@@ -226,7 +137,7 @@ export function QuickQuestionInterface({ chatModel }: { chatModel: string }) {
       </CardContent>
       {status === "idle" || status === "asking" ? (
         <CardFooter className="block border-t p-4 sm:p-5">
-          <form onSubmit={submit} className="space-y-3">
+          <form onSubmit={handleSubmit} className="space-y-3">
             {!question ? (
               <div
                 role="group"
@@ -264,11 +175,7 @@ export function QuickQuestionInterface({ chatModel }: { chatModel: string }) {
                 OpenAI（ChatGPT）に送られます
               </p>
               {status === "asking" ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => abort.current?.abort()}
-                >
+                <Button type="button" variant="outline" onClick={stop}>
                   <Square />
                   停止
                 </Button>

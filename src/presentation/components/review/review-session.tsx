@@ -2,15 +2,11 @@
 
 import { Home, RotateCcw } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
 import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
 import type { ChoiceQuestion } from "@/domain/practice/choice-question";
-import {
-  isReviewRating,
-  REVIEW_RATINGS,
-  type ReviewRating,
-} from "@/domain/review/review-item";
+import { isReviewRating, REVIEW_RATINGS } from "@/domain/review/review-item";
 import type { VocabularyCard } from "@/domain/vocabulary/vocabulary-entry";
 import type {
   AnswerReviewInput,
@@ -20,9 +16,9 @@ import {
   ChoiceGrid,
   ProgressBar,
   SolvedExample,
-  useChoicePicks,
   WrongPickNotice,
 } from "@/presentation/components/practice/choice-parts";
+import { useReviewSession } from "@/presentation/components/review/use-review-session";
 import { SpeakButton } from "@/presentation/components/speech/speak-button";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
@@ -138,20 +134,11 @@ function NoteCardContent({
   );
 }
 
-type SendState =
-  { status: "idle" | "sending" } | { status: "error"; message: string };
-
 // One pass over the reviews due now. A practice card is the question again:
 // pick until the answer is found. A word card shows the word: recall its
 // meaning, then turn it over. Either way, then say how well it was recalled
-// (もう一度・難しい・できた・簡単). The rating goes to Go under a log id made
-// for the card, so a retried send counts once.
-//
-// The cards are held for the whole pass. A server action that revalidates
-// (saving a word from a card does) re-renders the page with the due list
-// as it is now, without the cards already answered; taking it mid-pass
-// would slide the next card under the open one, shown as solved. A new list
-// is taken only once the pass is over, as 続けて復習する brings.
+// (もう一度・難しい・できた・簡単). The pass itself lives in useReviewSession;
+// this draws the card and handles the keys.
 export function ReviewSession({
   cards: loadedCards,
   remaining: loadedRemaining,
@@ -162,67 +149,28 @@ export function ReviewSession({
   remaining: number;
   answerReview: (input: AnswerReviewInput) => Promise<AnswerReviewResult>;
 }) {
-  const [session, setSession] = useState({
-    cards: loadedCards,
-    remaining: loadedRemaining,
-  });
-  const [lastLoaded, setLastLoaded] = useState(loadedCards);
-  const [index, setIndex] = useState(0);
   const {
+    cards,
+    remaining,
+    index,
+    card,
     wrong,
     solved,
-    pick: pickChoice,
-    reset: resetPicks,
+    send,
+    suggested,
+    ratingOpen,
+    pick,
     reveal,
-  } = useChoicePicks();
-  const [logId, setLogId] = useState(() => crypto.randomUUID());
-  const [send, setSend] = useState<SendState>({ status: "idle" });
-
-  if (lastLoaded !== loadedCards) {
-    setLastLoaded(loadedCards);
-    if (index >= session.cards.length) {
-      setSession({ cards: loadedCards, remaining: loadedRemaining });
-      setIndex(0);
-      resetPicks();
-    }
-  }
-  const { cards, remaining } = session;
-
-  const card = index < cards.length ? cards[index] : null;
-
-  function pick(choice: string) {
-    if (card?.type === "choice") pickChoice(card.question, choice);
-  }
-
-  async function rate(rating: ReviewRating) {
-    if (!card || send.status === "sending") return;
-    setSend({ status: "sending" });
-    let result: AnswerReviewResult;
-    try {
-      result = await answerReview({ itemId: card.itemId, logId, rating });
-    } catch {
-      result = {
-        ok: false,
-        message: "回答を保存できませんでした。もう一度お試しください。",
-      };
-    }
-    if (!result.ok) {
-      setSend({ status: "error", message: result.message });
-      return;
-    }
-    setIndex((i) => i + 1);
-    resetPicks();
-    setLogId(crypto.randomUUID());
-    setSend({ status: "idle" });
-  }
-
-  // A wrong pick suggests もう一度, a clean pick or a turned word できた.
-  const suggested: ReviewRating = wrong.length > 0 ? 1 : 3;
+    rate,
+  } = useReviewSession({
+    cards: loadedCards,
+    remaining: loadedRemaining,
+    answerReview,
+  });
 
   // Once the ratings show, the keys 1 to 4 pick them, as their buttons say,
   // and Space picks the suggested one. Typing in a field, shortcuts with a
   // modifier and Space on a button (which presses that button) are left alone.
-  const ratingOpen = card !== null && solved && send.status !== "sending";
   useEffect(() => {
     if (!ratingOpen) return;
     function onKeyDown(event: KeyboardEvent) {
