@@ -161,6 +161,33 @@ test("exports the selected notes as a CSV the import reads back", async ({
   await expect(page.getByText("5 / 5件を選択中")).toBeVisible();
 });
 
+test("imports 1000 notes with 100 hints each", async ({
+  context,
+  page,
+  db,
+}) => {
+  // The largest import the limits allow: 100,000 hints in one transaction.
+  test.setTimeout(120_000);
+  await asAdmin(context);
+  const hints = Array.from({ length: 100 }, (_, j) => `ヒント${j}`).join(",");
+  const rows = Array.from(
+    { length: 1000 },
+    (_, i) => `原文${i},添削${i},pinyin ${i},${hints}`,
+  );
+  // The header the export writes (ピンイン) is skipped too.
+  await upload(page, ["最初の文,添削後の文,ピンイン", ...rows].join("\n"));
+  await expect(page.getByText("1000件の学習文を登録しました。")).toBeVisible({
+    timeout: 60_000,
+  });
+  expect(
+    (await db.query('SELECT count(*)::int AS n FROM "LearningEntry"')).rows[0]
+      .n,
+  ).toBe(1000);
+  expect(
+    (await db.query('SELECT count(*)::int AS n FROM "Hint"')).rows[0].n,
+  ).toBe(100_000);
+});
+
 for (const [name, csv, error] of [
   ["missing columns", "原文,添削", "3列未満"],
   ["missing required value", "原文,,pinyin", "必須"],
@@ -168,6 +195,7 @@ for (const [name, csv, error] of [
   ["header only", "最初の文,添削後の文,ピン音", "データ行がありません"],
   ["row limit", Array(1001).fill("原文,添削,pinyin").join("\n"), "1000件まで"],
   ["valid then invalid row", "原文,添削,pinyin\n不正な行", "3列未満"],
+  ["NUL in a cell", "原文,添削,pin\u0000yin", "引用符"],
 ]) {
   test(`invalid CSV: ${name} writes nothing`, async ({ context, page, db }) => {
     await asAdmin(context);

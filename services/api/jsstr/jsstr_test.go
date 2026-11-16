@@ -68,28 +68,6 @@ func TestLen(t *testing.T) {
 	}
 }
 
-func TestTruncate(t *testing.T) {
-	cases := []struct {
-		in   string
-		n    int
-		want string
-	}{
-		{"abc", 5, "abc"},
-		{"abc", 2, "ab"},
-		{"abc", 0, ""},
-		{"あいう", 2, "あい"},
-		{"a\U0001F600b", 3, "a\U0001F600"},
-		{"a\U0001F600b", 2, "a\uFFFD"}, // half a surrogate pair
-		{"a\U0001F600b", 1, "a"},
-		{"\U0001F600\U0001F600", 4, "\U0001F600\U0001F600"},
-	}
-	for _, c := range cases {
-		if got := Truncate(c.in, c.n); got != c.want {
-			t.Errorf("Truncate(%q, %d) = %q, want %q", c.in, c.n, got, c.want)
-		}
-	}
-}
-
 func TestToLower(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"ALICE", "alice"},

@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // newOwner returns a fresh owner ID and removes everything it created when the
@@ -30,10 +32,17 @@ func draft(n string, hints ...string) EntryDraft {
 	}
 }
 
-// createBatch stores drafts as one import batch named "test", created from at.
+// createBatch stores drafts as one import batch named "test", created from at,
+// in one transaction (entry i at at + i ms; see queueImportBatch).
 func createBatch(t *testing.T, s *Store, owner string, drafts []EntryDraft, at time.Time) []Entry {
 	t.Helper()
-	_, created, err := s.CreateImportBatch(context.Background(), owner, "test", drafts, at)
+	ctx := context.Background()
+	var created []Entry
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		b := &pgx.Batch{}
+		_, created = queueImportBatch(b, owner, "test", drafts, at)
+		return execBatch(ctx, tx, b)
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +50,7 @@ func createBatch(t *testing.T, s *Store, owner string, drafts []EntryDraft, at t
 }
 
 // createTied stores drafts as one batch and then gives every entry the same
-// createdAt (CreateImportBatch spaces them 1 ms apart), for (createdAt, id)
+// createdAt (createBatch spaces them 1 ms apart), for (createdAt, id)
 // tie tests.
 func createTied(t *testing.T, s *Store, owner string, drafts []EntryDraft, at time.Time) []Entry {
 	t.Helper()

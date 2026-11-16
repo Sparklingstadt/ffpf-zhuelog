@@ -28,7 +28,6 @@ export default defineUserConfig({
         link: "/reference/",
         children: [
           "/reference/auth.md",
-          "/reference/entries.md",
           "/reference/follows.md",
           "/reference/line.md",
           "/reference/chat.md",

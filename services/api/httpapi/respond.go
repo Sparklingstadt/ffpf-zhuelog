@@ -48,10 +48,6 @@ const (
 	msgLoginIDTaken    = "このログインIDはすでに使われています。"
 	msgAccountNotFound = "アカウントが見つかりません。"
 
-	msgSelectCSVFile   = "CSVファイルを選択してください。"
-	msgCSVFileTooLarge = "ファイルは4MB以下にしてください。"
-	msgCSVExtension    = "拡張子が.csvのファイルを選択してください。"
-
 	msgChatInvalid          = "会話内容が上限を超えているか、形式が不正です。"
 	msgChatFailed           = "ChatGPTから応答を受信できませんでした。"
 	msgConversationNotFound = "会話が見つかりません。"
@@ -82,7 +78,6 @@ const (
 	codeInvalidCurrentPassword = "invalid_current_password"
 	codeSelfFollow             = "self_follow"
 	codeLoginIDTaken           = "login_id_taken"
-	codeInvalidCSV             = "invalid_csv"
 	codeChatFailed             = "chat_failed"
 )
 

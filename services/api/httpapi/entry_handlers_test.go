@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"context"
 	"encoding/json"
 	"testing"
 	"time"
@@ -16,20 +15,6 @@ const (
 )
 
 var authHeader = map[string]string{"Authorization": "Bearer tok"}
-
-// fakeEntries implements Entries; an unset hook returns a sentinel error
-// (which maps to 500).
-type fakeEntries struct {
-	// createImport serves CreateImportBatch.
-	createImport func(ctx context.Context, ownerID, fileName string, drafts []store.EntryDraft, now time.Time) (store.Batch, []store.Entry, error)
-}
-
-func (f *fakeEntries) CreateImportBatch(ctx context.Context, ownerID, fileName string, drafts []store.EntryDraft, now time.Time) (store.Batch, []store.Entry, error) {
-	if f.createImport == nil {
-		return store.Batch{}, nil, errUnexpectedCall{"CreateImportBatch"}
-	}
-	return f.createImport(ctx, ownerID, fileName, drafts, now)
-}
 
 func sampleEntry(id string, created time.Time) store.Entry {
 	return store.Entry{
