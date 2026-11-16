@@ -1,4 +1,4 @@
-// Reads Go's NDJSON answer: {"type":"delta","text"} lines, then
+// Reads the NDJSON answer: {"type":"delta","text"} lines, then
 // {"type":"done"}, or {"type":"error","message"} when the answer failed
 // halfway. An answer that ends without either was cut off.
 export type ChatStreamResult = "done" | "cut" | { error: string };
