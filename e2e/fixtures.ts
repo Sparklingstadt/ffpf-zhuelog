@@ -202,6 +202,35 @@ export async function openSiteMenu(page: Page) {
   return menu;
 }
 
+// Picks the choices in order until the right one, so most rounds miss some.
+export async function pickUntilRight(page: Page, groupName: string) {
+  const choices = page.getByRole("group", { name: groupName });
+  for (const button of await choices.getByRole("button").all()) {
+    await button.click();
+    if (await choices.getByRole("button", { name: /（正解）$/ }).count())
+      return;
+  }
+}
+
+// Plays one round of 25 preposition questions with pickUntilRight and waits
+// until the round is saved.
+export async function practicePrepositionRound(page: Page) {
+  const questionCount = 25;
+  await page.goto("/practice/prepositions");
+  for (let i = 0; i < questionCount; i++) {
+    await expect(
+      page.getByRole("progressbar", { name: "進捗" }),
+    ).toHaveAttribute("aria-valuenow", String(i));
+    await pickUntilRight(page, "介詞を選ぶ");
+    await page
+      .getByRole("button", {
+        name: i + 1 < questionCount ? "次へ" : "結果を見る",
+      })
+      .click();
+  }
+  await expect(page.getByText("記録に保存しました。")).toBeVisible();
+}
+
 export async function signOut(page: Page) {
   const menu = await openSiteMenu(page);
   await menu.getByRole("menuitem", { name: "ログアウト" }).click();

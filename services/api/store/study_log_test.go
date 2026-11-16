@@ -27,12 +27,10 @@ func TestStudyLogCountsEachKindByJapanDay(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, `UPDATE "LearningEntry" SET "deletedAt" = $2 WHERE "id" = $1`, trashed[0].ID, nov2); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.AddPrepositionRecord(ctx, a, prepositionRecord(nov1, nil, []string{"把"}, nil), nov1); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.AddComplementRecord(ctx, a, complementRecord(nov2, nil, nil), nov2); err != nil {
-		t.Fatal(err)
-	}
+	p := prepositionRecord(nov1, nil, []string{"把"}, nil)
+	saveRound(t, s, prepositionPractice, a, p.PrepositionRecordSummary, p.Questions, nov1)
+	c := complementRecord(nov2, nil, nil)
+	saveRound(t, s, complementPractice, a, c.ComplementRecordSummary, c.Questions, nov2)
 	addWord(t, s, a, word("认真", "まじめに"), nov2)
 	answerItem(t, s, a, dueItems(t, s, a, nov2)[0].ID, review.Good, nov2)
 	// Another owner's activity is not counted.

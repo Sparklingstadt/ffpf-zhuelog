@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Page, Request } from "@playwright/test";
 
 import {
   asAdmin,
@@ -7,6 +7,7 @@ import {
   createMember,
   expect,
   memberOwnerId,
+  practicePrepositionRound,
   test,
 } from "./fixtures";
 
@@ -80,6 +81,142 @@ test("a member's round of 25 shows its result, is recorded and can be read again
   await expect(page.getByRole("main")).toContainText(
     `ミス${record.missCount}回`,
   );
+});
+
+// Keeps the Server Action POST that saves the round, to send it again.
+function captureSave(page: Page) {
+  const saves: Request[] = [];
+  page.on("request", (request) => {
+    if (
+      request.method() === "POST" &&
+      new URL(request.url()).pathname === "/practice/prepositions" &&
+      request.headers()["next-action"]
+    )
+      saves.push(request);
+  });
+  return saves;
+}
+
+// The client sends the same id again on a retry. The first save wins and its
+// misses are queued again: a card answered for later comes forward to now
+// with its FSRS state, and a card already due is left alone.
+test("a retried save keeps one round and brings a card due later forward", async ({
+  page,
+  db,
+}) => {
+  test.setTimeout(90_000);
+  const accountId = await createMember(db, "taro", "太郎", "member-password-1");
+  const owner = memberOwnerId(accountId);
+  await asMember(page, "taro", "member-password-1");
+  const saves = captureSave(page);
+  await practicePrepositionRound(page);
+  expect(saves).toHaveLength(1);
+
+  const {
+    rows: [record],
+  } = await db.query(
+    `SELECT "id", "createdAt" FROM "PrepositionPracticeRecord" WHERE "ownerId" = $1`,
+    [owner],
+  );
+  const { rows: items } = await db.query(
+    `SELECT "id", "due", "updatedAt" FROM "ReviewItem" WHERE "ownerId" = $1 ORDER BY "targetId"`,
+    [owner],
+  );
+  test.skip(items.length < 2, "the round happened to miss fewer than two");
+  const [a, b] = items;
+  // A: answered and sent days ahead, as an answer leaves it.
+  await db.query(
+    `UPDATE "ReviewItem" SET "due" = now() + interval '10 days', "state" = 2, "reps" = 3,
+       "stability" = 7.5, "difficulty" = 5, "lastReview" = now() - interval '1 day'
+     WHERE "id" = $1`,
+    [a.id],
+  );
+
+  const before = (await db.query("SELECT now() AS t")).rows[0].t as Date;
+  const retry = await page.request.fetch(saves[0]);
+  expect(retry.status()).toBe(200);
+  expect(await retry.text()).toContain('{"ok":true}');
+
+  const { rows: records } = await db.query(
+    `SELECT "id", "createdAt" FROM "PrepositionPracticeRecord"`,
+  );
+  expect(records).toEqual([{ id: record.id, createdAt: record.createdAt }]);
+  const { rows: after } = await db.query(
+    `SELECT "id", "due", "updatedAt", "state", "reps", "stability", "difficulty",
+       "lastReview" IS NOT NULL AS "reviewed",
+       "due" >= date_trunc('milliseconds', $2::timestamptz) AND "due" <= now() AS "now"
+     FROM "ReviewItem" WHERE "ownerId" = $1 ORDER BY "targetId"`,
+    [owner, before],
+  );
+  expect(after).toHaveLength(items.length);
+  expect(after[0]).toMatchObject({
+    id: a.id,
+    now: true,
+    state: 2,
+    reps: 3,
+    stability: 7.5,
+    difficulty: 5,
+    reviewed: true,
+  });
+  expect(after[1]).toMatchObject({
+    id: b.id,
+    due: b.due,
+    updatedAt: b.updatedAt,
+  });
+});
+
+// A round id is the browser's; another member sending one already saved gets
+// the generic error, and the round stays its owner's.
+test("a round id already saved by someone else is not overwritten", async ({
+  page,
+  db,
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  const taro = await createMember(db, "taro", "太郎", "member-password-1");
+  const hanako = await createMember(db, "hanako", "花子", "member-password-2");
+  await asMember(page, "taro", "member-password-1");
+  const saves = captureSave(page);
+  await practicePrepositionRound(page);
+  expect(saves).toHaveLength(1);
+  const [save] = saves;
+  const {
+    rows: [record],
+  } = await db.query(`SELECT "id" FROM "PrepositionPracticeRecord"`);
+
+  const other = await browser.newContext();
+  const otherPage = await other.newPage();
+  await asMember(otherPage, "hanako", "member-password-2");
+  const headers = save.headers();
+  const response = await otherPage.request.post(save.url(), {
+    headers: {
+      "next-action": headers["next-action"],
+      "content-type": headers["content-type"],
+      accept: headers["accept"],
+    },
+    data: save.postData() ?? "",
+  });
+  expect(await response.text()).toContain(
+    "処理できませんでした。時間をおいてもう一度お試しください。",
+  );
+
+  const { rows: records } = await db.query(
+    `SELECT "id", "ownerId" FROM "PrepositionPracticeRecord"`,
+  );
+  expect(records).toEqual([{ id: record.id, ownerId: memberOwnerId(taro) }]);
+  const { rows: items } = await db.query(
+    `SELECT count(*)::int AS n FROM "ReviewItem" WHERE "ownerId" = $1`,
+    [memberOwnerId(hanako)],
+  );
+  expect(items[0].n).toBe(0);
+  // The record page streams behind its skeleton (records/layout.tsx), so
+  // the status is already 200 when notFound() runs: check the not-found page.
+  await otherPage.goto(`/practice/prepositions/records/${record.id}`);
+  await expect(
+    otherPage.getByText("This page could not be found."),
+  ).toBeVisible();
+  await expect(otherPage.getByText(/すべての問題/)).toHaveCount(0);
+  await other.close();
 });
 
 test("an admin's rounds are their own; a guest practices without a record", async ({

@@ -128,13 +128,17 @@ func TestResetDemoCreatesTheAccountAndSeeds(t *testing.T) {
 	if c, err := s.GetConversation(ctx, owner, convs[0].ID); err != nil || len(c.Messages) != 2 {
 		t.Fatalf("conversation = %+v, %v", c, err)
 	}
-	recs, err := s.ListPrepositionRecords(ctx, owner, 10)
-	if err != nil || len(recs) != 1 || recs[0].FirstTryCount != 1 || recs[0].MissCount != 2 || recs[0].QuestionCount != 2 {
-		t.Fatalf("preposition records = %+v, %v", recs, err)
+	var n, questions, firstTry, misses int
+	if err := s.pool.QueryRow(ctx, `SELECT count(*), max("questionCount"), max("firstTryCount"), max("missCount")
+	 FROM "PrepositionPracticeRecord" WHERE "ownerId" = $1`, owner).Scan(&n, &questions, &firstTry, &misses); err != nil ||
+		n != 1 || firstTry != 1 || misses != 2 || questions != 2 {
+		t.Fatalf("preposition records = %d (questions %d, first try %d, misses %d), %v", n, questions, firstTry, misses, err)
 	}
-	crecs, err := s.ListComplementRecords(ctx, owner, 10)
-	if err != nil || len(crecs) != 1 || crecs[0].Mode != "result" || crecs[0].FirstTryCount != 1 {
-		t.Fatalf("complement records = %+v, %v", crecs, err)
+	var mode string
+	if err := s.pool.QueryRow(ctx, `SELECT count(*), max("mode"), max("firstTryCount")
+	 FROM "ComplementPracticeRecord" WHERE "ownerId" = $1`, owner).Scan(&n, &mode, &firstTry); err != nil ||
+		n != 1 || mode != "result" || firstTry != 1 {
+		t.Fatalf("complement records = %d (mode %q, first try %d), %v", n, mode, firstTry, err)
 	}
 }
 

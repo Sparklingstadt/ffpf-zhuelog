@@ -107,7 +107,7 @@ LINE に中国語や日本語の文を送ると、OpenAI（ChatGPT）で添削�
   - **公式の語彙表**：HSK 3.0 の公式の語彙表（`data/hsk30.csv`、[ivankra/hsk30](https://github.com/ivankra/hsk30)、MIT）で文を区切り、文ごとの級を `src/domain/practice/hsk-words-official.ts` に生成しておいて引きます。問題データか語彙表を変えたら `node --import tsx scripts/generate-hsk-words.ts` で作り直します（作り直すまで `tests/hsk-words-official.test.ts` が失敗します）。級の数え方と問題数は [docs/hsk-levels-official.md](hsk-levels-official.md) にあります。
 - **練習中**: 正答率（1 回目で正解した問題の割合）・ミス数（間違えて選んだ回数）・経過時間を問題の上に出します。
 - **結果**: 25 問を解き終えると、正答率・ミス数・経過時間と、ミスした問題（正解と、間違えて選んだ介詞）を出します。
-- **記録**: 会員と管理者の結果は、解き終えたときに Go API の `/v1/preposition-records` へ保存します。`/practice/prepositions/records`（練習画面の「過去の記録」）で新しい順に見返せ、1 件ずつ全問の結果も見られます。ゲストの練習は記録に残りません。
+- **記録**: 会員と管理者の結果は、解き終えたときに保存します（Web が DB に直接保存し、間違えた問題を「今日の復習」に入れます）。`/practice/prepositions/records`（練習画面の「過去の記録」）で新しい順に見返せ、1 件ずつ全問の結果も見られます。ゲストの練習は記録に残りません。
 - **本番への反映**: DBマイグレーション `20261024150000_add_preposition_practice_records`（`PrepositionPracticeRecord` の追加）を、**main へのマージの前に** 本番のNeonへ適用してください（`vercel env pull` → `migrate deploy` → `migrate status`）。
 
 ## 日付別の学習ログ
@@ -145,9 +145,9 @@ UTF-8のCSVを利用します。ヘッダー行は省略可能です。
 
 正解すると、例文の上に例文全体のピンインを出します（補語と介詞の練習で共通）。ピンインは `pnpm exec tsx scripts/generate-example-pinyin.ts` で pinyin-pro から `src/domain/practice/example-pinyin.ts` に作ります。補語・介詞の問題データを変えたら作り直してください（作り直すまで `tests/example-pinyin.test.ts` が失敗します）。構造助詞の「得」は de、名詞の接尾辞の「子」は zi、「儿」は r 化として読み、pinyin-pro が誤る多音字（睡不着 の zháo、系上 の jì など）は `scripts/lib/example-pinyin.ts` の `READING_FIXES` で直します。生成したファイルは手で直しません。
 
-会員・管理者の結果は Go API 経由で保存し、補語の種類を付けて履歴から見返せます。ゲストも練習できますが、記録は保存されません。API の仕様は [練習の記録](../docs-site/reference/practice.md) を参照してください。
+会員・管理者の結果は Web が DB に保存し、補語の種類を付けて履歴から見返せます。ゲストも練習できますが、記録は保存されません。
 
-本番反映時は追加マイグレーション `20261030090000_add_complement_practice_records`（`ComplementPracticeRecord` テーブルの新設）が必要です。方向補語のモードには、続くマイグレーション `20261101090000_add_direction_complement_modes`（`mode` の CHECK 制約に4種類を追加）、「動詞から選ぶ」には `20261108090000_add_complement_verb_mode`（同じ制約に `verb` を追加）も必要です。Web の本番ビルドで適用し、補語記録の新ルートを含む Go API もデプロイしてください。既存の介詞練習の記録は別テーブルに保持されます。
+本番反映時は追加マイグレーション `20261030090000_add_complement_practice_records`（`ComplementPracticeRecord` テーブルの新設）が必要です。方向補語のモードには、続くマイグレーション `20261101090000_add_direction_complement_modes`（`mode` の CHECK 制約に4種類を追加）、「動詞から選ぶ」には `20261108090000_add_complement_verb_mode`（同じ制約に `verb` を追加）も必要です。Web の本番ビルドで適用します。既存の介詞練習の記録は別テーブルに保持されます。
 
 ## 了・过・着の練習
 

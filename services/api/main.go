@@ -166,11 +166,8 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 		DB:       db,
 		Logger:   logger,
 
-		PrepositionRecords: db,
-		ComplementRecords:  db,
-		Reviews:            db,
-		StudyLog:           db,
-		AIUsage:            db,
+		StudyLog: db,
+		AIUsage:  db,
 		// Saved conversations and question notes stay readable without
 		// OpenAI; only the routes that call it need the streamers below.
 		Conversations:  db,

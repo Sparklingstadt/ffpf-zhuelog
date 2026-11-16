@@ -1,4 +1,10 @@
-import { expect, memberOwnerId, test, upload } from "./fixtures";
+import {
+  expect,
+  memberOwnerId,
+  practicePrepositionRound,
+  test,
+  upload,
+} from "./fixtures";
 import { demoLoginId, goApiURL, goCronSecret } from "./environment";
 
 // Puts the demo account back to its fixture, as the nightly cron does. The
@@ -170,4 +176,28 @@ test("the demo account can answer a review", async ({ page, db }) => {
     .getByRole("button", { name: /^できた/ })
     .click();
   await expect.poll(logs).toBe(before + 1);
+});
+
+test("the demo account saves a practice round", async ({ page, db }) => {
+  test.setTimeout(90_000);
+  await resetDemo();
+  const account = await db.query(
+    `SELECT id FROM "PasswordAccount" WHERE "loginId" = $1`,
+    [demoLoginId],
+  );
+  const owner = memberOwnerId(account.rows[0].id);
+  const rounds = async () =>
+    (
+      await db.query(
+        `SELECT count(*)::int AS n FROM "PrepositionPracticeRecord" WHERE "ownerId" = $1`,
+        [owner],
+      )
+    ).rows[0].n as number;
+  const before = await rounds();
+
+  await page.goto("/signin");
+  await page.getByRole("button", { name: "デモで試す" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await practicePrepositionRound(page);
+  expect(await rounds()).toBe(before + 1);
 });

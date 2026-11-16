@@ -126,7 +126,7 @@ func goldenCases(t *testing.T) []goldenCase {
 
 	// A graduated card answered Good twice more when due, so that it is next
 	// due days ahead. A practice miss brings it forward to the time of the
-	// miss (EnqueueReviewItems); here it is answered two days after that,
+	// miss (the web's enqueue); here it is answered two days after that,
 	// still before the day FSRS had given it.
 	reviewed, reviewedAt := graduate(t)
 	for range 2 {
