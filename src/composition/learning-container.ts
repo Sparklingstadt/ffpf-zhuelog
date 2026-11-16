@@ -5,16 +5,20 @@ import {
   importFileName,
   parseLearningCsv,
 } from "@/infrastructure/csv/learning-csv";
-import { createLearningGateway } from "@/infrastructure/go-api/learning-gateway";
 import { createLearningCsvImport } from "@/infrastructure/prisma/learning-csv-import";
 import { createLearningNoteReads } from "@/infrastructure/prisma/learning-note-reads";
 import { createLearningNoteWrites } from "@/infrastructure/prisma/learning-note-writes";
 import { prisma } from "@/infrastructure/prisma/prisma-client";
+import { createReviewStore } from "@/infrastructure/prisma/review-store";
 
-const notes = createLearningNotes({
+// Note reads, the trash, sharing, the CSV import and a note's place in the
+// review queue are all kept in the database.
+export const learningNotes = createLearningNotes({
   currentUser: getCachedCurrentUser,
   reads: createLearningNoteReads(prisma),
   writes: createLearningNoteWrites(prisma),
+  entryReviews: createReviewStore(prisma),
+  now: () => new Date(),
   csvImport: {
     checkFile: checkCsvFile,
     parse: parseLearningCsv,
@@ -22,15 +26,3 @@ const notes = createLearningNotes({
     ...createLearningCsvImport(prisma),
   },
 });
-
-// Only the review queue status still goes through the Go API as the
-// signed-in user.
-const goGateway = createLearningGateway();
-
-// Note reads, the trash, sharing and the CSV import are kept in the
-// database; putting a note in or out of review still goes through Go.
-export const learningNotes = {
-  ...notes,
-  isInReview: goGateway.isInReview,
-  setInReview: goGateway.setInReview,
-};

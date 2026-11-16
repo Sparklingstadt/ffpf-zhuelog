@@ -14,7 +14,7 @@ export type SendState =
   { status: "idle" | "sending" } | { status: "error"; message: string };
 
 // One pass over the reviews due now: the card on screen, its picks (or
-// whether it is turned over) and sending its rating. The rating goes to Go
+// whether it is turned over) and sending its rating. The rating is sent
 // under a log id made for the card, so a retried send counts once.
 //
 // The cards are held for the whole pass. A server action that revalidates

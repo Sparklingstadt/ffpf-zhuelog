@@ -20,7 +20,8 @@ const notFound: ActionState = {
 const inReviewSchema = z.enum(["true", "false"]);
 
 // Puts the signed-in user's note in their review queue or takes it out.
-// Members and admins have a queue; Go checks that the note is theirs.
+// Members and admins have a queue; learningNotes checks that the note is
+// theirs.
 export async function handleNoteReview(
   formData: FormData,
   dependencies: {

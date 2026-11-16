@@ -1,6 +1,7 @@
 import { Prisma, type PrismaClient } from "../../generated/prisma/client";
 import type { LearningEntry } from "../../domain/learning/entities/learning-entry";
 import { nextFsrsCard, type FsrsCard } from "../../domain/review/fsrs";
+import { REVIEW_ITEM_ID } from "../../domain/review/review-item";
 import type { VocabularyCard } from "../../domain/vocabulary/vocabulary-entry";
 import { liveEntriesById } from "./learning-note-reads";
 import {
@@ -9,8 +10,7 @@ import {
 } from "./learning-note-writes";
 import { newId } from "./new-id";
 
-// A ReviewItem id as Go and newId make them; anything else is not looked up.
-export const REVIEW_ITEM_ID = /^c[a-z0-9]{24}$/;
+export { REVIEW_ITEM_ID };
 
 // The language of a note's review item: notes are Chinese.
 const LANGUAGE = "zh";
