@@ -110,9 +110,9 @@ curl -i https://<プロジェクト>.vercel.app/health
 
 ## 6. Web の設定
 
-Web（Next.js）は、ログインも学習ノートの読み書きも Go API で行います。DB には直接つながりません。仕様は `docs/superpowers/specs/2026-10-21-web-auth-via-go-api-design.md` と `docs/superpowers/specs/2026-10-22-web-data-via-go-api-design.md` にあります。
+Web（Next.js）は、ログインも学習ノートの読み書きも Go API で行います。ただし、ログイン中の人を決めるところは Web が自分で行います。Go が出すアクセストークン（`zl_access`）を `API_JWT_SECRET` で確かめ、DB の `PasswordAccount`・`FfpfAccount` を Prisma（`src/infrastructure/prisma/`）で読みます（Go API を畳む移行の段階 0。設計は `docs/superpowers/specs/2026-11-16-deprecate-go-backend-design.md`）。ほかのデータとログインは今も Go API を通します。仕様は `docs/superpowers/specs/2026-10-21-web-auth-via-go-api-design.md` と `docs/superpowers/specs/2026-10-22-web-data-via-go-api-design.md` にあります。
 
-Go API の Vercel プロジェクトには、`GITHUB_WEB_CLIENT_ID`・`GITHUB_WEB_CLIENT_SECRET`・`GITHUB_WEB_REDIRECT_URI`・`API_WEB_PROXY_SECRET` を入れておきます（上の「3. 環境変数」の表）。Web の Vercel プロジェクトに入れる値は、次の 4 つです。
+Go API の Vercel プロジェクトには、`GITHUB_WEB_CLIENT_ID`・`GITHUB_WEB_CLIENT_SECRET`・`GITHUB_WEB_REDIRECT_URI`・`API_WEB_PROXY_SECRET` を入れておきます（上の「3. 環境変数」の表）。Web の Vercel プロジェクトに入れる値は、次の 4 つに、あとの「Web が実行時に使う DB と秘密」の 3 つ（と `DATABASE_URL`）を足したものです。
 
 | 名前                   | 内容                                                                        |
 | ---------------------- | --------------------------------------------------------------------------- |
@@ -127,7 +127,7 @@ Go API の Vercel プロジェクトには、`GITHUB_WEB_CLIENT_ID`・`GITHUB_WE
 - `AUTH_URL` は必ず設定し、利用者が開く Web の origin と同じにします。GitHub ログインの `redirect_uri` は、この origin から作ります。
 - Go API の `GITHUB_WEB_REDIRECT_URI` は、`<AUTH_URL の origin>/api/auth/callback/github/go` と **1 文字も違わず** 同じにします。違うと Go API が `401` を返し、GitHub ログインができません。そのため、URL が合わないプレビューのデプロイでは GitHub ログインは使えません（パスワードとゲストのログインは使えます）。
 - `AUTH_GITHUB_ID` と `GITHUB_WEB_CLIENT_ID` が別の OAuth App だと、GitHub が発行した `code` を Go API が交換できず、GitHub ログインが失敗します。
-- `AUTH_SECRET`・`AUTH_GITHUB_SECRET`・`AUTH_ALLOWED_GITHUB_IDS` は、Web では使いません。`DATABASE_URL` は、Web の実行には要りませんが、**本番のビルド**が `prisma migrate deploy` に使うので、Web の Production には必ず残してください（「4. 本番の DB の確認」）。消すと本番の Web のデプロイが失敗します。
+- `AUTH_SECRET`・`AUTH_GITHUB_SECRET` は、Web では使いません。`DATABASE_URL` は、Web の実行時にも、**本番のビルド**の `prisma migrate deploy` にも使います（「4. 本番の DB の確認」）。消すと、ログイン中の人を決められず、本番の Web のデプロイも失敗します。
 
 LINE 連携を使うときは、Web の Vercel プロジェクトに、もう 1 つ次の値を入れます（無くても Web は動きます）。
 
@@ -147,9 +147,26 @@ FFPF ID でのログインを使うときは、Web の Vercel プロジェクト
 
 2 つのどちらかが無い・`FFPF_ID_ISSUER` が `https://` でない（`localhost`・`127.0.0.1` を除く）ときは、ログイン画面に「FFPF IDでログイン」を出しません。
 
+### Web が実行時に使う DB と秘密
+
+Web は実行時に、次の値を使います。Web の Vercel プロジェクトの Production に入れます。
+
+| 名前                      | 内容                                                                                                            |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`            | Neon の接続文字列。実行時の読み取りに使うので **pooled** の URL にする                                          |
+| `API_JWT_SECRET`          | Go API と **同じ値**（32 バイト以上。足りないと、Web はトークンをすべて無効として扱い、全員が未ログインになる） |
+| `AUTH_ALLOWED_GITHUB_IDS` | 管理者にする GitHub ユーザーの数字の ID（カンマ区切り。Go API と同じ値。空なら管理者は誰も通らない）            |
+| `DEMO_LOGIN_ID`           | デモアカウントのログイン ID（Go API の `DEMO_LOGIN_ID` と同じ。デモを使わないなら入れなくてよい）               |
+
+注意:
+
+- 値は、Go API のプロジェクトに入れているものと同じにします。Web だけ値が違うと、Go が出したトークンを Web が確かめられず、管理者やデモの判定もずれます。
+- `DATABASE_URL` が pooled か、マージの前に確かめます（ホスト名に `-pooler` が付くのが pooled です）。マイグレーション（`prisma migrate deploy`）は direct の URL を使うのが本来の形です。今の Production の値が **direct** のときは、実行時用に pooled の値を別の変数で足します。ただし、今の Web のコード（`src/infrastructure/prisma/prisma-client.ts`）が読むのは `DATABASE_URL` だけです。その場合は、実行時用の変数を読むコードの変更を先に入れてから、値を設定します。
+- 秘密の値は、このリポジトリのファイルやログに書きません。
+
 ### Web のプレビュー（Preview）
 
-PR ごとの Web のプレビューも、ログインとデータの読み書きを Go API で行います。そのため、Web の Vercel プロジェクトの **Preview** の環境変数にも、次の 4 つを入れます。
+PR ごとの Web のプレビューも、ログインとデータの読み書きを Go API で行います。そのため、Web の Vercel プロジェクトの **Preview** の環境変数にも、次の 4 つ（と、下の注の DB と秘密）を入れます。
 
 | 名前                   | Preview に入れる値                                                               |
 | ---------------------- | -------------------------------------------------------------------------------- |
@@ -161,6 +178,10 @@ PR ごとの Web のプレビューも、ログインとデータの読み書き
 注意:
 
 - 4 つのどれかが無いと、プレビューの Web ではログインできません。ログインできないので、学習ノートも見られません。
+- Web は実行時に DB を読むので、Preview にも `DATABASE_URL` と `API_JWT_SECRET` を入れます。**本番と別の Neon ブランチ**の `DATABASE_URL`（pooled）と、**本番とは別の** `API_JWT_SECRET` です。`API_JWT_SECRET` は、Preview の Go API と同じ値にします。同じ DB や秘密を使うと、プレビューが本番のデータを書き換えたり、本番のトークンを受け付けたりしかねません。`AUTH_ALLOWED_GITHUB_IDS` と `DEMO_LOGIN_ID` も、Preview の Go API に合わせて入れます。
+- プレビューのビルドはマイグレーションを当てません（`scripts/vercel-build.sh`）。そのため、Preview 用の Neon ブランチのスキーマは、手で合わせます。次のどちらかです。
+  - 本番から Neon のブランチを作り直す（スキーマも本番と同じになる）。
+  - そのブランチの direct の URL に向けて、手元で `DATABASE_URL=<そのブランチの direct の URL> pnpm exec prisma migrate deploy` を実行する。
 - Preview の Go API は、上の「3. 環境変数」のとおり、本番とは別の DB と別の秘密を使います。プレビューの Web を本番の Go API につながないでください。
 - プレビューの URL はデプロイごとに変わります。`AUTH_URL` と Go API の `GITHUB_WEB_REDIRECT_URI` が合わないときは、GitHub ログインは使えません。パスワードとゲストのログインは使えます。
 
