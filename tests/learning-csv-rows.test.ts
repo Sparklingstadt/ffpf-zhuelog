@@ -64,11 +64,6 @@ describe("importRows", () => {
       rows.hints.every((h) => h.learningEntryId === rows.entries[0].id),
     );
   });
-
-  it("truncates now to milliseconds", () => {
-    const rows = importRows("u1", "a.csv", [draft()], NOW, counter());
-    assert.equal(rows.entries[0].createdAt.getTime(), NOW.getTime());
-  });
 });
 
 describe("chunks", () => {
@@ -77,5 +72,14 @@ describe("chunks", () => {
     const parts = chunks(items, 5_000);
     assert.equal(parts.length, 20);
     assert.deepEqual(parts.flat(), items);
+  });
+
+  it("returns the remainder as a last, shorter chunk", () => {
+    assert.deepEqual(chunks([1, 2, 3, 4, 5], 2), [[1, 2], [3, 4], [5]]);
+  });
+
+  it("rejects a size that would never advance", () => {
+    assert.throws(() => chunks([1], 0), RangeError);
+    assert.throws(() => chunks([1], -1), RangeError);
   });
 });

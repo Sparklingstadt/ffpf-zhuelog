@@ -187,11 +187,11 @@ sequenceDiagram
 | 種類       | 数                    | 中身                                                                                          |
 | ---------- | --------------------- | --------------------------------------------------------------------------------------------- |
 | 単体（TS） | 378 件                | ドメインの規則、表示の変換、層の検査、Go API の呼び方                                         |
-| Go         | テストファイル 81 本  | ハンドラー、認証、FSRS、CSV のパース。`store` は本物の Postgres に対して走る                  |
+| Go         | テストファイル 81 本  | ハンドラー、認証、FSRS。`store` は本物の Postgres に対して走る                                |
 | E2E        | 206 件（PC とスマホ） | Playwright。Docker の Postgres、Go API、Web、OpenAI と FFPF ID のスタブを立ち上げて画面を通す |
 
 - **E2E の土台**：`e2e/server.ts` が、マイグレーション、`next build`、スタブ、Go のビルドと起動を行います。テストのたびに表を空にします。
-- **CSV のパースの移植**：Web から Go に移したとき、前の Web の出力を `testdata/expected.json`（約 45 件の CSV）に固定しました。Go の結果が同じことを確かめています。
+- **CSV のパースの検証**：CSV の取り込みを Web に戻したので、約 45 件の CSV の見本は `tests/fixtures/learning-csv/` にあり、TS のパーサー（csv-parse）がその見本と同じ結果を返すことを確かめています。
 - **lefthook**：commit の前に format・lint・型チェック、push の前に単体と E2E を走らせます。GitHub Actions の CI は置いていないので、このローカルの確認が関門です。
 
 ## 10. デプロイ

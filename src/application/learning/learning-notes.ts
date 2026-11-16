@@ -24,8 +24,9 @@ export class LearningForbiddenError extends Error {
   override name = "LearningForbiddenError";
 }
 
+// On failure, message is a CsvValidationError's message.
 export type CsvImportResult =
-  { ok: true; count: number } | { ok: false; message: string }; // a CsvValidationError's message
+  { ok: true; count: number } | { ok: false; message: string };
 
 export type LearningNotesDeps = {
   currentUser: () => Promise<AuthenticatedUser | null>;
