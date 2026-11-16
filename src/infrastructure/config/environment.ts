@@ -83,3 +83,25 @@ export function siteUrl(): string {
   if (vercel) return `https://${vercel}`;
   return "http://localhost:3000";
 }
+
+// Secret that signs the access tokens the API issues. Empty when unset; the
+// token verifier treats a secret that is too short as "every token invalid".
+export function apiJwtSecret(): string {
+  return process.env.API_JWT_SECRET ?? "";
+}
+
+// GitHub account ids allowed to act as administrator: comma separated,
+// trimmed, digits only. Empty means no administrator gets through.
+export function allowedGitHubIds(): ReadonlySet<string> {
+  const ids = (process.env.AUTH_ALLOWED_GITHUB_IDS ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter((id) => /^[0-9]+$/.test(id));
+  return new Set(ids);
+}
+
+// Login id of the demo password account, when one is configured.
+export function demoLoginId(): string | undefined {
+  const id = process.env.DEMO_LOGIN_ID?.trim();
+  return id ? id : undefined;
+}
