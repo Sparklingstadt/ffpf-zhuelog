@@ -79,7 +79,7 @@ DB への接続は、TLS で証明書まで検証します。ホストが `local
 
 ## 4. 本番の DB の確認
 
-Go API が使うテーブルは、Prisma のマイグレーションで本番の Neon に適用済みです（`ApiRefreshToken`、`SignInThrottle` など）。マイグレーションは、Web の **本番ビルド** が自動で適用します。`vercel.json` の `buildCommand` が `scripts/vercel-build.sh` を動かし、`VERCEL_ENV=production` のときだけ `prisma migrate deploy` を実行してから `next build` します（Preview のビルドは本番と同じ DB を使うので、マイグレーションは当てません）。そのため、Web の Production には `DATABASE_URL` が必要です。無い・つながらない・DDL が失敗すると、本番の Web のデプロイが失敗します（失敗したビルドの本番は、前のバージョンのままです）。
+Go API が使うテーブルは、Prisma のマイグレーションで本番の Neon に適用済みです（`ApiRefreshToken`、`SignInThrottle` など）。マイグレーションは、Web の **本番ビルド** が自動で適用します。`vercel.json` の `buildCommand` が `scripts/vercel-build.sh` を動かし、`VERCEL_ENV=production` のときだけ `prisma migrate deploy` を実行してから `next build` します（Preview のビルドは自分の Neon ブランチを使い、マイグレーションは当てません）。そのため、Web の Production には `DATABASE_URL` が必要です。無い・つながらない・DDL が失敗すると、本番の Web のデプロイが失敗します（失敗したビルドの本番は、前のバージョンのままです）。
 
 **マイグレーションの制約**: Web のデプロイで自動的に当たる一方、Go API は別のプロジェクトで、あとから手で（main をマージした後に）デプロイします。この間、DB のスキーマは新しく、動いている Go API は古いままです。そのため、マイグレーションは今動いている Go API とそのまま両立する形にします。足してよいのは、表の追加と、null を許す列（または既定値のある列）の追加だけです。列・表の削除や名前の変更、型の変更、NOT NULL の追加のような壊す変更は、2 段階に分けます（1 回目で新しい形を足して Go API を切り替え、2 回目のリリースで古い形を削除します）。
 
@@ -153,7 +153,7 @@ Web は実行時に、次の値を使います。Web の Vercel プロジェク�
 
 | 名前                      | 内容                                                                                                            |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`            | Neon の接続文字列。実行時の読み取りに使うので **pooled** の URL にする                                          |
+| `DATABASE_URL`            | Neon の接続文字列。実行時の読み取りに使う。pooled の URL か **確かめる**（下の注を参照）                        |
 | `API_JWT_SECRET`          | Go API と **同じ値**（32 バイト以上。足りないと、Web はトークンをすべて無効として扱い、全員が未ログインになる） |
 | `AUTH_ALLOWED_GITHUB_IDS` | 管理者にする GitHub ユーザーの数字の ID（カンマ区切り。Go API と同じ値。空なら管理者は誰も通らない）            |
 | `DEMO_LOGIN_ID`           | デモアカウントのログイン ID（Go API の `DEMO_LOGIN_ID` と同じ。デモを使わないなら入れなくてよい）               |
@@ -163,6 +163,9 @@ Web は実行時に、次の値を使います。Web の Vercel プロジェク�
 - 値は、Go API のプロジェクトに入れているものと同じにします。Web だけ値が違うと、Go が出したトークンを Web が確かめられず、管理者やデモの判定もずれます。
 - `DATABASE_URL` が pooled か、マージの前に確かめます（ホスト名に `-pooler` が付くのが pooled です）。マイグレーション（`prisma migrate deploy`）は direct の URL を使うのが本来の形です。今の Production の値が **direct** のときは、実行時用に pooled の値を別の変数で足します。ただし、今の Web のコード（`src/infrastructure/prisma/prisma-client.ts`）が読むのは `DATABASE_URL` だけです。その場合は、実行時用の変数を読むコードの変更を先に入れてから、値を設定します。
 - 秘密の値は、このリポジトリのファイルやログに書きません。
+- 4 つ（`API_JWT_SECRET`（Go API と 1 バイトも違わない値）、`AUTH_ALLOWED_GITHUB_IDS`（数字の ID。Go API と同じ値）、`DEMO_LOGIN_ID`、`DATABASE_URL`）は、**マージ（本番のデプロイ）の前に** Web の Production に入れておきます。Vercel の環境変数は、変えたあとに再デプロイしないと効きません。
+- 足りない・値が違うときの症状：`API_JWT_SECRET` が無い・違う・短いと、全員が未ログイン扱いになり、ログインしても `/signin` に戻ります。`DATABASE_URL` が無いと、会員向けのページがエラーになります。
+- Web に Auth.js の時代の `AUTH_ALLOWED_GITHUB_IDS` が残っていないか確かめます（下の「段階3のマージの前に行うこと」で残すとしている値です）。数字でない項目（ログイン名など）は捨てられ、管理者が権限を失います。数字の ID に直します。
 
 ### Web のプレビュー（Preview）
 
@@ -178,7 +181,7 @@ PR ごとの Web のプレビューも、ログインとデータの読み書き
 注意:
 
 - 4 つのどれかが無いと、プレビューの Web ではログインできません。ログインできないので、学習ノートも見られません。
-- Web は実行時に DB を読むので、Preview にも `DATABASE_URL` と `API_JWT_SECRET` を入れます。**本番と別の Neon ブランチ**の `DATABASE_URL`（pooled）と、**本番とは別の** `API_JWT_SECRET` です。`API_JWT_SECRET` は、Preview の Go API と同じ値にします。同じ DB や秘密を使うと、プレビューが本番のデータを書き換えたり、本番のトークンを受け付けたりしかねません。`AUTH_ALLOWED_GITHUB_IDS` と `DEMO_LOGIN_ID` も、Preview の Go API に合わせて入れます。
+- Web は実行時に DB を読むので、Preview にも `DATABASE_URL` と `API_JWT_SECRET` を入れます。**本番と別の Neon ブランチ**の `DATABASE_URL`（pooled）と、**本番とは別の** `API_JWT_SECRET` です。`DATABASE_URL` は、Preview の Go API の `DATABASE_URL` と **同じ Neon ブランチ** にします（トークンが指すアカウントがそこにあります）。`API_JWT_SECRET` も、Preview の Go API と同じ値にします。同じ DB や秘密を使うと、プレビューが本番のデータを書き換えたり、本番のトークンを受け付けたりしかねません。`AUTH_ALLOWED_GITHUB_IDS` と `DEMO_LOGIN_ID` も、Preview の Go API に合わせて入れます。
 - プレビューのビルドはマイグレーションを当てません（`scripts/vercel-build.sh`）。そのため、Preview 用の Neon ブランチのスキーマは、手で合わせます。次のどちらかです。
   - 本番から Neon のブランチを作り直す（スキーマも本番と同じになる）。
   - そのブランチの direct の URL に向けて、手元で `DATABASE_URL=<そのブランチの direct の URL> pnpm exec prisma migrate deploy` を実行する。
@@ -283,7 +286,7 @@ FFPF ID（ffpf-portal が提供する OpenID Connect のプロバイダー）の
 
 - アカウント：`DEMO_LOGIN_ID` の ID の、普通のパスワード会員です。パスワードのハッシュは使えない値なので、ID とパスワードではログインできません。アカウントは下のリセットが作ります（手で作る必要はありません）。
 - データ：デモを試す全員で 1 つのアカウントを共有します。毎晩 04:00（日本時間）に、`services/api/vercel.json` の Cron（`0 19 * * *`、UTC）が `GET /v1/cron/demo-reset` を呼び、1 つのトランザクションで、デモの持ち物（学習ノートとヒント、復習の項目と記録、単語帳、会話ノート、クイック質問、練習の記録、フォロー、LINE の行）を消してから、`services/api/demo/seed.json` の内容を入れ直します。日付は「リセットの何日前か」で書いてあるので、いつ見ても直近 7 日の記録に見えます。ログイン中のセッションは消しません。
-- 使えないもの：OpenAI を呼ぶルート（`POST /v1/chat`・`POST /v1/quick-question`・`POST /v1/vocabulary/draft`）、LINE 連携の 5 つ、`POST /v1/account/password`、フォロー・メンバー一覧・タイムライン・共有（ほかの会員に届くため）は、デモには `403`（「デモでは使えません。」）です。判定は `auth.Service.IsDemo` の 1 か所で、管理者がデモとして操作しているときや、ほかの会員には当てはまりません。`GET /v1/me` はデモに `"demo": true` を返し、Web はすべてのページに「デモアカウントです。…」を出し、メニューから使えない機能を外します。
+- 使えないもの：OpenAI を呼ぶルート（`POST /v1/chat`・`POST /v1/quick-question`・`POST /v1/vocabulary/draft`）、LINE 連携の 5 つ、`POST /v1/account/password`、フォロー・メンバー一覧・タイムライン・共有（ほかの会員に届くため）は、デモには `403`（「デモでは使えません。」）です。判定は `auth.Service.IsDemo` の 1 か所で、管理者がデモとして操作しているときや、ほかの会員には当てはまりません。Web は、自分の DB の確認（`passwordHash` が使えない値で、ログイン ID が `DEMO_LOGIN_ID` と同じ）でデモかどうかを決め、すべてのページに「デモアカウントです。…」を出し、メニューから使えない機能を外します。
 - 手でリセットする：`curl -i -X POST https://ffpf-zhuelog-api.vercel.app/v1/cron/demo-reset -H "Authorization: Bearer $CRON_SECRET"` が `204` を返します（`GET` でも同じです）。`CRON_SECRET` を知っている人だけが呼べます。
 - マイグレーションは要りません（既存の表だけを使います）。Vercel Hobby の Cron は 2 つまでで、LINE の拾い直しとこのリセットで 2 つです。
 
