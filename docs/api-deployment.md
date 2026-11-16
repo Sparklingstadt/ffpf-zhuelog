@@ -488,7 +488,7 @@ curl -s -o /dev/null -w '%{http_code}' https://ffpf-zhuelog.sparklingstadt.com/a
 5. 次の 2 つを確かめます。`curl -i -X POST https://ffpf-zhuelog-api.vercel.app/v1/line/webhook` が `404` を返すこと。Go の Vercel プロジェクトの **Settings → Cron Jobs** に何も無いこと。
 6. Go の Vercel プロジェクトから、`LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`OPENAI_API_KEY`・`OPENAI_LEARNING_MODEL`・`CRON_SECRET`・`OPENAI_API_BASE_URL`・`LINE_API_BASE_URL` を消してよくなります（`OPENAI_API_BASE_URL` と `LINE_API_BASE_URL` は、入れていた場合だけです）。`DEMO_LOGIN_ID` は残します（Go のログインが使います）。Go が読む値は、`PORT`・`DATABASE_URL`・`API_JWT_SECRET`・`GITHUB_MOBILE_*`・`GITHUB_WEB_*`・`API_WEB_PROXY_SECRET`・`AUTH_ALLOWED_GITHUB_IDS` で、`FFPF_ID_*` と `DEMO_LOGIN_ID` は任意です。
 
-10c を出すまで、拾い直し（`/api/cron/line-drain`）とデモのリセットは、定期には動きません。拾い直しが 1 晩飛ぶのは、設計どおりです。デモのリセットが要るときは、上の手順 3 の `curl` で手でできます。
+10c を出すまで、拾い直し（`/api/cron/line-drain`）とデモのリセットは、定期には動きません。拾い直しが 1 晩飛ぶのは、設計どおりです。デモのリセットが要るときは、上の手順 3 の `curl` で手でできます（10c のマージのあとは Cron が呼びます）。
 
 戻すとき（10b）:
 
@@ -498,7 +498,28 @@ curl -s -o /dev/null -w '%{http_code}' https://ffpf-zhuelog.sparklingstadt.com/a
 
 ##### 手順 4（10c のマージの前と後）
 
-手順 3 で Go を出し直したあとで、10c をマージします。Web の `vercel.json` の `crons` が、Production のデプロイで登録されます。Vercel のダッシュボードの **Settings → Cron Jobs** に、2 つ（`/api/cron/line-drain` は毎日 21:00 UTC、`/api/cron/demo-reset` は毎日 19:00 UTC）が出ることを確かめます。詳しくは、10c の PR で、この節に書きます。
+手順 3 で Go を出し直したあとで、10c をマージします。この PR（10c）は、Web の `vercel.json` に `crons` を足すだけです（コードは、コメントのほかは変えません）。これで段階 10 の 4 つの手順はすべて終わり、Go に残るのはログインだけになります。
+
+Cron は Production のデプロイで登録されます。時刻は UTC で、`/api/cron/line-drain` は `0 21 * * *`（06:00 JST）、`/api/cron/demo-reset` は `0 19 * * *`（04:00 JST）です。Hobby の Cron は時刻が 1 時間単位で、指定の時刻から最大 59 分遅れることがあります（[Vercel の説明](https://vercel.com/docs/cron-jobs/usage-and-pricing)）。
+
+マージの前:
+
+- 手順 3 が済んでいること。Go の Vercel プロジェクトの **Settings → Cron Jobs** に何も無いこと（Go と Web の両方で同じ拾い直しが動くと、OpenAI の呼び出しが二重になりえます）。
+- Web の Production に `CRON_SECRET` があること。Vercel が Cron の呼び出しに `Authorization: Bearer <CRON_SECRET>` を自動で付けるので、ほかに設定は要りません。
+- Hobby の Cron は 2 つまで・1 日 1 回までで、この 2 つで埋まります。マイグレーションはありません。
+
+マージのあと:
+
+1. Web の Production のデプロイが Ready になるのを待ちます。
+2. `vercel promote` で、そのデプロイを本番に切り替えます（Cron は Production のデプロイで登録されます）。
+3. Web の Vercel プロジェクトの **Settings → Cron Jobs** に、ちょうど 2 つ、`/api/cron/line-drain`（`0 21 * * *`）と `/api/cron/demo-reset`（`0 19 * * *`）が出ることを確かめます。
+4. 待たずに確かめるなら、同じ画面から、それぞれの Cron を 1 回だけ実行できます（任意）。成功すると、Web のログ（Vercel の **Logs**）に、リクエストの結果として `204` が出ます。`demo-reset` は `DEMO_RESET_DONE`、`line-drain` は `LINE_REVIEW_NOTIFY_SENT`（お知らせを送ったとき）が出ます。`401` なら `CRON_SECRET` が無いか違い、`404` なら `DEMO_LOGIN_ID` か LINE の設定がありません。
+5. 次の朝（04:00 JST ごろと 06:00 JST ごろ。遅れても 1 時間以内）に、Web のログで、2 つの実行があったことを確かめます。
+
+戻すとき（10c）:
+
+- この PR だけを戻す（Web を戻す）と、Web の Cron が消えるだけで、ほかは動きます。拾い直しとデモのリセットが定期には動かなくなります（手で `curl` すれば呼べます）。Go に Cron は無いので、二重には動きません。
+- Go の Cron を戻したいときは、先にこの PR を戻して Web の Cron を消してから、Go を 10b の前に戻します（2 つの Cron を並べない）。
 
 ##### 戻すとき（10a）
 
@@ -563,8 +584,8 @@ Web の次の 2 つの Route Handler で動きます。LINE の設定（上の�
 
 - 送った文は、webhook のリクエストの中で処理します（保存 → OpenAI → 学習ノートに保存 → reply）。reply は無料です。添削・翻訳の結果は、バッチ名 `LINE` のノートとして保存します。1 回の通知の処理は、リクエストの開始から 45 秒までで、残りが 30 秒を切った文は、保存だけして OpenAI は呼ばず、「時間がかかっています」と返します（翌朝の拾い直しが処理します）。イベントは 55 秒を過ぎると新しく始めません。
 - 拾い直しは、5 分以上 `pending` のまま残ったメッセージを 1 回だけ試し直し、できたら push で、できなければ失敗を push で知らせます。1 回の実行は 50 秒で止まり、残りが 30 秒を切ったら、新しい生成は始めず次の実行に回します（試す回数を使い切った行は、生成せずに失敗にします）。push は、LINE の無料プランでは月 200 通の枠を使います。同じ実行が、希望した人へ復習のお知らせも送ります（[LINE 連携のリファレンス](../docs-site/reference/line.md#put-v1-line-review-notify)）。お知らせは今月の残りから 30 通を拾い直しのために残し、その範囲だけ送ります。
-- **Cron はまだ登録していません**：Web の `vercel.json` に `crons` は無く、`/api/cron/line-drain` を呼ぶのは人だけです。Go の Cron は段階 10b で消えたので、段階 10c で Web に登録するまで、拾い直しと朝のお知らせは定期には動きません（1 晩飛んでかまいません。手で呼ぶときは、`Authorization: Bearer $CRON_SECRET` を付けて `GET` します）。
-- `maxDuration` は、2 つの route の中で 60 秒と決めています。Web のプロジェクトにはすでに 90 秒の route（クイック質問・チャット）があるので、プロジェクトの設定を変える必要はありません。
+- **Cron は Web の `vercel.json` に登録しています**：`/api/cron/line-drain` は `0 21 * * *`（UTC。06:00 JST）です。Vercel が `Authorization: Bearer <CRON_SECRET>` を付けて呼ぶので、Web の Production に `CRON_SECRET` が要ります。Hobby の Cron は時刻が 1 時間単位で、06:00 から最大 59 分遅れることがあります。Hobby の Cron は 2 つまで・1 日 1 回までで、この拾い直しとデモのリセットで 2 つが埋まります。手で呼ぶときは、`Authorization: Bearer $CRON_SECRET` を付けて `GET` します。
+- `maxDuration` は、route の中で決めています（拾い直しは 60 秒、デモのリセットは 30 秒）。Web のプロジェクトにはすでに 90 秒の route（クイック質問・チャット）があるので、プロジェクトの設定を変える必要はありません。
 - ログには、イベント ID・メッセージの ID・コードだけを出し、本文・生成結果・鍵・LINE のユーザー ID・連携コード・reply token は出しません。
 - 使う表は `LineLink`・`LineLinkCode`・`LineMessage` の 3 つで、Prisma のマイグレーション `20261023090000_add_line_link` で作ります（本番にはすでにあります）。
 - OpenAI の利用量は、操作している人ではなく LINE を結びつけた人の `AiUsage` に、機能名 `line` で記録します。
@@ -609,11 +630,11 @@ FFPF ID（ffpf-portal が提供する OpenID Connect のプロバイダー）の
 採用担当など、アカウントを持たない人が会員向けの画面（学習ノート・今日の復習・単語帳・会話ノート・練習の記録）を試せるようにする機能です。ログイン画面の「デモで試す」から入ります。
 
 - アカウント：`DEMO_LOGIN_ID` の ID の、普通のパスワード会員です。パスワードのハッシュは使えない値なので、ID とパスワードではログインできません。アカウントは下のリセットが作ります（手で作る必要はありません）。
-- データ：デモを試す全員で 1 つのアカウントを共有します。毎晩 04:00（日本時間）に、Web の `vercel.json` の Cron（`0 19 * * *`、UTC。登録は段階 10c）が `GET /api/cron/demo-reset` を呼び、1 つのトランザクションで、デモの持ち物（学習ノートとヒント、CSV の取り込みの記録、復習の項目と記録、単語帳、会話ノート、クイック質問、練習の記録（介詞・補語）、フォロー（デモがしたものと、デモをフォローしているもの）、LINE の連携・連携コード・受け取った文）を消してから、`src/domain/demo/demo-fixture.json` の内容を、Web の FSRS で復習の項目にして入れ直します（例のデータは、Go が最後に作った内容と同じであることを `tests/fixtures/demo-seed-golden.json` で確かめています）。消さないものは、AI の利用量（`AiUsage`。管理者が費用を見る記録）とログインのセッション（`ApiRefreshToken`）です。日付は「リセットの何日前か」で書いてあるので、いつ見ても直近 7 日の記録に見えます。ログイン中のセッションは消しません。
+- データ：デモを試す全員で 1 つのアカウントを共有します。毎晩 04:00（日本時間）ごろに、Web の `vercel.json` の Cron（`0 19 * * *`、UTC）が `GET /api/cron/demo-reset` を呼び、1 つのトランザクションで、デモの持ち物（学習ノートとヒント、CSV の取り込みの記録、復習の項目と記録、単語帳、会話ノート、クイック質問、練習の記録（介詞・補語）、フォロー（デモがしたものと、デモをフォローしているもの）、LINE の連携・連携コード・受け取った文）を消してから、`src/domain/demo/demo-fixture.json` の内容を、Web の FSRS で復習の項目にして入れ直します（例のデータは、Go が最後に作った内容と同じであることを `tests/fixtures/demo-seed-golden.json` で確かめています）。消さないものは、AI の利用量（`AiUsage`。管理者が費用を見る記録）とログインのセッション（`ApiRefreshToken`）です。日付は「リセットの何日前か」で書いてあるので、いつ見ても直近 7 日の記録に見えます。ログイン中のセッションは消しません。
 - 使えないもの：OpenAI を呼ぶルート（Web の `POST /api/chat` と `POST /api/quick-question`）は、デモには `403`（「デモでは使えません。」）です。Web の LINE 連携の画面（`/account/line`）は `/` に戻します。パスワードの変更も、デモには使えません。断るのは Web です（Go のルートはもうありません）。フォロー・会員の一覧・タイムライン・共有（ほかの会員に届くため）は、Web が断ります（`/follow` は `/` に戻し、フォローや共有を直接送ると画面には「ログインし直してください。」と出ます）。管理者がデモとして操作しているときや、ほかの会員には当てはまりません。Web の AI のルート（単語帳の下書き・クイック質問・ChatGPT と話す）は、Web が自分でデモかどうかを確かめて断ります。Web は、自分の DB の確認（`passwordHash` が使えない値で、ログイン ID が `DEMO_LOGIN_ID` と同じ）でデモかどうかを決め、すべてのページに「デモアカウントです。…」を出し、メニューから使えない機能を外します。
-- リセットは Web が行います（段階 10b で Go から移しました。`DEMO_LOGIN_ID` が空なら、Web のルートは `404` です）。Cron の登録は段階 10c までなく、それまでは毎晩は戻らないので、必要なら下の `curl` で手でリセットします。
+- リセットは Web が行います（段階 10b で Go から移しました。`DEMO_LOGIN_ID` が空なら、Web のルートは `404` です）。Hobby の Cron は時刻が 1 時間単位なので、04:00 から最大 59 分遅れることがあります。Vercel が `Authorization: Bearer <CRON_SECRET>` を付けて呼ぶので、Web の Production に `CRON_SECRET` が要ります。`maxDuration` は route に 30 秒と書いてあります。すぐ戻したいときは、下の `curl` で手でリセットします。
 - 手でリセットする：`curl -i -X POST https://ffpf-zhuelog.sparklingstadt.com/api/cron/demo-reset -H "Authorization: Bearer $CRON_SECRET"` が `204` を返します（`GET` でも同じです）。`CRON_SECRET` を知っている人だけが呼べます。`$CRON_SECRET` は Web の Production の値です。
-- マイグレーションは要りません（既存の表だけを使います）。Vercel Hobby の Cron は 2 つまでで、LINE の拾い直しとこのリセットで 2 つです（どちらも Web の `vercel.json` に、段階 10c で入れます。Go の `services/api/vercel.json` に Cron は無くなりました）。
+- マイグレーションは要りません（既存の表だけを使います）。Vercel Hobby の Cron は 2 つまで・1 日 1 回までで、LINE の拾い直しとこのリセットで 2 つが埋まります（どちらも Web の `vercel.json` にあります。Go の `services/api/vercel.json` に Cron は無くなりました）。
 
 ### 切り替えの手順
 

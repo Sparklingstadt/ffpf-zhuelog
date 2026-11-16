@@ -8,8 +8,8 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
 // The nightly demo reset (Go: GET and POST /v1/cron/demo-reset,
-// httpapi/demo.go): the demo account back to its fixture. Not registered as
-// a Vercel Cron yet.
+// httpapi/demo.go): the demo account back to its fixture. Registered in
+// vercel.json as a Vercel Cron (0 19 * * * UTC = 04:00 JST).
 async function resetDemo(request: Request): Promise<Response> {
   // Without DEMO_LOGIN_ID the route does not exist, before the secret (as Go).
   if (!demoReset.available)
