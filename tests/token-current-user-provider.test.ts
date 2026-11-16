@@ -190,16 +190,50 @@ test("act-as a malformed or missing member is ignored", async () => {
 });
 
 test("act-as is ignored for members and guests", async () => {
+  const other: IdentityAccount = { ...password, id: "def", loginId: "jiro" };
   const m = await provider(member("password:abc", 3), {
-    actAs: "password:abc",
+    actAs: "password:def",
+    accounts: accounts([password, other]),
   }).getCurrentUser();
-  assert.equal(m?.actAsIgnored, undefined);
-  assert.equal(m?.actingAs, undefined);
+  assert.deepEqual(m, {
+    githubLogin: "taro",
+    githubId: "password:abc",
+    role: "member",
+    displayName: "太郎",
+    accountId: "abc",
+  });
   const g = await provider(
     { role: "guest", ownerId: "guest" },
     { actAs: "password:abc" },
   ).getCurrentUser();
   assert.deepEqual(g, { githubLogin: "guest", role: "guest" });
+});
+
+test("lookup errors propagate instead of signing out", async () => {
+  const boom = new Error("db down");
+  const failing: IdentityAccounts = {
+    findPasswordAccount: async () => {
+      throw boom;
+    },
+    findFfpfAccount: async () => {
+      throw boom;
+    },
+  };
+  await assert.rejects(
+    provider(member("password:abc", 3), { accounts: failing }).getCurrentUser(),
+    boom,
+  );
+  await assert.rejects(
+    provider(member("ffpf:sub1", 2), { accounts: failing }).getCurrentUser(),
+    boom,
+  );
+  await assert.rejects(
+    provider(admin, {
+      actAs: "password:abc",
+      accounts: failing,
+    }).getCurrentUser(),
+    boom,
+  );
 });
 
 test("an admin off the allowlist is revoked even while acting", async () => {

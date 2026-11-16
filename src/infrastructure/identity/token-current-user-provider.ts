@@ -60,6 +60,8 @@ export class TokenCurrentUserProvider implements CurrentUserProvider {
         return this.adminUser(claims);
       case "member":
         return this.memberUser(claims);
+      default:
+        return null;
     }
   }
 
