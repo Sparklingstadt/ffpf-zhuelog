@@ -1,9 +1,7 @@
 import { redirect } from "next/navigation";
 
-import {
-  getCurrentViewerUser,
-  memberAccounts,
-} from "@/composition/identity-container";
+import { getCurrentViewerUser } from "@/composition/identity-container";
+import { lineLink } from "@/composition/line-container";
 import {
   isLineLinkPreview,
   lineAddFriendUrl,
@@ -27,7 +25,7 @@ export default async function LineLinkPage() {
   // The viewer guard lets guests through; they have no LINE link.
   if (!user || user.role === "guest") redirect("/");
 
-  const link = await memberAccounts.getLineLink();
+  const link = await lineLink.getLineLink();
 
   return (
     <>

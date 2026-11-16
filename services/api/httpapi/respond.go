@@ -18,9 +18,7 @@ import (
 const (
 	msgUnauthorized      = "認証が必要です。"
 	msgForbidden         = "このアカウントは利用できません。" // allowlist removal, revoked session
-	msgAdminOnly         = "管理者だけが利用できます。"
 	msgLineNotLinked     = "LINE と連携していません。先に連携してください。"
-	msgMembersOnly       = "この操作は会員だけが利用できます。"
 	msgBadRequest        = "リクエストが不正です。"
 	msgNotFound          = "見つかりません。"
 	msgMethodNotAllowed  = "このメソッドは使用できません。"
@@ -36,33 +34,21 @@ const (
 	msgNotWhileActing    = "会員として操作している間は使えません。"
 	msgDemoRestricted    = "デモでは使えません。"
 	msgDemoDisabled      = "デモは利用できません。"
-
-	msgInvalidNewPassword     = "パスワードは12〜128文字にしてください。"
-	msgPasswordMismatch       = "確認用のパスワードが一致しません。"
-	msgInvalidCurrentPassword = "現在のパスワードが違うか、一時的にロックされています。"
-
-	msgInvalidLoginID  = "ログインIDは英小文字・数字・. _ - の3〜32文字にしてください。"
-	msgInvalidName     = "表示名は1〜50文字にしてください。"
-	msgLoginIDTaken    = "このログインIDはすでに使われています。"
-	msgAccountNotFound = "アカウントが見つかりません。"
 )
 
 // Error codes in the {"error":{"code":...}} body.
 const (
-	codeInvalidRequest         = "invalid_request"
-	codeUnauthorized           = "unauthorized"
-	codeForbidden              = "forbidden"
-	codeNotFound               = "not_found"
-	codeMethodNotAllowed       = "method_not_allowed"
-	codeTooLarge               = "too_large"
-	codeRateLimited            = "rate_limited"
-	codeUnavailable            = "unavailable"
-	codeInternal               = "internal"
-	codeGitHubUnavailable      = "github_unavailable"
-	codeFFPFUnavailable        = "ffpf_unavailable"
-	codePasswordMismatch       = "password_mismatch"
-	codeInvalidCurrentPassword = "invalid_current_password"
-	codeLoginIDTaken           = "login_id_taken"
+	codeInvalidRequest    = "invalid_request"
+	codeUnauthorized      = "unauthorized"
+	codeForbidden         = "forbidden"
+	codeNotFound          = "not_found"
+	codeMethodNotAllowed  = "method_not_allowed"
+	codeTooLarge          = "too_large"
+	codeRateLimited       = "rate_limited"
+	codeUnavailable       = "unavailable"
+	codeInternal          = "internal"
+	codeGitHubUnavailable = "github_unavailable"
+	codeFFPFUnavailable   = "ffpf_unavailable"
 )
 
 const timeLayout = "2006-01-02T15:04:05.000Z07:00"
@@ -120,12 +106,6 @@ func writeServiceError(w http.ResponseWriter, r *http.Request, err error) {
 		writeError(w, http.StatusForbidden, codeForbidden, msgForbidden)
 	case errors.Is(err, auth.ErrThrottled):
 		writeError(w, http.StatusTooManyRequests, codeRateLimited, msgRateLimited)
-	case errors.Is(err, auth.ErrInvalidNewPassword):
-		writeError(w, http.StatusBadRequest, codeInvalidRequest, msgInvalidNewPassword)
-	case errors.Is(err, auth.ErrPasswordMismatch):
-		writeError(w, http.StatusBadRequest, codePasswordMismatch, msgPasswordMismatch)
-	case errors.Is(err, auth.ErrInvalidCurrentPassword):
-		writeError(w, http.StatusBadRequest, codeInvalidCurrentPassword, msgInvalidCurrentPassword)
 	case errors.Is(err, store.ErrNotFound):
 		writeError(w, http.StatusNotFound, codeNotFound, msgNotFound)
 	case errors.Is(err, auth.ErrGitHubUnavailable):
@@ -157,18 +137,6 @@ func writeNotFound(w http.ResponseWriter) {
 // writeForbidden answers 403 with a role-specific message.
 func writeForbidden(w http.ResponseWriter, msg string) {
 	writeError(w, http.StatusForbidden, codeForbidden, msg)
-}
-
-// pathValueMsg returns the named path value if valid accepts it; otherwise it
-// answers 404 with msg itself and returns false, since such a value cannot
-// name any row.
-func pathValueMsg(w http.ResponseWriter, r *http.Request, name string, valid func(string) bool, msg string) (string, bool) {
-	v := r.PathValue(name)
-	if !valid(v) {
-		writeError(w, http.StatusNotFound, codeNotFound, msg)
-		return "", false
-	}
-	return v, true
 }
 
 // decodeBody reads exactly one JSON object from the request body into dst,

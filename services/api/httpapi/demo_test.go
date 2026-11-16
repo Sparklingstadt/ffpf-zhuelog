@@ -55,7 +55,6 @@ func TestDemoIsRefusedExactlyTheClosedRoutes(t *testing.T) {
 		"DELETE /v1/line/link",
 		"PUT /v1/line/review-notify",
 		"DELETE /v1/line/review-notify",
-		"POST /v1/account/password",
 	}
 	paths := strings.NewReplacer("{id}", "abc", "{itemId}", "abc", "{ownerId}", otherOwner)
 

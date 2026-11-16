@@ -102,7 +102,7 @@ curl -i https://<プロジェクト>.vercel.app/health
 
 ## 6. Web の設定
 
-Web（Next.js）は、DB を Prisma（`src/infrastructure/prisma/`）で読み書きし、Go が出すアクセストークン（`zl_access`）も `API_JWT_SECRET` で自分で確かめます。ログイン、admin、LINE、cron は、今も Go API が行います。仕様は `docs/superpowers/specs/2026-10-21-web-auth-via-go-api-design.md` と `docs/superpowers/specs/2026-10-22-web-data-via-go-api-design.md` にあります。
+Web（Next.js）は、DB を Prisma（`src/infrastructure/prisma/`）で読み書きし、Go が出すアクセストークン（`zl_access`）も `API_JWT_SECRET` で自分で確かめます。会員の管理とパスワードの変更では、`PasswordAccount`（作成・パスワードの再設定と変更）と `SignInThrottle`（パスワード変更の回数）にも書きます。ログイン、LINE、cron は、今も Go API が行います。仕様は `docs/superpowers/specs/2026-10-21-web-auth-via-go-api-design.md` と `docs/superpowers/specs/2026-10-22-web-data-via-go-api-design.md` にあります。
 
 Go API の Vercel プロジェクトには、`GITHUB_WEB_CLIENT_ID`・`GITHUB_WEB_CLIENT_SECRET`・`GITHUB_WEB_REDIRECT_URI`・`API_WEB_PROXY_SECRET` を入れておきます（上の「3. 環境変数」の表）。Web の Vercel プロジェクトに入れる値は、次の 4 つに、あとの「Web が実行時に使う DB と秘密」の値を足したものです。
 
@@ -228,7 +228,7 @@ Web に移りました。設定は Web の `OPENAI_API_KEY`・`OPENAI_CHAT_MODEL
 
 `/v1/auth/*` には 2 種類の制限があります。
 
-- **IP ごとのレート制限**: インスタンスのメモリ上で数え、1 分に 10 回までです。Vercel はインスタンスを自動で増やすので、インスタンスが複数あるときは合計でこれより多く通ることがあります。
+- **IP ごとのレート制限**: DB の `SignInThrottle` テーブルで数えるので、インスタンスが増えても合計で数えます。1 分に 10 回までです。メモリ上で数えるのは、DB で数える設定が無いとき（ローカルのテスト）だけです。
 - **パスワードログインの試行回数**: DB の `SignInThrottle` テーブルで数えます。Web からのログインも Go API を通るので、Web とアプリの試行は合わせて数えます。15 分の枠で、1 つのクライアントからのパスワードログインは 20 回まで、同じクライアントから同じ loginId へは 5 回まで（成功すると 0 に戻ります）。超えると `429`（`rate_limited`）を返します。
 
 どちらも、クライアントのアドレスには、次の順で決まる値を使います。
@@ -250,7 +250,7 @@ Web に移りました。設定は Web の `OPENAI_API_KEY`・`OPENAI_CHAT_MODEL
 
 Go API は 1 つのインスタンスあたり最大 3 本の DB 接続を持ちます。Vercel がインスタンスを増やすと接続数も増えるので、Neon の pooled 接続文字列を使ってください。
 
-パスワードの検証（scrypt、N=2^15・r=8）は 1 回ごとに 32 MiB を使うため、インスタンスごとに同時に 4 件までしか計算しません（5 件目以降は空くまで待ちます）。
+パスワードの検証（scrypt、N=2^15・r=8）は 1 回ごとに 32 MiB を使うため、インスタンスごとに同時に 4 件までしか計算しません（5 件目以降は空くまで待ちます）。パスワードのハッシュ（作成・再設定・変更）と検証は、Web でも `crypto.scrypt` で計算します（1 回ごとに 32 MiB を使います）。専用の上限は付けていませんが、Node の threadpool（既定は 4 本）が上限になり、同時に動くのは 4 件まで、残りは待ちます。この threadpool はファイルや DNS の処理と共有です。
 
 ### 公開範囲
 

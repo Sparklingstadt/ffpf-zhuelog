@@ -577,13 +577,12 @@ func throttleRouter(t *testing.T, a Auth, th Throttle, c *clock) (http.Handler, 
 // With a Throttle, the route limits are counted there (shared by every
 // instance), under keys that cannot meet auth.Service's own.
 func TestRouteRateLimitsUseThrottle(t *testing.T) {
-	a := accountAuth(func(context.Context, auth.Principal, string, string, string) error {
-		return auth.ErrInvalidCurrentPassword
-	})
-	a.password = func(context.Context, string, string, string) (auth.TokenPair, error) {
-		return auth.TokenPair{}, auth.ErrUnauthorized
+	a := &fakeAuth{
+		password: func(context.Context, string, string, string) (auth.TokenPair, error) {
+			return auth.TokenPair{}, auth.ErrUnauthorized
+		},
+		refresh: func(context.Context, string) (auth.TokenPair, error) { return auth.TokenPair{}, auth.ErrUnauthorized },
 	}
-	a.refresh = func(context.Context, string) (auth.TokenPair, error) { return auth.TokenPair{}, auth.ErrUnauthorized }
 	c := newClock()
 	th := &fakeThrottle{}
 	h, _ := throttleRouter(t, a, th, c)
@@ -601,8 +600,6 @@ func TestRouteRateLimitsUseThrottle(t *testing.T) {
 		{http.MethodPost, "/v1/auth/logout", `{"refreshToken":"x"}`, xff, "route:auth:203.0.113.9", authRateLimit},
 		{http.MethodPost, "/v1/auth/guest", "", xff, "route:auth:203.0.113.9", authRateLimit},
 		{http.MethodPost, "/v1/auth/demo", "", xff, "route:auth:203.0.113.9", authRateLimit},
-		{http.MethodPost, passwordPath, passwordBody("old", "new password!", "new password!"),
-			map[string]string{"Authorization": "Bearer tok", "X-Forwarded-For": "203.0.113.9"}, "route:auth:203.0.113.9", authRateLimit},
 		{http.MethodPost, "/v1/auth/refresh", `{"refreshToken":"x"}`, xff, "route:refresh:203.0.113.9", refreshRateLimit},
 	} {
 		th.calls = nil

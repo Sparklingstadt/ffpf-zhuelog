@@ -15,9 +15,6 @@ var (
 	_ Pinger = (*store.Store)(nil)
 
 	_ Throttle = (*store.Store)(nil)
-
-	_ Accounts       = (*store.Store)(nil)
-	_ PasswordHasher = (*auth.PasswordVerifier)(nil)
 )
 
 // Auth is what the handlers need from *auth.Service.
@@ -28,22 +25,12 @@ type Auth interface {
 	Refresh(ctx context.Context, token string) (auth.TokenPair, error)
 	Logout(ctx context.Context, token string) error
 	Authenticate(ctx context.Context, accessToken string) (auth.Principal, error)
-	ChangePassword(ctx context.Context, p auth.Principal, current, next, confirm string) error
 	LoginGuest(ctx context.Context) (auth.TokenPair, error)
 	Me(ctx context.Context, p auth.Principal) (auth.Me, error)
 	ActAs(ctx context.Context, p auth.Principal, ownerID string) (auth.Principal, error)
 	DemoEnabled() bool
 	LoginDemo(ctx context.Context, client string) (auth.TokenPair, error)
 	IsDemo(ctx context.Context, p auth.Principal) (bool, error)
-}
-
-// Accounts is what the handlers need from *store.Store for admin member
-// management.
-type Accounts interface {
-	ListPasswordAccounts(ctx context.Context) ([]store.AccountSummary, error)
-	CreatePasswordAccount(ctx context.Context, loginID, displayName, hash string, now time.Time) (store.AccountSummary, error)
-	FindPasswordAccountByID(ctx context.Context, id string) (store.PasswordAccount, error)
-	SetPassword(ctx context.Context, id, hash string, now time.Time) error
 }
 
 // Throttle is the fixed-window counter in the database (*store.Store), so a
@@ -60,13 +47,10 @@ type Pinger interface {
 // Deps are the router's collaborators. A nil Logger means slog.Default() and a
 // nil Now means time.Now.
 type Deps struct {
-	Auth Auth
-	// Accounts and Hasher serve the admin routes.
-	Accounts Accounts
-	Hasher   PasswordHasher
-	DB       Pinger
-	Logger   *slog.Logger
-	Now      func() time.Time
+	Auth   Auth
+	DB     Pinger
+	Logger *slog.Logger
+	Now    func() time.Time
 	// WebProxySecret, when non-empty, lets the Next.js web server forward the
 	// end user's IP (see clientKeyFunc).
 	WebProxySecret []byte
@@ -130,8 +114,6 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	r.authRoutes()
 	r.demoRoutes()
 	r.meRoute()
-	r.accountRoutes()
-	r.adminRoutes()
 	r.lineRoutes()
 	return r.mux, r.routes
 }
@@ -176,24 +158,10 @@ func (r *registrar) authed(h http.Handler) http.Handler {
 	return requireAuth(r.d.Auth, false, rejectUserParam(h))
 }
 
-// private registers an authed route.
-func (r *registrar) private(pattern string, h http.Handler) {
-	r.handle(route{pattern: pattern, authed: true}, r.authed(h))
-}
-
-// adminOnly registers an authed route that answers non-admins with 403.
-func (r *registrar) adminOnly(pattern string, h http.Handler) { r.private(pattern, requireAdmin(h)) }
-
 // notForDemo registers an authed route the demo account may not use: one
-// that changes the account (password, LINE link).
+// that changes the account (the LINE link).
 func (r *registrar) notForDemo(pattern string, h http.Handler) {
-	r.notForDemoWrapped(pattern, r.authed, h)
-}
-
-// notForDemoWrapped is notForDemo with its own wrapper instead of authed; h
-// is the handler before authentication and wrap goes around it.
-func (r *registrar) notForDemoWrapped(pattern string, wrap func(http.Handler) http.Handler, h http.Handler) {
-	r.handle(route{pattern: pattern, authed: true, closedToDemo: true}, wrap(notDemo(r.d.Auth, h)))
+	r.handle(route{pattern: pattern, authed: true, closedToDemo: true}, r.authed(notDemo(r.d.Auth, h)))
 }
 
 func (r *registrar) healthRoutes() {
@@ -238,21 +206,6 @@ func (r *registrar) demoRoutes() {
 func (r *registrar) meRoute() {
 	r.handle(route{pattern: "GET /v1/me", authed: true, allowGuest: true},
 		requireAuth(r.d.Auth, true, rejectUserParam(me(r.d.Auth))))
-}
-
-func (r *registrar) accountRoutes() {
-	// Changing a password checks the current one, so it shares the /v1/auth/*
-	// limit. The limit runs before authentication so failed tokens count too.
-	r.notForDemoWrapped("POST /v1/account/password",
-		func(h http.Handler) http.Handler { return r.limited(r.authed(h)) }, changePassword(r.d.Auth))
-}
-
-// adminRoutes are member management (passwords are hashed with the shared
-// scrypt semaphore and are never logged).
-func (r *registrar) adminRoutes() {
-	r.adminOnly("GET /v1/admin/accounts", listAccounts(r.d.Accounts))
-	r.adminOnly("POST /v1/admin/accounts", createAccount(r.d.Accounts, r.d.Hasher, r.d.Now))
-	r.adminOnly("POST /v1/admin/accounts/{id}/password", resetAccountPassword(r.d.Accounts, r.d.Hasher, r.d.Now))
 }
 
 // lineRoutes exist only when the bot is configured. The webhook and the drain

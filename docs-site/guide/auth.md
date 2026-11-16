@@ -49,7 +49,7 @@ Web    ◀─(5) {accessToken, refreshToken, expiresIn} ── API
 4. API は portal の `/oauth/token` で `code` を交換し（Client Secret は HTTP Basic で送ります。10 秒でタイムアウトし、リダイレクトには従いません）、ID トークンを検証します。署名は ES256 だけで、鍵は portal の `/oauth/jwks`（10 分キャッシュ。知らない `kid` なら 1 回だけ取り直す）から取ります。`iss` が `FFPF_ID_ISSUER`、`aud` が `FFPF_ID_CLIENT_ID`、`exp` が過ぎていない（60 秒の余裕）、`nonce` が一致、`email_verified` が `true`、`sub` が `^[a-z0-9]{1,64}$` であることを確かめます。discovery は使いません。
 5. `FfpfAccount`（`id` は `sub`）を最新のメールアドレスと表示名で作るか更新し、`ownerId` を `ffpf:<sub>`、`role` を `member` としてトークンを発行します。メールアドレスは表示用で、認可には使いません。
 
-入力・交換・検証の失敗は `401 unauthorized`、portal に届かない・応答が不正なときは `502 ffpf_unavailable`、API に設定が無いときは `503 unavailable` です。FFPF ID の会員にはこのサービスのパスワードが無いので、`POST /v1/account/password` は `403 forbidden` です（パスワードは portal で変えます）。
+入力・交換・検証の失敗は `401 unauthorized`、portal に届かない・応答が不正なときは `502 ffpf_unavailable`、API に設定が無いときは `503 unavailable` です。FFPF ID の会員にはこのサービスのパスワードが無いので、パスワードは portal で変えます。
 
 ## ゲスト
 
@@ -75,7 +75,7 @@ Web    ◀─(5) {accessToken, refreshToken, expiresIn} ── API
 admin は、認証つきのリクエストに `X-Zhuelog-Act-As: <会員の ownerId>` を付けると、その会員として操作できます。Web の管理画面の「この会員として操作」はこの仕組みを使います。
 
 - トークンは admin のものをそのまま使い、毎回いつもどおり確かめます（許可リストから外れれば `403`）。
-- 持ち主（`ownerId`）だけが会員になり、`role` は `admin` のままです。Go のルートは、すべてその会員のものとして扱います。`/v1/admin/*` など admin の機能も、そのまま使えます。
+- 持ち主（`ownerId`）だけが会員になり、`role` は `admin` のままです。Go のルートは、すべてその会員のものとして扱います。Go には admin だけのルートはもう残っていません（会員の管理は Web の管理画面に移りました）。
 - 確かめる順番：トークンの確認とゲストの判定の後、admin でなければ `403 forbidden`（「他の人として操作できるのは管理者だけです。」）、ヘッダーが 2 つ以上・値が `^password:[a-z0-9]{1,64}$` に合わない（空・admin の ID・`guest` を含む）なら `400 invalid_request`、その会員がいなければ `404 not_found`（「会員が見つかりません。」）。
 - なれるのは会員だけです。admin やゲストにはなれません。
 - `GET /v1/me` は、`ownerId` に会員の `ownerId` を返し、`actingAs: {ownerId, loginId, displayName}` を付けます（[リファレンス](../reference/auth.md#get-v1-me)）。
@@ -161,8 +161,8 @@ DB の掃除は cron を使わず、ログインに成功したときにその `
 
 `sessionVersion` は次の操作で 1 上がり、その会員の **Web と API の既存のログインがすべて** 無効になります。
 
-- 会員が自分のパスワードを変えたとき（`POST /v1/account/password`。操作した端末も含めて無効になるので、アプリはログインし直します）
-- admin が会員のパスワードをリセットしたとき（Web の管理画面、または `POST /v1/admin/accounts/{id}/password`）
+- Web で会員が自分のパスワードを変えたとき
+- Web の管理画面で admin が会員のパスワードを再設定したとき
 
 admin を許可リストから外すと、その admin のトークンは期限前でも `403` になり、リフレッシュもできなくなります（ファミリーは失効します）。許可リストは起動時に読むので、変えたら API を再デプロイします。
 
@@ -173,17 +173,18 @@ admin を許可リストから外すと、その admin のトークンは期限�
 - `POST /v1/auth/github`
 - `POST /v1/auth/ffpf`
 - `POST /v1/auth/guest`
+- `POST /v1/auth/demo`
 - `POST /v1/auth/password`
 - `POST /v1/auth/logout`
-- `POST /v1/account/password`（認証より前に数えるので、無効なトークンでの呼び出しも数に入ります）
 
 `POST /v1/auth/refresh` は別の枠で、IP ごとに **1 分あたり 60 回** です。Web は開いているタブごとにリフレッシュするので、ログインと同じ枠だとリフレッシュがログインを締め出してしまいます。リフレッシュには有効なリフレッシュトークンが要るので、ゆるくしても総当たりにはなりません。
 
 超えると `429 rate_limited` です。固定の 1 分の窓で、窓が変われば回数は戻ります。
 
-- 数えるのはインスタンスごとのメモリ上です。Vercel がインスタンスを増やすと、実際の上限はその分ゆるくなります。パスワードの総当たりは、DB で数える [試行回数の制限](#試行回数の制限) でも防いでいます。
+- 数えるのは DB の `SignInThrottle` テーブルなので、インスタンスが増えても合計で数えます。メモリ上で数えるのは、DB で数える設定が無いとき（ローカルのテスト）だけです。パスワードの総当たりは、別に [試行回数の制限](#試行回数の制限) でも防いでいます。
 - Web（Next.js）から呼ばれたときは、全員が Vercel の関数の 1 つの IP に見えてしまいます。そこで Web は、利用者の IP を `X-Zhuelog-Client-IP` で、共有の秘密（`API_WEB_PROXY_SECRET`、32 バイト以上）を `X-Zhuelog-Proxy-Secret` で送ります。API は秘密が **一致したときだけ**（定数時間で比べます）`X-Zhuelog-Client-IP` を IP として使います。一致しないとき、`API_WEB_PROXY_SECRET` が未設定のときは、このヘッダーを無視します。この IP は、下の [試行回数の制限](#試行回数の制限) にも使います。
 - それ以外では、IP に `X-Forwarded-For` の **最後の値** を使い、無ければ接続元のアドレスを使います。Vercel はこのヘッダーをクライアントの IP で上書きするので偽装されません。Vercel の前に別のプロキシを置くと制限が正しく働かないので、置かないでください。
+- Web が行う自分のパスワードの変更も、同じ鍵（`route:auth:<IP>`）を `SignInThrottle` で数えるので、ログインと同じ枠に入ります。
 - それ以外のエンドポイントにレート制限はありません。
 
 ## 試行回数の制限
@@ -200,4 +201,4 @@ admin を許可リストから外すと、その admin のトークンは期限�
 - 回数は必ずクライアントのアドレスごとに数えます。他人が別の場所から間違ったパスワードを繰り返しても、本人のログインは止まりません（以前のアカウントごとのロックは廃止しました）。
 - アドレスは、レート制限と同じ決め方（`X-Zhuelog-Client-IP` を信頼できるときはその値、そうでなければ `X-Forwarded-For` の最後の値、それも無ければ接続元）で、IPv4 はそのまま、IPv6 は上位 64 ビット（/64）単位で数えます。
 
-自分のパスワードの変更（`POST /v1/account/password`）にも、アカウントごとに 15 分で 5 回までの制限があります。超えたときは、今のパスワードが違うときと同じ `400 invalid_current_password` を返します。変更に成功すると回数は戻ります。この回数はパスワードの変更だけのもので、ログインには影響しません。
+自分のパスワードの変更（Web）にも、アカウントごとに 15 分で 5 回までの制限があります。同じ `SignInThrottle` の表で、鍵 `password-change:<accountId>` で数え、変更に成功すると 0 に戻ります。ログインには影響しません。

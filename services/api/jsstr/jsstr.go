@@ -1,5 +1,5 @@
 // Package jsstr reproduces the JavaScript string operations the web app's
-// validation relies on (trim, length, toLowerCase), so the API judges
+// validation relies on (trim, toLowerCase), so the API judges
 // input exactly as the web does.
 package jsstr
 
@@ -18,20 +18,6 @@ func IsSpace(r rune) bool {
 
 // Trim is String.prototype.trim.
 func Trim(s string) string { return strings.TrimFunc(s, IsSpace) }
-
-// Len is JS s.length: the number of UTF-16 code units. An invalid UTF-8 byte
-// counts as one unit (it decodes to U+FFFD).
-func Len(s string) int {
-	n := 0
-	for _, r := range s {
-		if r >= 0x10000 {
-			n += 2
-		} else {
-			n++
-		}
-	}
-	return n
-}
 
 // ToLower is String.prototype.toLowerCase for the cases that matter here: it
 // is strings.ToLower except that U+0130 (LATIN CAPITAL LETTER I WITH DOT

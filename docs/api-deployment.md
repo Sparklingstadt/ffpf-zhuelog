@@ -109,7 +109,7 @@ curl -i https://<プロジェクト>.vercel.app/health
 
 ## 6. Web の設定
 
-Web（Next.js）は、ログインも学習ノートの読み書きも Go API で行います。ただし、ログイン中の人を決めるところは Web が自分で行います。Go が出すアクセストークン（`zl_access`）を `API_JWT_SECRET` で確かめ、DB の `PasswordAccount`・`FfpfAccount` を Prisma（`src/infrastructure/prisma/`）で読みます（Go API を畳む移行の段階 0。設計は `docs/superpowers/specs/2026-11-16-deprecate-go-backend-design.md`）。ほかのデータとログインは今も Go API を通します。仕様は `docs/superpowers/specs/2026-10-21-web-auth-via-go-api-design.md` と `docs/superpowers/specs/2026-10-22-web-data-via-go-api-design.md` にあります。
+Web（Next.js）は、ログインも学習ノートの読み書きも Go API で行います。ただし、ログイン中の人を決めるところは Web が自分で行います。Go が出すアクセストークン（`zl_access`）を `API_JWT_SECRET` で確かめ、DB の `PasswordAccount`・`FfpfAccount` を Prisma（`src/infrastructure/prisma/`）で読み、会員の管理とパスワードの変更では `PasswordAccount`（作成・パスワードの再設定と変更）と `SignInThrottle`（パスワード変更の回数）にも書きます（Go API を畳む移行の段階 0。設計は `docs/superpowers/specs/2026-11-16-deprecate-go-backend-design.md`）。ほかのデータとログインは今も Go API を通します。仕様は `docs/superpowers/specs/2026-10-21-web-auth-via-go-api-design.md` と `docs/superpowers/specs/2026-10-22-web-data-via-go-api-design.md` にあります。
 
 Go API の Vercel プロジェクトには、`GITHUB_WEB_CLIENT_ID`・`GITHUB_WEB_CLIENT_SECRET`・`GITHUB_WEB_REDIRECT_URI`・`API_WEB_PROXY_SECRET` を入れておきます（上の「3. 環境変数」の表）。Web の Vercel プロジェクトに入れる値は、次の 4 つに、あとの「Web が実行時に使う DB と秘密」の 3 つ（と `DATABASE_URL`）を足したものです。
 
@@ -379,6 +379,31 @@ ChatGPT と話す（OpenAI の答えを NDJSON でブラウザへ流す）と会
 - Go を再デプロイしたあとで Web だけを戻すと、古い Web が消えたルートを呼んで `404` になります。`/follow` はエラーの画面になり、フォローのボタンは「見つかりませんでした。画面を更新してください。」と出ます。
 - Web を戻すなら Go も戻します。いっしょに戻すのがいちばん安全です。
 
+#### 段階9b（会員の管理・パスワード変更）のマージの前と後
+
+会員の作成・一覧・パスワードの再設定（管理者）と、自分のパスワードの変更を Web に移した変更（段階9b）を本番に出す順番です。Web が scrypt で Go と同じ形のハッシュを書き（`tests/fixtures/scrypt-golden.json` で Go と同じことを確かめています）、ハッシュと `sessionVersion` を 1 つの `UPDATE` で変えます。Go の `/v1/admin/accounts`・`/v1/admin/accounts/{id}/password`・`/v1/account/password` はなくなりました。Go に残るのは、LINE、ログイン（ハッシュの確かめと `sessionVersion` の確かめを含む）、Cron です。
+
+マージの前:
+
+- この段階で必須の環境変数も、マイグレーションもありません。`PasswordAccount` と `SignInThrottle` はすでにあります。Web は段階 0 から `DATABASE_URL` で DB を読み、管理者を `AUTH_ALLOWED_GITHUB_IDS`、デモを `DEMO_LOGIN_ID` で決めています。
+
+マージのあと:
+
+1. Web の Production のデプロイが Ready になったことを確かめます。
+2. その Web のデプロイを `vercel promote` でカスタムドメインに切り替えます。
+3. main から Go を再デプロイします（Vercel CLI。実行の前に、使う人に確かめます）。これで、削除した `/v1/admin/accounts`・`/v1/admin/accounts/{id}/password`・`/v1/account/password` が本番の Go から実際に消えます。
+4. 本番で、管理者が試しの会員を 1 人作ります。その会員でログインできること（Go のログインが Web のハッシュを受け付けること）と、パスワードを再設定すると前のログインが切れることを確かめます。確かめたあと、試しの会員は DB から手で消します（Web に削除の画面はありません）。
+
+切り替えのあいだ:
+
+- 古い Go と新しい Web は同じ形のハッシュを書き、同じ `sessionVersion` と同じ試行回数の鍵を使います。どちらで変えても、もう一方のログインとセッションの確かめに効きます。
+
+戻すとき:
+
+- Go だけを戻しても害はありません。
+- Go を再デプロイしたあとで Web だけを戻すと、古い Web が消えたルートを呼んで `404` になります。管理画面の一覧はエラーの画面に、パスワードの変更は「処理できませんでした。時間をおいてもう一度お試しください。」になります。
+- Web を戻すなら Go も戻します。Web が書いたハッシュは、古い Go でも確かめられます。
+
 ### Web のプレビュー（Preview）
 
 PR ごとの Web のプレビューも、ログインとデータの読み書きを Go API で行います。そのため、Web の Vercel プロジェクトの **Preview** の環境変数にも、次の 4 つ（と、下の注の DB と秘密）を入れます。
@@ -473,7 +498,7 @@ FFPF ID（ffpf-portal が提供する OpenID Connect のプロバイダー）の
 
 - 流れ：Web が PKCE・`state`・`nonce` を作って `zl_oauth` Cookie に入れ、portal の `/oauth/authorize` へ送ります。戻り先 `/api/auth/callback/ffpf` で `state` を確かめてから、Go API の `POST /v1/auth/ffpf` に `{code, codeVerifier, redirectUri, nonce}` を渡します。Go API は portal の `/oauth/token` で `code` を交換し（client_secret_basic、10 秒、リダイレクトには従いません）、ID トークンを `/oauth/jwks`（10 分キャッシュ）で検証します（ES256・`iss`・`aud`・`exp`・`nonce`・`email_verified`）。discovery は使わず、エンドポイントは `FFPF_ID_ISSUER` から組み立てます。
 - 持ち主の ID は `ffpf:<sub>` です。`FfpfAccount` にメールアドレスと表示名を保存し、ログインのたびに最新の値で更新します。メールアドレスは表示用で、認可には使いません。許可リストは無く、メールアドレスを確認済みの FFPF ID なら誰でも会員になれます。
-- FFPF ID の会員は、パスワード会員と同じく学習ノート・共有・フォロー・タイムライン・LINE 連携を使えます。メンバー一覧にも出ます。パスワードはこのサービスに無いので、`/account/password` には portal のマイページ（`<FFPF_ID_ISSUER>/id`）へのリンクを出し、`POST /v1/account/password` は `403` です。
+- FFPF ID の会員は、パスワード会員と同じく学習ノート・共有・フォロー・タイムライン・LINE 連携を使えます。メンバー一覧にも出ます。パスワードはこのサービスに無いので、`/account/password` には portal のマイページ（`<FFPF_ID_ISSUER>/id`）へのリンクだけを出します（パスワードを変えるフォームは出しません）。
 - 誤りの扱い：入力・交換・ID トークンの検証の失敗は `401 unauthorized`、portal に届かない・5xx・JWKS が取れないときは `502 ffpf_unavailable`、設定が無いときは `503 unavailable` です。Web はどれも「認証サービスからの結果を確認できませんでした。」と出してログイン画面に戻します。
 - 使う表は `FfpfAccount` で、Prisma のマイグレーション `20261027120000_add_ffpf_accounts` で作ります。
 
@@ -492,7 +517,7 @@ FFPF ID（ffpf-portal が提供する OpenID Connect のプロバイダー）の
 
 - アカウント：`DEMO_LOGIN_ID` の ID の、普通のパスワード会員です。パスワードのハッシュは使えない値なので、ID とパスワードではログインできません。アカウントは下のリセットが作ります（手で作る必要はありません）。
 - データ：デモを試す全員で 1 つのアカウントを共有します。毎晩 04:00（日本時間）に、`services/api/vercel.json` の Cron（`0 19 * * *`、UTC）が `GET /v1/cron/demo-reset` を呼び、1 つのトランザクションで、デモの持ち物（学習ノートとヒント、復習の項目と記録、単語帳、会話ノート、クイック質問、練習の記録、フォロー、LINE の行）を消してから、`services/api/demo/seed.json` の内容を入れ直します。日付は「リセットの何日前か」で書いてあるので、いつ見ても直近 7 日の記録に見えます。ログイン中のセッションは消しません。
-- 使えないもの：OpenAI を呼ぶルート（Web の `POST /api/chat` と `POST /api/quick-question`）、LINE 連携の 5 つ、`POST /v1/account/password` は、デモには `403`（「デモでは使えません。」）です。フォロー・会員の一覧・タイムライン・共有（ほかの会員に届くため）は、Web が断ります（`/follow` は `/` に戻し、フォローや共有を直接送ると画面には「ログインし直してください。」と出ます）。Go のルートの判定は `auth.Service.IsDemo` の 1 か所で、LINE 連携と `POST /v1/account/password` だけに残っています。管理者がデモとして操作しているときや、ほかの会員には当てはまりません。Web の AI のルート（単語帳の下書き・クイック質問・ChatGPT と話す）は、Web が自分でデモかどうかを確かめて断ります。Web は、自分の DB の確認（`passwordHash` が使えない値で、ログイン ID が `DEMO_LOGIN_ID` と同じ）でデモかどうかを決め、すべてのページに「デモアカウントです。…」を出し、メニューから使えない機能を外します。
+- 使えないもの：OpenAI を呼ぶルート（Web の `POST /api/chat` と `POST /api/quick-question`）、LINE 連携の 5 つは、デモには `403`（「デモでは使えません。」）です。パスワードの変更も、デモには使えません。断るのは Web です（Go のルートはもうありません）。フォロー・会員の一覧・タイムライン・共有（ほかの会員に届くため）は、Web が断ります（`/follow` は `/` に戻し、フォローや共有を直接送ると画面には「ログインし直してください。」と出ます）。Go のルートの判定は `auth.Service.IsDemo` の 1 か所で、LINE 連携の 5 つだけに残っています。管理者がデモとして操作しているときや、ほかの会員には当てはまりません。Web の AI のルート（単語帳の下書き・クイック質問・ChatGPT と話す）は、Web が自分でデモかどうかを確かめて断ります。Web は、自分の DB の確認（`passwordHash` が使えない値で、ログイン ID が `DEMO_LOGIN_ID` と同じ）でデモかどうかを決め、すべてのページに「デモアカウントです。…」を出し、メニューから使えない機能を外します。
 - 手でリセットする：`curl -i -X POST https://ffpf-zhuelog-api.vercel.app/v1/cron/demo-reset -H "Authorization: Bearer $CRON_SECRET"` が `204` を返します（`GET` でも同じです）。`CRON_SECRET` を知っている人だけが呼べます。
 - マイグレーションは要りません（既存の表だけを使います）。Vercel Hobby の Cron は 2 つまでで、LINE の拾い直しとこのリセットで 2 つです。
 
@@ -515,7 +540,7 @@ FFPF ID（ffpf-portal が提供する OpenID Connect のプロバイダー）の
 
 `/v1/auth/*` には 2 種類の制限があります。
 
-- **IP ごとのレート制限**: インスタンスのメモリ上で数え、1 分に 10 回までです（`/v1/auth/*` と `POST /v1/account/password` で同じ枠を共有）。`POST /v1/auth/refresh` だけは別の枠で、1 分に 60 回までです。Web は開いているタブごとにリフレッシュするので、ログインと同じ枠だとリフレッシュがログインを締め出してしまうためです。Vercel はインスタンスを自動で増やすので、インスタンスが複数あるときは合計でこれより多く通ることがあります。
+- **IP ごとのレート制限**: DB の `SignInThrottle` テーブルで数えるので、インスタンスが増えても合計で数えます。1 分に 10 回までです（`/v1/auth/*` の 6 つで同じ枠を共有）。Web のパスワード変更も同じ鍵（`route:auth:<IP>`）を `SignInThrottle` で数えるので、同じ枠に入ります。`POST /v1/auth/refresh` だけは別の枠で、1 分に 60 回までです。Web は開いているタブごとにリフレッシュするので、ログインと同じ枠だとリフレッシュがログインを締め出してしまうためです。メモリ上で数えるのは、DB で数える設定が無いとき（ローカルのテスト）だけです。
 - **パスワードログインの試行回数**: DB の `SignInThrottle` テーブルで数えます。Web からのログインも Go API を通るので、Web とアプリの試行は合わせて数えます。15 分の枠で、1 つのクライアントからのパスワードログインは 20 回まで、同じクライアントから同じ loginId へは 5 回まで（成功すると 0 に戻ります）。超えると `429`（`rate_limited`）を返します。
 
 どちらも、クライアントのアドレスには、次の順で決まる値を使います。
@@ -543,7 +568,7 @@ FFPF ID（ffpf-portal が提供する OpenID Connect のプロバイダー）の
 
 Go API は 1 つのインスタンスあたり最大 3 本の DB 接続を持ちます。Vercel がインスタンスを増やすと接続数も増えるので、Neon の pooled 接続文字列を使ってください。
 
-パスワードの検証（scrypt、N=2^15・r=8）は 1 回ごとに 32 MiB を使うため、インスタンスごとに同時に 4 件までしか計算しません（5 件目以降は空くまで待ちます）。
+パスワードの検証（scrypt、N=2^15・r=8）は 1 回ごとに 32 MiB を使うため、インスタンスごとに同時に 4 件までしか計算しません（5 件目以降は空くまで待ちます）。パスワードのハッシュ（作成・再設定・変更）と検証は、Web でも `crypto.scrypt` で計算します（1 回ごとに 32 MiB を使います）。専用の上限は付けていませんが、Node の threadpool（既定は 4 本）が上限になり、同時に動くのは 4 件まで、残りは待ちます。この threadpool はファイルや DNS の処理と共有です。
 
 ### 公開範囲
 

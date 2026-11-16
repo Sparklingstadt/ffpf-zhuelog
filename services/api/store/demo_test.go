@@ -224,8 +224,9 @@ func TestResetDemoKeepsAnExistingAccount(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	loginID := newDemoLoginID(t, s)
-	made, err := s.CreatePasswordAccount(ctx, loginID, "試用", "scrypt:existing", fixedNow())
-	if err != nil {
+	made := newID()
+	if _, err := s.pool.Exec(ctx, `INSERT INTO "PasswordAccount" ("id", "loginId", "displayName", "passwordHash", "sessionVersion", "createdAt", "updatedAt") VALUES ($1, $2, '試用', 'scrypt:existing', 0, $3, $3)`,
+		made, loginID, dbTime(fixedNow())); err != nil {
 		t.Fatal(err)
 	}
 	id, err := s.ResetDemo(ctx, loginID, smallDemoSeed(fixedNow()), fixedNow())
@@ -233,7 +234,7 @@ func TestResetDemoKeepsAnExistingAccount(t *testing.T) {
 		t.Fatalf("ResetDemo: %v", err)
 	}
 	a, err := s.FindPasswordAccountByID(ctx, id)
-	if err != nil || id != made.ID || a.DisplayName != "試用" || a.PasswordHash != "scrypt:existing" {
+	if err != nil || id != made || a.DisplayName != "試用" || a.PasswordHash != "scrypt:existing" {
 		t.Fatalf("account = %+v, %v; want the existing one unchanged", a, err)
 	}
 }
