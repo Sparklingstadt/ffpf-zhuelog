@@ -13,6 +13,7 @@ import {
 } from "../../domain/review/review-days";
 import {
   REVIEW_ITEM_ID,
+  REVIEW_LOG_ID,
   type DueReviews,
   type ReviewItem,
   type ReviewRating,
@@ -108,7 +109,7 @@ export function createReviewQueue(deps: ReviewQueueDeps) {
     },
 
     // Applied once per logId, so a retry is safe. false when the item is
-    // not the user's (or not an item id at all) or logId is another item's.
+    // not the user's (or not an item id at all), logId is not a UUID or it is another item's.
     async answer(answer: {
       itemId: string;
       logId: string;
@@ -116,6 +117,7 @@ export function createReviewQueue(deps: ReviewQueueDeps) {
     }): Promise<boolean> {
       const ownerId = await owner();
       if (!REVIEW_ITEM_ID.test(answer.itemId)) return false;
+      if (!REVIEW_LOG_ID.test(answer.logId)) return false;
       return deps.store.answer(
         ownerId,
         answer.itemId,

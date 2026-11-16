@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import { LearningForbiddenError } from "../src/application/learning/learning-notes";
 import { handleNoteReview } from "../src/presentation/controllers/note-review-controller";
+import { genericErrorMessage } from "../src/presentation/presenters/generic-error-message";
 
 const success = { status: "success", message: "" };
 const unauthorized = { status: "error", message: "ログインし直してください。" };
@@ -105,5 +106,6 @@ test("LearningForbiddenError is not allowed and other errors go through the gene
     },
   );
   assert.equal(state.status, "error");
+  assert.equal(state.message, genericErrorMessage);
   assert.deepEqual(logged, [["NOTE_REVIEW_FAILED", "Error"]]);
 });

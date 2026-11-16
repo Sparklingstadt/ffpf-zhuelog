@@ -206,3 +206,10 @@ test("an answer to an item id of the wrong shape is not found without asking the
     assert.equal(await queue.answer({ itemId: id, logId, rating: 3 }), false);
   assert.deepEqual(calls, []);
 });
+
+test("an answer with a logId that is not a lower-case UUID is refused without asking the store", async () => {
+  const { queue, calls } = setup(member);
+  for (const bad of ["", "not-a-uuid", logId.toUpperCase()])
+    assert.equal(await queue.answer({ itemId, logId: bad, rating: 3 }), false);
+  assert.deepEqual(calls, []);
+});

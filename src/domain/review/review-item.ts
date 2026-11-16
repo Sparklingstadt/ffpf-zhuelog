@@ -4,6 +4,11 @@ import type { VocabularyCard } from "@/domain/vocabulary/vocabulary-entry";
 // A ReviewItem id as Go and newId make them; anything else is not looked up.
 export const REVIEW_ITEM_ID = /^c[a-z0-9]{24}$/;
 
+// The id of one answer (ReviewLog) as Go checked it: a lower-case UUID
+// (crypto.randomUUID() always passes).
+export const REVIEW_LOG_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
 // An item of the signed-in user's spaced-repetition queue. kind says what
 // targetId names ("preposition": "P001:学校", "complement": "result-01",
 // "vocabulary": the word's id, with the word in vocabulary, "entry": a

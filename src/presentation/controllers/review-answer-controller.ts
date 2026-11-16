@@ -4,7 +4,7 @@ import {
   isMemberRole,
   type AppRole,
 } from "@/domain/identity/entities/authenticated-user";
-import type { ReviewRating } from "@/domain/review/review-item";
+import { REVIEW_LOG_ID, type ReviewRating } from "@/domain/review/review-item";
 import {
   attemptGo,
   type ActionResult,
@@ -15,9 +15,7 @@ import { accountForbiddenMessage } from "@/presentation/presenters/account-actio
 // lower-case UUID as Go checked it (crypto.randomUUID() always passes).
 const answerInput = z.object({
   itemId: z.string().min(1),
-  logId: z
-    .string()
-    .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
+  logId: z.string().regex(REVIEW_LOG_ID),
   rating: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
 });
 
