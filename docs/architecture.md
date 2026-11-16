@@ -12,7 +12,7 @@ flowchart LR
   subgraph Web[Web: Next.js 16 on Vercel]
     RSC[Server Components]
     SA[Server Actions]
-    RH[Route Handlers<br/>チャットの中継・OAuth の callback]
+    RH[Route Handlers<br/>チャット・クイック質問の答え・OAuth の callback]
     PX[proxy.ts<br/>refresh token の更新]
   end
   subgraph API[Go API on Vercel]
@@ -171,16 +171,16 @@ sequenceDiagram
 
 ## 8. AI と費用
 
-**呼ぶところ**：OpenAI を呼ぶのは次の 4 か所で、単語帳の下書きとクイック質問が Web（`src/infrastructure/openai/`）、ほかは Go API です。どれも Responses API を使います。
+**呼ぶところ**：OpenAI を呼ぶのは次の 4 か所で、LINE の添削・翻訳だけが Go API、ほかは Web（`src/infrastructure/openai/`）です。どれも Responses API を使います。
 
 | 機能              | モデル                           | 返し方                                                    |
 | ----------------- | -------------------------------- | --------------------------------------------------------- |
 | LINE の添削・翻訳 | `gpt-5-mini`                     | JSON スキーマで構造化した出力                             |
 | 単語帳の下書き    | `gpt-5-mini`                     | JSON スキーマで構造化した出力                             |
-| ChatGPT と話す    | 環境変数で変えられる（既定あり） | ストリーミング（NDJSON で中継）                           |
+| ChatGPT と話す    | 環境変数で変えられる（既定あり） | ストリーミング（Web の Route Handler から NDJSON で直接） |
 | クイック質問      | 同上                             | ストリーミング（Web の Route Handler から NDJSON で直接） |
 
-クイック質問は、テキストが出る前の失敗なら 502、出たあとの失敗なら `error` の行で伝えます。途中で切れた答えは保存しません。
+ストリーミングの 2 つは、テキストが出る前の失敗なら 502、出たあとの失敗なら `error` の行で伝えます。ChatGPT と話すは、トークンの上限で切れた答えもそのまま保存します。クイック質問は、途中で切れた答えを保存しません。
 
 **利用量の記録**：呼ぶたびに、機能・モデル・入出力のトークン数を `AiUsage` に記録します。管理者は `/admin/ai-usage` で月ごとに見られます。入力した文や答えは記録しません。
 
@@ -206,7 +206,7 @@ sequenceDiagram
 
 ## 11. いまの課題
 
-- **入力の検証が 2 か所にある**：ログイン ID・パスワード・表示名の規則や、チャットの本文の上限を、Web（zod）と Go の両方で持っています。Go が最後の砦で、Web は早く知らせるためですが、規則を変えるときは 2 か所を直す必要があります。
+- **入力の検証が 2 か所にある**：ログイン ID・パスワード・表示名の規則を、Web（zod）と Go の両方で持っています。Go が最後の砦で、Web は早く知らせるためですが、規則を変えるときは 2 か所を直す必要があります。
 - **外部キーがない**：管理者は DB に行を持たないので、`ownerId` に外部キーがありません。持ち主の整合性は Go API のコードで守っています。
 - **Preview の DB**：Preview の Go API がどの DB を使うかについて、文書の記述が食い違っています（`api-deployment.md` の 62 行目と 80 行目）。どちらかにそろえる必要があります。
 - **CI がない**：GitHub Actions の CI は外しました。確認は lefthook のローカルの検査だけで、`pnpm audit` と `pnpm run build` は自動では走りません。
