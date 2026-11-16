@@ -2,29 +2,25 @@
 
 import { revalidatePath } from "next/cache";
 
-import { getCurrentViewerUser } from "@/composition/identity-container";
+import { LineLinkForbiddenError } from "@/application/line/line-link";
 import { lineLink } from "@/composition/line-container";
 import { attemptGo } from "@/presentation/controllers/action-state";
-import { accountForbiddenMessage } from "@/presentation/presenters/account-action-errors";
 
 export type LineLinkState =
   | { status: "idle" }
   | { status: "issued"; code: string; expiresAt: string }
   | { status: "error"; message: string };
 
-// Members and admins only: guests can read the app but have no LINE link.
-async function getLinkOwner() {
-  const user = await getCurrentViewerUser();
-  return user && user.role !== "guest" ? user : null;
-}
+// The signed-in member's or admin's own LINE link, read and written in the
+// database by the lineLink use case, which refuses guests, the demo account
+// and an admin acting as a member (LineLinkForbiddenError, shown as
+// accountForbiddenMessage by attemptGo).
 
 // Takes no arguments: the state and the form data are both unused, and a
 // function with fewer parameters still works as a useActionState action.
 export async function issueLineLinkCodeAction(): Promise<LineLinkState> {
-  if (!(await getLinkOwner()))
-    return { status: "error", message: accountForbiddenMessage };
   const issued = await attemptGo("LINE_LINK_CODE_FAILED", () =>
-    lineLink.issueLineLinkCode(),
+    lineLink.issueCode(),
   );
   if (!issued.ok) return { status: "error", message: issued.message };
   return {
@@ -34,9 +30,14 @@ export async function issueLineLinkCodeAction(): Promise<LineLinkState> {
   };
 }
 
+// A refused user changes nothing and sees the page as it was.
 export async function unlinkLineAction(): Promise<void> {
-  if (!(await getLinkOwner())) return;
-  await lineLink.unlinkLine();
+  try {
+    await lineLink.unlink();
+  } catch (error) {
+    if (error instanceof LineLinkForbiddenError) return;
+    throw error;
+  }
   revalidatePath("/account/line");
 }
 
@@ -51,11 +52,9 @@ export async function setLineReviewNotifyAction(
   _previous: LineReviewNotifyState,
   formData: FormData,
 ): Promise<LineReviewNotifyState> {
-  if (!(await getLinkOwner()))
-    return { status: "error", message: accountForbiddenMessage };
   const on = formData.get("on") === "1";
   const saved = await attemptGo("LINE_REVIEW_NOTIFY_FAILED", () =>
-    lineLink.setLineReviewNotify(on),
+    lineLink.setReviewNotify(on),
   );
   if (!saved.ok) return { status: "error", message: saved.message };
   if (!saved.value)

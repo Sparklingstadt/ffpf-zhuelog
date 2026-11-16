@@ -5,6 +5,7 @@ import { ConversationForbiddenError } from "@/application/chat/conversation-note
 import { QuestionForbiddenError } from "@/application/chat/question-notes";
 import { AccountAdminForbiddenError } from "@/application/identity/member-accounts";
 import { LearningForbiddenError } from "@/application/learning/learning-notes";
+import { LineLinkForbiddenError } from "@/application/line/line-link";
 import { PracticeForbiddenError } from "@/application/practice/practice-records";
 import { ReviewForbiddenError } from "@/application/review/review-queue";
 import { SocialForbiddenError } from "@/application/social/social-network";
@@ -122,8 +123,8 @@ export async function attemptGoResult(
 }
 
 // Go's 403, or an application refusing the signed-in user: learning notes,
-// reviews, practice records, questions, conversations, follows and member
-// accounts.
+// reviews, practice records, questions, conversations, follows, member
+// accounts and the LINE link.
 function isForbidden(error: unknown): boolean {
   return (
     error instanceof LearningForbiddenError ||
@@ -133,6 +134,7 @@ function isForbidden(error: unknown): boolean {
     error instanceof ConversationForbiddenError ||
     error instanceof SocialForbiddenError ||
     error instanceof AccountAdminForbiddenError ||
+    error instanceof LineLinkForbiddenError ||
     (error instanceof GoApiError && error.status === 403)
   );
 }
