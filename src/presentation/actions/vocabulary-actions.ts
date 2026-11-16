@@ -21,6 +21,7 @@ import {
   actionUnauthorized,
   type ActionState,
 } from "@/presentation/controllers/action-state";
+import { lowercaseUuid } from "@/presentation/actions/vocabulary-id";
 import { accountForbiddenMessage } from "@/presentation/presenters/account-action-errors";
 import { genericErrorMessage } from "@/presentation/presenters/generic-error-message";
 
@@ -96,7 +97,7 @@ export async function draftVocabularyAction(
 }
 
 const saveInput = z.object({
-  id: z.uuid(),
+  id: lowercaseUuid,
   word: z.string().trim().min(1).max(VOCABULARY_LIMITS.word),
   pinyin: z.string().trim().max(VOCABULARY_LIMITS.pinyin),
   meaning: z.string().trim().min(1).max(VOCABULARY_LIMITS.meaning),
@@ -136,7 +137,7 @@ export async function deleteVocabularyAction(
   formData: FormData,
 ): Promise<ActionState> {
   if (!(await canUseVocabulary())) return actionUnauthorized;
-  const id = z.uuid().safeParse(formData.get("id"));
+  const id = lowercaseUuid.safeParse(formData.get("id"));
   if (!id.success) return { status: "error", message: notFoundMessage };
   try {
     await vocabulary.remove(id.data);

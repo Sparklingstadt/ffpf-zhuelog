@@ -88,6 +88,68 @@ export function createVocabularyStore(
   db: () => PrismaClient,
   now: () => Date = () => new Date(),
 ) {
+  async function saveOnce(
+    ownerId: string,
+    input: VocabularyInput,
+    at: Date,
+  ): Promise<VocabularyEntry> {
+    const row = await db().$transaction(async (tx) => {
+      const existing = await tx.vocabularyEntry.findUnique({
+        where: { id: input.id },
+        select: { ownerId: true },
+      });
+      const decision = decideSave(existing?.ownerId ?? null, ownerId);
+      if (decision === "not-found") throw new VocabularyNotFoundError();
+      if (decision === "update") {
+        // Scoped by owner: the row may have been deleted or recreated
+        // by someone else since the check above.
+        const { count } = await tx.vocabularyEntry.updateMany({
+          where: { id: input.id, ownerId },
+          data: {
+            pinyin: input.pinyin,
+            meaning: input.meaning,
+            updatedAt: at,
+          },
+        });
+        if (count === 0) throw new VocabularyNotFoundError();
+        return tx.vocabularyEntry.findUniqueOrThrow({
+          where: { id: input.id },
+        });
+      }
+      const created = await tx.vocabularyEntry.create({
+        data: {
+          id: input.id,
+          ownerId,
+          language: LANGUAGE,
+          word: input.word,
+          pinyin: input.pinyin,
+          meaning: input.meaning,
+          sourceEntryId: input.sourceEntryId || null,
+          createdAt: at,
+          updatedAt: at,
+        },
+      });
+      await tx.reviewItem.createMany({
+        data: [
+          {
+            id: newId(),
+            ownerId,
+            language: LANGUAGE,
+            kind: REVIEW_KIND,
+            targetId: created.id,
+            due: at,
+            state: 0,
+            createdAt: at,
+            updatedAt: at,
+          },
+        ],
+        skipDuplicates: true,
+      });
+      return created;
+    });
+    return toEntry(row, null);
+  }
+
   return {
     // Newest first, with when each word's review card is next due.
     async list(ownerId: string): Promise<VocabularyEntry[]> {
@@ -123,77 +185,13 @@ export function createVocabularyStore(
       // the owner's), so a client retry applies once.
       for (let attempt = 0; ; attempt += 1) {
         try {
-          return await this.saveOnce(ownerId, input, at);
+          return await saveOnce(ownerId, input, at);
         } catch (error) {
           const kind = uniqueViolationOn(error);
           if (kind === "id" && attempt === 0) continue;
           if (kind === "word") throw new VocabularyExistsError();
           throw error;
         }
-      }
-    },
-
-    async saveOnce(
-      ownerId: string,
-      input: VocabularyInput,
-      at: Date,
-    ): Promise<VocabularyEntry> {
-      {
-        const row = await db().$transaction(async (tx) => {
-          const existing = await tx.vocabularyEntry.findUnique({
-            where: { id: input.id },
-            select: { ownerId: true },
-          });
-          const decision = decideSave(existing?.ownerId ?? null, ownerId);
-          if (decision === "not-found") throw new VocabularyNotFoundError();
-          if (decision === "update") {
-            // Scoped by owner: the row may have been deleted or recreated
-            // by someone else since the check above.
-            const { count } = await tx.vocabularyEntry.updateMany({
-              where: { id: input.id, ownerId },
-              data: {
-                pinyin: input.pinyin,
-                meaning: input.meaning,
-                updatedAt: at,
-              },
-            });
-            if (count === 0) throw new VocabularyNotFoundError();
-            return tx.vocabularyEntry.findUniqueOrThrow({
-              where: { id: input.id },
-            });
-          }
-          const created = await tx.vocabularyEntry.create({
-            data: {
-              id: input.id,
-              ownerId,
-              language: LANGUAGE,
-              word: input.word,
-              pinyin: input.pinyin,
-              meaning: input.meaning,
-              sourceEntryId: input.sourceEntryId || null,
-              createdAt: at,
-              updatedAt: at,
-            },
-          });
-          await tx.reviewItem.createMany({
-            data: [
-              {
-                id: newId(),
-                ownerId,
-                language: LANGUAGE,
-                kind: REVIEW_KIND,
-                targetId: created.id,
-                due: at,
-                state: 0,
-                createdAt: at,
-                updatedAt: at,
-              },
-            ],
-            skipDuplicates: true,
-          });
-          return created;
-        });
-        return toEntry(row, null);
       }
     },
 

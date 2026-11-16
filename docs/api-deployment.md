@@ -164,8 +164,26 @@ Web は実行時に、次の値を使います。Web の Vercel プロジェク�
 
 - 値は、Go API のプロジェクトに入れているものと同じにします。Web だけ値が違うと、Go が出したトークンを Web が確かめられず、管理者やデモの判定もずれます。
 - `DATABASE_URL` が pooled か、マージの前に確かめます（ホスト名に `-pooler` が付くのが pooled です）。マイグレーション（`prisma migrate deploy`）は direct の URL を使うのが本来の形です。今の Production の値が **direct** のときは、実行時用に pooled の値を別の変数で足します。ただし、今の Web のコード（`src/infrastructure/prisma/prisma-client.ts`）が読むのは `DATABASE_URL` だけです。その場合は、実行時用の変数を読むコードの変更を先に入れてから、値を設定します。
-- 単語帳（一覧・保存・削除）は、Web が Prisma で DB を読み書きします。「AI で下書き」も Web が OpenAI を直接呼び、使った量を、操作している人の `AiUsage` に記録します。Go API には `/v1/vocabulary*` のルートはもうありません。そのため、**マージの前に** Web の Production に `OPENAI_API_KEY` を入れます（Go API と同じ値でよい）。Go API にも、LINE・ChatGPT と話す・クイック質問のために、自分の `OPENAI_API_KEY` が引き続き要ります。
+- 単語帳（一覧・保存・削除）は、Web が Prisma で DB を読み書きします。「AI で下書き」も Web が OpenAI を直接呼び、使った量を、操作している人の `AiUsage` に記録します。コードの上では、Go API に `/v1/vocabulary*` のルートはもうありません（本番の Go は、下の手順で再デプロイするまで古いままです）。そのため、**マージの前に** Web の Production に `OPENAI_API_KEY` を入れます（Go API と同じ値でよい）。Go API にも、LINE・ChatGPT と話す・クイック質問のために、自分の `OPENAI_API_KEY` が引き続き要ります。
 - `OPENAI_API_BASE_URL` はテスト専用です。`127.0.0.1` などのループバックの URL だけを受け付けます。**Production と Preview には設定しません。**
+
+#### 段階1のマージの前と後
+
+単語帳を Web に移した変更（段階1）を本番に出す順番です。
+
+マージの前:
+
+- Web の Production に `OPENAI_API_KEY` を入れます（Go API と同じ値でよい）。
+- Go に `OPENAI_LEARNING_MODEL` を入れている場合は、Web にも同じ値を入れます。今の Go には入っておらず、既定の `gpt-5-mini` なので、Web も入れなくて同じになります。
+
+マージのあと:
+
+1. Web の Production のデプロイが Ready になったことを確かめます。
+2. main から Go を再デプロイします（Vercel CLI。実行の前に、使う人に確かめます）。これで、削除した `/v1/vocabulary*` のルートが本番から実際に消えます。それまでは、本番の Go に古いルートが残っています。
+
+戻すとき:
+
+- Go を再デプロイしたあとで Web だけを戻すと、単語帳が壊れます（古い Web が `/v1/vocabulary*` を呼び、`404` になります）。Web と Go を **いっしょに** 戻します。
 - 秘密の値は、このリポジトリのファイルやログに書きません。
 - 4 つ（`API_JWT_SECRET`（Go API と 1 バイトも違わない値）、`AUTH_ALLOWED_GITHUB_IDS`（数字の ID。Go API と同じ値）、`DEMO_LOGIN_ID`、`DATABASE_URL`）は、**マージ（本番のデプロイ）の前に** Web の Production に入れておきます。Vercel の環境変数は、変えたあとに再デプロイしないと効きません。
 - 足りない・値が違うときの症状：`API_JWT_SECRET` が無い・違う・短いと、全員が未ログイン扱いになり、ログインしても `/signin` に戻ります。`DATABASE_URL` が無いと、会員向けのページがエラーになります。

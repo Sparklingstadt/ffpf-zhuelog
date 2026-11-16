@@ -4,7 +4,7 @@
 
 ## 一覧
 
-権限の列：「公開」は認証不要（LINE のルートは、括弧の中の別の方法で確かめます。LINE の設定が無いときは `/v1/line/*` の 7 つが `404`。`OPENAI_API_KEY` が無いときは `POST /v1/chat`・`POST /v1/quick-question`・`POST /v1/vocabulary/draft` が `404`、会話ノートと質問ノートの `PUT` が `405`。保存済みのノートの読み出しと会話ノートの削除は使えます）、「全員」は admin と会員（ゲストは `403`。`GET /v1/me` だけ「ゲストも」）、「会員」「admin」はその役割だけ（それ以外は `403`）。`?user=` の列は、admin が他の人のノートを読むためのクエリを受け付けるかどうかです。
+権限の列：「公開」は認証不要（LINE のルートは、括弧の中の別の方法で確かめます。LINE の設定が無いときは `/v1/line/*` の 7 つが `404`。`OPENAI_API_KEY` が無いときは `POST /v1/chat`・`POST /v1/quick-question` が `404`、会話ノートと質問ノートの `PUT` が `405`。保存済みのノートの読み出しと会話ノートの削除は使えます）、「全員」は admin と会員（ゲストは `403`。`GET /v1/me` だけ「ゲストも」）、「会員」「admin」はその役割だけ（それ以外は `403`）。`?user=` の列は、admin が他の人のノートを読むためのクエリを受け付けるかどうかです。
 
 | メソッド | パス                                                                                           | 権限                  | `?user=` | 成功 | 内容                                               |
 | -------- | ---------------------------------------------------------------------------------------------- | --------------------- | -------- | ---- | -------------------------------------------------- |
@@ -60,10 +60,6 @@
 | GET      | [`/v1/entries/{id}/review`](./reviews.md#get-v1-entries-id-review)                             | 会員・admin           | ×        | 200  | ノートが復習に入っているか                         |
 | PUT      | [`/v1/entries/{id}/review`](./reviews.md#put-v1-entries-id-review)                             | 会員・admin           | ×        | 204  | ノートを復習に入れる                               |
 | DELETE   | [`/v1/entries/{id}/review`](./reviews.md#delete-v1-entries-id-review)                          | 会員・admin           | ×        | 204  | ノートを復習から外す                               |
-| GET      | [`/v1/vocabulary`](./vocabulary.md#get-v1-vocabulary)                                          | 会員・admin           | ×        | 200  | 単語帳の一覧                                       |
-| PUT      | [`/v1/vocabulary/{id}`](./vocabulary.md#put-v1-vocabulary-id)                                  | 会員・admin           | ×        | 200  | 単語を足す・直す                                   |
-| DELETE   | [`/v1/vocabulary/{id}`](./vocabulary.md#delete-v1-vocabulary-id)                               | 会員・admin           | ×        | 204  | 単語を消す                                         |
-| POST     | [`/v1/vocabulary/draft`](./vocabulary.md#post-v1-vocabulary-draft)                             | 会員・admin           | ×        | 200  | ピン音と意味の下書き（AI）                         |
 | GET      | [`/v1/study-log`](./study-log.md#get-v1-study-log)                                             | 会員・admin           | ×        | 200  | 日ごとの学習量                                     |
 | GET      | [`/v1/admin/accounts`](./admin.md#get-v1-admin-accounts)                                       | admin                 | ×        | 200  | 会員の一覧（管理用）                               |
 | POST     | [`/v1/admin/accounts`](./admin.md#post-v1-admin-accounts)                                      | admin                 | ×        | 201  | 会員の作成                                         |

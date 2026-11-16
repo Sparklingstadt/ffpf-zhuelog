@@ -294,7 +294,7 @@ model ReviewLog {
 // A word or phrase an owner picked out to learn, with its reading and
 // meaning (drafted by AI, edited by the owner). Each one is also a
 // ReviewItem of kind "vocabulary" whose targetId is this id; deleting the
-// entry deletes that item too (the Go API does both in one transaction).
+// entry deletes that item too (the web does both in one transaction).
 // sourceEntryId is the learning note it was picked from, kept as a plain
 // reference: the note may later go to the trash or be deleted.
 model VocabularyEntry {
@@ -313,7 +313,7 @@ model VocabularyEntry {
 }
 
 // One OpenAI call: who it was for, which feature, and the tokens it used.
-// Written only by the Go API; read by the admin's monthly summary.
+// Written by the Go API and the web; read by the admin's monthly summary.
 model AiUsage {
   id           String   @id
   ownerId      String
