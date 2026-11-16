@@ -2,6 +2,7 @@
 // alphabet, length, lifetime and redeem throttle (services/api/linebot/code.go).
 
 import type { ThrottleRule } from "@/domain/identity/sign-in-throttle";
+import { goTrimSpace } from "@/domain/line/go-text";
 
 // Go: codeAlphabet (code.go:24). No 0, O, 1 or I; 32 letters divide 256, so a
 // byte picks a letter without bias.
@@ -32,10 +33,14 @@ export function linkCodeFromBytes(bytes: Uint8Array): string {
   return code;
 }
 
-// Go: codeShape (code.go:61-72). NFKC, trim, upper case; the code when it is
-// exactly 8 characters of the alphabet, else null.
+// Go: codeShape (code.go:61-72). NFKC, Go's TrimSpace, upper case; the code
+// when it is exactly 8 characters of the alphabet, else null. Only a-z is
+// upper-cased: toUpperCase would turn "ß" into "SS" and change the length,
+// where Go's strings.ToUpper keeps one rune per rune.
 export function readLinkCode(text: string): string | null {
-  const n = text.normalize("NFKC").trim().toUpperCase();
+  const n = goTrimSpace(text.normalize("NFKC")).replace(/[a-z]/g, (c) =>
+    c.toUpperCase(),
+  );
   const chars = [...n];
   if (chars.length !== LINK_CODE_LENGTH) return null;
   return chars.every((c) => LINK_CODE_ALPHABET.includes(c)) ? n : null;

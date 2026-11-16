@@ -1,3 +1,4 @@
+import { goTrimSpace } from "@/domain/line/go-text";
 import type { LineGeneration } from "@/domain/line/line-replies";
 import type { LineLearningKind } from "@/domain/line/line-text";
 import {
@@ -104,11 +105,11 @@ export function parseLineLearning(
   return { text, pinyin, hints };
 }
 
-// Go: cleanString (learning/schema.go:105-109). Trims s; null unless it is
-// 1..limit code points.
+// Go: cleanString (learning/schema.go:105-109). Trims s with Go's TrimSpace;
+// null unless it is 1..limit code points.
 function clean(s: unknown, limit: number): string | null {
   if (typeof s !== "string") return null;
-  const trimmed = s.trim();
+  const trimmed = goTrimSpace(s);
   const length = [...trimmed].length;
   return length >= 1 && length <= limit ? trimmed : null;
 }

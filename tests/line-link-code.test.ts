@@ -15,6 +15,7 @@ test("link codes are read and hashed as Go does", () => {
     " abcd2345 ",
     "ＡＢＣＤ２３４５",
     "　ａｂｃｄ２３４５　",
+    "ABCD2345\u0085",
   ])
     assert.equal(readLinkCode(text), "ABCD2345", JSON.stringify(text));
   for (const text of [
@@ -27,6 +28,8 @@ test("link codes are read and hashed as Go does", () => {
     "ABCD 345",
     "你好你好你好你好",
     "",
+    "ABCD2345\uFEFF",
+    "abcd23ß",
   ])
     assert.equal(readLinkCode(text), null, JSON.stringify(text));
 });

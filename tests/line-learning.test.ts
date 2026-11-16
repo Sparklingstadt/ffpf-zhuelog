@@ -94,6 +94,7 @@ test("the model's answer is checked as Go checked it", () => {
     ["a number text", raw({ ...ok, correctedText: 1 })],
     ["a null text", raw({ ...ok, correctedText: null })],
     ["a blank text", raw({ ...ok, correctedText: "  \n " })],
+    ["a NEL-only text", raw({ ...ok, correctedText: "\u0085" })],
     [
       "the translation key",
       raw({ translatedText: "我", pinyin: "wǒ", hints: ["a"] }),
@@ -108,6 +109,14 @@ test("the model's answer is checked as Go checked it", () => {
   ];
   for (const [name, text] of rejected)
     assert.equal(parseLineLearning("correction", text), null, name);
+  assert.deepEqual(
+    parseLineLearning(
+      "correction",
+      raw({ correctedText: "\uFEFF", pinyin: "\uFEFF", hints: ["\uFEFF"] }),
+    ),
+    { text: "\uFEFF", pinyin: "\uFEFF", hints: ["\uFEFF"] },
+    "U+FEFF is not a Go space",
+  );
   assert.equal(
     parseLineLearning("translation", raw(ok)),
     null,
