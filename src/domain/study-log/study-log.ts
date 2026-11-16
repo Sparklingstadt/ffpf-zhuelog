@@ -1,5 +1,5 @@
 // What the signed-in user did on one Japan date ("YYYY-MM-DD"), as the web
-// counts it.
+// counts it from the database.
 export type StudyDay = {
   date: string;
   reviews: number;

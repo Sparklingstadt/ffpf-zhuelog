@@ -19,7 +19,6 @@ import {
 } from "@/infrastructure/go-api/go-api-session";
 import { isDemoAvailable } from "@/infrastructure/go-api/client";
 import { createAccountGateway } from "@/infrastructure/go-api/account-gateway";
-import { createAiUsageGateway } from "@/infrastructure/go-api/ai-usage-gateway";
 import { getCachedCurrentUser } from "./current-user";
 
 // Decided from the access token and the account tables, once per request.
@@ -33,9 +32,6 @@ const requireViewerUser = new RequireViewerUser(currentUserProvider);
 // Password accounts (admin) and a member's own password go through the Go
 // API as the signed-in user.
 export const memberAccounts = createAccountGateway();
-
-// The admin's monthly summary of OpenAI usage.
-export const aiUsage = createAiUsageGateway();
 
 export function getCurrentAdminUser() {
   return requireAdminUser.execute();
