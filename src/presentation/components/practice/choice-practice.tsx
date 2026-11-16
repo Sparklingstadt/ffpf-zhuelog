@@ -2,72 +2,40 @@
 
 import { ArrowRight, History, RotateCcw } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
 import type { ChoiceQuestion } from "@/domain/practice/choice-question";
 import type { HskLevel } from "@/domain/practice/hsk-level";
 import type { PracticeQuizKind } from "@/domain/practice/practice-quiz";
-import {
-  accuracyPercent,
-  answerOf,
-  scoreRound,
-  type ChoiceAnswer,
-} from "@/domain/practice/practice-record";
+import { accuracyPercent } from "@/domain/practice/practice-record";
 import type {
   SavePracticeRoundInput,
   SavePracticeRoundResult,
 } from "@/presentation/actions/practice-record-actions";
 import {
-  nextPracticeQuizAction,
-  type NextPracticeQuizResult,
-} from "@/presentation/actions/practice-quiz-actions";
-import {
   ChoiceGrid,
   ProgressBar,
   SolvedExample,
-  useChoicePicks,
   WrongPickNotice,
 } from "@/presentation/components/practice/choice-parts";
 import { ChoiceAnswerList } from "@/presentation/components/practice/choice-answer-list";
 import { RoundStats } from "@/presentation/components/practice/round-stats";
+import {
+  usePracticeRound,
+  type SaveState,
+} from "@/presentation/components/practice/use-practice-round";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
 import { focusInPlace, scrollBehavior } from "@/presentation/lib/focus";
 import { isOnControl, isTypingOrShortcut } from "@/presentation/lib/keyboard";
 import { cn } from "@/presentation/lib/utils";
 
-type SaveState =
-  | { status: "idle" | "saving" | "saved" }
-  | { status: "error"; message: string };
-
-type NextRoundState =
-  { status: "idle" | "loading" } | { status: "error"; message: string };
-
-type FinishedRound = {
-  id: string;
-  startedAt: Date;
-  elapsedMs: number;
-  questions: ChoiceAnswer[];
-};
-
-// The round as it stands when its last question is answered, under a new id
-// that a retried save reuses.
-function finishRound(
-  startedAt: number,
-  questions: ChoiceAnswer[],
-): FinishedRound {
-  return {
-    id: crypto.randomUUID(),
-    startedAt: new Date(startedAt),
-    elapsedMs: Date.now() - startedAt,
-    questions,
-  };
-}
-
 // Shared four-choice round for prepositions and complements. A wrong pick is crossed out and the
 // question stays until the right one is picked. The accuracy, misses and time
 // run above the question; when the last one is answered a member's or
-// admin's round is saved (`canSave`), and the result shows them again.
+// admin's round is saved (`canSave`), and the result shows them again. The
+// round itself lives in usePracticeRound; this draws it and handles the
+// scrolling and the keys.
 export function ChoicePractice({
   initialQuiz,
   canSave,
@@ -90,24 +58,24 @@ export function ChoicePractice({
   choiceLabel: string;
   compactHeading?: boolean;
 }) {
-  const [quiz, setQuiz] = useState(initialQuiz);
-  const [index, setIndex] = useState(0);
   const {
+    question,
+    index,
+    total,
+    finished,
+    done,
     wrong,
     solved,
-    pick: pickChoice,
-    reset: resetPicks,
-  } = useChoicePicks();
-  // The questions answered so far, with their misses.
-  const [answers, setAnswers] = useState<ChoiceAnswer[]>([]);
-  // Both start at the same moment, so the server and the browser show 0:00.
-  const [startedAt, setStartedAt] = useState(() => Date.now());
-  const [now, setNow] = useState(() => Date.now());
-  const [round, setRound] = useState<FinishedRound | null>(null);
-  const [save, setSave] = useState<SaveState>({ status: "idle" });
-  const [nextRound, setNextRound] = useState<NextRoundState>({
-    status: "idle",
-  });
+    answers,
+    score,
+    elapsedMs,
+    save,
+    nextRound,
+    pick,
+    next: nextQuestion,
+    retrySave,
+    restart: restartRound,
+  } = usePracticeRound({ initialQuiz, canSave, quizKind, level, saveRound });
   const progress = useRef<HTMLDivElement>(null);
   const choicesRef = useRef<HTMLDivElement>(null);
 
@@ -126,47 +94,6 @@ export function ChoicePractice({
       progress.current?.scrollIntoView({ block: "start" });
   }, []);
 
-  const total = quiz.length;
-  const finished = index >= total;
-  const done = Math.min(total, index + (solved ? 1 : 0));
-  const question = finished ? null : quiz[index];
-  const score = scoreRound(answers);
-  const elapsedMs = round ? round.elapsedMs : now - startedAt;
-
-  // The clock ticks until the last question is answered.
-  useEffect(() => {
-    if (round) return;
-    const timer = setInterval(() => setNow(Date.now()), 250);
-    return () => clearInterval(timer);
-  }, [round]);
-
-  async function store(finishedRound: FinishedRound) {
-    setSave({ status: "saving" });
-    try {
-      const result = await saveRound({
-        ...finishedRound,
-        startedAt: finishedRound.startedAt.toISOString(),
-      });
-      setSave(result.ok ? { status: "saved" } : { status: "error", ...result });
-    } catch {
-      setSave({
-        status: "error",
-        message: "記録を保存できませんでした。もう一度お試しください。",
-      });
-    }
-  }
-
-  function pick(choice: string) {
-    if (!question || pickChoice(question, choice) !== "solved") return;
-    const answered = [...answers, answerOf(question, wrong)];
-    setAnswers(answered);
-    if (index + 1 < total) return;
-    const finishedRound = finishRound(startedAt, answered);
-    setNow(startedAt + finishedRound.elapsedMs);
-    setRound(finishedRound);
-    if (canSave) void store(finishedRound);
-  }
-
   // After scrolling down to "next" on a phone, the next question starts out
   // of sight; bring the round back from the progress bar down.
   function showQuestion() {
@@ -177,9 +104,12 @@ export function ChoicePractice({
   }
 
   function next() {
-    setIndex((current) => current + 1);
-    resetPicks();
+    nextQuestion();
     showQuestion();
+  }
+
+  async function restart() {
+    if (await restartRound()) showQuestion();
   }
 
   // The keys 1 to 4 pick the choices in the order they show, and Enter goes
@@ -205,41 +135,6 @@ export function ChoicePractice({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   });
-
-  async function restart() {
-    if (nextRound.status === "loading") return;
-    setNextRound({ status: "loading" });
-    let result: NextPracticeQuizResult;
-    try {
-      result = await nextPracticeQuizAction(quizKind, level);
-    } catch {
-      result = {
-        ok: false,
-        message:
-          "次の問題を用意できませんでした。通信を確かめて、もう一度押してください。",
-      };
-    }
-    if (!result.ok || result.quiz.length === 0) {
-      setNextRound({
-        status: "error",
-        message: result.ok
-          ? "この級で出せる問題がありません。"
-          : result.message,
-      });
-      return;
-    }
-    setNextRound({ status: "idle" });
-    const startAt = Date.now();
-    setQuiz(result.quiz);
-    setIndex(0);
-    resetPicks();
-    setAnswers([]);
-    setStartedAt(startAt);
-    setNow(startAt);
-    setRound(null);
-    setSave({ status: "idle" });
-    showQuestion();
-  }
 
   return (
     <div className="flex flex-col gap-3 roomy:gap-6">
@@ -386,11 +281,7 @@ export function ChoicePractice({
               onlyMissed
               className="max-w-md"
             />
-            <SaveStatus
-              canSave={canSave}
-              save={save}
-              onRetry={round ? () => void store(round) : undefined}
-            />
+            <SaveStatus canSave={canSave} save={save} onRetry={retrySave} />
             {nextRound.status === "error" ? (
               <p role="alert" className="text-sm text-destructive">
                 {nextRound.message}
