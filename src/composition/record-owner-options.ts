@@ -1,6 +1,6 @@
 import type { RecordOwner } from "@/application/identity/use-cases/resolve-record-owner";
 import type { AuthenticatedUser } from "@/domain/identity/entities/authenticated-user";
-import { memberAccounts } from "@/composition/identity-container";
+import { memberAccounts } from "@/composition/account-container";
 import { loadOr } from "@/presentation/controllers/load-or";
 
 export type RecordOwnerOption = {
@@ -11,7 +11,7 @@ export type RecordOwnerOption = {
 
 // Members an admin can pick as the viewed owner: "表示名（ログインID）".
 export async function listRecordOwnerOptions(): Promise<RecordOwnerOption[]> {
-  const accounts = await memberAccounts.listAccounts();
+  const accounts = await memberAccounts.list();
   return accounts.map((account) => ({
     ownerId: account.ownerId,
     label: `${account.displayName}（${account.loginId}）`,

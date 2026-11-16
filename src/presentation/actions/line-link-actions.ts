@@ -2,10 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 
-import {
-  getCurrentViewerUser,
-  memberAccounts,
-} from "@/composition/identity-container";
+import { getCurrentViewerUser } from "@/composition/identity-container";
+import { lineLink } from "@/composition/line-container";
 import { attemptGo } from "@/presentation/controllers/action-state";
 import { accountForbiddenMessage } from "@/presentation/presenters/account-action-errors";
 
@@ -26,7 +24,7 @@ export async function issueLineLinkCodeAction(): Promise<LineLinkState> {
   if (!(await getLinkOwner()))
     return { status: "error", message: accountForbiddenMessage };
   const issued = await attemptGo("LINE_LINK_CODE_FAILED", () =>
-    memberAccounts.issueLineLinkCode(),
+    lineLink.issueLineLinkCode(),
   );
   if (!issued.ok) return { status: "error", message: issued.message };
   return {
@@ -38,7 +36,7 @@ export async function issueLineLinkCodeAction(): Promise<LineLinkState> {
 
 export async function unlinkLineAction(): Promise<void> {
   if (!(await getLinkOwner())) return;
-  await memberAccounts.unlinkLine();
+  await lineLink.unlinkLine();
   revalidatePath("/account/line");
 }
 
@@ -57,7 +55,7 @@ export async function setLineReviewNotifyAction(
     return { status: "error", message: accountForbiddenMessage };
   const on = formData.get("on") === "1";
   const saved = await attemptGo("LINE_REVIEW_NOTIFY_FAILED", () =>
-    memberAccounts.setLineReviewNotify(on),
+    lineLink.setLineReviewNotify(on),
   );
   if (!saved.ok) return { status: "error", message: saved.message };
   if (!saved.value)
