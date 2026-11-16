@@ -1,24 +1,12 @@
 "use client";
 
 import { Bot, Plus, Send, Sparkles, Square } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, type FormEvent } from "react";
 
-import {
-  conversationTitle,
-  fitsLimits,
-  MAX_INPUT_CHARS,
-  type Conversation,
-  type ConversationMessage,
-} from "@/domain/chat/conversation";
-import {
-  saveConversationAction,
-  type SaveConversationInput,
-} from "@/presentation/actions/conversation-actions";
+import { MAX_INPUT_CHARS, type Conversation } from "@/domain/chat/conversation";
 import { ChatMessage } from "@/presentation/components/chat/chat-message";
-import {
-  streamChat,
-  submitOnEnter,
-} from "@/presentation/components/chat/chat-stream";
+import { submitOnEnter } from "@/presentation/components/chat/chat-stream";
+import { useChatConversation } from "@/presentation/components/chat/use-chat-conversation";
 import { Button } from "@/presentation/components/ui/button";
 import {
   Card,
@@ -28,43 +16,14 @@ import {
 } from "@/presentation/components/ui/card";
 import { Textarea } from "@/presentation/components/ui/textarea";
 
-const FAILURE = "ChatGPTから応答を受信できませんでした。";
-const CUT = "応答が途中で切れました。";
-const STOPPED = "応答を停止しました。";
-const LIMIT = "会話の上限に達しました。新しい会話を始めてください。";
-const SAVE_FAILED =
-  "保存できませんでした。次の回答のときにもう一度保存します。";
-
 const starters = [
   "今日あったことを中国語で話す練習をしたいです。質問してください。",
   "自然な中国語の表現を、ピンインと日本語の説明付きで教えてください。",
   "HSK4級くらいの中国語で会話してください。間違いは会話後に直してください。",
 ];
 
-type Meta = { id: string; createdAt: string | null; ended: boolean };
-
-function newMeta(): Meta {
-  return { id: crypto.randomUUID(), createdAt: null, ended: false };
-}
-
-function toSaveInput(
-  meta: Meta,
-  messages: ConversationMessage[],
-  modelName: string,
-): SaveConversationInput {
-  return {
-    id: meta.id,
-    title: conversationTitle(messages[0]?.text ?? ""),
-    modelName,
-    ended: meta.ended,
-    createdAt: meta.createdAt ?? new Date().toISOString(),
-    messages,
-  };
-}
-
-// The user's chat with ChatGPT (members and admins). Every answer that arrives whole is saved
-// with the whole conversation; an answer that is cut off is shown dimmed and
-// left out, and its question goes back into the input to send again.
+// The user's chat with ChatGPT (members and admins). The conversation and
+// its saving live in useChatConversation; this draws it.
 export function ChatInterface({
   chatModel,
   initial,
@@ -72,159 +31,24 @@ export function ChatInterface({
   chatModel: string;
   initial: Conversation | null;
 }) {
-  const [meta, setMeta] = useState<Meta>(() =>
-    initial
-      ? {
-          id: initial.id,
-          createdAt: initial.createdAt.toISOString(),
-          ended: initial.ended,
-        }
-      : newMeta(),
-  );
-  const [messages, setMessages] = useState<ConversationMessage[]>(
-    initial?.messages ?? [],
-  );
-  const [input, setInput] = useState("");
-  const [answer, setAnswer] = useState("");
-  // A cut-off answer, shown until the next send.
-  const [cutAnswer, setCutAnswer] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState("");
-  // What was last saved, so an unchanged conversation is not sent again and
-  // a failed save is retried after the next answer.
-  const savedJson = useRef(
-    initial
-      ? JSON.stringify(
-          toSaveInput(
-            {
-              id: initial.id,
-              createdAt: initial.createdAt.toISOString(),
-              ended: initial.ended,
-            },
-            initial.messages,
-            initial.modelName,
-          ),
-        )
-      : "",
-  );
-  const abort = useRef<AbortController | null>(null);
-  // Bumped by "新しい会話" so a send that was running leaves the new
-  // conversation alone.
-  const generation = useRef(0);
+  const {
+    messages,
+    input,
+    setInput,
+    answer,
+    cutAnswer,
+    busy,
+    notice,
+    ended,
+    send,
+    stop,
+    startNew,
+  } = useChatConversation({ chatModel, initial });
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
   }, [messages, answer, cutAnswer]);
-
-  // Stops a running answer when the page goes away.
-  useEffect(() => () => abort.current?.abort(), []);
-
-  async function save(next: Meta, nextMessages: ConversationMessage[]) {
-    if (!nextMessages.length) return true;
-    const value = toSaveInput(next, nextMessages, chatModel);
-    const json = JSON.stringify(value);
-    if (json === savedJson.current) return true;
-    const started = generation.current;
-    let result: Awaited<ReturnType<typeof saveConversationAction>>;
-    try {
-      result = await saveConversationAction(value);
-    } catch {
-      // Unreachable server or a failed action: retried after the next answer.
-      result = { ok: false, message: "" };
-    }
-    // "新しい会話" was pressed meanwhile: the saved conversation is no longer
-    // on screen.
-    if (generation.current !== started) return true;
-    if (!result.ok) return false;
-    savedJson.current = json;
-    // A reload opens the same conversation.
-    window.history.replaceState(null, "", `/chat?id=${next.id}`);
-    return true;
-  }
-
-  async function send(text: string) {
-    const question = text.trim();
-    if (!question || busy || meta.ended) return;
-
-    const userMessage: ConversationMessage = {
-      id: crypto.randomUUID(),
-      role: "user",
-      text: question,
-    };
-    const asked = [...messages, userMessage];
-    if (!fitsLimits(asked)) {
-      const ended = { ...meta, ended: true };
-      setMeta(ended);
-      setNotice(
-        (await save(ended, messages)) ? LIMIT : `${LIMIT} ${SAVE_FAILED}`,
-      );
-      return;
-    }
-
-    const current = {
-      ...meta,
-      createdAt: meta.createdAt ?? new Date().toISOString(),
-    };
-    setMeta(current);
-    setMessages(asked);
-    setInput("");
-    setAnswer("");
-    setCutAnswer("");
-    setNotice("");
-    setBusy(true);
-
-    const controller = new AbortController();
-    abort.current = controller;
-    const started = generation.current;
-    const result = await streamChat({
-      endpoint: "/api/chat",
-      messages: asked.map(({ role, text }) => ({ role, text })),
-      signal: controller.signal,
-      onText: setAnswer,
-      texts: { failure: FAILURE, cut: CUT, stopped: STOPPED },
-    });
-    if (abort.current === controller) abort.current = null;
-    if (generation.current !== started) return;
-    setBusy(false);
-    setAnswer("");
-
-    if (!result.ok) {
-      // Leave the question out of the conversation so it can be sent again.
-      setMessages(messages);
-      setInput(question);
-      setCutAnswer(result.text);
-      setNotice(result.message);
-      return;
-    }
-    const answered: ConversationMessage[] = [
-      ...asked,
-      { id: crypto.randomUUID(), role: "assistant", text: result.text },
-    ];
-    setMessages(answered);
-    // The answer that crosses the limits ends the conversation; Go accepts
-    // it because the question was within them.
-    const next = fitsLimits(answered) ? current : { ...current, ended: true };
-    if (next.ended) setMeta(next);
-    const saved = await save(next, answered);
-    if (next.ended) setNotice(saved ? LIMIT : `${LIMIT} ${SAVE_FAILED}`);
-    else if (!saved) setNotice(SAVE_FAILED);
-  }
-
-  function startNew() {
-    generation.current += 1;
-    abort.current?.abort();
-    abort.current = null;
-    setBusy(false);
-    setMeta(newMeta());
-    setMessages([]);
-    setInput("");
-    setAnswer("");
-    setCutAnswer("");
-    setNotice("");
-    savedJson.current = "";
-    window.history.replaceState(null, "", "/chat");
-  }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -305,10 +129,10 @@ export function ChatInterface({
           ) : null}
           <div ref={endRef} />
         </div>
-        {notice || meta.ended ? (
+        {notice || ended ? (
           <div className="space-y-1 px-4 pb-4 text-sm sm:px-6" role="status">
             {notice ? <p className="text-destructive">{notice}</p> : null}
-            {meta.ended && !notice ? (
+            {ended && !notice ? (
               <p>
                 この会話は上限に達したため、読むだけです。「新しい会話」で練習を始められます。
               </p>
@@ -317,7 +141,7 @@ export function ChatInterface({
         ) : null}
       </CardContent>
 
-      {meta.ended ? null : (
+      {ended ? null : (
         <CardFooter className="block border-t bg-card p-4 sm:p-5">
           <form onSubmit={handleSubmit} className="space-y-3">
             <Textarea
@@ -335,11 +159,7 @@ export function ChatInterface({
                 Enterで送信 · Shift + Enterで改行
               </p>
               {busy ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => abort.current?.abort()}
-                >
+                <Button type="button" variant="outline" onClick={stop}>
                   <Square className="fill-current" />
                   停止
                 </Button>
