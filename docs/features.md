@@ -95,7 +95,7 @@ LINE に中国語や日本語の文を送ると、OpenAI（ChatGPT）で添削�
 - **会話ノート**: 回答が届くたびに、会話をまるごと保存します。`/conversations` で話した日（日本時間）ごとに見返せ、「続きを話す」で続きから話せます。削除もできます（ゴミ箱はありません）。
 - **上限**: 1 つの会話は 40 発言・合計 4 万字までです。上限に達した会話は読むだけになります。
 - **設定**: Web に `OPENAI_API_KEY`（と任意で `OPENAI_CHAT_MODEL`）を入れます。空のときは画面に「ChatGPT が設定されていません」と出ます。
-- **本番への反映**: DBマイグレーション `20261024090000_add_chat_conversations`（`ChatConversation` の追加）を、**main へのマージの前に** 本番のNeonへ適用してください。手順は [docs/api-deployment.md](api-deployment.md) の「8. ChatGPT と話す（会話ノート）」にあります。
+- **本番への反映**: `ChatConversation` の表は本番にすでにあり、新しいマイグレーションの手順はありません。Web への切り替えの順番は [docs/api-deployment.md](api-deployment.md) の「段階7（チャット）のマージの前と後」にあります。
 
 ## 介詞の練習
 
