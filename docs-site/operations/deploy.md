@@ -84,7 +84,7 @@ node --env-file=.env.production.local node_modules/prisma/build/index.js migrate
 rm .env.production.local
 ```
 
-会員一覧（`GET /v1/members`）は、DB の日本語の照合順序 `ja-x-icu` で並べます。本番の Neon にあるかを一度確かめてください（1 行返れば問題ありません。無いと会員一覧が `500` になります）。
+会員の一覧（Web の `/follow`）は、DB の日本語の照合順序 `ja-x-icu` で並べます。本番の Neon にあるかを一度確かめてください（1 行返れば問題ありません。無いと `/follow` がエラーになります）。
 
 ```sql
 SELECT 1 FROM pg_collation WHERE collname = 'ja-x-icu';
@@ -102,7 +102,7 @@ curl -i https://<プロジェクト>.vercel.app/health
 
 ## 6. Web の設定
 
-Web（Next.js）は、DB を Prisma（`src/infrastructure/prisma/`）で読み書きし、Go が出すアクセストークン（`zl_access`）も `API_JWT_SECRET` で自分で確かめます。ログイン、フォロー、タイムライン、メンバー、admin、LINE、cron は、今も Go API が行います。仕様は `docs/superpowers/specs/2026-10-21-web-auth-via-go-api-design.md` と `docs/superpowers/specs/2026-10-22-web-data-via-go-api-design.md` にあります。
+Web（Next.js）は、DB を Prisma（`src/infrastructure/prisma/`）で読み書きし、Go が出すアクセストークン（`zl_access`）も `API_JWT_SECRET` で自分で確かめます。ログイン、admin、LINE、cron は、今も Go API が行います。仕様は `docs/superpowers/specs/2026-10-21-web-auth-via-go-api-design.md` と `docs/superpowers/specs/2026-10-22-web-data-via-go-api-design.md` にあります。
 
 Go API の Vercel プロジェクトには、`GITHUB_WEB_CLIENT_ID`・`GITHUB_WEB_CLIENT_SECRET`・`GITHUB_WEB_REDIRECT_URI`・`API_WEB_PROXY_SECRET` を入れておきます（上の「3. 環境変数」の表）。Web の Vercel プロジェクトに入れる値は、次の 4 つに、あとの「Web が実行時に使う DB と秘密」の値を足したものです。
 

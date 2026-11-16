@@ -17,7 +17,7 @@ flowchart LR
   end
   subgraph API[Go API on Vercel]
     AUTH[auth]
-    DATA[フォロー・LINE の復習のお知らせ]
+    DATA[LINE の復習のお知らせ]
     LINEBOT[linebot]
     AI[LINE の添削・翻訳の OpenAI の呼び出しと利用量の記録]
   end
@@ -30,7 +30,7 @@ flowchart LR
   UI -->|HttpOnly Cookie| Web
   Web -->|Bearer JWT<br/>サーバー間| API
   API --> DB
-  Web -->|Prisma: アカウントの確認・単語帳・学習ノート・CSV の取り込み・復習・練習の記録・質問ノート・会話ノート・学習ログ・AI の利用量の集計| DB
+  Web -->|Prisma: アカウントの確認・単語帳・学習ノート・CSV の取り込み・復習・練習の記録・質問ノート・会話ノート・フォロー・タイムライン・学習ログ・AI の利用量の集計| DB
   Web -->|単語帳の下書き・クイック質問・チャット| OpenAI
   AI --> OpenAI
   LINE -->|Webhook| LINEBOT
@@ -40,7 +40,7 @@ flowchart LR
 ```
 
 - ブラウザーが話す相手は Web だけです。Go API を直接は呼びません。
-- Web は、ログイン中の人を決めるために、実行時に DB のアカウント（`PasswordAccount`・`FfpfAccount`）を Prisma（`src/infrastructure/prisma/`）で読みます。アクセストークンも Web が自分で確かめます。単語帳（一覧・保存・削除）と学習ノート（一覧・検索・カレンダー・日ごとの表示・ゴミ箱・共有・CSV の取り込み）と練習の記録（介詞・補語）も Prisma で読み書きし（CSV は Web が自分で検証・解析し、1 つのトランザクションで保存します）、「AI で下書き」・クイック質問・ChatGPT と話すは Web が OpenAI を直接呼んで、使った量を `AiUsage` に記録し、質問ノートと会話ノートも Prisma で読み書きし、学習ログ（カレンダー）と AI の利用量の月ごとの集計は Prisma で読むだけです。ほかの読み書きとログイン、LINE の AI（添削・翻訳）は今も Go API を通します。機能は、設計書（[2026-11-16-deprecate-go-backend-design.md](superpowers/specs/2026-11-16-deprecate-go-backend-design.md)）の段階ごとに、Go から Web へ移していきます。
+- Web は、ログイン中の人を決めるために、実行時に DB のアカウント（`PasswordAccount`・`FfpfAccount`）を Prisma（`src/infrastructure/prisma/`）で読みます。アクセストークンも Web が自分で確かめます。単語帳（一覧・保存・削除）と学習ノート（一覧・検索・カレンダー・日ごとの表示・ゴミ箱・共有・CSV の取り込み）と練習の記録（介詞・補語）も Prisma で読み書きし（CSV は Web が自分で検証・解析し、1 つのトランザクションで保存します）、「AI で下書き」・クイック質問・ChatGPT と話すは Web が OpenAI を直接呼んで、使った量を `AiUsage` に記録し、質問ノートと会話ノートも Prisma で読み書きし、フォロー（会員の一覧・タイムライン・フォローする／外す）も Prisma で読み書きし、学習ログ（カレンダー）と AI の利用量の月ごとの集計は Prisma で読むだけです。ほかの読み書きとログイン、LINE の AI（添削・翻訳）は今も Go API を通します。機能は、設計書（[2026-11-16-deprecate-go-backend-design.md](superpowers/specs/2026-11-16-deprecate-go-backend-design.md)）の段階ごとに、Go から Web へ移していきます。
 - LINE は Go API に Webhook を送ります。添削の結果は Go API が LINE に push で返します。
 
 ## 2. Web と Go API を分けた理由
@@ -207,7 +207,7 @@ sequenceDiagram
 ## 11. いまの課題
 
 - **入力の検証が 2 か所にある**：ログイン ID・パスワード・表示名の規則を、Web（zod）と Go の両方で持っています。Go が最後の砦で、Web は早く知らせるためですが、規則を変えるときは 2 か所を直す必要があります。
-- **外部キーがない**：管理者は DB に行を持たないので、`ownerId` に外部キーがありません。持ち主の整合性は Go API のコードで守っています。
+- **外部キーがない**：管理者は DB に行を持たないので、`ownerId` に外部キーがありません。持ち主の整合性はコードで守っています（フォローは、相手のアカウントがあるときだけ行を足す 1 つの SQL）。
 - **Preview の DB**：Preview の Go API がどの DB を使うかについて、文書の記述が食い違っています（`api-deployment.md` の 62 行目と 80 行目）。どちらかにそろえる必要があります。
 - **CI がない**：GitHub Actions の CI は外しました。確認は lefthook のローカルの検査だけで、`pnpm audit` と `pnpm run build` は自動では走りません。
 - **層の検査に抜けがある**：`presentation` から `infrastructure` への import は、まだ制限していません。

@@ -91,7 +91,7 @@ node --env-file=.env.production.local node_modules/prisma/build/index.js migrate
 rm .env.production.local
 ```
 
-会員一覧（`GET /v1/members`）は、DB の日本語の照合順序 `ja-x-icu` で並べます。本番の Neon にあるかを一度確かめてください（1 行返れば問題ありません。無いと会員一覧が `500` になります）。
+会員の一覧（Web の `/follow`）は、DB の日本語の照合順序 `ja-x-icu` で並べます。本番の Neon にあるかを一度確かめてください（1 行返れば問題ありません。無いと `/follow` がエラーになります）。
 
 ```sql
 SELECT 1 FROM pg_collation WHERE collname = 'ja-x-icu';
@@ -354,6 +354,31 @@ ChatGPT と話す（OpenAI の答えを NDJSON でブラウザへ流す）と会
 - Go を再デプロイしたあとで Web だけを戻すと、古い Web が `/v1/study-log` と `/v1/admin/ai-usage` を呼んで `404` になります。学習ログは「処理できませんでした。時間をおいてもう一度お試しください。」、AI 利用量は「利用量を読めませんでした。Go API が最新かを確認してください。」と出ます。
 - Web を戻すなら Go も戻します。いっしょに戻すのがいちばん安全です。
 
+#### 段階9a（フォロー・タイムライン・会員の一覧）のマージの前と後
+
+フォロー（する・外す）、フォロー中の人の共有ノートのタイムライン、会員の一覧を Web に移した変更（段階9a）を本番に出す順番です。Web が Prisma で Go と同じ SQL を流し、フォローは「相手の会員がいるときだけ行を足す」1 つの SQL にしました。Go の `/v1/members`・`/v1/follows/{ownerId}`・`/v1/timeline` はなくなりました。Go に残るのは、LINE、会員の管理、パスワード変更、ログイン、Cron です。
+
+マージの前:
+
+- この段階で必須の環境変数も、マイグレーションもありません。表はすべてすでにあります。会員の一覧の照合順序 `ja-x-icu` も、Go のときに確かめた同じ DB です。
+
+マージのあと:
+
+1. Web の Production のデプロイが Ready になったことを確かめます。
+2. その Web のデプロイを `vercel promote` でカスタムドメインに切り替えます。
+3. main から Go を再デプロイします（Vercel CLI。実行の前に、使う人に確かめます）。これで、削除した `/v1/members`・`/v1/follows/{ownerId}`・`/v1/timeline` が本番の Go から実際に消えます。
+4. 本番で `/follow` を開き、会員の一覧と共有ノートが出ること、1 人をフォローして外せることを確かめます。
+
+切り替えのあいだ:
+
+- 古い Go と新しい Web が同じ `Follow` 表を同じ形で読み書きするので、どちらで書いた行も、もう一方に出ます。
+
+戻すとき:
+
+- Go だけを戻しても害はありません。
+- Go を再デプロイしたあとで Web だけを戻すと、古い Web が消えたルートを呼んで `404` になります。`/follow` はエラーの画面になり、フォローのボタンは「見つかりませんでした。画面を更新してください。」と出ます。
+- Web を戻すなら Go も戻します。いっしょに戻すのがいちばん安全です。
+
 ### Web のプレビュー（Preview）
 
 PR ごとの Web のプレビューも、ログインとデータの読み書きを Go API で行います。そのため、Web の Vercel プロジェクトの **Preview** の環境変数にも、次の 4 つ（と、下の注の DB と秘密）を入れます。
@@ -467,7 +492,7 @@ FFPF ID（ffpf-portal が提供する OpenID Connect のプロバイダー）の
 
 - アカウント：`DEMO_LOGIN_ID` の ID の、普通のパスワード会員です。パスワードのハッシュは使えない値なので、ID とパスワードではログインできません。アカウントは下のリセットが作ります（手で作る必要はありません）。
 - データ：デモを試す全員で 1 つのアカウントを共有します。毎晩 04:00（日本時間）に、`services/api/vercel.json` の Cron（`0 19 * * *`、UTC）が `GET /v1/cron/demo-reset` を呼び、1 つのトランザクションで、デモの持ち物（学習ノートとヒント、復習の項目と記録、単語帳、会話ノート、クイック質問、練習の記録、フォロー、LINE の行）を消してから、`services/api/demo/seed.json` の内容を入れ直します。日付は「リセットの何日前か」で書いてあるので、いつ見ても直近 7 日の記録に見えます。ログイン中のセッションは消しません。
-- 使えないもの：OpenAI を呼ぶルート（Web の `POST /api/chat` と `POST /api/quick-question`）、LINE 連携の 5 つ、`POST /v1/account/password`、フォロー・メンバー一覧・タイムライン・共有（ほかの会員に届くため）は、デモには `403`（「デモでは使えません。」）です。Go のルートの判定は `auth.Service.IsDemo` の 1 か所で、管理者がデモとして操作しているときや、ほかの会員には当てはまりません。Web の AI のルート（単語帳の下書き・クイック質問・ChatGPT と話す）は、Web が自分でデモかどうかを確かめて断ります。Web は、自分の DB の確認（`passwordHash` が使えない値で、ログイン ID が `DEMO_LOGIN_ID` と同じ）でデモかどうかを決め、すべてのページに「デモアカウントです。…」を出し、メニューから使えない機能を外します。
+- 使えないもの：OpenAI を呼ぶルート（Web の `POST /api/chat` と `POST /api/quick-question`）、LINE 連携の 5 つ、`POST /v1/account/password` は、デモには `403`（「デモでは使えません。」）です。フォロー・会員の一覧・タイムライン・共有（ほかの会員に届くため）は、Web が断ります（`/follow` は `/` に戻します）。Go のルートの判定は `auth.Service.IsDemo` の 1 か所で、LINE 連携と `POST /v1/account/password` だけに残っています。管理者がデモとして操作しているときや、ほかの会員には当てはまりません。Web の AI のルート（単語帳の下書き・クイック質問・ChatGPT と話す）は、Web が自分でデモかどうかを確かめて断ります。Web は、自分の DB の確認（`passwordHash` が使えない値で、ログイン ID が `DEMO_LOGIN_ID` と同じ）でデモかどうかを決め、すべてのページに「デモアカウントです。…」を出し、メニューから使えない機能を外します。
 - 手でリセットする：`curl -i -X POST https://ffpf-zhuelog-api.vercel.app/v1/cron/demo-reset -H "Authorization: Bearer $CRON_SECRET"` が `204` を返します（`GET` でも同じです）。`CRON_SECRET` を知っている人だけが呼べます。
 - マイグレーションは要りません（既存の表だけを使います）。Vercel Hobby の Cron は 2 つまでで、LINE の拾い直しとこのリセットで 2 つです。
 

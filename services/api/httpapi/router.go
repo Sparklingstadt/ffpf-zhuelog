@@ -185,7 +185,7 @@ func (r *registrar) private(pattern string, h http.Handler) {
 func (r *registrar) adminOnly(pattern string, h http.Handler) { r.private(pattern, requireAdmin(h)) }
 
 // notForDemo registers an authed route the demo account may not use: one
-// that calls OpenAI, reaches other members or changes the account.
+// that changes the account (LINE link).
 func (r *registrar) notForDemo(pattern string, h http.Handler) {
 	r.notForDemoWrapped(pattern, r.authed, h)
 }
