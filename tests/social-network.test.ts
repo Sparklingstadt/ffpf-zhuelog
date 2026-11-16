@@ -157,6 +157,9 @@ test("follow checks the id, then self, then the member", async () => {
 
   const missing = network(member, false);
   assert.equal(await missing.social.follow("password:def"), "not-found");
+  assert.deepEqual(missing.calls, [
+    { method: "follow", args: ["password:abc", "password:def", now] },
+  ]);
 
   const found = network(member, true);
   assert.equal(await found.social.follow("password:def"), "followed");

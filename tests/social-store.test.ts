@@ -25,6 +25,8 @@ test("memberDirectorySql lists the members as Go did", () => {
     `f."followerId" = a."ownerId" AND f."followeeId" = $2`,
     `WHERE a."ownerId" <> $3`,
     `ORDER BY a."displayName" COLLATE "ja-x-icu", a."createdAt", a."ownerId"`,
+    `AS "following"`,
+    `AS "followsMe"`,
   ]) {
     assert.ok(text.includes(part), `${part}\n${text}`);
   }
@@ -93,6 +95,9 @@ test("timelineSql reads the shared notes as Go did", () => {
     `ORDER BY e."createdAt" DESC, e."id" DESC`,
     "LIMIT $2",
     `AS "ownerName"`,
+    `'password:'`,
+    `'ffpf:'`,
+    "UNION ALL",
   ]) {
     assert.ok(text.includes(part), `${part}\n${text}`);
   }

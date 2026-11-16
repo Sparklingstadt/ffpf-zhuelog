@@ -64,8 +64,8 @@ function unexpectedFailureMessage(code: string, error: unknown): string {
 // (the redirect to /signin, notFound) are rethrown. Go's 403,
 // LearningForbiddenError, ReviewForbiddenError, PracticeForbiddenError,
 // QuestionForbiddenError, ConversationForbiddenError and
-// SocialForbiddenError are treated as not being allowed; other Go failures go through goFailureMessage, anything
-// else gets the generic text.
+// SocialForbiddenError are treated as not being allowed; other Go failures go
+// through goFailureMessage, anything else gets the generic text.
 export async function attemptGoAction(
   code: string,
   run: () => Promise<ActionState>,
@@ -93,10 +93,10 @@ export type GoAttempt<T> =
 // Runs an action's Go or database call and keeps its value. Next's own
 // errors are rethrown. Go's 403, LearningForbiddenError,
 // ReviewForbiddenError, PracticeForbiddenError, QuestionForbiddenError,
-// ConversationForbiddenError and SocialForbiddenError mean not allowed; a Go 404 gets `notFound`
-// when the action gives one; other Go failures go through goFailureMessage
-// and anything else gets the generic text, logging codes and error names
-// only.
+// ConversationForbiddenError and SocialForbiddenError mean not allowed; a Go
+// 404 gets `notFound` when the action gives one; other Go failures go through
+// goFailureMessage and anything else gets the generic text, logging codes and
+// error names only.
 export async function attemptGo<T>(
   code: string,
   run: () => Promise<T>,

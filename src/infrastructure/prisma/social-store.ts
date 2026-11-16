@@ -16,11 +16,14 @@ import { hintsByEntry, toKind } from "./learning-note-reads";
 //
 // Following is one statement: Go asked MemberExists and then inserted, so a
 // member removed in between still got the row (Follow has no foreign key).
-// Here a data-modifying CTE inserts only while the followee's account exists
-// and reads whether it does.
+// Here a data-modifying CTE inserts the row if the followee's account exists
+// in the statement's snapshot (READ COMMITTED) and reads whether it does. A
+// delete committed concurrently can still race, so the window is narrower
+// than Go's two statements but not closed.
 //
-// Same results as Go's ListMembers (follows.go:42-77), Follow/Unfollow
-// (follows.go:79-115) and ListTimeline without the cursor (follows.go:117-157).
+// Same results as Go's ListMembers (reference section 1), Follow/Unfollow
+// (section 2) and ListTimeline without the cursor (section 3) in
+// docs/superpowers/plans/2026-11-16-deprecate-go-stage9-go-reference.md.
 
 export type MemberRow = {
   ownerId: string;
@@ -41,7 +44,7 @@ export type TimelineRow = {
   ownerName: string;
 };
 
-// Pure: Go's ListMembers statement (store/follows.go:46-52). Everyone with a
+// Pure: Go's ListMembers statement (go-reference section 1, statement 1). Everyone with a
 // password or FFPF account but the viewer; no login id.
 export function memberDirectorySql(viewerId: string): Prisma.Sql {
   return Prisma.sql`
@@ -78,7 +81,8 @@ export function directoryFromRows(
   };
 }
 
-// Pure: Go's ListTimeline statement without the cursor (store/follows.go:123-132).
+// Pure: Go's ListTimeline statement without the cursor (go-reference
+// section 3).
 // Only followed owners that still have an account; shared, not trashed.
 export function timelineSql(viewerId: string, limit: number): Prisma.Sql {
   return Prisma.sql`
