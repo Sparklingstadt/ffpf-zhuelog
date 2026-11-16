@@ -1,4 +1,4 @@
-// A finished practice round, as the Go API keeps it for members and admins.
+// A finished practice round, as the web saves it for members and admins.
 // Every practice shares these shapes; complement rounds add their mode.
 
 // One question of the round and the wrong choices picked before the
@@ -45,7 +45,7 @@ export function answerOf(
   };
 }
 
-// Counted as Go counts them when it saves the round.
+// Counted from the questions when the round is saved.
 export function scoreRound(
   answers: readonly { misses: readonly string[] }[],
 ): RoundScore {
