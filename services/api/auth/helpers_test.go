@@ -49,7 +49,6 @@ type fakeStore struct {
 	sessionErr     error
 	pruneErr       error
 	throttleErr    error
-	setPasswordErr error
 
 	ffpf          map[string]*store.FfpfAccount // by sub; see ffpfAccounts
 	upsertFfpfErr error

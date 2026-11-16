@@ -50,8 +50,8 @@ export type MemberAccountsDeps = {
 
 // Password accounts as Go's admin account routes managed them
 // (services/api/httpapi/admin_handlers.go): the caller is checked first (Go's
-// requireAdmin ran before any input check), then the input in Go's order. The plain password leaves only in `issued`,
-// for the admin to hand over once.
+// requireAdmin ran before any input check), then the input in Go's order.
+// The plain password leaves only in `issued`, for the admin to hand over once.
 export function createMemberAccounts(deps: MemberAccountsDeps) {
   async function requireAdmin(): Promise<void> {
     const user = await deps.currentUser();
@@ -97,7 +97,8 @@ export function createMemberAccounts(deps: MemberAccountsDeps) {
 
     // The password is checked before the id, as Go did. A missing account
     // costs no hash. Nothing refuses the demo's account or the member the
-    // admin acts as, as in Go.
+    // admin acts as, as in Go. The id is bound into a server action, so the
+    // client can send any value: a non-string is an id no account could have.
     async resetPassword(
       accountId: string,
       rawPassword: string,
@@ -105,7 +106,7 @@ export function createMemberAccounts(deps: MemberAccountsDeps) {
       await requireAdmin();
       const choice = choosePassword(rawPassword);
       if (!choice) return { ok: false, reason: "password" };
-      if (!isAccountIdShape(accountId))
+      if (typeof accountId !== "string" || !isAccountIdShape(accountId))
         return { ok: false, reason: "not-found" };
       if ((await deps.store.loginIdOf(accountId)) === null)
         return { ok: false, reason: "not-found" };

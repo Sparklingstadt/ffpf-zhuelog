@@ -232,6 +232,17 @@ test("reset checks the password before the account and hashes nothing for a miss
     assert.deepEqual(hashed, []);
   }
   {
+    // The bound id reaches the server action as the client sent it.
+    const { accounts, calls, hashed } = fakeDeps(admin);
+    const forged = 42 as unknown as string;
+    assert.deepEqual(await accounts.resetPassword(forged, ""), {
+      ok: false,
+      reason: "not-found",
+    });
+    assert.deepEqual(calls, []);
+    assert.deepEqual(hashed, []);
+  }
+  {
     const { accounts, calls, hashed } = fakeDeps(admin, {
       loginIdOf: async () => null,
     });

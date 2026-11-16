@@ -75,8 +75,8 @@ func scryptGoldenHashes(t *testing.T) []scryptGoldenHash {
 		{"emoji", "😀😀😀😀😀😀"},
 		{"128 characters", strings.Repeat("a", 128)},
 		// Passwords are not normalised, so these two hash differently.
-		{"decomposed accent", "étude-password"},
-		{"composed accent", "étude-password"},
+		{"decomposed accent", "e\u0301tude-password"},
+		{"composed accent", "\u00e9tude-password"},
 		{"generated shape", "AbCdEfGhIjKlMnOpQrSt"},
 	}
 	var out []scryptGoldenHash

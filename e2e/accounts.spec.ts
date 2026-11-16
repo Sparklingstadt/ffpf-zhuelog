@@ -33,6 +33,15 @@ async function readOutputPassword(page: Page) {
   return match[1];
 }
 
+// A direct call to Go's /v1/auth/<route>, as the web's server would make.
+function goAuth(route: string, body: Record<string, unknown>) {
+  return fetch(`${goApiURL}/v1/auth/${route}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 async function refreshCookie(context: BrowserContext) {
   const cookies = await context.cookies();
   return cookies.find((c) => c.name === "zl_refresh")?.value;
@@ -205,6 +214,22 @@ test("reset revokes existing member sessions", async ({
     const refreshToken = await refreshCookie(memberContext);
     expect(refreshToken).toBeTruthy();
 
+    // Control: a second session of the same member, refreshed once before the
+    // reset, so the 401s below can only come from the reset. A refresh rotates
+    // the token (reusing one revokes its family), so the browser's token is
+    // left alone and this session's rotated token is kept for after the reset.
+    const signedIn = await goAuth("password", {
+      loginId: "taro",
+      password: "member-password-1",
+    });
+    expect(signedIn.status).toBe(200);
+    const controlRefreshed = await goAuth("refresh", {
+      refreshToken: (await signedIn.json()).refreshToken,
+    });
+    expect(controlRefreshed.status).toBe(200);
+    const controlToken = (await controlRefreshed.json()).refreshToken;
+    expect(controlToken).toBeTruthy();
+
     await asAdmin(context);
     await page.goto("/admin/accounts");
     page.once("dialog", (dialog) => dialog.accept());
@@ -214,13 +239,11 @@ test("reset revokes existing member sessions", async ({
     expect((await account(db, "taro"))?.sessionVersion).toBe(1);
 
     // Go still signs members in until stage 11; it sees the version the web
-    // bumped and refuses the member's old refresh token.
-    const refreshed = await fetch(`${goApiURL}/v1/auth/refresh`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ refreshToken }),
-    });
-    expect(refreshed.status).toBe(401);
+    // bumped and refuses the member's old refresh tokens.
+    expect((await goAuth("refresh", { refreshToken })).status).toBe(401);
+    expect(
+      (await goAuth("refresh", { refreshToken: controlToken })).status,
+    ).toBe(401);
 
     await memberPage.goto("/logs");
     await expect(memberPage).toHaveURL(/\/signin/);

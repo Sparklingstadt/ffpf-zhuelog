@@ -118,6 +118,8 @@ test("account ids and current passwords are checked like Go", () => {
   // 43 × 3 bytes = 129 UTF-8 bytes.
   assert.equal(isAccountIdShape("あ".repeat(43)), false);
   assert.equal(isAccountIdShape("a\u0000b"), false);
+  assert.equal(isAccountIdShape("a" + String.fromCharCode(0xd800)), false);
+  assert.equal(isAccountIdShape("cm3x9k2p70000ab12cd34ef56"), true);
 
   assert.equal(isPlausibleCurrentPassword("x"), true);
   assert.equal(isPlausibleCurrentPassword("パ".repeat(128)), true);

@@ -63,6 +63,8 @@ test("verify refuses stored parameters that would exhaust memory", async () => {
 
 test("hashes and verifies exactly as Go does (golden file)", async () => {
   assert.deepEqual(golden.params, SCRYPT_PARAMS);
+  assert.equal(golden.hashes.length, 8);
+  assert.equal(golden.verify.length, 16);
   for (const { name, password, salt, hash } of golden.hashes) {
     assert.equal(
       await hashWithSalt(password, Buffer.from(salt, "base64url")),
@@ -85,4 +87,19 @@ test("generatePassword is 20 base64url characters", () => {
 test("simulate costs one scrypt and never throws", async () => {
   assert.equal(await hasher.simulate("x"), undefined);
   assert.equal(await hasher.simulate(""), undefined);
+});
+
+test("simulate builds the dummy hash again after a failed attempt", async () => {
+  const flaky = new ScryptPasswordHasher();
+  const realHash = flaky.hash.bind(flaky);
+  let calls = 0;
+  flaky.hash = async (password: string) => {
+    calls += 1;
+    if (calls === 1) throw new Error("scrypt failed");
+    return realHash(password);
+  };
+  await flaky.simulate("x");
+  await flaky.simulate("x");
+  await flaky.simulate("x");
+  assert.equal(calls, 2);
 });

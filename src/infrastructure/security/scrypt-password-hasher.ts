@@ -113,10 +113,15 @@ export class ScryptPasswordHasher {
 
   // Spends the work of one verify on a valid hash, for a failure that must
   // cost as much as a wrong password. Never throws. Go: Simulate. The dummy
-  // hash of a random password is built once, on the first call (Go: Warm).
+  // hash of a random password is created lazily on the first call and then
+  // reused, unlike Go, whose Warm creates it at startup. A failed creation is
+  // forgotten, so the next call tries again.
   async simulate(password: string) {
     try {
-      this.dummyHash ??= this.hash(generatePassword());
+      this.dummyHash ??= this.hash(generatePassword()).catch((error) => {
+        this.dummyHash = undefined;
+        throw error;
+      });
       await this.verify(password, await this.dummyHash);
     } catch {
       // A failed dummy hash costs less, but simulate must never throw.
