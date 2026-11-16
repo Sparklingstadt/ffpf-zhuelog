@@ -12,14 +12,12 @@ flowchart LR
   subgraph Web[Web: Next.js 16 on Vercel]
     RSC[Server Components]
     SA[Server Actions]
-    RH[Route Handlers<br/>チャット・クイック質問の答え・OAuth の callback]
+    RH[Route Handlers<br/>チャット・クイック質問の答え・OAuth の callback・LINE の webhook と拾い直し]
     PX[proxy.ts<br/>refresh token の更新]
   end
   subgraph API[Go API on Vercel]
     AUTH[auth]
-    DATA[LINE の復習のお知らせ]
-    LINEBOT[linebot]
-    AI[LINE の添削・翻訳の OpenAI の呼び出しと利用量の記録]
+    CRON[Go の Cron<br/>LINE の拾い直しとデモのリセット<br/>段階 10c で Web へ]
   end
   DB[(PostgreSQL / Neon<br/>スキーマは Prisma)]
   OpenAI[OpenAI API]
@@ -30,18 +28,19 @@ flowchart LR
   UI -->|HttpOnly Cookie| Web
   Web -->|Bearer JWT<br/>サーバー間| API
   API --> DB
-  Web -->|Prisma: アカウントの確認・会員の管理・パスワード変更・単語帳・学習ノート・CSV の取り込み・復習・練習の記録・質問ノート・会話ノート・フォロー・タイムライン・学習ログ・AI の利用量の集計| DB
-  Web -->|単語帳の下書き・クイック質問・チャット| OpenAI
-  AI --> OpenAI
-  LINE -->|Webhook| LINEBOT
-  LINEBOT -->|push| LINE
+  Web -->|Prisma: アカウントの確認・会員の管理・パスワード変更・単語帳・学習ノート・CSV の取り込み・復習・練習の記録・質問ノート・会話ノート・フォロー・タイムライン・学習ログ・AI の利用量の集計・LINE の連携とメッセージ| DB
+  Web -->|単語帳の下書き・クイック質問・チャット・LINE の添削と翻訳| OpenAI
+  LINE -->|Webhook| Web
+  Web -->|reply・push| LINE
+  CRON -->|拾い直し・お知らせの push<br/>段階 10c まで| LINE
+  CRON --> OpenAI
   AUTH --> GH
   AUTH --> FFPF
 ```
 
 - ブラウザーが話す相手は Web だけです。Go API を直接は呼びません。
-- Web は、ログイン中の人を決めるために、実行時に DB のアカウント（`PasswordAccount`・`FfpfAccount`）を Prisma（`src/infrastructure/prisma/`）で読みます。アクセストークンも Web が自分で確かめます。単語帳（一覧・保存・削除）と学習ノート（一覧・検索・カレンダー・日ごとの表示・ゴミ箱・共有・CSV の取り込み）と練習の記録（介詞・補語）も Prisma で読み書きし（CSV は Web が自分で検証・解析し、1 つのトランザクションで保存します）、「AI で下書き」・クイック質問・ChatGPT と話すは Web が OpenAI を直接呼んで、使った量を `AiUsage` に記録し、質問ノートと会話ノートも Prisma で読み書きし、フォロー（会員の一覧・タイムライン・フォローする／外す）も Prisma で読み書きし、会員の管理（作成・一覧・パスワードの再設定）と自分のパスワードの変更も Prisma で書き（ハッシュは Web が scrypt で Go と同じ形に作ります）、学習ログ（カレンダー）と AI の利用量の月ごとの集計は Prisma で読むだけです。ほかの読み書きとログイン、LINE の AI（添削・翻訳）は今も Go API を通します。機能は、設計書（[2026-11-16-deprecate-go-backend-design.md](superpowers/specs/2026-11-16-deprecate-go-backend-design.md)）の段階ごとに、Go から Web へ移していきます。
-- LINE は Go API に Webhook を送ります。添削の結果は Go API が LINE に push で返します。
+- Web は、ログイン中の人を決めるために、実行時に DB のアカウント（`PasswordAccount`・`FfpfAccount`）を Prisma（`src/infrastructure/prisma/`）で読みます。アクセストークンも Web が自分で確かめます。単語帳（一覧・保存・削除）と学習ノート（一覧・検索・カレンダー・日ごとの表示・ゴミ箱・共有・CSV の取り込み）と練習の記録（介詞・補語）も Prisma で読み書きし（CSV は Web が自分で検証・解析し、1 つのトランザクションで保存します）、「AI で下書き」・クイック質問・ChatGPT と話すは Web が OpenAI を直接呼んで、使った量を `AiUsage` に記録し、質問ノートと会話ノートも Prisma で読み書きし、フォロー（会員の一覧・タイムライン・フォローする／外す）も Prisma で読み書きし、会員の管理（作成・一覧・パスワードの再設定）と自分のパスワードの変更も Prisma で書き（ハッシュは Web が scrypt で Go と同じ形に作ります）、学習ログ（カレンダー）と AI の利用量の月ごとの集計は Prisma で読むだけです。LINE も Web が受け、webhook の署名を確かめ、添削・翻訳の OpenAI を直接呼んで reply し、連携とメッセージ（`LineLink`・`LineLinkCode`・`LineMessage`）を Prisma で読み書きします。ログインと Cron は今も Go API を通します。機能は、設計書（[2026-11-16-deprecate-go-backend-design.md](superpowers/specs/2026-11-16-deprecate-go-backend-design.md)）の段階ごとに、Go から Web へ移していきます。
+- LINE は Web の `POST /api/line/webhook` に Webhook を送ります。Web が署名を確かめ、OpenAI で添削・翻訳し、結果を reply で返します。段階 10b まで、Go API にも同じ LINE のルートが残っていますが、LINE の Webhook URL を Web に変えたあとは使いません。拾い直しと朝のお知らせは、Web にも `GET /api/cron/line-drain` が入りましたが（段階 10a）、Cron に登録するのは段階 10c です。それまでは、Go の Cron が `/v1/line/drain` を呼んで動かします。
 
 ## 2. Web と Go API を分けた理由
 
@@ -114,7 +113,7 @@ Web から Go API への呼び出しは `src/infrastructure/go-api/` にまと�
 - 接続元ごと、接続元とログイン ID の組ごとに、15 分の窓で数えます（`SignInThrottle`）。
 - アカウントそのものはロックしません。ほかの場所からの失敗で、本人が締め出されないようにするためです。
 
-**会員として操作**：管理者は、会員の画面を閲覧のみで見られます。トークンには、操作している管理者（ActorID）と、見ている会員（OwnerID）の両方が入ります。LINE の連携はできず、AI の利用量は管理者のほうに数えます。
+**会員として操作**：管理者は、会員の画面を閲覧のみで見られます。トークンには、操作している管理者（ActorID）と、見ている会員（OwnerID）の両方が入ります。LINE の連携はできず（LINE 連携の画面は `/` に戻ります）、AI の利用量は管理者のほうに数えます。
 
 ## 5. 復習
 
@@ -147,31 +146,33 @@ Web から Go API への呼び出しは `src/infrastructure/go-api/` にまと�
 sequenceDiagram
   participant U as 利用者の LINE
   participant L as LINE
-  participant G as Go API
+  participant W as Web
   participant D as DB
   participant O as OpenAI
   U->>L: 中国語の文を送る
-  L->>G: Webhook（署名つき）
-  G->>D: LineMessage に保存（pending）
+  L->>W: Webhook（署名つき。POST /api/line/webhook）
+  W->>D: LineMessage に保存（pending）
   alt 時間が 30 秒以上残っている
-    G->>O: 添削（JSON スキーマつき）
-    G->>D: 学習ノートに保存（done）
-    G->>L: push で結果を返す
+    W->>O: 添削（JSON スキーマつき）
+    W->>D: 学習ノートに保存（done）
+    W->>L: reply で結果を返す
   else 時間が足りない
-    Note over G,D: pending のまま残す
+    Note over W,D: pending のまま残す
   end
-  Note over G: 毎朝 06:00 の Cron
-  G->>D: 5 分以上 pending の行を拾い直す（2 回まで）
-  G->>L: 結果か失敗を push。期日の来た復習のお知らせ
+  Note over W: 毎朝 06:00 の拾い直し（GET /api/cron/line-drain）
+  W->>D: 5 分以上 pending の行を拾い直す（2 回まで）
+  W->>L: 結果か失敗を push。期日の来た復習のお知らせ
 ```
 
+- Web の入口は `src/app/api/line/webhook/route.ts`（Webhook）と `src/app/api/cron/line-drain/route.ts`（拾い直しと朝のお知らせ）です。Webhook は署名を、リクエストの生のバイト列に対して確かめます。連携の画面（`/account/line`）と Server Actions も Web が Prisma で読み書きし、Go を呼びません。
+- **Cron はまだ Web にありません**：`/api/cron/line-drain` は段階 10a で入りましたが、Vercel Cron には登録していません（登録は段階 10c）。それまでは、Go の Cron（`services/api/vercel.json`）が毎朝 06:00（日本時間）に、Go の `/v1/line/drain` を呼びます。Go と Web は同じ表（`LineLink`・`LineLinkCode`・`LineMessage`）を同じ意味で使うので、どちらが拾い直しても結果は同じです。Go の LINE のコードは段階 10b で消えます。
 - 同じ Webhook が 2 回届いても、`webhookEventId` の一意制約で 1 回だけ処理します。
-- Vercel の関数の時間切れで添削が終わらなかった文は、`pending` のまま残し、毎朝の Cron が拾い直します。
+- Vercel の関数の時間切れで添削が終わらなかった文は、`pending` のまま残し、毎朝の拾い直しが拾い直します。
 - 無料プランの push は月 200 通です。お知らせの前に残りを確かめ、拾い直しの返信のために 30 通を残します。
 
 ## 8. AI と費用
 
-**呼ぶところ**：OpenAI を呼ぶのは次の 4 か所で、LINE の添削・翻訳だけが Go API、ほかは Web（`src/infrastructure/openai/`）です。どれも Responses API を使います。
+**呼ぶところ**：OpenAI を呼ぶのは次の 4 か所で、すべて Web（`src/infrastructure/openai/`）です（LINE の添削・翻訳は `line-learning.ts`。段階 10b まで、Go にも古い呼び出しが残っています）。どれも Responses API を使います。
 
 | 機能              | モデル                           | 返し方                                                    |
 | ----------------- | -------------------------------- | --------------------------------------------------------- |
@@ -188,11 +189,11 @@ sequenceDiagram
 
 ## 9. テスト
 
-| 種類       | 数                    | 中身                                                                                          |
-| ---------- | --------------------- | --------------------------------------------------------------------------------------------- |
-| 単体（TS） | 378 件                | ドメインの規則、表示の変換、層の検査、Go API の呼び方                                         |
-| Go         | テストファイル 81 本  | ハンドラー、認証、FSRS。`store` は本物の Postgres に対して走る                                |
-| E2E        | 206 件（PC とスマホ） | Playwright。Docker の Postgres、Go API、Web、OpenAI と FFPF ID のスタブを立ち上げて画面を通す |
+| 種類       | 数                    | 中身                                                                                                  |
+| ---------- | --------------------- | ----------------------------------------------------------------------------------------------------- |
+| 単体（TS） | 378 件                | ドメインの規則、表示の変換、層の検査、Go API の呼び方                                                 |
+| Go         | テストファイル 81 本  | ハンドラー、認証、FSRS。`store` は本物の Postgres に対して走る                                        |
+| E2E        | 206 件（PC とスマホ） | Playwright。Docker の Postgres、Go API、Web、OpenAI と LINE と FFPF ID のスタブを立ち上げて画面を通す |
 
 - **E2E の土台**：`e2e/server.ts` が、マイグレーション、`next build`、スタブ、Go のビルドと起動を行います。テストのたびに表を空にします。
 - **CSV のパースの検証**：CSV の取り込みを Web に戻したので、約 45 件の CSV の見本は `tests/fixtures/learning-csv/` にあり、TS のパーサー（csv-parse）がその見本と同じ結果を返すことを確かめています。

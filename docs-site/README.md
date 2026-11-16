@@ -27,6 +27,7 @@ features:
 - 学習ノートの一覧・詳細・編集・削除、CSV のインポート、ゴミ箱、共有、日付ごとの記録（カレンダー）、今日の復習（一覧・回答・ノートの出し入れ）、練習の記録（介詞・補語）、質問ノート、会話ノート、学習ログ（カレンダー）、AI の利用量の集計、フォローとタイムライン、会員の一覧、会員の管理（作成・パスワードの再設定）、自分のパスワードの変更は Web が Prisma で直接扱い、クイック質問と「ChatGPT と話す」は Web が OpenAI を直接呼ぶため、この API にはありません。
 - ブラウザから呼ぶことは想定していません（CORS は無効です）。
 - 添削・翻訳の実行（LLM の呼び出し）は、LINE 連携（`/v1/line/*`）の中だけにあります。会員が自分の LINE を結びつけ、LINE に送った文を OpenAI で添削・翻訳して、学習ノートに保存します（[LINE 連携](./reference/line.md)）。ほかのルートからは呼べません。
+  - **移行の注**：LINE の webhook・連携の画面・拾い直しは、段階 10a で Web（`POST /api/line/webhook`・`/account/line`・`GET /api/cron/line-drain`）にも入りました。LINE の Webhook URL を Web に変えたあと、Go のこのルートは使われず、段階 10b で消えます。
 
 ## 構成
 
@@ -84,7 +85,7 @@ Web（Next.js）は、ログイン中の人の確認、単語帳、学習ノー�
 | `OPENAI_API_BASE_URL` / `LINE_API_BASE_URL`                                     | テスト専用の接続先の差し替え。ループバックの URL だけを受け付け、それ以外は起動時に終了します。本番には設定しません                                                                                                |
 | `AUTH_ALLOWED_GITHUB_IDS`                                                       | admin の許可リスト。GitHub の数値のユーザー ID をカンマ区切りで並べる（前後の空白は除き、数字以外の値は無視）                                                                                                      |
 
-`PORT`・`GITHUB_WEB_*`・`API_WEB_PROXY_SECRET`・LINE 連携の設定（`LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`OPENAI_API_KEY`・`CRON_SECRET`・`*_API_BASE_URL`）以外はすべて必須で、無い・不正なときは起動時に終了します。`GITHUB_WEB_*` と `API_WEB_PROXY_SECRET` は API の起動には要りませんが、Web から使うときは必要です。
+`PORT`・`GITHUB_WEB_*`・`API_WEB_PROXY_SECRET`・LINE 連携の設定（`LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`OPENAI_API_KEY`・`CRON_SECRET`・`*_API_BASE_URL`）以外はすべて必須で、無い・不正なときは起動時に終了します。`GITHUB_WEB_*` と `API_WEB_PROXY_SECRET` は API の起動には要りませんが、Web から使うときは必要です。 LINE 連携の設定（`LINE_*`・`OPENAI_API_KEY`・`CRON_SECRET`）は、LINE を Web に移した（段階 10a）あと、段階 10b で Go では不要になります。
 
 ## 関連する文書
 

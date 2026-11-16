@@ -32,27 +32,27 @@ Web 用とは別の OAuth App を新しく作ります。GitHub の **Settings �
 
 ビルドのために `GOFLAGS` に `-buildvcs=false` を入れます（Production と Preview）。Vercel のビルド環境には `.git` が無く、`go build` がコミットの情報を埋め込めずに失敗するためです。
 
-| 名前                          | 内容                                                                                                                               |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                | Neon の pooled 接続文字列（ホスト名に `-pooler` を含むもの）。`?schema=` は付けない（下の注を参照）                                |
-| `API_JWT_SECRET`              | アクセス JWT の HS256 鍵。`openssl rand -base64 48` で作る（32 バイト以上）                                                        |
-| `GITHUB_MOBILE_CLIENT_ID`     | モバイル用 GitHub OAuth App の Client ID                                                                                           |
-| `GITHUB_MOBILE_CLIENT_SECRET` | モバイル用 GitHub OAuth App の Client Secret                                                                                       |
-| `GITHUB_MOBILE_REDIRECT_URI`  | アプリのカスタム URL スキーム                                                                                                      |
-| `AUTH_ALLOWED_GITHUB_IDS`     | admin の許可リスト。GitHub の数値 ID をカンマ区切りで（Go API と Web の両方に、同じ値を設定します）                                |
-| `GITHUB_WEB_CLIENT_ID`        | Web 用 GitHub OAuth App の Client ID（Web の GitHub ログインに必要。下の注を参照）                                                 |
-| `GITHUB_WEB_CLIENT_SECRET`    | Web 用 GitHub OAuth App の Client Secret                                                                                           |
-| `GITHUB_WEB_REDIRECT_URI`     | `https://<Web のホスト>/api/auth/callback/github/go`                                                                               |
-| `API_WEB_PROXY_SECRET`        | Web サーバーと共有する秘密。32 バイト以上（`openssl rand -base64 48`）。Web から使うときは必要                                     |
-| `LINE_CHANNEL_SECRET`         | LINE の Messaging API のチャネルシークレット（LINE 連携を使うときだけ。下の注と「7. LINE 連携」を参照）                            |
-| `LINE_CHANNEL_ACCESS_TOKEN`   | LINE の長期のチャネルアクセストークン                                                                                              |
-| `OPENAI_API_KEY`              | OpenAI の API キー                                                                                                                 |
-| `CRON_SECRET`                 | Cron（LINE の拾い直し、デモのリセット）の認証用の秘密。Vercel が Cron の呼び出しに `Authorization: Bearer <値>` を付けます         |
-| `DEMO_LOGIN_ID`               | デモアカウントのログイン ID（例: `demo`。任意）。空のときはデモが無い状態です。「10. デモアカウント」を参照                        |
-| `FFPF_ID_ISSUER`              | FFPF ID（ffpf-portal）の issuer（例: `https://ffpf-portal.vercel.app`）。FFPF ID を使うときだけ。「9. FFPF ID でのログイン」を参照 |
-| `FFPF_ID_CLIENT_ID`           | portal に登録した zhuelog のクライアント ID（例: `zhuelog`）                                                                       |
-| `FFPF_ID_CLIENT_SECRET`       | `pnpm run oidc:client zhuelog`（ffpf-portal）で作ったシークレット                                                                  |
-| `FFPF_ID_REDIRECT_URI`        | `https://<Web のホスト>/api/auth/callback/ffpf`                                                                                    |
+| 名前                          | 内容                                                                                                                                                                    |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                | Neon の pooled 接続文字列（ホスト名に `-pooler` を含むもの）。`?schema=` は付けない（下の注を参照）                                                                     |
+| `API_JWT_SECRET`              | アクセス JWT の HS256 鍵。`openssl rand -base64 48` で作る（32 バイト以上）                                                                                             |
+| `GITHUB_MOBILE_CLIENT_ID`     | モバイル用 GitHub OAuth App の Client ID                                                                                                                                |
+| `GITHUB_MOBILE_CLIENT_SECRET` | モバイル用 GitHub OAuth App の Client Secret                                                                                                                            |
+| `GITHUB_MOBILE_REDIRECT_URI`  | アプリのカスタム URL スキーム                                                                                                                                           |
+| `AUTH_ALLOWED_GITHUB_IDS`     | admin の許可リスト。GitHub の数値 ID をカンマ区切りで（Go API と Web の両方に、同じ値を設定します）                                                                     |
+| `GITHUB_WEB_CLIENT_ID`        | Web 用 GitHub OAuth App の Client ID（Web の GitHub ログインに必要。下の注を参照）                                                                                      |
+| `GITHUB_WEB_CLIENT_SECRET`    | Web 用 GitHub OAuth App の Client Secret                                                                                                                                |
+| `GITHUB_WEB_REDIRECT_URI`     | `https://<Web のホスト>/api/auth/callback/github/go`                                                                                                                    |
+| `API_WEB_PROXY_SECRET`        | Web サーバーと共有する秘密。32 バイト以上（`openssl rand -base64 48`）。Web から使うときは必要                                                                          |
+| `LINE_CHANNEL_SECRET`         | LINE の Messaging API のチャネルシークレット（LINE 連携を使うときだけ。下の注と「7. LINE 連携」を参照。段階 10b のあとは不要。Web に移る）                              |
+| `LINE_CHANNEL_ACCESS_TOKEN`   | LINE の長期のチャネルアクセストークン（段階 10b のあとは不要。Web に移る）                                                                                              |
+| `OPENAI_API_KEY`              | OpenAI の API キー（Go では LINE のためだけ。段階 10b のあとは不要。Web に移る）                                                                                        |
+| `CRON_SECRET`                 | Cron（LINE の拾い直し、デモのリセット）の認証用の秘密。Vercel が Cron の呼び出しに `Authorization: Bearer <値>` を付けます。段階 10b のあとは Go では不要（Web に移る） |
+| `DEMO_LOGIN_ID`               | デモアカウントのログイン ID（例: `demo`。任意）。空のときはデモが無い状態です。「10. デモアカウント」を参照                                                             |
+| `FFPF_ID_ISSUER`              | FFPF ID（ffpf-portal）の issuer（例: `https://ffpf-portal.vercel.app`）。FFPF ID を使うときだけ。「9. FFPF ID でのログイン」を参照                                      |
+| `FFPF_ID_CLIENT_ID`           | portal に登録した zhuelog のクライアント ID（例: `zhuelog`）                                                                                                            |
+| `FFPF_ID_CLIENT_SECRET`       | `pnpm run oidc:client zhuelog`（ffpf-portal）で作ったシークレット                                                                                                       |
+| `FFPF_ID_REDIRECT_URI`        | `https://<Web のホスト>/api/auth/callback/ffpf`                                                                                                                         |
 
 - `DATABASE_URL` は、手で入れなくても、チームの **Storage** タブで Web が使っている Neon のストアを開き、**Connect Project** から Go API のプロジェクトをつなぐと入ります（pooled の接続文字列です。`channel_binding=require` が付いていても Go API はそのまま使えます）。
 - `GITHUB_WEB_CLIENT_SECRET` は、Vercel に入れた値を読み戻せないので、GitHub の OAuth App の画面で **Generate a new client secret** を押して新しく作ります。段階3をマージするまでは、本番の Web（Auth.js）のログインが古い Secret を使うので、古い Secret を消さないでください。
@@ -68,7 +68,8 @@ Web 用とは別の OAuth App を新しく作ります。GitHub の **Settings �
 - Web 用の OAuth App は、以前から Web で使っているものをそのまま使えます。GitHub は登録した callback URL の **下の階層** を `redirect_uri` に使えるので、Web の callback（`https://<Web>/api/auth/callback/github/go`）は登録済みの callback（`/api/auth/callback/github`）の下になり、OAuth App の設定を変える必要はありません。
 - `API_WEB_PROXY_SECRET` は、Web（Next.js）が利用者の IP を渡すための共有の秘密です。使い方は 下の「レート制限とクライアントの IP」 を見てください。空のときは `X-Zhuelog-Client-IP` を常に無視します。設定すると、`POST /v1/auth/guest` は `X-Zhuelog-Proxy-Secret` が一致する呼び出し（Web のサーバー）だけを受け付け、それ以外は `403` です（下の「ゲストのセッション」）。
 - `API_WEB_PROXY_SECRET` も `API_JWT_SECRET` と同じく、Production と Preview で **別の値** にします。同じだと、プレビューの Web が本番の Go API に任意の IP を名乗れてしまいます。
-- LINE の 2 つ（`LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`）は、**両方設定するか、両方空** にします。LINE を使うときは `OPENAI_API_KEY` も要ります。足りないと起動時に止まります。LINE の 2 つが空のときは Go API は普通に起動し、`/v1/line/*` の 5 つのルートが `404` になります（LINE 連携が無い状態です）。Go API の `OPENAI_API_KEY` は LINE のためだけに使います。
+- LINE の 2 つ（`LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`）は、**両方設定するか、両方空** にします。LINE を使うときは `OPENAI_API_KEY` も要ります。足りないと起動時に止まります。LINE の 2 つが空のときは Go API は普通に起動し、`/v1/line/*` の 7 つのルートが `404` になります（LINE 連携が無い状態です）。Go API の `OPENAI_API_KEY` は LINE のためだけに使います。
+- 段階 10b のあと、Go から LINE のルートと 2 つの Cron が消えるので、Go の `LINE_*`・`OPENAI_*`・`CRON_SECRET` は不要になります（Web が持つようになります。下の「段階10（LINE とデモのリセットの cron）のマージの前と後」）。それまでは、LINE の Webhook URL を Web に変えたあとも、Go の拾い直しの Cron が動くので、Go の値は消さないでください。
 - `CRON_SECRET` が空のときは、`GET /v1/line/drain` と `/v1/cron/demo-reset` は常に `401` です（拾い直しとデモのリセットが動きません）。LINE 連携かデモを使うときは設定します。
 - `DEMO_LOGIN_ID` は、ログイン ID と同じ形（英小文字・数字・`.` `_` `-` の 3〜32 文字）にします。違うと起動時に止まります。同じログイン ID の会員がすでにいると、その会員のデータが毎晩消えるので、使われていない ID にします。
 - `FFPF_ID_*` の 4 つは **すべて設定するか、すべて空** にします（一部だけだと起動時に止まります）。`FFPF_ID_ISSUER` は `https://` の URL で、`?` や `#` を含めません（`http://` は `localhost` と `127.0.0.1` だけ）。違うと起動時に止まります。4 つが空のときは、`POST /v1/auth/ffpf` が `503` を返します（FFPF ID のログインが無い状態です）。
@@ -150,15 +151,19 @@ FFPF ID でのログインを使うときは、Web の Vercel プロジェクト
 
 Web は実行時に、次の値を使います。Web の Vercel プロジェクトの Production に入れます。
 
-| 名前                      | 内容                                                                                                            |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`            | Neon の接続文字列。実行時の読み取りに使う。pooled の URL か **確かめる**（下の注を参照）                        |
-| `API_JWT_SECRET`          | Go API と **同じ値**（32 バイト以上。足りないと、Web はトークンをすべて無効として扱い、全員が未ログインになる） |
-| `AUTH_ALLOWED_GITHUB_IDS` | 管理者にする GitHub ユーザーの数字の ID（カンマ区切り。Go API と同じ値。空なら管理者は誰も通らない）            |
-| `DEMO_LOGIN_ID`           | デモアカウントのログイン ID（Go API の `DEMO_LOGIN_ID` と同じ。デモを使わないなら入れなくてよい）               |
-| `OPENAI_API_KEY`          | 単語帳の「AI で下書き」に使う OpenAI の API キー。Go API と同じ値でよい。無いと下書きは「今は使えません」になる |
-| `OPENAI_LEARNING_MODEL`   | 下書きのモデル（任意。無ければ `gpt-5-mini`）                                                                   |
-| `OPENAI_CHAT_MODEL`       | クイック質問と ChatGPT と話すのモデル（任意。無ければ `gpt-6.1-sol`）                                           |
+| 名前                        | 内容                                                                                                                                            |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`              | Neon の接続文字列。実行時の読み取りに使う。pooled の URL か **確かめる**（下の注を参照）                                                        |
+| `API_JWT_SECRET`            | Go API と **同じ値**（32 バイト以上。足りないと、Web はトークンをすべて無効として扱い、全員が未ログインになる）                                 |
+| `AUTH_ALLOWED_GITHUB_IDS`   | 管理者にする GitHub ユーザーの数字の ID（カンマ区切り。Go API と同じ値。空なら管理者は誰も通らない）                                            |
+| `DEMO_LOGIN_ID`             | デモアカウントのログイン ID（Go API の `DEMO_LOGIN_ID` と同じ。デモを使わないなら入れなくてよい）                                               |
+| `OPENAI_API_KEY`            | 単語帳の「AI で下書き」に使う OpenAI の API キー。Go API と同じ値でよい。無いと下書きは「今は使えません」になる                                 |
+| `OPENAI_LEARNING_MODEL`     | 単語帳の下書きと LINE の添削・翻訳のモデル（任意。無ければ `gpt-5-mini`。Go に入れていれば同じ値）                                              |
+| `LINE_CHANNEL_SECRET`       | LINE の Messaging API のチャネルシークレット。Go と **同じ値**。**Production だけ**（下の注を参照）                                             |
+| `LINE_CHANNEL_ACCESS_TOKEN` | LINE の長期のチャネルアクセストークン。Go と **同じ値**。**Production だけ**                                                                    |
+| `CRON_SECRET`               | LINE の拾い直し（`/api/cron/line-drain`）の認証用の秘密。**Production だけ**。Vercel が Cron の呼び出しに `Authorization: Bearer <値>` を付ける |
+| `LINE_API_BASE_URL`         | テスト専用。LINE の API の接続先の差し替え（ループバックの URL だけ。本番には設定しない）                                                       |
+| `OPENAI_CHAT_MODEL`         | クイック質問と ChatGPT と話すのモデル（任意。無ければ `gpt-6.1-sol`）                                                                           |
 
 注意:
 
@@ -166,6 +171,8 @@ Web は実行時に、次の値を使います。Web の Vercel プロジェク�
 - `DATABASE_URL` が pooled か、マージの前に確かめます（ホスト名に `-pooler` が付くのが pooled です）。マイグレーション（`prisma migrate deploy`）は direct の URL を使うのが本来の形です。今の Production の値が **direct** のときは、実行時用に pooled の値を別の変数で足します。ただし、今の Web のコード（`src/infrastructure/prisma/prisma-client.ts`）が読むのは `DATABASE_URL` だけです。その場合は、実行時用の変数を読むコードの変更を先に入れてから、値を設定します。
 - 単語帳（一覧・保存・削除）は、Web が Prisma で DB を読み書きします。「AI で下書き」も Web が OpenAI を直接呼び、使った量を、操作している人の `AiUsage` に記録します。コードの上では、Go API に `/v1/vocabulary*` のルートはもうありません（本番の Go は、下の手順で再デプロイするまで古いままです）。そのため、**マージの前に** Web の Production に `OPENAI_API_KEY` を入れます（Go API と同じ値でよい）。Go API にも、LINE のために、自分の `OPENAI_API_KEY` が引き続き要ります。
 - `OPENAI_API_BASE_URL` はテスト専用です。`127.0.0.1` などのループバックの URL だけを受け付けます。**Production と Preview には設定しません。**
+- LINE の `LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`CRON_SECRET` は、**Production だけ** に入れ、Preview には入れません。入れると、プレビューのデプロイが本物の LINE のチャネルに返事をしてしまうためです（Webhook は本番の URL にだけ届きますが、プレビューから push を送れてしまいます）。LINE を使うには、LINE の 2 つと `OPENAI_API_KEY` がそろっている必要があります。LINE の 2 つのどちらか、または `OPENAI_API_KEY` が無い（`LINE_API_BASE_URL` がループバックでないときも同じ）Web は、`POST /api/line/webhook` と `GET /api/cron/line-drain` が `404`、`/account/line` が「LINE 連携は今は使えません。」になります（Go のように起動時には止まりません）。`CRON_SECRET` だけが無いときは、拾い直しが常に `401` です。LINE の 2 つは、Go のプロジェクトと同じ値にします。`CRON_SECRET` は、Go と同じ値にするか、`openssl rand -hex 32` で新しく作ります。
+- `LINE_API_BASE_URL` はテスト専用です。`OPENAI_API_BASE_URL` と同じく、**Production と Preview には設定しません。**
 - 秘密の値は、このリポジトリのファイルやログに書きません。
 - 4 つ（`API_JWT_SECRET`（Go API と 1 バイトも違わない値）、`AUTH_ALLOWED_GITHUB_IDS`（数字の ID。Go API と同じ値）、`DEMO_LOGIN_ID`、`DATABASE_URL`）は、**マージ（本番のデプロイ）の前に** Web の Production に入れておきます。Vercel の環境変数は、変えたあとに再デプロイしないと効きません。
 - 足りない・値が違うときの症状：`API_JWT_SECRET` が無い・違う・短いと、全員が未ログイン扱いになり、ログインしても `/signin` に戻ります。`DATABASE_URL` が無いと、会員向けのページがエラーになります。
@@ -404,6 +411,77 @@ ChatGPT と話す（OpenAI の答えを NDJSON でブラウザへ流す）と会
 - Go を再デプロイしたあとで Web だけを戻すと、古い Web が消えたルートを呼んで `404` になります。管理画面の一覧はエラーの画面に、パスワードの変更は「処理できませんでした。時間をおいてもう一度お試しください。」になります。
 - Web を戻すなら Go も戻します。Web が書いたハッシュは、古い Go でも確かめられます。
 
+#### 段階10（LINE とデモのリセットの cron）のマージの前と後
+
+LINE の webhook・連携・拾い直しと、デモのリセットの cron を Web に移す段階（段階10）を本番に出す順番です。1 つの PR には大きいので、3 つの PR（10a・10b・10c）に分けました。
+
+- **10a**：LINE の webhook（`POST /api/line/webhook`）、「LINE 連携」の画面と Server Actions、拾い直しと朝のお知らせ（`GET /api/cron/line-drain`）を Web に足します。Cron はまだ登録しません。Go は変えません。
+- **10b**：Go から LINE のルートと 2 つの Cron（`services/api/vercel.json`）を消し、デモのリセットを Web（`/api/cron/demo-reset`）に足します。
+- **10c**：Web の `vercel.json` に `crons` を足して、2 つの Cron を Web で動かします。
+
+順番は 4 つの手順で、LINE の返信と OpenAI の呼び出しが二重にならないように切り替えます。LINE の Webhook URL は同時に 1 か所にしか向けられないので、「Go が答える」か「Web が答える」かのどちらか一方になります。この途中で、拾い直しが 1 回（1 晩）飛ぶことと、Webhook URL を変える数分のあいだに届いた LINE の文に返事が無いことがあります。この 2 つは、わかったうえで受け入れています。
+
+##### 手順 1（10a のマージの前と後）
+
+この PR（10a）が行うのは、Web に LINE の受け口を足すところまでです。LINE の Webhook URL は変えません。マージしても、LINE の文は Go に届き続けます。
+
+マージの前:
+
+- Web の Vercel プロジェクトの **Production** に、`LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`（どちらも Go のプロジェクトと同じ値）と `CRON_SECRET`（Go と同じ値にするか、`openssl rand -hex 32` で新しく作る）を入れます。Preview には入れません。`OPENAI_API_KEY` は段階 1 から入っています。
+- Go に `OPENAI_LEARNING_MODEL` を入れている場合は、Web にも同じ値を入れます（今の Go には入っておらず、どちらも既定の `gpt-5-mini` です）。
+- マイグレーションはありません（`LineLink`・`LineLinkCode`・`LineMessage` は本番にあります）。
+- Vercel の環境変数は、変えたあとに再デプロイしないと効きません。入れてから、マージのデプロイを出します。
+
+マージのあと:
+
+1. Web の Production のデプロイが Ready になったことを確かめます。
+2. その Web のデプロイを `vercel promote` でカスタムドメインに切り替えます。
+3. 次の `curl` で、Webhook が Web で答えていることを確かめます。署名の無い呼び出しは、`401` と次の JSON を返します。
+
+   ```bash
+   curl -s -X POST https://ffpf-zhuelog.sparklingstadt.com/api/line/webhook
+   # {"error":{"code":"unauthorized","message":"認証が必要です。"}}
+   ```
+
+   - `404` のときは、LINE の値（`LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`OPENAI_API_KEY`）が Production に入っていません。入れて再デプロイします。
+   - `{"error":"認証が必要です。"}`（`code` と `message` の入れ子が無い形）のときは、まだ古い Web のデプロイが答えています（`vercel promote` が済んでいません）。
+
+4. `/account/line` を開き、「LINE 連携は今は使えません。」が出ないことを確かめます。
+5. **Go は、まだ再デプロイしません。** Go の LINE のコードは、この PR では消えません（段階 10b で消します）。
+
+次の `curl` は、**まだ叩きません**。
+
+```bash
+curl -s -o /dev/null -w '%{http_code}' https://ffpf-zhuelog.sparklingstadt.com/api/cron/line-drain -H "Authorization: Bearer $CRON_SECRET"
+```
+
+叩くと `204` が返りますが、毎朝の Go の Cron とは別に拾い直しが走るので、拾い直しが 2 回走ります（試す回数は 1 つの文に 2 回までなので、2 回目で使い切って失敗にされる文が出ます）。Web の Cron は、段階 10c まで登録しません。
+
+この時点では、LINE の文はまだ Go に届き、拾い直しの Cron も Go が動かします。Web の画面で出した連携コードは、Go の Webhook でも使えます（同じ表を同じ意味で使うため）。Web で切り替えた復習のお知らせの設定は、Go の Cron がそのまま送ります。Go のコードは出し直しません。
+
+##### 手順 2（利用者が行う）
+
+マージと確認が済んでから、LINE の Webhook URL を Web に変えます。
+
+1. LINE Developers のコンソールで、Messaging API のチャネルの **Webhook URL** を、Go の `https://ffpf-zhuelog-api.vercel.app/v1/line/webhook` から、Web の `https://ffpf-zhuelog.sparklingstadt.com/api/line/webhook` に変えます。
+2. 「**検証**」を押し、成功（`200`）になることを確かめます。「Webhook の利用」はオンのまま、「応答メッセージ」はオフのままにします。
+3. 自分の LINE で、添削・翻訳・コードでの連携を 1 回ずつ試します。結果が Web の学習ノートに入ること、`AiUsage` に機能名 `line` の行が増えること（管理者の `/admin/ai-usage`）を確かめます。
+4. 変えてから数分のあいだに届いた文は、返事が無いことがあります（許容します）。
+
+##### 手順 3（10b のマージの前と後）
+
+手順 2 が済んでから、10b をマージします。マージのあと、Web を `vercel promote` で切り替え、main から Go を再デプロイします（実行の前に、使う人に確かめます）。Go から LINE のルートと 2 つの Cron（`services/api/vercel.json`）が消えます。次に 10c を出すまで、拾い直しとデモのリセットは動きません（1 晩飛んでかまいません。急ぐときは、Web の `/api/cron/demo-reset` を手で呼びます）。詳しくは、10b の PR で、この節に書きます。
+
+##### 手順 4（10c のマージの前と後）
+
+手順 3 で Go を出し直したあとで、10c をマージします。Web の `vercel.json` の `crons` が、Production のデプロイで登録されます。Vercel のダッシュボードの **Settings → Cron Jobs** に、2 つ（`/api/cron/line-drain` は毎日 21:00 UTC、`/api/cron/demo-reset` は毎日 19:00 UTC）が出ることを確かめます。詳しくは、10c の PR で、この節に書きます。
+
+##### 戻すとき（10a）
+
+- 手順 2 の前なら、Web だけを戻せば足ります。LINE の Webhook は Go に向いたままで、Go がまだ連携のルートも持っているからです。戻した Web の `/account/line` は、前の Web のとおり Go を呼びます。
+- 手順 2 のあとで Web だけを戻す場合は、**先に** LINE Developers の Webhook URL を Go（`https://ffpf-zhuelog-api.vercel.app/v1/line/webhook`）に戻します。戻さずに Web を戻すと、古い Web には Webhook のルートが無いので、LINE の文は `404` で失われます。
+- Go は、10a では何も変えていないので、戻す必要はありません。
+
 ### Web のプレビュー（Preview）
 
 PR ごとの Web のプレビューも、ログインとデータの読み書きを Go API で行います。そのため、Web の Vercel プロジェクトの **Preview** の環境変数にも、次の 4 つ（と、下の注の DB と秘密）を入れます。
@@ -449,39 +527,29 @@ PR ごとの Web のプレビューも、ログインとデータの読み書き
 
 LINE に送った文を OpenAI で添削・翻訳し、送った人の学習ノートに追加する機能です。会員と管理者が、Web の「LINE 連携」画面（`/account/line`）で連携コードを出し、それを LINE に送ると、その LINE とアカウントが結びつきます。ゲストは使えません。仕様は `docs/superpowers/specs/2026-10-23-line-via-go-api-design.md` にあります。
 
-Go API の次の 5 つのルートで動きます。LINE の設定（上の「3. 環境変数」）が空のときは、どれも `404` です。
+段階 10a で、LINE の受け口と画面は Web に移りました（Go から Web への切り替えは、下の「段階10（LINE とデモのリセットの cron）のマージの前と後」の順番で行います）。Go の `/v1/line/*` の 7 つのルート（Webhook・連携の 3 つ・お知らせの 2 つ・拾い直し）は段階 10b で消えるまで残りますが、LINE の Webhook URL を Web に変えたあとは使われません。連携の画面と Server Actions（コードを出す・解除する・お知らせの入り切り）は、Go を呼ばず、Web が Prisma で `LineLink`・`LineLinkCode`・`LineMessage` を読み書きします。
 
-| メソッド | パス                 | 認証                                  | 内容                                                                 |
-| -------- | -------------------- | ------------------------------------- | -------------------------------------------------------------------- |
-| POST     | `/v1/line/webhook`   | LINE の署名（`X-Line-Signature`）     | LINE からの通知を受け取り、添削・翻訳して返信する                    |
-| GET      | `/v1/line/link`      | 会員・管理者（ゲストは `403`）        | LINE と連携しているか（`{"linked": true}`）                          |
-| POST     | `/v1/line/link-code` | 会員・管理者（ゲストは `403`）        | 連携コード（8 文字、10 分）を出す。前のコードは無効になる            |
-| DELETE   | `/v1/line/link`      | 会員・管理者（ゲストは `403`）        | 連携を解除する（連携していなくても `204`）                           |
-| GET      | `/v1/line/drain`     | `Authorization: Bearer <CRON_SECRET>` | 結果が出ないまま残ったメッセージの拾い直し（Vercel Cron が呼びます） |
+Web の次の 2 つの Route Handler で動きます。LINE の設定（上の「Web が実行時に使う DB と秘密」）が足りないときは、どちらも `404` です。
 
-- 送った文は、webhook のリクエストの中で処理します（保存 → OpenAI → 学習ノートに保存 → reply）。reply は無料です。添削・翻訳の結果は、バッチ名 `LINE` のノートとして保存します。1 回の通知の処理は、リクエストの開始から 45 秒までで、残りが 30 秒を切った文は、保存だけして OpenAI は呼ばず、「時間がかかっています」と返します（翌朝の拾い直しが処理します）。
-- 拾い直しは、`services/api/vercel.json` の Cron（`0 21 * * *`、UTC なので日本時間の毎日 06:00）が `GET /v1/line/drain` を呼んで行います。5 分以上 `pending` のまま残ったメッセージを 1 回だけ試し直し、できたら push で、できなければ失敗を push で知らせます。1 回の実行で残りが 30 秒を切ったら、新しい生成は始めず次の実行に回します（試す回数を使い切った行は、生成せずに失敗にします）。push は、LINE の無料プランでは月 200 通の枠を使います。同じ Cron が、希望した人へ復習のお知らせも送ります（[LINE 連携のリファレンス](../docs-site/reference/line.md#put-v1-line-review-notify)）。お知らせは今月の残りから 30 通を拾い直しのために残し、その範囲だけ送ります。
-- ログには、イベント ID・メッセージの ID・コードだけを出し、本文・生成結果・鍵・LINE のユーザー ID・連携コードは出しません。
-- 使う表は `LineLink`・`LineLinkCode`・`LineMessage` の 3 つで、Prisma のマイグレーション `20261023090000_add_line_link` で作ります。
+| メソッド | パス                   | 認証                                  | 内容                                                                                                   |
+| -------- | ---------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| POST     | `/api/line/webhook`    | LINE の署名（`X-Line-Signature`）     | LINE からの通知を受け取り、添削・翻訳して返信する（`src/app/api/line/webhook/route.ts`）               |
+| GET      | `/api/cron/line-drain` | `Authorization: Bearer <CRON_SECRET>` | 結果が出ないまま残ったメッセージの拾い直しと、復習のお知らせ（`src/app/api/cron/line-drain/route.ts`） |
+
+- 送った文は、webhook のリクエストの中で処理します（保存 → OpenAI → 学習ノートに保存 → reply）。reply は無料です。添削・翻訳の結果は、バッチ名 `LINE` のノートとして保存します。1 回の通知の処理は、リクエストの開始から 45 秒までで、残りが 30 秒を切った文は、保存だけして OpenAI は呼ばず、「時間がかかっています」と返します（翌朝の拾い直しが処理します）。イベントは 55 秒を過ぎると新しく始めません。
+- 拾い直しは、5 分以上 `pending` のまま残ったメッセージを 1 回だけ試し直し、できたら push で、できなければ失敗を push で知らせます。1 回の実行は 50 秒で止まり、残りが 30 秒を切ったら、新しい生成は始めず次の実行に回します（試す回数を使い切った行は、生成せずに失敗にします）。push は、LINE の無料プランでは月 200 通の枠を使います。同じ実行が、希望した人へ復習のお知らせも送ります（[LINE 連携のリファレンス](../docs-site/reference/line.md#put-v1-line-review-notify)）。お知らせは今月の残りから 30 通を拾い直しのために残し、その範囲だけ送ります。
+- **Cron はまだ登録していません**：Web の `vercel.json` に `crons` は無く、`/api/cron/line-drain` を呼ぶのは人だけです。段階 10c までは、`services/api/vercel.json` の Cron（`0 21 * * *`、UTC なので日本時間の毎日 06:00）が、Go の `GET /v1/line/drain` を呼びます。Go と Web は同じ表を同じ意味で使うので、どちらが拾い直しても結果は同じです。ただし **両方を同じ晩に呼ぶと、拾い直しが 2 回になります**（段階 10 の節の「叩かない」を参照）。
+- `maxDuration` は、2 つの route の中で 60 秒と決めています（Go の書き込みの上限と同じ）。Web のプロジェクトにはすでに 90 秒の route（クイック質問・チャット）があるので、プロジェクトの設定を変える必要はありません。
+- ログには、イベント ID・メッセージの ID・コードだけを出し、本文・生成結果・鍵・LINE のユーザー ID・連携コード・reply token は出しません。
+- 使う表は `LineLink`・`LineLinkCode`・`LineMessage` の 3 つで、Prisma のマイグレーション `20261023090000_add_line_link` で作ります（本番にはすでにあります）。
+- OpenAI の利用量は、操作している人ではなく LINE を結びつけた人の `AiUsage` に、機能名 `line` で記録します。
+- e2e は、偽の LINE API（`e2e/line-stub.ts`）に `LINE_API_BASE_URL` を向けて確かめます。
 
 ### 切り替えの手順
 
-LINE 連携を本番で使い始めるときは、次の順で行います。
+LINE の Webhook を Go から Web に切り替える順番は、下の「段階10（LINE とデモのリセットの cron）のマージの前と後」にあります。LINE Developers で変えるのは、**Webhook URL** を `https://ffpf-zhuelog.sparklingstadt.com/api/line/webhook` にすることと、「Webhook の利用」をオンのまま、「**応答メッセージ**」をオフのままにすることです（オンだと、LINE の自動応答とこちらの返信が二重に届きます）。
 
-1. LINE Developers で、Messaging API のチャネルを用意します（以前のチャネルが残っていれば使えます）。**Webhook URL** を `https://ffpf-zhuelog-api.vercel.app/v1/line/webhook` にして、Webhook の利用をオンにします。「**応答メッセージ**」は **オフ** にします（オンのままだと、LINE の自動応答とこの API の返信が二重に届きます）。LINE の「検証」ボタンは、手順 5 で Go API をデプロイするまでは `404` で失敗します（まだ押さないでください）。
-2. Go API の Vercel プロジェクトの Production に、`LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`OPENAI_API_KEY`・`CRON_SECRET` を入れます。Web の Vercel プロジェクトには `LINE_ADD_FRIEND_URL` を入れます。
-3. マイグレーション `20261023090000_add_line_link` は、main へのマージで Web の本番ビルドが自動で適用します（「4. 本番の DB の確認」）。マージの後、手順 5 で Go API をデプロイするまでに `migrate status` で適用済みを確かめます。自動で当たらなかったときだけ、`vercel env pull` と `migrate deploy` で手で当てます。
-4. main にマージします。
-5. Go API に main をデプロイします。今の Go API の Vercel プロジェクトは、Git からの自動デプロイが切れている（`createDeployments: disabled`）ので、マージしてもデプロイされません。**Deployments → Redeploy** は使いません（古いデプロイを作り直すだけで、マージ前のコードが出てしまいます）。次のどちらかで、main を明示して出します。
-   - **Settings → Git** で Git からのデプロイを入れ直し、main をデプロイする。
-   - プロジェクトをリンクした状態で、main をチェックアウトした `services/api` から `vercel deploy --prod` を実行する。
-
-   デプロイができたら、`curl -i -X POST https://ffpf-zhuelog-api.vercel.app/v1/line/webhook` が `401`（`404` ではない）を返すことを確かめます。その後で、LINE の「**検証**」ボタンを押します。
-
-6. Web が本番の URL に付いたかも確かめます。Web の Vercel プロジェクトの Deployment Checks は、今はもう無い CI のチェック（`verify (24)`・`verify (26)`・`e2e`）を待ち続けるので、本番の URL が付かないことがあります。直すまでは、デプロイを手で Promote します。
-7. 自分の LINE で、連携・添削・翻訳・解除を試します。
-
-関数の最大実行時間は `services/api/vercel.json` では指定しません。Go の Framework Preset では `functions` のキーが関数に合わず、ビルドが失敗するためです（`The pattern "main.go" defined in functions doesn't match any Serverless Functions`）。webhook と拾い直しは最大 60 秒かかるので、**60 秒以上** が必要です。今の Go API のプロジェクトは Fluid compute で、既定が 300 秒なので足ります。Fluid compute を切るなど設定を変えるときは、ダッシュボードの **Settings → Functions** で 60 秒以上にしてください。
+LINE の連携を最初から作り直すとき（以前のチャネルが無いとき）は、LINE Developers で Messaging API のチャネルを用意し、Web の Production に `LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`OPENAI_API_KEY`・`CRON_SECRET` と、任意で `LINE_ADD_FRIEND_URL` を入れてデプロイしてから、Webhook URL を設定して「検証」を押します（成功は `200`）。
 
 ## 8. ChatGPT と話す（会話ノート）
 
@@ -517,9 +585,10 @@ FFPF ID（ffpf-portal が提供する OpenID Connect のプロバイダー）の
 
 - アカウント：`DEMO_LOGIN_ID` の ID の、普通のパスワード会員です。パスワードのハッシュは使えない値なので、ID とパスワードではログインできません。アカウントは下のリセットが作ります（手で作る必要はありません）。
 - データ：デモを試す全員で 1 つのアカウントを共有します。毎晩 04:00（日本時間）に、`services/api/vercel.json` の Cron（`0 19 * * *`、UTC）が `GET /v1/cron/demo-reset` を呼び、1 つのトランザクションで、デモの持ち物（学習ノートとヒント、復習の項目と記録、単語帳、会話ノート、クイック質問、練習の記録、フォロー、LINE の行）を消してから、`services/api/demo/seed.json` の内容を入れ直します。日付は「リセットの何日前か」で書いてあるので、いつ見ても直近 7 日の記録に見えます。ログイン中のセッションは消しません。
-- 使えないもの：OpenAI を呼ぶルート（Web の `POST /api/chat` と `POST /api/quick-question`）、LINE 連携の 5 つは、デモには `403`（「デモでは使えません。」）です。パスワードの変更も、デモには使えません。断るのは Web です（Go のルートはもうありません）。フォロー・会員の一覧・タイムライン・共有（ほかの会員に届くため）は、Web が断ります（`/follow` は `/` に戻し、フォローや共有を直接送ると画面には「ログインし直してください。」と出ます）。Go のルートの判定は `auth.Service.IsDemo` の 1 か所で、LINE 連携の 5 つだけに残っています。管理者がデモとして操作しているときや、ほかの会員には当てはまりません。Web の AI のルート（単語帳の下書き・クイック質問・ChatGPT と話す）は、Web が自分でデモかどうかを確かめて断ります。Web は、自分の DB の確認（`passwordHash` が使えない値で、ログイン ID が `DEMO_LOGIN_ID` と同じ）でデモかどうかを決め、すべてのページに「デモアカウントです。…」を出し、メニューから使えない機能を外します。
+- 使えないもの：OpenAI を呼ぶルート（Web の `POST /api/chat` と `POST /api/quick-question`）と、Go の LINE 連携のルートは、デモには `403`（「デモでは使えません。」）です。Web の LINE 連携の画面（`/account/line`）は `/` に戻します。パスワードの変更も、デモには使えません。断るのは Web です（Go のルートはもうありません）。フォロー・会員の一覧・タイムライン・共有（ほかの会員に届くため）は、Web が断ります（`/follow` は `/` に戻し、フォローや共有を直接送ると画面には「ログインし直してください。」と出ます）。Go のルートの判定は `auth.Service.IsDemo` の 1 か所で、LINE 連携のルートだけに残っています（段階 10b で消えます）。管理者がデモとして操作しているときや、ほかの会員には当てはまりません。Web の AI のルート（単語帳の下書き・クイック質問・ChatGPT と話す）は、Web が自分でデモかどうかを確かめて断ります。Web は、自分の DB の確認（`passwordHash` が使えない値で、ログイン ID が `DEMO_LOGIN_ID` と同じ）でデモかどうかを決め、すべてのページに「デモアカウントです。…」を出し、メニューから使えない機能を外します。
+- リセットは段階 10b まで Go が行います（Web への移行は段階 10b・10c。下の「段階10（LINE とデモのリセットの cron）のマージの前と後」）。
 - 手でリセットする：`curl -i -X POST https://ffpf-zhuelog-api.vercel.app/v1/cron/demo-reset -H "Authorization: Bearer $CRON_SECRET"` が `204` を返します（`GET` でも同じです）。`CRON_SECRET` を知っている人だけが呼べます。
-- マイグレーションは要りません（既存の表だけを使います）。Vercel Hobby の Cron は 2 つまでで、LINE の拾い直しとこのリセットで 2 つです。
+- マイグレーションは要りません（既存の表だけを使います）。Vercel Hobby の Cron は 2 つまでで、LINE の拾い直しとこのリセットで 2 つです（今は Go の `services/api/vercel.json` に 2 つあります。段階 10c で Web の `vercel.json` に移ります）。
 
 ### 切り替えの手順
 
