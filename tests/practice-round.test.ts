@@ -131,6 +131,13 @@ test("every complement mode is accepted", () => {
   }
 });
 
+test("a preposition round accepts an undefined mode and refuses a defined one", () => {
+  const valid = round(1000, question("在"));
+  assert.ok(preposition({ ...valid, mode: undefined }));
+  assert.equal(preposition({ ...valid, mode: "result" }), null);
+  assert.equal(preposition({ ...valid, mode: null }), null);
+});
+
 test("the saved round counts from its questions", () => {
   const questions: ChoiceAnswer[] = [
     question("在"),

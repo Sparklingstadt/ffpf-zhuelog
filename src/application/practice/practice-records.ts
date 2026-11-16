@@ -26,7 +26,7 @@ export class PracticeForbiddenError extends Error {
   override name = "PracticeForbiddenError";
 }
 
-// "invalid": the round fails Go's checks. "taken": the id is another
+// "invalid": the round fails the round checks. "taken": the id is another
 // owner's round, which is left as it was.
 export type SaveRoundResult = "saved" | "invalid" | "taken";
 

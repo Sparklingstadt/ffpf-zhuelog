@@ -95,8 +95,8 @@ const modeOf = (row: { mode: string }) => row.mode as ComplementRoundMode;
 // caller, read once per request.
 export function createPracticeRecordStore(db: () => PrismaClient) {
   // Saves the row unless its id is taken, reads back the row saved under the
-  // id for this owner, and queues that row's misses, in one transaction (see
-  // 設計者の判断 3, 4). The first save of an id wins: a retry changes nothing
+  // id for this owner, and queues that row's misses, in one transaction so a
+  // save never half-succeeds. The first save of an id wins: a retry changes nothing
   // and queues the first save's misses again. null: the id is another
   // owner's, and nothing changed or was queued.
   async function save<Row extends RecordRow>(

@@ -27,15 +27,15 @@
 
 ## 技術構成
 
-| 部分         | 使っているもの                                                                                                                                                                 |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Web          | Next.js 16（App Router、Server Components、Server Actions）、React 19、TypeScript、Tailwind CSS 4、shadcn/ui                                                                   |
-| API          | Go（標準の `net/http`）。フォローとタイムライン、学習の記録、問題と一問一答、チャット、LINE、管理、ログイン、定期実行を受け持ちます                                            |
-| DB           | PostgreSQL 17（本番は Neon）。スキーマとマイグレーションは Prisma 7。Web はアカウント・単語帳・学習ノート（CSV を含む）・復習・練習の記録を、Go API はそれ以外を読み書きします |
-| 認証         | GitHub OAuth（PKCE）、ID とパスワード（scrypt）、FFPF ID（OpenID Connect）、ゲスト。Go が JWT と refresh token を発行します                                                    |
-| 外部サービス | OpenAI API、LINE Messaging API、Web Speech API（読み上げ）                                                                                                                     |
-| テスト       | Node の test runner、Go の testing、Playwright（PC とスマホの幅）、lefthook                                                                                                    |
-| デプロイ     | Vercel（Web と Go API の 2 プロジェクト）。本番のマイグレーションは Web のビルドで当てます                                                                                     |
+| 部分         | 使っているもの                                                                                                                                                                                                                                                                                                                       |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Web          | Next.js 16（App Router、Server Components、Server Actions）、React 19、TypeScript、Tailwind CSS 4、shadcn/ui                                                                                                                                                                                                                         |
+| API          | Go（標準の `net/http`）。フォローとタイムライン、学習の記録、問題と一問一答、チャット、LINE、管理、ログイン、定期実行を受け持ちます                                                                                                                                                                                                  |
+| DB           | PostgreSQL 17（本番は Neon）。スキーマとマイグレーションは Prisma 7。Web はアカウントを読み、単語帳・学習ノート（CSV を含む）・復習・練習の記録を読み書きします。Go API はアカウントの書き込み（ログイン・refresh・管理）とそれ以外を受け持ち、デモのリセットでは練習の記録と復習の項目も書きます。LINE の通知は復習の項目を読みます |
+| 認証         | GitHub OAuth（PKCE）、ID とパスワード（scrypt）、FFPF ID（OpenID Connect）、ゲスト。Go が JWT と refresh token を発行します                                                                                                                                                                                                          |
+| 外部サービス | OpenAI API、LINE Messaging API、Web Speech API（読み上げ）                                                                                                                                                                                                                                                                           |
+| テスト       | Node の test runner、Go の testing、Playwright（PC とスマホの幅）、lefthook                                                                                                                                                                                                                                                          |
+| デプロイ     | Vercel（Web と Go API の 2 プロジェクト）。本番のマイグレーションは Web のビルドで当てます                                                                                                                                                                                                                                           |
 
 ## 設計の要点
 

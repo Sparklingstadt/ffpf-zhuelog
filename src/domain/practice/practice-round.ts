@@ -130,7 +130,9 @@ export function checkPracticeRound(
   if (Number.isNaN(round.startedAt.getTime())) return null;
   // A preposition round has no mode: Go refused the key as unknown.
   if (
-    kind === "complement" ? !isComplementRoundMode(round.mode) : "mode" in round
+    kind === "complement"
+      ? !isComplementRoundMode(round.mode)
+      : round.mode !== undefined
   ) {
     return null;
   }
@@ -165,8 +167,8 @@ export type PracticeReviewTarget = {
 // Which missed questions become review targets (the rule the Go API used to
 // apply; see docs/superpowers/plans/2026-11-16-deprecate-go-stage5-go-reference.md).
 // The missed questions that name their question, once each, sorted by
-// targetId (see 設計者の判断 2). A preposition's use has several phrases, so
-// its target is the use and the noun ("P001:学校").
+// targetId so concurrent saves lock rows in the same order. A preposition's
+// use has several phrases, so its target is the use and the noun ("P001:学校").
 export function practiceReviewTargets(
   kind: PracticeKind,
   questions: readonly ChoiceAnswer[],
@@ -183,8 +185,7 @@ export function practiceReviewTargets(
 
 const text = (value: unknown) => (typeof value === "string" ? value : "");
 
-// Reads the questions column back, as the Go API's scan did.
-// The questions of a saved row's JSON.
+// Reads the questions column of a saved row back, as the Go API's scan did.
 export function choiceAnswersFrom(json: unknown): ChoiceAnswer[] {
   if (!Array.isArray(json)) return [];
   return json.map((item: unknown) => {

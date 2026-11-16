@@ -60,8 +60,8 @@ function unexpectedFailureMessage(code: string, error: unknown): string {
 // Runs an action that calls the Go API or the database. Next's own errors
 // (the redirect to /signin, notFound) are rethrown. Go's 403,
 // LearningForbiddenError, ReviewForbiddenError and PracticeForbiddenError are
-// treated as not being allowed; other Go failures go through goFailureMessage, anything else gets
-// the generic text.
+// treated as not being allowed; other Go failures go through
+// goFailureMessage, anything else gets the generic text.
 export async function attemptGoAction(
   code: string,
   run: () => Promise<ActionState>,
