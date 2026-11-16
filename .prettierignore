@@ -13,3 +13,5 @@ pnpm-lock.yaml
 next-env.d.ts
 .env*
 prisma/seed.private.json
+# Written by Go byte for byte (services/api/demo/golden_test.go compares them).
+tests/fixtures/demo-seed-golden.json
