@@ -423,7 +423,7 @@ function validateResult(card: FsrsCard) {
 // A card that has never been reviewed, due at now (review.go NewCard).
 export function newFsrsCard(now: Date): FsrsCard {
   return {
-    due: now,
+    due: new Date(now.getTime()),
     stability: 0,
     difficulty: 0,
     scheduledDays: 0,
@@ -455,7 +455,11 @@ export function nextFsrsCard(
   };
   const pass: Pass = {
     last,
-    current: { ...last, reps: last.reps + 1, lastReview: now },
+    current: {
+      ...last,
+      reps: last.reps + 1,
+      lastReview: new Date(now.getTime()),
+    },
     now,
   };
   const next =

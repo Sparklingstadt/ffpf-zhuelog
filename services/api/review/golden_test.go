@@ -161,11 +161,26 @@ func goldenCases(t *testing.T) []goldenCase {
 		{"new-good", NewCard(start), []answer{atDue(Good)}},
 		{"new-easy", NewCard(start), []answer{atDue(Easy)}},
 		{"good-path", NewCard(start), repeat(atDue(Good), 8)},
-		{"easy-path", NewCard(start), repeat(atDue(Easy), 6)},
+		// Long enough for the interval to reach the 36500-day maximum.
+		{"easy-path", NewCard(start), repeat(atDue(Easy), 8)},
 		{"hard-in-learning", NewCard(start), []answer{atDue(Hard), atDue(Hard), atDue(Good), atDue(Good)}},
 		{"lapse", NewCard(start), concat(graduation, []answer{
 			atDue(Again), atDue(Good), atDue(Hard), atDue(Again), atDue(Good),
 		})},
+		// Relearning: Hard waits 15 minutes and keeps the step; Again
+		// starts the step over.
+		{"relearning-hard-again", NewCard(start), concat(graduation, []answer{
+			atDue(Again), atDue(Hard), atDue(Again), atDue(Good),
+		})},
+		// Learning, a day after the first answer: Again takes the forget
+		// stability, not the short-term one.
+		{"learning-again-after-a-day", NewCard(start), []answer{
+			atDue(Good), afterPrevious(Again, 24*time.Hour), atDue(Good), atDue(Good),
+		}},
+		// Learning: Again restarts the steps, Easy graduates at once.
+		{"learning-again-easy", NewCard(start), []answer{
+			atDue(Again), atDue(Again), atDue(Easy),
+		}},
 		// An hour after graduating: the same UTC day, so no day has passed.
 		{"early-review", NewCard(start), concat(graduation, []answer{afterPrevious(Good, time.Hour)})},
 		{"overdue", NewCard(start), concat(graduation, []answer{
