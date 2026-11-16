@@ -20,7 +20,8 @@ const ANSWER_TIMEOUT_MS = 60_000;
 const MAX_OUTPUT_TOKENS = 1600;
 
 // Streams the answer's text pieces. Throws OpenAiError; reports usage
-// through onUsage before it returns or throws. Cancelling signal, or
+// through onUsage before it returns or throws. An onUsage that throws is
+// ignored: it never changes the stream's result. Cancelling signal, or
 // returning early from the iteration, aborts the request.
 // Go: chat/openai.go Streamer.Stream. One attempt, no retries.
 export async function* streamAnswer(
@@ -46,6 +47,15 @@ export async function* streamAnswer(
     if (timeout.aborted) return new OpenAiError("OPENAI_TIMEOUT");
     if (signal.aborted) return new OpenAiError("OPENAI_REQUEST_FAILED");
     return transportError(error);
+  };
+
+  // The caller's bookkeeping must not turn an answer into a failure.
+  const reportUsage = (usage: OpenAiUsage): void => {
+    try {
+      options.onUsage(usage);
+    } catch {
+      // Swallowed on purpose.
+    }
   };
 
   try {
@@ -95,8 +105,7 @@ export async function* streamAnswer(
           yield event.text;
           continue;
         }
-        if (event.usage)
-          options.onUsage({ model: request.model, ...event.usage });
+        if (event.usage) reportUsage({ model: request.model, ...event.usage });
         if (event.outcome === "completed") return;
         if (event.outcome === "incomplete") {
           if (request.requireComplete)

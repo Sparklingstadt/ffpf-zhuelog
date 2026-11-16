@@ -251,6 +251,21 @@ test("usage of the final event is reported once", async () => {
   assert.deepEqual(none, []);
 });
 
+test("an onUsage that throws never changes the answer", async () => {
+  const result = await collect(
+    streamAnswer(
+      config,
+      quick(),
+      options(serve([delta("你"), completed(true)]), {
+        onUsage: () => {
+          throw new Error("bookkeeping failed");
+        },
+      }),
+    ),
+  );
+  assert.deepEqual(result, { pieces: ["你"] });
+});
+
 test("stopping the iteration or the signal aborts the request", async () => {
   let requestSignal: AbortSignal | undefined;
   const open = serve(

@@ -338,7 +338,18 @@ test("usage is recorded before the answer ends, even when it fails", async () =>
   }
 });
 
-test("stopping the iteration early still records the usage", async () => {
+test("a usage write that never finishes does not hold the answer", async () => {
+  const { notes, logged } = setup(member, {
+    recordUsage: () => new Promise<void>(() => {}),
+    recordTimeoutMs: 5,
+  });
+  assert.deepEqual(await collect(await askWith(notes)), ["你", "好"]);
+  assert.deepEqual(logged, [
+    ["AI_USAGE_NOT_RECORDED", "quick_question", "TimeoutError"],
+  ]);
+});
+
+test("stopping early records only the usage already reported", async () => {
   const { notes, usage } = setup(member);
   for await (const piece of await askWith(notes)) {
     assert.equal(piece, "你");

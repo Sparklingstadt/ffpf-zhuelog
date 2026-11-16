@@ -52,7 +52,7 @@ export function quickQuestionText(body: unknown): string | null {
 
 // The note as it is saved (trimmed), or null when Go would have answered
 // 400 or 404 (an id of the wrong shape).
-// Go: httpapi/question_handlers.go putQuestion.
+// Go reference: docs/superpowers/plans/2026-11-16-deprecate-go-stage6-go-reference.md §3.
 export function checkQuestionNote(
   input: SaveQuestionInput,
 ): SaveQuestionInput | null {

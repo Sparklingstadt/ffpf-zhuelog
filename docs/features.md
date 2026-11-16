@@ -11,7 +11,7 @@ OpenAI を呼ぶ 4 つの機能（LINE の添削・翻訳、ChatGPT と話す、
 アカウントを持たない人（採用担当など）が、会員向けの画面を試せます。ログイン画面の「デモで試す」から入ると、学習ノート・今日の復習・単語帳・会話ノート・練習の記録に、直近 7 日分の例のデータが入っています。
 
 - **共有と毎晩のリセット**: デモは試す人全員で 1 つのアカウントを使います。書いたものはほかの人にも見え、毎晩 04:00（日本時間）に例のデータへ戻ります。例のデータは `services/api/demo/seed.json` です。
-- **使えないもの**: AI（ChatGPT と話す、クイック質問、単語帳の下書き）、LINE 連携、フォローと共有、パスワード変更は、Go API（クイック質問は Web）が「デモでは使えません。」と断ります。メニューにも出ません。すべてのページの上に「デモアカウントです。」と出ます。
+- **使えないもの**: AI（ChatGPT と話す、クイック質問、単語帳の下書き）、LINE 連携、フォローと共有、パスワード変更は、Go API（クイック質問と単語帳の下書きは Web）が「デモでは使えません。」と断ります。メニューにも出ません。すべてのページの上に「デモアカウントです。」と出ます。
 - **設定**: Go API の環境変数 `DEMO_LOGIN_ID`（例: `demo`）で有効になります。空のときはデモが無く、ボタンも出ません。リセットは `CRON_SECRET` で守られた `GET`/`POST /v1/cron/demo-reset` で、`services/api/vercel.json` の Cron が毎晩呼びます。
 - **本番で有効にする**: Go API の Vercel プロジェクトに `DEMO_LOGIN_ID` を入れてデプロイし、`curl -X POST https://ffpf-zhuelog-api.vercel.app/v1/cron/demo-reset -H "Authorization: Bearer $CRON_SECRET"` を 1 回呼んでアカウントとデータを作ります。詳しくは [docs/api-deployment.md](api-deployment.md) の「10. デモアカウント」にあります。
 

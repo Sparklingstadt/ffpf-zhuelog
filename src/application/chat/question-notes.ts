@@ -1,3 +1,4 @@
+import { RECORD_TIMEOUT_MS, recordWithin } from "../ai-usage/record-within";
 import {
   checkQuestionNote,
   QUESTION_ID,
@@ -50,6 +51,8 @@ export type QuestionNotesDeps = {
   recordUsage: (
     entry: OpenAiUsage & { ownerId: string; feature: "quick_question" },
   ) => Promise<void>;
+  // How long a usage write may take; RECORD_TIMEOUT_MS when unset.
+  recordTimeoutMs?: number;
   // Logging belongs to the outer layers; callers pass only fixed codes and
   // error names, never the question, the answer or an error's message.
   logError: (code: string, ...details: string[]) => void;
@@ -79,20 +82,22 @@ export function createQuestionNotes(deps: QuestionNotesDeps) {
     return found.ownerId;
   }
 
-  // Records the tokens an answer spent. A failed write is only logged, so
-  // it never changes what the user gets.
+  // Records the tokens an answer spent, waiting at most recordTimeoutMs. A
+  // failed or late write is only logged, so it never changes what the user
+  // gets.
   async function record(actorId: string, usage: OpenAiUsage): Promise<void> {
-    try {
-      await deps.recordUsage({
-        ownerId: actorId,
-        feature: FEATURE,
-        model: usage.model,
-        inputTokens: usage.inputTokens,
-        outputTokens: usage.outputTokens,
-      });
-    } catch (error) {
-      deps.logError("AI_USAGE_NOT_RECORDED", FEATURE, errorName(error));
-    }
+    await recordWithin(
+      () =>
+        deps.recordUsage({
+          ownerId: actorId,
+          feature: FEATURE,
+          model: usage.model,
+          inputTokens: usage.inputTokens,
+          outputTokens: usage.outputTokens,
+        }),
+      deps.recordTimeoutMs ?? RECORD_TIMEOUT_MS,
+      (code, name) => deps.logError(code, FEATURE, name),
+    );
   }
 
   function askerFor(
