@@ -9,8 +9,12 @@ const LANGUAGE = "zh";
 const REVIEW_KIND = "vocabulary";
 const LIST_LIMIT = 1000;
 
-export class VocabularyNotFoundError extends Error {}
-export class VocabularyExistsError extends Error {}
+export class VocabularyNotFoundError extends Error {
+  override name = "VocabularyNotFoundError";
+}
+export class VocabularyExistsError extends Error {
+  override name = "VocabularyExistsError";
+}
 
 // What to do with a save, given who owns the row already stored under the id
 // (null when there is none).
@@ -22,12 +26,36 @@ export function decideSave(
   return existingOwnerId === ownerId ? "update" : "not-found";
 }
 
-function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    (error as { code?: unknown }).code === "P2002"
-  );
+// Which unique constraint a Prisma P2002 error broke: the owner's word, the
+// id (primary key), or another one; null when it is not a P2002. The shape of
+// meta varies with the driver adapter, so every place a name can sit is read.
+export function uniqueViolationOn(
+  error: unknown,
+): "word" | "id" | "other" | null {
+  if (typeof error !== "object" || error === null) return null;
+  const { code, meta } = error as { code?: unknown; meta?: unknown };
+  if (code !== "P2002") return null;
+  const tokens: string[] = [];
+  const collect = (value: unknown) => {
+    if (typeof value === "string") tokens.push(value);
+    else if (Array.isArray(value)) value.forEach(collect);
+    else if (typeof value === "object" && value !== null) {
+      const { fields, name, index } = value as Record<string, unknown>;
+      collect(fields);
+      collect(name);
+      collect(index);
+    }
+  };
+  const m = (meta ?? {}) as {
+    target?: unknown;
+    driverAdapterError?: { cause?: { constraint?: unknown } };
+  };
+  collect(m.target);
+  collect(m.driverAdapterError?.cause?.constraint);
+  if (tokens.some((t) => t === "word" || t.endsWith("_word_key")))
+    return "word";
+  if (tokens.some((t) => t === "id" || t.endsWith("_pkey"))) return "id";
+  return "other";
 }
 
 type Row = {
@@ -90,7 +118,27 @@ export function createVocabularyStore(
       input: VocabularyInput,
     ): Promise<VocabularyEntry> {
       const at = now();
-      try {
+      // A retried or doubled submit can lose the race to create the same id;
+      // the second pass then sees the row and edits it (or finds it is not
+      // the owner's), so a client retry applies once.
+      for (let attempt = 0; ; attempt += 1) {
+        try {
+          return await this.saveOnce(ownerId, input, at);
+        } catch (error) {
+          const kind = uniqueViolationOn(error);
+          if (kind === "id" && attempt === 0) continue;
+          if (kind === "word") throw new VocabularyExistsError();
+          throw error;
+        }
+      }
+    },
+
+    async saveOnce(
+      ownerId: string,
+      input: VocabularyInput,
+      at: Date,
+    ): Promise<VocabularyEntry> {
+      {
         const row = await db().$transaction(async (tx) => {
           const existing = await tx.vocabularyEntry.findUnique({
             where: { id: input.id },
@@ -99,13 +147,19 @@ export function createVocabularyStore(
           const decision = decideSave(existing?.ownerId ?? null, ownerId);
           if (decision === "not-found") throw new VocabularyNotFoundError();
           if (decision === "update") {
-            return tx.vocabularyEntry.update({
-              where: { id: input.id },
+            // Scoped by owner: the row may have been deleted or recreated
+            // by someone else since the check above.
+            const { count } = await tx.vocabularyEntry.updateMany({
+              where: { id: input.id, ownerId },
               data: {
                 pinyin: input.pinyin,
                 meaning: input.meaning,
                 updatedAt: at,
               },
+            });
+            if (count === 0) throw new VocabularyNotFoundError();
+            return tx.vocabularyEntry.findUniqueOrThrow({
+              where: { id: input.id },
             });
           }
           const created = await tx.vocabularyEntry.create({
@@ -140,9 +194,6 @@ export function createVocabularyStore(
           return created;
         });
         return toEntry(row, null);
-      } catch (error) {
-        if (isUniqueViolation(error)) throw new VocabularyExistsError();
-        throw error;
       }
     },
 
