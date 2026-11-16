@@ -6,6 +6,11 @@ export function reviewItemsToDelete(ownerId: string, ids: string[]) {
   return { ownerId, kind: "entry" as const, targetId: { in: ids } };
 }
 
+// Interactive transaction limits for the purge writes. Prisma's default is a
+// 5 s timeout, too short for a cold Neon start or a big trash (Go allowed up
+// to its 30 s server limit).
+const TRANSACTION_OPTIONS = { maxWait: 5_000, timeout: 15_000 };
+
 // Every write names the owner and the note's state in its WHERE clause and is
 // decided by the number of rows it affected, so a concurrent trash, restore or
 // purge cannot slip between a check and the write. `now` is read once per call
@@ -36,7 +41,7 @@ export function createLearningNoteWrites(
     },
 
     // Deletes a trashed note (hints and logs cascade) and its entry review
-    // items, in one transaction.
+    // items, in one transaction. See TRANSACTION_OPTIONS for the limits.
     async purge(ownerId: string, id: string): Promise<boolean> {
       return db().$transaction(async (tx) => {
         const { count } = await tx.learningEntry.deleteMany({
@@ -47,7 +52,7 @@ export function createLearningNoteWrites(
           where: reviewItemsToDelete(ownerId, [id]),
         });
         return true;
-      });
+      }, TRANSACTION_OPTIONS);
     },
 
     // Deletes all the owner's trashed notes and their entry review items in
@@ -66,7 +71,7 @@ export function createLearningNoteWrites(
           ),
         });
         return rows.length;
-      });
+      }, TRANSACTION_OPTIONS);
     },
 
     // Live notes only. Sharing keeps the first sharedAt; unsharing an

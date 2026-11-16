@@ -41,13 +41,6 @@ export function goUploadAuthed<T>(
   );
 }
 
-// For the reads where an admin looks at another person's notes.
-export function withUserParam(path: string, ownerId: string | undefined) {
-  if (ownerId === undefined) return path;
-  const separator = path.includes("?") ? "&" : "?";
-  return `${path}${separator}user=${encodeURIComponent(ownerId)}`;
-}
-
 // redirect() throws NEXT_REDIRECT, so it is never called inside a try block.
 async function asSignedInUser<T>(
   call: (accessToken: string, actAs: string | undefined) => Promise<T>,
