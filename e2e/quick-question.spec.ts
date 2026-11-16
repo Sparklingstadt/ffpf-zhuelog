@@ -314,14 +314,12 @@ test("stopping an answer stops the request to OpenAI", async ({
   await asAdmin(context);
   await page.goto("/quick-question");
   const question = `[hang] ${randomUUID()}`;
-  const state = async () =>
-    (
-      (await (
-        await request.get(
-          `${openAiStubURL}/e2e/streams?message=${encodeURIComponent(question)}`,
-        )
-      ).json()) as { state: string }
-    ).state;
+  const state = async () => {
+    const response = await request.get(
+      `${openAiStubURL}/e2e/streams?message=${encodeURIComponent(question)}`,
+    );
+    return ((await response.json()) as { state: string }).state;
+  };
 
   let asked = 0;
   page.on("request", (sent) => {

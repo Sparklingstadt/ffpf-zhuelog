@@ -159,12 +159,13 @@ Web は実行時に、次の値を使います。Web の Vercel プロジェク�
 | `DEMO_LOGIN_ID`           | デモアカウントのログイン ID（Go API の `DEMO_LOGIN_ID` と同じ。デモを使わないなら入れなくてよい）               |
 | `OPENAI_API_KEY`          | 単語帳の「AI で下書き」に使う OpenAI の API キー。Go API と同じ値でよい。無いと下書きは「今は使えません」になる |
 | `OPENAI_LEARNING_MODEL`   | 下書きのモデル（任意。無ければ `gpt-5-mini`）                                                                   |
+| `OPENAI_CHAT_MODEL`       | クイック質問のモデル（任意。無ければ `gpt-6.1-sol`。Go API と同じ値にする）                                     |
 
 注意:
 
 - 値は、Go API のプロジェクトに入れているものと同じにします。Web だけ値が違うと、Go が出したトークンを Web が確かめられず、管理者やデモの判定もずれます。
 - `DATABASE_URL` が pooled か、マージの前に確かめます（ホスト名に `-pooler` が付くのが pooled です）。マイグレーション（`prisma migrate deploy`）は direct の URL を使うのが本来の形です。今の Production の値が **direct** のときは、実行時用に pooled の値を別の変数で足します。ただし、今の Web のコード（`src/infrastructure/prisma/prisma-client.ts`）が読むのは `DATABASE_URL` だけです。その場合は、実行時用の変数を読むコードの変更を先に入れてから、値を設定します。
-- 単語帳（一覧・保存・削除）は、Web が Prisma で DB を読み書きします。「AI で下書き」も Web が OpenAI を直接呼び、使った量を、操作している人の `AiUsage` に記録します。コードの上では、Go API に `/v1/vocabulary*` のルートはもうありません（本番の Go は、下の手順で再デプロイするまで古いままです）。そのため、**マージの前に** Web の Production に `OPENAI_API_KEY` を入れます（Go API と同じ値でよい）。Go API にも、LINE・ChatGPT と話す・クイック質問のために、自分の `OPENAI_API_KEY` が引き続き要ります。
+- 単語帳（一覧・保存・削除）は、Web が Prisma で DB を読み書きします。「AI で下書き」も Web が OpenAI を直接呼び、使った量を、操作している人の `AiUsage` に記録します。コードの上では、Go API に `/v1/vocabulary*` のルートはもうありません（本番の Go は、下の手順で再デプロイするまで古いままです）。そのため、**マージの前に** Web の Production に `OPENAI_API_KEY` を入れます（Go API と同じ値でよい）。Go API にも、LINE と ChatGPT と話すために、自分の `OPENAI_API_KEY` が引き続き要ります。
 - `OPENAI_API_BASE_URL` はテスト専用です。`127.0.0.1` などのループバックの URL だけを受け付けます。**Production と Preview には設定しません。**
 - 秘密の値は、このリポジトリのファイルやログに書きません。
 - 4 つ（`API_JWT_SECRET`（Go API と 1 バイトも違わない値）、`AUTH_ALLOWED_GITHUB_IDS`（数字の ID。Go API と同じ値）、`DEMO_LOGIN_ID`、`DATABASE_URL`）は、**マージ（本番のデプロイ）の前に** Web の Production に入れておきます。Vercel の環境変数は、変えたあとに再デプロイしないと効きません。
@@ -275,6 +276,31 @@ Web は実行時に、次の値を使います。Web の Vercel プロジェク�
 
 - Go だけを戻しても害はありません。
 - Go を再デプロイしたあとで Web だけを戻すと、古い Web が `/v1/*-records` を呼んで `404` になります。練習を終えると「処理できませんでした。時間をおいてもう一度お試しください。」と出て、記録も復習も残りません。`/practice` のカードから前回の記録が消え、記録の一覧のページはエラーの表示、1 件のページは `404` になります。Web を戻すなら Go も戻します。
+- いっしょに戻すのがいちばん安全です。
+
+#### 段階6（質問）のマージの前と後
+
+クイック質問（OpenAI の答えを NDJSON でブラウザへ流す）と質問ノート（保存した質問の一覧・保存・削除）を Web に移した変更（段階6）を本番に出す順番です。Web の Route Handler が OpenAI を直接呼んで答えを流し、使った量を `quick_question` として操作している人の `AiUsage` に記録し、質問ノートを Prisma で読み書きします。ブラウザが止めると、Web は OpenAI への要求も中断します。Go の `/v1/questions*` と `/v1/quick-question` はなくなりました。Go に残るのは、ChatGPT と話す（`/v1/chat`・会話）、LINE、フォローとタイムライン、学習ログ、管理、ログイン、Cron です。
+
+マージの前:
+
+- この段階で必須の環境変数も、マイグレーションもありません。
+- `OPENAI_CHAT_MODEL` は任意です。Go の Production には入っていないので、Web も入れなければ、どちらも既定の `gpt-6.1-sol` になります。
+
+マージのあと:
+
+1. Web の Production のデプロイが Ready になったことを確かめます。
+2. その Web のデプロイを `vercel promote` でカスタムドメインに切り替えます。
+3. main から Go を再デプロイします（Vercel CLI。実行の前に、使う人に確かめます）。これで、削除した `/v1/quick-question` と `/v1/questions*` が本番の Go から実際に消えます。
+
+切り替えのあいだ:
+
+- 古い Go と新しい Web が同じ `QuickQuestion` の表に書いても問題ありません。行の形と、「同じ id は同じ内容のときだけ成功」の決まりが同じだからです。利用量も同じ `feature`（`quick_question`）で同じ表に入ります。
+
+戻すとき:
+
+- Go だけを戻しても害はありません。
+- Go を再デプロイしたあとで Web だけを戻すと、古い Web が `/v1/quick-question` と `/v1/questions*` を呼んで `404` になります。質問すると「見つかりません。」と出て、質問ノートのページはエラーの表示になり、`/quick-question` は「クイック質問を利用できません」になります。Web を戻すなら Go も戻します。
 - いっしょに戻すのがいちばん安全です。
 
 ### Web のプレビュー（Preview）
@@ -396,7 +422,7 @@ FFPF ID（ffpf-portal が提供する OpenID Connect のプロバイダー）の
 
 - アカウント：`DEMO_LOGIN_ID` の ID の、普通のパスワード会員です。パスワードのハッシュは使えない値なので、ID とパスワードではログインできません。アカウントは下のリセットが作ります（手で作る必要はありません）。
 - データ：デモを試す全員で 1 つのアカウントを共有します。毎晩 04:00（日本時間）に、`services/api/vercel.json` の Cron（`0 19 * * *`、UTC）が `GET /v1/cron/demo-reset` を呼び、1 つのトランザクションで、デモの持ち物（学習ノートとヒント、復習の項目と記録、単語帳、会話ノート、クイック質問、練習の記録、フォロー、LINE の行）を消してから、`services/api/demo/seed.json` の内容を入れ直します。日付は「リセットの何日前か」で書いてあるので、いつ見ても直近 7 日の記録に見えます。ログイン中のセッションは消しません。
-- 使えないもの：OpenAI を呼ぶルート（`POST /v1/chat`・`POST /v1/quick-question`）、LINE 連携の 5 つ、`POST /v1/account/password`、フォロー・メンバー一覧・タイムライン・共有（ほかの会員に届くため）は、デモには `403`（「デモでは使えません。」）です。判定は `auth.Service.IsDemo` の 1 か所で、管理者がデモとして操作しているときや、ほかの会員には当てはまりません。Web は、自分の DB の確認（`passwordHash` が使えない値で、ログイン ID が `DEMO_LOGIN_ID` と同じ）でデモかどうかを決め、すべてのページに「デモアカウントです。…」を出し、メニューから使えない機能を外します。
+- 使えないもの：OpenAI を呼ぶルート（Go の `POST /v1/chat` と、Web の `POST /api/quick-question`）、LINE 連携の 5 つ、`POST /v1/account/password`、フォロー・メンバー一覧・タイムライン・共有（ほかの会員に届くため）は、デモには `403`（「デモでは使えません。」）です。判定は `auth.Service.IsDemo` の 1 か所で、管理者がデモとして操作しているときや、ほかの会員には当てはまりません。Web は、自分の DB の確認（`passwordHash` が使えない値で、ログイン ID が `DEMO_LOGIN_ID` と同じ）でデモかどうかを決め、すべてのページに「デモアカウントです。…」を出し、メニューから使えない機能を外します。
 - 手でリセットする：`curl -i -X POST https://ffpf-zhuelog-api.vercel.app/v1/cron/demo-reset -H "Authorization: Bearer $CRON_SECRET"` が `204` を返します（`GET` でも同じです）。`CRON_SECRET` を知っている人だけが呼べます。
 - マイグレーションは要りません（既存の表だけを使います）。Vercel Hobby の Cron は 2 つまでで、LINE の拾い直しとこのリセットで 2 つです。
 

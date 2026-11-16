@@ -33,8 +33,9 @@ function hasOnlyKeys(value: Record<string, unknown>, keys: string[]): boolean {
 }
 
 // The question of a POST /api/quick-question body, untrimmed, or null when
-// Go would have answered 400 (Go's chat.Validate plus the quick rules).
-// Go: httpapi/chat_handlers.go streamMessages (quick) and chat/chat.go Validate.
+// the former Go backend would have answered 400: unknown keys refused, exactly
+// one message, role and length rules. See
+// docs/superpowers/plans/2026-11-16-deprecate-go-stage6-go-reference.md.
 export function quickQuestionText(body: unknown): string | null {
   // Unknown keys are refused at every level, as Go's DisallowUnknownFields.
   if (!isRecord(body) || !hasOnlyKeys(body, ["messages"])) return null;

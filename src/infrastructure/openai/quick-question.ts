@@ -1,6 +1,6 @@
-// The instructions of every quick question, byte for byte Go's
-// chat.QuickQuestionPrompt (services/api/chat/chat.go). It answers one
-// independent learning question without asking the user to go on.
+// The instructions of every quick question. Copied byte for byte from Go's
+// former QuickQuestionPrompt (removed in stage 6) and pinned by the test.
+// It answers one independent learning question without asking the user to go on.
 export const QUICK_QUESTION_INSTRUCTIONS = `あなたは中国語学習アプリ「学习録」の質問アシスタントです。
 中国語学習についての1回だけの質問に、まず要点から簡潔に答えてください。
 - ユーザーが使った言語に合わせて答える。
