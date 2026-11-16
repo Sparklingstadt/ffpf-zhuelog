@@ -1,22 +1,12 @@
 import { goApiAuthed, type GoApiCall } from "./authed";
 import { GoApiError } from "./client";
 import { toDate } from "./learning-json";
+import type {
+  IssuedPassword,
+  MemberAccount,
+} from "../../domain/identity/member-account";
 
-export type MemberAccount = {
-  id: string;
-  ownerId: string;
-  loginId: string;
-  displayName: string;
-  createdAt: Date;
-};
-
-// The password to hand to the member once: the one the admin typed, or a
-// generated one when the field was left blank.
-export type IssuedPassword = {
-  loginId: string;
-  password: string;
-  generated: boolean;
-};
+export type { IssuedPassword, MemberAccount };
 
 type AccountJson = Omit<MemberAccount, "createdAt"> & { createdAt: string };
 
