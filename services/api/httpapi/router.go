@@ -91,11 +91,6 @@ type Deps struct {
 	Line              LineService
 	LineChannelSecret []byte
 	CronSecret        []byte
-	// StudyLog counts what owners did each day.
-	StudyLog StudyLog
-	// AIUsage sums up the tokens of the OpenAI calls for the admin; nil
-	// leaves the summary route out.
-	AIUsage AIUsage
 	// DemoReset puts the demo account back to its fixture; nil (no demo)
 	// leaves its cron route out. CronSecret guards it.
 	DemoReset DemoResetter
@@ -150,7 +145,6 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	r.memberRoutes()
 	r.accountRoutes()
 	r.adminRoutes()
-	r.studyLogRoutes()
 	r.lineRoutes()
 	return r.mux, r.routes
 }
@@ -277,22 +271,11 @@ func (r *registrar) accountRoutes() {
 }
 
 // adminRoutes are member management (passwords are hashed with the shared
-// scrypt semaphore and are never logged) and, when recorded, the AI usage
-// summary.
+// scrypt semaphore and are never logged).
 func (r *registrar) adminRoutes() {
 	r.adminOnly("GET /v1/admin/accounts", listAccounts(r.d.Accounts))
 	r.adminOnly("POST /v1/admin/accounts", createAccount(r.d.Accounts, r.d.Hasher, r.d.Now))
 	r.adminOnly("POST /v1/admin/accounts/{id}/password", resetAccountPassword(r.d.Accounts, r.d.Hasher, r.d.Now))
-	if r.d.AIUsage != nil {
-		r.adminOnly("GET /v1/admin/ai-usage", aiUsageMonth(r.d.AIUsage, r.d.Now))
-	}
-}
-
-// studyLogRoutes are the study log, for members and admins.
-func (r *registrar) studyLogRoutes() {
-	if r.d.StudyLog != nil {
-		r.private("GET /v1/study-log", listStudyLog(r.d.StudyLog))
-	}
 }
 
 // lineRoutes exist only when the bot is configured. The webhook and the drain

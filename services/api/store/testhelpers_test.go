@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"crypto/rand"
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"testing"
@@ -276,57 +275,4 @@ func reviewOwner(t *testing.T, s *Store) string {
 		_, _ = s.pool.Exec(context.Background(), `DELETE FROM "ReviewItem" WHERE "ownerId" = $1`, owner)
 	})
 	return owner
-}
-
-// prepositionRecord is a preposition round started at startedAt with one
-// question per misses.
-func prepositionRecord(startedAt time.Time, misses ...[]string) PrepositionRecord {
-	r := PrepositionRecord{PrepositionRecordSummary: PrepositionRecordSummary{
-		ID:        newUUID(),
-		ElapsedMs: 83_250,
-		StartedAt: startedAt,
-	}}
-	for _, m := range misses {
-		r.Questions = append(r.Questions, PrepositionQuestion{Answer: "在", Noun: "学校", Prompt: "（　）学校学习", Misses: m})
-	}
-	return r
-}
-
-// complementRecord is a complement round of the result mode started at
-// startedAt with one question per misses.
-func complementRecord(startedAt time.Time, misses ...[]string) ComplementRecord {
-	r := ComplementRecord{ComplementRecordSummary: ComplementRecordSummary{
-		ID:        newUUID(),
-		Mode:      "result",
-		ElapsedMs: 83_250,
-		StartedAt: startedAt,
-	}}
-	for _, m := range misses {
-		r.Questions = append(r.Questions, ComplementQuestion{Answer: "在", Noun: "学校", Prompt: "（　）学校学习", Misses: m})
-	}
-	return r
-}
-
-// saveRound stores a round of k's for the owner, created at createdAt, as the
-// web saves one: the counts come from the questions (as the demo counts them)
-// and a question without misses keeps an empty list.
-func saveRound(t *testing.T, s *Store, k practiceKind, owner string, r PracticeRecordSummary, qs []PracticeQuestion, createdAt time.Time) {
-	t.Helper()
-	saved := make([]PracticeQuestion, len(qs))
-	for i, q := range qs {
-		if q.Misses == nil {
-			q.Misses = []string{}
-		}
-		saved[i] = q
-	}
-	r.QuestionCount = len(saved)
-	r.FirstTryCount, r.MissCount = demoScore(len(saved), func(i int) int { return len(saved[i].Misses) })
-	questions, err := json.Marshal(saved)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sql, args := k.insert(owner, r, string(questions), createdAt)
-	if _, err := s.pool.Exec(context.Background(), sql, args...); err != nil {
-		t.Fatal(err)
-	}
 }

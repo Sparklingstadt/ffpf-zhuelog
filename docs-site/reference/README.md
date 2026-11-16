@@ -27,11 +27,9 @@
 | PUT      | [`/v1/line/review-notify`](./line.md#put-v1-line-review-notify)                     | 会員・admin           | 200  | 復習のお知らせを受け取る                           |
 | DELETE   | [`/v1/line/review-notify`](./line.md#delete-v1-line-review-notify)                  | 会員・admin           | 200  | 復習のお知らせを止める                             |
 | GET      | [`/v1/line/drain`](./line.md#get-v1-line-drain)                                     | 公開（`CRON_SECRET`） | 204  | 残ったメッセージの拾い直しと復習のお知らせ（Cron） |
-| GET      | [`/v1/study-log`](./study-log.md#get-v1-study-log)                                  | 会員・admin           | 200  | 日ごとの学習量                                     |
 | GET      | [`/v1/admin/accounts`](./admin.md#get-v1-admin-accounts)                            | admin                 | 200  | 会員の一覧（管理用）                               |
 | POST     | [`/v1/admin/accounts`](./admin.md#post-v1-admin-accounts)                           | admin                 | 201  | 会員の作成                                         |
 | POST     | [`/v1/admin/accounts/{id}/password`](./admin.md#post-v1-admin-accounts-id-password) | admin                 | 200  | 会員のパスワードのリセット                         |
-| GET      | [`/v1/admin/ai-usage`](./admin.md#get-v1-admin-ai-usage)                            | admin                 | 200  | AI の利用量（月ごと）                              |
 | GET      | [`/health`](./health.md)                                                            | 公開                  | 200  | DB まで含めたヘルスチェック                        |
 | GET      | [`/healthz`](./health.md)                                                           | 公開                  | 200  | `/health` と同じ（ローカル用）                     |
 | GET      | [`/ping`](./health.md)                                                              | 公開                  | 200  | DB を見ない死活監視用                              |
