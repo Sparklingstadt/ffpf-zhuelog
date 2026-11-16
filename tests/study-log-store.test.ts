@@ -20,7 +20,11 @@ test("studyLogSql counts the five kinds as Go did", () => {
     'FROM "VocabularyEntry"',
     `("reviewedAt" + interval '9 hours')::date`,
     'GROUP BY "day" ORDER BY "day"',
-    `to_char("day", 'YYYY-MM-DD')`,
+    `to_char("day", 'YYYY-MM-DD') AS "date"`,
+    'AS "reviews"',
+    'AS "practiceQuestions"',
+    'AS "notes"',
+    'AS "words"',
   ]) {
     assert.ok(text.includes(part), `${part}\n${text}`);
   }

@@ -10,7 +10,6 @@ import {
   summarizeAiUsage,
 } from "@/domain/ai-usage/monthly-usage";
 import { AppHeader } from "@/presentation/components/layout/app-header";
-import { loadOr } from "@/presentation/controllers/load-or";
 import {
   Card,
   CardContent,
@@ -18,6 +17,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/presentation/components/ui/card";
+import { loadOr } from "@/presentation/controllers/load-or";
 import {
   Table,
   TableBody,

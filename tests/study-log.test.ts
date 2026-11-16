@@ -101,6 +101,14 @@ test("study log ranges are Japan days, as Go read them", () => {
     studyLogRange("2026-12-31", "2027-01-01")?.end,
     new Date("2027-01-01T15:00:00.000Z"),
   );
+  assert.deepEqual(
+    studyLogRange("9999-12-30", "9999-12-31")?.end,
+    new Date("9999-12-31T15:00:00.000Z"),
+  );
+  assert.deepEqual(studyLogRange("2028-02-29", "2028-02-29"), {
+    start: new Date("2028-02-28T15:00:00.000Z"),
+    end: new Date("2028-02-29T15:00:00.000Z"),
+  });
   const refused: [string, string][] = [
     ["2026-01-01", "2026-04-04"],
     ["2026-11-02", "2026-11-01"],

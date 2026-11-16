@@ -7,8 +7,7 @@ import (
 )
 
 // AIUsage is one OpenAI call: whom it was for, the feature (an aiusage
-// Feature), the model and the tokens it used. LINE records its calls with it;
-// the web writes and reads the other rows.
+// Feature), the model and the tokens it used.
 type AIUsage struct {
 	OwnerID      string
 	Feature      string

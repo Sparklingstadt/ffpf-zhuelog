@@ -97,6 +97,18 @@ test("AI usage months are Japan months", () => {
   );
   assert.throws(() => aiUsageMonthRange("2026-13"), RangeError);
   assert.throws(() => aiUsageMonthRange("1999-12"), RangeError);
+  assert.throws(() => aiUsageMonthRange("2026-00"), RangeError);
+  assert.throws(() => aiUsageMonthRange("2026-1"), RangeError);
+  assert.throws(() => aiUsageMonthRange("2026-11-01"), RangeError);
+  // The first and the last month that are accepted.
+  assert.deepEqual(aiUsageMonthRange("2000-01"), {
+    from: new Date("1999-12-31T15:00:00.000Z"),
+    to: new Date("2000-01-31T15:00:00.000Z"),
+  });
+  assert.deepEqual(aiUsageMonthRange("9999-12"), {
+    from: new Date("9999-11-30T15:00:00.000Z"),
+    to: new Date("9999-12-31T15:00:00.000Z"),
+  });
 
   assert.equal(aiUsageMonthOf(new Date("2026-10-31T15:00:00.000Z")), "2026-11");
   assert.equal(aiUsageMonthOf(new Date("2026-10-31T14:59:59.999Z")), "2026-10");
