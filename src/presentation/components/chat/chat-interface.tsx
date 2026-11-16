@@ -158,13 +158,21 @@ export function ChatInterface({
               <p className="text-xs text-muted-foreground">
                 Enterで送信 · Shift + Enterで改行
               </p>
+              {/* Distinct keys: reusing one <button> would turn the clicked
+                  stop button into a submit button before the click's default
+                  action runs, sending the stopped message again. */}
               {busy ? (
-                <Button type="button" variant="outline" onClick={stop}>
+                <Button
+                  key="stop"
+                  type="button"
+                  variant="outline"
+                  onClick={stop}
+                >
                   <Square className="fill-current" />
                   停止
                 </Button>
               ) : (
-                <Button type="submit" disabled={!input.trim()}>
+                <Button key="submit" type="submit" disabled={!input.trim()}>
                   <Send />
                   送信
                 </Button>
