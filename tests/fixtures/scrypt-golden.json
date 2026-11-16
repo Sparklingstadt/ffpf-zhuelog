@@ -1,0 +1,158 @@
+{
+  "params": {
+    "n": 32768,
+    "r": 8,
+    "p": 1,
+    "saltBytes": 16,
+    "keyBytes": 64,
+    "generatedBytes": 15
+  },
+  "hashes": [
+    {
+      "name": "ascii",
+      "password": "correct horse battery",
+      "salt": "haCoovdv_GJzgMvKnLtnJg",
+      "hash": "scrypt:32768:8:1:haCoovdv_GJzgMvKnLtnJg:u2YIojLKvpyjlZu0NXQkOB7reTRID392pMJzoofMsBvpyJBWb50EosI6NpPzVxbmBMP8O2md6zaKnKEHvzCk7A"
+    },
+    {
+      "name": "spaces kept",
+      "password": " keep spaces 1",
+      "salt": "bh1CbN7z6HWMvr3SwXJ6jg",
+      "hash": "scrypt:32768:8:1:bh1CbN7z6HWMvr3SwXJ6jg:jqqDcfXggh1yLJFDmtQbau1hMTG_bDYxwEG8mXRaHGwf3LJeMOBLmY8liSyLB8qsPhsYIZqGdJFnkgroeoLnsA"
+    },
+    {
+      "name": "japanese",
+      "password": "パスワードは十二文字以上",
+      "salt": "KEKNviyznbH_wtu37r30DQ",
+      "hash": "scrypt:32768:8:1:KEKNviyznbH_wtu37r30DQ:CUIz671TLX0PD2kFzGeAjNHcgs-ZFgflp5hvsVmn_ksiiOc7a2uCmLHjSf-Z89bk5Uxzbryl9Ym9MywvY2kr3A"
+    },
+    {
+      "name": "emoji",
+      "password": "😀😀😀😀😀😀",
+      "salt": "toeP4d3kMI3XNeYgm-tDRQ",
+      "hash": "scrypt:32768:8:1:toeP4d3kMI3XNeYgm-tDRQ:tRMxe7-c2CGtHP6dZJEZwsNS2M0wFhJTXmpoHEm8E0pth5QyCVK6qAoWESToSgGn5NInw72IPIJZV-iQqeSFRg"
+    },
+    {
+      "name": "128 characters",
+      "password": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "salt": "V-r3PMjPXToKgd5E_1dxrg",
+      "hash": "scrypt:32768:8:1:V-r3PMjPXToKgd5E_1dxrg:u-4EUYE8IOFrEyiT-9OuHSdweI2YqxmovWHzo-q5luFkGixMDrDb05Oj0zZQAwxk9R5I4WWu7aWfj7uwYIQpzA"
+    },
+    {
+      "name": "decomposed accent",
+      "password": "étude-password",
+      "salt": "9_kZUprSLeWiFlcnqSsu4Q",
+      "hash": "scrypt:32768:8:1:9_kZUprSLeWiFlcnqSsu4Q:NB7xcEPRA55SYK3XeCak3J3MI2pvgIuZQuCcpsCHvWGUbRqtArOMVNv4B8YROw8tAoIYhW6_muEU2AYIqOYjhg"
+    },
+    {
+      "name": "composed accent",
+      "password": "étude-password",
+      "salt": "OdZT-WCDRzp8ypDj1oElNQ",
+      "hash": "scrypt:32768:8:1:OdZT-WCDRzp8ypDj1oElNQ:h1jE-fj4-TJhCjz2fb48ScTmkUqRfmC5kAAr68_kWMhB1-8Q-P3lKMerkZQUNWTnT9usuNa-f1z7CK7-WXJ1IQ"
+    },
+    {
+      "name": "generated shape",
+      "password": "AbCdEfGhIjKlMnOpQrSt",
+      "salt": "anvCSWgQPFIwRg-zpdXpsA",
+      "hash": "scrypt:32768:8:1:anvCSWgQPFIwRg-zpdXpsA:zw0U2Vmu5_yfTsoxGykyb8jbOrtTUsEerNx2u664Zcfw_utl0xGoR0h7xJ4gJ_w4gIW_v3PHjM0jNisfNlucYQ"
+    }
+  ],
+  "verify": [
+    {
+      "name": "wrong password",
+      "password": "correct horse batterY",
+      "hash": "scrypt:32768:8:1:haCoovdv_GJzgMvKnLtnJg:u2YIojLKvpyjlZu0NXQkOB7reTRID392pMJzoofMsBvpyJBWb50EosI6NpPzVxbmBMP8O2md6zaKnKEHvzCk7A",
+      "match": false
+    },
+    {
+      "name": "older parameters",
+      "password": "correct horse battery",
+      "hash": "scrypt:16384:8:2:haCoovdv_GJzgMvKnLtnJg:CUcfGtYGxdysKFnzm_x1u2dSuQkJ1vDlVF4zKS4TJY0Dw5u8ofMvJNtIreCkWwHrBclPTTcwQvWd1UpOFyMLRg",
+      "match": true
+    },
+    {
+      "name": "leading zeros in N",
+      "password": "correct horse battery",
+      "hash": "scrypt:032768:8:1:haCoovdv_GJzgMvKnLtnJg:u2YIojLKvpyjlZu0NXQkOB7reTRID392pMJzoofMsBvpyJBWb50EosI6NpPzVxbmBMP8O2md6zaKnKEHvzCk7A",
+      "match": true
+    },
+    {
+      "name": "N above 32768",
+      "password": "correct horse battery",
+      "hash": "scrypt:65536:8:1:haCoovdv_GJzgMvKnLtnJg:u2YIojLKvpyjlZu0NXQkOB7reTRID392pMJzoofMsBvpyJBWb50EosI6NpPzVxbmBMP8O2md6zaKnKEHvzCk7A",
+      "match": false
+    },
+    {
+      "name": "N not a power of two",
+      "password": "correct horse battery",
+      "hash": "scrypt:3:8:1:haCoovdv_GJzgMvKnLtnJg:u2YIojLKvpyjlZu0NXQkOB7reTRID392pMJzoofMsBvpyJBWb50EosI6NpPzVxbmBMP8O2md6zaKnKEHvzCk7A",
+      "match": false
+    },
+    {
+      "name": "r above 8",
+      "password": "correct horse battery",
+      "hash": "scrypt:32768:9:1:haCoovdv_GJzgMvKnLtnJg:u2YIojLKvpyjlZu0NXQkOB7reTRID392pMJzoofMsBvpyJBWb50EosI6NpPzVxbmBMP8O2md6zaKnKEHvzCk7A",
+      "match": false
+    },
+    {
+      "name": "p above 4",
+      "password": "correct horse battery",
+      "hash": "scrypt:32768:8:5:haCoovdv_GJzgMvKnLtnJg:u2YIojLKvpyjlZu0NXQkOB7reTRID392pMJzoofMsBvpyJBWb50EosI6NpPzVxbmBMP8O2md6zaKnKEHvzCk7A",
+      "match": false
+    },
+    {
+      "name": "p zero",
+      "password": "correct horse battery",
+      "hash": "scrypt:32768:8:0:haCoovdv_GJzgMvKnLtnJg:u2YIojLKvpyjlZu0NXQkOB7reTRID392pMJzoofMsBvpyJBWb50EosI6NpPzVxbmBMP8O2md6zaKnKEHvzCk7A",
+      "match": false
+    },
+    {
+      "name": "padded salt",
+      "password": "correct horse battery",
+      "hash": "scrypt:32768:8:1:haCoovdv_GJzgMvKnLtnJg==:u2YIojLKvpyjlZu0NXQkOB7reTRID392pMJzoofMsBvpyJBWb50EosI6NpPzVxbmBMP8O2md6zaKnKEHvzCk7A",
+      "match": false
+    },
+    {
+      "name": "salt with a foreign character",
+      "password": "correct horse battery",
+      "hash": "scrypt:32768:8:1:haCoovdv_GJzgMvKnLtnJg!:u2YIojLKvpyjlZu0NXQkOB7reTRID392pMJzoofMsBvpyJBWb50EosI6NpPzVxbmBMP8O2md6zaKnKEHvzCk7A",
+      "match": false
+    },
+    {
+      "name": "empty salt",
+      "password": "correct horse battery",
+      "hash": "scrypt:32768:8:1::u2YIojLKvpyjlZu0NXQkOB7reTRID392pMJzoofMsBvpyJBWb50EosI6NpPzVxbmBMP8O2md6zaKnKEHvzCk7A",
+      "match": false
+    },
+    {
+      "name": "short key",
+      "password": "correct horse battery",
+      "hash": "scrypt:32768:8:1:haCoovdv_GJzgMvKnLtnJg:u2YIojLKvpyjlZu0NXQkOB7reTRID392pMJzoofMsBvpyJBWb50EosI6NpPzVxbmBMP8O2md6zaKnKEHvzCk",
+      "match": false
+    },
+    {
+      "name": "tampered key",
+      "password": "correct horse battery",
+      "hash": "scrypt:32768:8:1:haCoovdv_GJzgMvKnLtnJg:A2YIojLKvpyjlZu0NXQkOB7reTRID392pMJzoofMsBvpyJBWb50EosI6NpPzVxbmBMP8O2md6zaKnKEHvzCk7A",
+      "match": false
+    },
+    {
+      "name": "seven parts",
+      "password": "correct horse battery",
+      "hash": "scrypt:32768:8:1:haCoovdv_GJzgMvKnLtnJg:u2YIojLKvpyjlZu0NXQkOB7reTRID392pMJzoofMsBvpyJBWb50EosI6NpPzVxbmBMP8O2md6zaKnKEHvzCk7A:x",
+      "match": false
+    },
+    {
+      "name": "not scrypt",
+      "password": "correct horse battery",
+      "hash": "bcrypt$2b$10$abcdefghijklmnopqrstuv",
+      "match": false
+    },
+    {
+      "name": "demo marker",
+      "password": "correct horse battery",
+      "hash": "demo:no-password",
+      "match": false
+    }
+  ]
+}

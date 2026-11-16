@@ -1,6 +1,28 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
-import { ScryptPasswordHasher } from "../scripts/lib/scrypt-password-hasher";
+import {
+  generatePassword,
+  hashWithSalt,
+  SCRYPT_PARAMS,
+  ScryptPasswordHasher,
+} from "../src/infrastructure/security/scrypt-password-hasher";
+
+// Written by Go (services/api/auth/password_golden_test.go), which verifies
+// the web's hashes at sign-in.
+type Golden = {
+  params: typeof SCRYPT_PARAMS;
+  hashes: { name: string; password: string; salt: string; hash: string }[];
+  verify: { name: string; password: string; hash: string; match: boolean }[];
+};
+
+const golden: Golden = JSON.parse(
+  readFileSync(
+    join(import.meta.dirname, "fixtures", "scrypt-golden.json"),
+    "utf8",
+  ),
+);
 
 const hasher = new ScryptPasswordHasher();
 
@@ -37,4 +59,30 @@ test("verify refuses stored parameters that would exhaust memory", async () => {
   const [, , r, p, salt, key] = stored.split(":");
   const hostile = `scrypt:${2 ** 24}:${r}:${p}:${salt}:${key}`;
   assert.equal(await hasher.verify("correct horse battery", hostile), false);
+});
+
+test("hashes and verifies exactly as Go does (golden file)", async () => {
+  assert.deepEqual(golden.params, SCRYPT_PARAMS);
+  for (const { name, password, salt, hash } of golden.hashes) {
+    assert.equal(
+      await hashWithSalt(password, Buffer.from(salt, "base64url")),
+      hash,
+      name,
+    );
+    assert.equal(await hasher.verify(password, hash), true, name);
+  }
+  for (const { name, password, hash, match } of golden.verify) {
+    assert.equal(await hasher.verify(password, hash), match, name);
+  }
+});
+
+test("generatePassword is 20 base64url characters", () => {
+  const first = generatePassword();
+  assert.match(first, /^[A-Za-z0-9_-]{20}$/);
+  assert.notEqual(generatePassword(), first);
+});
+
+test("simulate costs one scrypt and never throws", async () => {
+  assert.equal(await hasher.simulate("x"), undefined);
+  assert.equal(await hasher.simulate(""), undefined);
 });

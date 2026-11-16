@@ -12,8 +12,9 @@ import (
 	"golang.org/x/crypto/scrypt"
 )
 
-// These match the parameters the Node seed and e2e scripts write
-// (scripts/lib/scrypt-password-hasher.ts).
+// These match the parameters the web writes
+// (src/infrastructure/security/scrypt-password-hasher.ts); TestScryptGolden
+// pins both to the same hashes.
 const (
 	scryptN         = 1 << 15
 	scryptR         = 8

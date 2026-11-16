@@ -6,7 +6,7 @@ import {
 } from "@playwright/test";
 import { createHmac, randomBytes } from "node:crypto";
 import { Client } from "pg";
-import { ScryptPasswordHasher } from "../scripts/lib/scrypt-password-hasher";
+import { ScryptPasswordHasher } from "../src/infrastructure/security/scrypt-password-hasher";
 import { baseURL, cookieName, databaseUrl, goJwtSecret } from "./environment";
 
 export const test = base.extend<{ db: Client }>({
