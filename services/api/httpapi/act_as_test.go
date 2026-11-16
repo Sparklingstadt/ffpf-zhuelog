@@ -31,17 +31,20 @@ func actAsHeaders(ownerID string) map[string]string {
 }
 
 func TestActAsWritesGoToTheMember(t *testing.T) {
-	rv := &fakeReviews{}
+	recs := &fakePrepositionRecords{}
 	h, _, logs := routerWith(t, "", Deps{
-		Auth:    actingAuth(auth.RoleAdmin),
-		Reviews: rv,
+		Auth:               actingAuth(auth.RoleAdmin),
+		PrepositionRecords: recs,
 	})
-	w := do(h, http.MethodDelete, "/v1/entries/e1/review", "", actAsHeaders(actedMember))
-	if w.Code != http.StatusNoContent {
+	q := map[string]any{"id": "P001", "answer": "在", "noun": "学校", "prompt": "（　）学校学习", "misses": []string{}}
+	headers := actAsHeaders(actedMember)
+	headers["Content-Type"] = "application/json"
+	w := do(h, http.MethodPut, "/v1/preposition-records/"+testConversationID, prepositionBody(t, 1000, q), headers)
+	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, body %q", w.Code, w.Body.String())
 	}
-	if rv.owner != actedMember {
-		t.Fatalf("store owner = %q, want %q", rv.owner, actedMember)
+	if recs.addOwner != actedMember {
+		t.Fatalf("store owner = %q, want %q", recs.addOwner, actedMember)
 	}
 	if !strings.Contains(logs.String(), `"msg":"acting as member"`) ||
 		!strings.Contains(logs.String(), `"actor":"`+testOwner+`"`) ||

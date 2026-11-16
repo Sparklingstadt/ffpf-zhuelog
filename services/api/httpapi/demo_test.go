@@ -99,17 +99,18 @@ func TestDemoIsRefusedExactlyTheClosedRoutes(t *testing.T) {
 }
 
 func TestDemoKeepsItsOwnRecords(t *testing.T) {
-	reviews := &fakeReviews{}
+	records := &fakePrepositionRecords{}
 	follows := &fakeFollows{listMembers: func(_ context.Context, viewer string) (store.MemberDirectory, error) {
 		return store.MemberDirectory{Members: []store.Member{}}, nil
 	}}
-	d := Deps{Reviews: reviews, Follows: follows}
+	d := Deps{PrepositionRecords: records, Follows: follows}
 
-	// The demo reads its reviews, and the member directory is closed to it.
+	// The demo reads its own practice records, and the member directory is
+	// closed to it.
 	d.Auth = demoAuth(true)
 	h, _, _ := routerWith(t, auth.RoleMember, d)
-	if w := do(h, http.MethodGet, "/v1/reviews/due", "", authHeader); w.Code != http.StatusOK || reviews.owner != testOwner {
-		t.Fatalf("demo reviews: %d for %q", w.Code, reviews.owner)
+	if w := do(h, http.MethodGet, "/v1/preposition-records", "", authHeader); w.Code != http.StatusOK || records.listOwner != testOwner {
+		t.Fatalf("demo practice records: %d for %q", w.Code, records.listOwner)
 	}
 	w := do(h, http.MethodGet, "/v1/members", "", authHeader)
 	wantError(t, w, http.StatusForbidden, "forbidden")

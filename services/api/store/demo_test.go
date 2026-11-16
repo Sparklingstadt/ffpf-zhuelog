@@ -100,17 +100,18 @@ func TestResetDemoCreatesTheAccountAndSeeds(t *testing.T) {
 	if len(entries) != 1 || len(entries[0].Hints) != 2 || entries[0].CorrectedText != "我吃完饭了。" {
 		t.Fatalf("entries = %+v", entries)
 	}
-	due, err := s.ListDueReviewItems(ctx, owner, now, 10)
-	if err != nil || len(due) != 2 {
-		t.Fatalf("due reviews = %d, %v; want the note and the new word", len(due), err)
+	due := dueItems(t, s, owner, now)
+	if len(due) != 2 {
+		t.Fatalf("due reviews = %+v; want the note and the new word", due)
 	}
 	kinds := map[string]bool{}
 	for _, it := range due {
 		kinds[it.Kind] = true
-		if it.Kind == ReviewKindEntry && (it.Entry == nil || it.Entry.ID != entries[0].ID || it.Reps != 1) {
+		if it.Kind == ReviewKindEntry && (it.TargetID != entries[0].ID || reviewCard(t, s, owner, it.ID).Reps != 1) {
 			t.Errorf("note item = %+v", it)
 		}
-		if it.Kind == ReviewKindVocabulary && (it.Vocabulary == nil || it.Vocabulary.SourceEntryID != entries[0].ID) {
+		if it.Kind == ReviewKindVocabulary && countRows(t, s, `SELECT count(*) FROM "VocabularyEntry"
+		 WHERE "id" = $1 AND "ownerId" = $2 AND "sourceEntryId" = $3`, it.TargetID, owner, entries[0].ID) != 1 {
 			t.Errorf("word item = %+v", it)
 		}
 	}

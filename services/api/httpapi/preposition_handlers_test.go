@@ -15,13 +15,15 @@ import (
 // fakePrepositionRecords stores rounds by id for one owner at a time and
 // counts the misses as the store does.
 type fakePrepositionRecords struct {
-	list     []store.PrepositionRecordSummary
-	saved    map[string]store.PrepositionRecord
-	addOwner string
-	addNow   time.Time
+	list      []store.PrepositionRecordSummary
+	saved     map[string]store.PrepositionRecord
+	addOwner  string
+	addNow    time.Time
+	listOwner string
 }
 
 func (f *fakePrepositionRecords) ListPrepositionRecords(_ context.Context, ownerID string, limit int) ([]store.PrepositionRecordSummary, error) {
+	f.listOwner = ownerID
 	if limit != 100 {
 		return nil, errUnexpectedCall{"ListPrepositionRecords limit"}
 	}

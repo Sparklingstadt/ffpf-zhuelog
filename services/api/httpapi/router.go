@@ -106,8 +106,8 @@ type Deps struct {
 	// PrepositionRecords keeps finished rounds of preposition practice.
 	PrepositionRecords PrepositionRecords
 	ComplementRecords  ComplementRecords
-	// Reviews is the spaced-repetition queue. Saved practice rounds add their
-	// missed questions to it; nil leaves the review routes out.
+	// Reviews is the review queue that saved practice rounds add their
+	// missed questions to; nil queues nothing.
 	Reviews Reviews
 	// StudyLog counts what owners did each day.
 	StudyLog StudyLog
@@ -169,7 +169,6 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	r.accountRoutes()
 	r.adminRoutes()
 	r.practiceRecordRoutes()
-	r.reviewRoutes()
 	r.studyLogRoutes()
 	r.lineRoutes()
 	r.conversationRoutes()
@@ -328,22 +327,6 @@ func (r *registrar) practiceRecordRoutes() {
 	r.private("GET /v1/complement-records", listPracticeRecords(comp))
 	r.private("GET /v1/complement-records/{id}", getPracticeRecord(comp))
 	r.private("PUT /v1/complement-records/{id}", putPracticeRecord(comp, r.d.Reviews, r.d.Now))
-}
-
-// reviewRoutes are today's reviews, for members and admins, and the learning
-// notes they put in them (always their own; a note in the trash is 404).
-func (r *registrar) reviewRoutes() {
-	rv, now := r.d.Reviews, r.d.Now
-	if rv == nil {
-		return
-	}
-	r.private("GET /v1/reviews/due", listDueReviews(rv, now))
-	r.private("GET /v1/reviews/count", countDueReviews(rv, now))
-	r.private("GET /v1/reviews/entries", listEntriesInReview(rv))
-	r.private("POST /v1/reviews/{itemId}", answerReview(rv, now))
-	r.private("GET /v1/entries/{id}/review", entryReviewStatus(rv))
-	r.private("PUT /v1/entries/{id}/review", addEntryReview(rv, now))
-	r.private("DELETE /v1/entries/{id}/review", removeEntryReview(rv))
 }
 
 // studyLogRoutes are the study log, for members and admins.
