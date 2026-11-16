@@ -18,8 +18,9 @@ export async function GET() {
     if (user && isMemberRole(user.role))
       count = await loadOr(CODE, () => reviews.countDue(), null);
   } catch (error) {
-    // Not a Go failure (loadOr logged those). Still only hide the badge, and
-    // log the kind of error, never the error itself.
+    // Not a load failure (loadOr logged those), such as Next's redirect.
+    // Still only hide the badge, and log the kind of error, never the error
+    // itself.
     console.error(CODE, (error as Error)?.name);
   }
   return NextResponse.json(

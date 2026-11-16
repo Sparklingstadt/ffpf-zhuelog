@@ -1,50 +1,35 @@
 import {
   actionSuccess,
-  actionUnauthorized,
   attemptGoAction,
   noteIdSchema,
   type ActionState,
 } from "@/presentation/controllers/action-state";
-
-type Member = () => Promise<{ githubId?: string } | null>;
 
 const notFound: ActionState = {
   status: "error",
   message: "このノートは見つかりませんでした。画面を更新してください。",
 };
 
-// Owner of the signed-in user's notes. The form never names the owner, so an
-// admin viewing someone else (or a crafted POST) still acts on their own.
-async function ownerOf(getMember: Member) {
-  const user = await getMember();
-  return user?.githubId ?? null;
-}
-
-// Moves one note to the trash, restores it, or deletes it for good.
+// Moves one note to the trash, restores it, or deletes it for good. The form
+// never names the owner: run (learningNotes) acts on the signed-in user's own
+// notes, so an admin viewing someone else (or a crafted POST) still acts on
+// their own, and refuses anyone else with LearningForbiddenError.
 export async function handleNoteAction(
   formData: FormData,
-  dependencies: {
-    getMember: Member;
-    run: (ownerId: string, id: string) => Promise<boolean>;
-  },
+  dependencies: { run: (id: string) => Promise<boolean> },
 ): Promise<ActionState> {
-  const ownerId = await ownerOf(dependencies.getMember);
-  if (!ownerId) return actionUnauthorized;
   const id = noteIdSchema.safeParse(formData.get("id"));
   if (!id.success) return notFound;
   return attemptGoAction("NOTE_TRASH_FAILED", async () =>
-    (await dependencies.run(ownerId, id.data)) ? actionSuccess : notFound,
+    (await dependencies.run(id.data)) ? actionSuccess : notFound,
   );
 }
 
 export async function handleEmptyTrash(dependencies: {
-  getMember: Member;
-  run: (ownerId: string) => Promise<number>;
+  run: () => Promise<number>;
 }): Promise<ActionState> {
-  const ownerId = await ownerOf(dependencies.getMember);
-  if (!ownerId) return actionUnauthorized;
   return attemptGoAction("NOTE_TRASH_FAILED", async () => {
-    await dependencies.run(ownerId);
+    await dependencies.run();
     return actionSuccess;
   });
 }

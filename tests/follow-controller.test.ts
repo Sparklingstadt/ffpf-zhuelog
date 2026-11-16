@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
 
+import { redirect } from "next/navigation";
+
+import { LearningForbiddenError } from "../src/application/learning/learning-notes";
 import { GoApiError } from "../src/infrastructure/go-api/client";
 import type { FollowResult } from "../src/infrastructure/go-api/social-gateway";
 import {
@@ -47,6 +50,15 @@ const member = async () => ({
   githubId: "password:ckm",
   role: "member" as const,
 });
+
+// The error Next's redirect() throws.
+function nextRedirect(): Error {
+  try {
+    redirect("/signin");
+  } catch (error) {
+    return error as Error;
+  }
+}
 
 function silenceConsoleError(t: TestContext) {
   return t.mock.method(console, "error", () => {});
@@ -149,17 +161,17 @@ test("follow and share without a session ask to sign in again", async () => {
       unauthorized,
     );
     assert.deepEqual(unfollow.calls, []);
-
-    const share = recorder(true);
-    assert.deepEqual(
-      await handleShare(form({ id: "cmabc123", shared: "true" }), {
-        getMember,
-        run: share.run,
-      }),
-      unauthorized,
-    );
-    assert.deepEqual(share.calls, []);
   }
+
+  const share = recorder(true);
+  assert.deepEqual(
+    await handleShare(form({ id: "cmabc123", shared: "true" }), {
+      getMember: async () => null,
+      run: share.run,
+    }),
+    unauthorized,
+  );
+  assert.deepEqual(share.calls, []);
 });
 
 test("a failing follow logs only FOLLOW_FAILED with Go's status and code", async (t) => {
@@ -197,7 +209,7 @@ test("a failing unfollow logs only FOLLOW_FAILED with Go's status and code", asy
   ]);
 });
 
-test("follow and unfollow treat Go's 403 as not allowed and let other errors through", async () => {
+test("follow and unfollow treat Go's 403 as not allowed and let Next's redirect through", async () => {
   const forbidden = new GoApiError(403, "forbidden");
   assert.deepEqual(
     await handleFollow(form({ followeeId: "password:ckb1" }), {
@@ -214,20 +226,20 @@ test("follow and unfollow treat Go's 403 as not allowed and let other errors thr
     unauthorized,
   );
 
-  const redirect = new Error("NEXT_REDIRECT");
+  const thrown = nextRedirect();
   await assert.rejects(
     handleFollow(form({ followeeId: "password:ckb1" }), {
       getMember: member,
-      run: recorder<FollowResult>(redirect).run,
+      run: recorder<FollowResult>(thrown).run,
     }),
-    (error) => error === redirect,
+    (error) => error === thrown,
   );
   await assert.rejects(
     handleUnfollow(form({ followeeId: "password:ckb1" }), {
       getMember: member,
-      run: recorder<void>(redirect).run,
+      run: recorder<void>(thrown).run,
     }),
-    (error) => error === redirect,
+    (error) => error === thrown,
   );
 });
 
@@ -255,7 +267,7 @@ test("unfollow treats a malformed followee as not found", async () => {
   assert.deepEqual(calls, []);
 });
 
-test("share passes the owner, id and flag; admins are refused", async () => {
+test("share passes only the id and flag; admins are refused", async () => {
   const on = recorder(true);
   assert.deepEqual(
     await handleShare(
@@ -264,7 +276,7 @@ test("share passes the owner, id and flag; admins are refused", async () => {
     ),
     success,
   );
-  assert.deepEqual(on.calls, [["password:ckm", "cmabc123", true]]);
+  assert.deepEqual(on.calls, [["cmabc123", true]]);
 
   const off = recorder(true);
   assert.deepEqual(
@@ -274,7 +286,7 @@ test("share passes the owner, id and flag; admins are refused", async () => {
     }),
     success,
   );
-  assert.deepEqual(off.calls, [["password:ckm", "cmabc123", false]]);
+  assert.deepEqual(off.calls, [["cmabc123", false]]);
 
   for (const fields of [
     { id: "cmabc123", shared: "yes" } as Record<string, string>,
@@ -331,25 +343,29 @@ test("share of a missing note is not found; a failure logs only SHARE_FAILED", a
   ]);
 });
 
-test("share treats Go's 403 as not allowed and lets other errors through", async () => {
-  const forbidden = recorder<boolean>(
+test("share treats Go's 403 and LearningForbiddenError as not allowed and lets Next's redirect through", async () => {
+  for (const error of [
     new GoApiError(403, "forbidden", "メンバーだけが共有できます。"),
-  );
-  assert.deepEqual(
-    await handleShare(form({ id: "cmabc123", shared: "true" }), {
-      getMember: member,
-      run: forbidden.run,
-    }),
-    unauthorized,
-  );
+    // learningNotes refuses the demo account.
+    new LearningForbiddenError(),
+  ]) {
+    const forbidden = recorder<boolean>(error);
+    assert.deepEqual(
+      await handleShare(form({ id: "cmabc123", shared: "true" }), {
+        getMember: member,
+        run: forbidden.run,
+      }),
+      unauthorized,
+    );
+  }
 
-  const redirect = new Error("NEXT_REDIRECT");
-  const thrown = recorder<boolean>(redirect);
+  const thrown = nextRedirect();
+  const redirected = recorder<boolean>(thrown);
   await assert.rejects(
     handleShare(form({ id: "cmabc123", shared: "true" }), {
       getMember: member,
-      run: thrown.run,
+      run: redirected.run,
     }),
-    (error) => error === redirect,
+    (error) => error === thrown,
   );
 });

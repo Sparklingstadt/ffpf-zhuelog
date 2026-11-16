@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
 
+import { redirect } from "next/navigation";
+
+import { LearningForbiddenError } from "../src/application/learning/learning-notes";
 import { GoApiError } from "../src/infrastructure/go-api/client";
 import {
   actionSuccess,
@@ -100,20 +103,78 @@ test("attemptGoResult returns ok, or a message for each Go failure", async (t) =
   assert.deepEqual(logged, [["SAVE_FAILED", 404, "not_found"]]);
 });
 
-test("Go helpers rethrow anything that is not a Go failure", async () => {
-  const redirect = new Error("NEXT_REDIRECT");
-  await assert.rejects(
-    attemptGoResult("C", async () => {
-      throw redirect;
+// The error Next's redirect() throws, as the helpers see it.
+function nextRedirect(): unknown {
+  try {
+    redirect("/signin");
+  } catch (error) {
+    return error;
+  }
+}
+
+test("Go helpers rethrow Next's redirect", async () => {
+  const thrown = nextRedirect();
+  for (const run of [
+    () =>
+      attemptGoResult("C", async () => {
+        throw thrown;
+      }),
+    () =>
+      attemptGoAction("C", async () => {
+        throw thrown;
+      }),
+    () =>
+      attemptGo("C", async () => {
+        throw thrown;
+      }),
+  ])
+    await assert.rejects(run(), (error) => error === thrown);
+});
+
+test("Go helpers treat LearningForbiddenError as not allowed", async (t) => {
+  const logged = captureErrors(t);
+  const forbidden = async () => {
+    throw new LearningForbiddenError();
+  };
+  assert.deepEqual(await attemptGoAction("C", forbidden), actionUnauthorized);
+  assert.deepEqual(await attemptGo("C", forbidden), {
+    ok: false,
+    message: accountForbiddenMessage,
+  });
+  assert.deepEqual(await attemptGoResult("C", forbidden), {
+    ok: false,
+    message: accountForbiddenMessage,
+  });
+  assert.deepEqual(logged, []);
+});
+
+test("Go helpers give any other failure the generic text and log only its name", async (t) => {
+  const logged = captureErrors(t);
+  const failure = Object.assign(new Error("secret detail"), {
+    name: "PrismaClientKnownRequestError",
+  });
+  const failing = async () => {
+    throw failure;
+  };
+  assert.deepEqual(await attemptGoAction("NOTE_TRASH_FAILED", failing), {
+    status: "error",
+    message: genericErrorMessage,
+  });
+  assert.deepEqual(await attemptGo("ISSUE_FAILED", failing), {
+    ok: false,
+    message: genericErrorMessage,
+  });
+  assert.deepEqual(
+    await attemptGoResult("SAVE_FAILED", async () => {
+      throw "odd";
     }),
-    redirect,
+    { ok: false, message: genericErrorMessage },
   );
-  await assert.rejects(
-    attemptGoAction("C", async () => {
-      throw redirect;
-    }),
-    redirect,
-  );
+  assert.deepEqual(logged, [
+    ["NOTE_TRASH_FAILED", "PrismaClientKnownRequestError"],
+    ["ISSUE_FAILED", "PrismaClientKnownRequestError"],
+    ["SAVE_FAILED", "string"],
+  ]);
 });
 
 test("attemptGo returns the value, or a message for each Go failure", async (t) => {
@@ -145,11 +206,4 @@ test("attemptGo returns the value, or a message for each Go failure", async (t) 
     { ok: false, message: genericErrorMessage },
   );
   assert.deepEqual(logged, [["ISSUE_FAILED", 500, "internal"]]);
-  const redirect = new Error("NEXT_REDIRECT");
-  await assert.rejects(
-    attemptGo("C", async () => {
-      throw redirect;
-    }),
-    redirect,
-  );
 });

@@ -1,6 +1,9 @@
+import { unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 
+import { LearningForbiddenError } from "@/application/learning/learning-notes";
 import { GoApiError } from "@/infrastructure/go-api/client";
+import { errorName } from "@/presentation/controllers/load-or";
 import { accountForbiddenMessage } from "@/presentation/presenters/account-action-errors";
 import { genericErrorMessage } from "@/presentation/presenters/generic-error-message";
 
@@ -46,9 +49,17 @@ export function goFailureMessage(code: string, error: GoApiError): string {
   return genericErrorMessage;
 }
 
-// Runs an action that calls the Go API. Only a GoApiError becomes a state:
-// anything else, including Next's redirect to /signin, is rethrown. 403 is
-// treated as not being allowed; other failures go through goFailureMessage.
+// What the form shows for a failure that is not Go's: the generic text,
+// logging the fixed code with the error's name only.
+function unexpectedFailureMessage(code: string, error: unknown): string {
+  console.error(code, errorName(error));
+  return genericErrorMessage;
+}
+
+// Runs an action that calls the Go API or the database. Next's own errors
+// (the redirect to /signin, notFound) are rethrown. Go's 403 and
+// LearningForbiddenError are treated as not being allowed; other Go failures
+// go through goFailureMessage, anything else gets the generic text.
 export async function attemptGoAction(
   code: string,
   run: () => Promise<ActionState>,
@@ -56,9 +67,13 @@ export async function attemptGoAction(
   try {
     return await run();
   } catch (error) {
-    if (!(error instanceof GoApiError)) throw error;
-    if (error.status === 403) return actionUnauthorized;
-    return { status: "error", message: goFailureMessage(code, error) };
+    unstable_rethrow(error);
+    if (isForbidden(error)) return actionUnauthorized;
+    const message =
+      error instanceof GoApiError
+        ? goFailureMessage(code, error)
+        : unexpectedFailureMessage(code, error);
+    return { status: "error", message };
   }
 }
 
@@ -69,10 +84,11 @@ export type ActionResult = { ok: true } | { ok: false; message: string };
 export type GoAttempt<T> =
   { ok: true; value: T } | { ok: false; message: string };
 
-// Runs an action's Go call and keeps its value. Only a GoApiError becomes a
-// message; anything else, including Next's redirect to /signin, is rethrown.
-// 403 means not allowed; a 404 gets `notFound` when the action gives one;
-// other failures go through goFailureMessage, which logs codes only.
+// Runs an action's Go or database call and keeps its value. Next's own
+// errors are rethrown. Go's 403 and LearningForbiddenError mean not allowed;
+// a Go 404 gets `notFound` when the action gives one; other Go failures go
+// through goFailureMessage and anything else gets the generic text, logging
+// codes and error names only.
 export async function attemptGo<T>(
   code: string,
   run: () => Promise<T>,
@@ -81,9 +97,11 @@ export async function attemptGo<T>(
   try {
     return { ok: true, value: await run() };
   } catch (error) {
-    if (!(error instanceof GoApiError)) throw error;
-    if (error.status === 403)
+    unstable_rethrow(error);
+    if (isForbidden(error))
       return { ok: false, message: accountForbiddenMessage };
+    if (!(error instanceof GoApiError))
+      return { ok: false, message: unexpectedFailureMessage(code, error) };
     if (error.status === 404 && notFound)
       return { ok: false, message: notFound };
     return { ok: false, message: goFailureMessage(code, error) };
@@ -98,4 +116,11 @@ export async function attemptGoResult(
 ): Promise<ActionResult> {
   const attempt = await attemptGo(code, run, options);
   return attempt.ok ? { ok: true } : attempt;
+}
+
+function isForbidden(error: unknown): boolean {
+  return (
+    error instanceof LearningForbiddenError ||
+    (error instanceof GoApiError && error.status === 403)
+  );
 }
