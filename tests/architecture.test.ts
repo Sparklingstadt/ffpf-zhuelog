@@ -126,3 +126,19 @@ test("pages and UI components never import the Go API gateways", () => {
   );
   assert.deepEqual(offenders, []);
 });
+
+// UI components take nothing from infrastructure; browser-side stores come
+// through composition/browser-preferences.ts (eslint.config.mjs agrees).
+test("UI components never import infrastructure", () => {
+  const files = readdirSync(root, { recursive: true, encoding: "utf8" })
+    .map((path) => path.replaceAll("\\", "/"))
+    .filter((path) => /\.(ts|tsx)$/.test(path))
+    .filter((path) => path.startsWith("presentation/components/"));
+  assert.ok(files.length > 0);
+  const offenders = files.flatMap((path) =>
+    moduleSpecifiers(readFileSync(`${root}${path}`, "utf8"))
+      .filter((specifier) => /^@\/infrastructure(\/|$)/.test(specifier))
+      .map((specifier) => `${path}: ${specifier}`),
+  );
+  assert.deepEqual(offenders, []);
+});

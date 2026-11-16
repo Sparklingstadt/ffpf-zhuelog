@@ -3,7 +3,7 @@
 import { useRef } from "react";
 import { useServerInsertedHTML } from "next/navigation";
 
-import { THEME_BOOTSTRAP_SCRIPT } from "@/infrastructure/theme/theme-bootstrap";
+import { THEME_BOOTSTRAP_SCRIPT } from "@/composition/browser-preferences";
 
 // Insert into the server's HTML stream before the body paints. On the client
 // this component renders nothing, including during layout recovery or refresh.

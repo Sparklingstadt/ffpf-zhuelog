@@ -8,7 +8,7 @@ import {
   getThemeSnapshot,
   setThemePreference,
   subscribeToTheme,
-} from "@/infrastructure/theme/browser-theme-store";
+} from "@/composition/browser-preferences";
 import { Button } from "@/presentation/components/ui/button";
 
 const options = [

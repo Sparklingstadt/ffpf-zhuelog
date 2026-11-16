@@ -1,7 +1,7 @@
 import type { RecordOwner } from "@/application/identity/use-cases/resolve-record-owner";
 import type { AuthenticatedUser } from "@/domain/identity/entities/authenticated-user";
 import { memberAccounts } from "@/composition/identity-container";
-import { GoApiError } from "@/infrastructure/go-api/client";
+import { loadOr } from "@/presentation/controllers/load-or";
 
 export type RecordOwnerOption = {
   ownerId: string;
@@ -40,13 +40,11 @@ export type RecordOwnerView = {
 // fails, so a failure leaves only "自分" instead of breaking the page. Other
 // errors, such as Next's redirect to /signin, pass through.
 async function loadOptions(): Promise<RecordOwnerOption[]> {
-  try {
-    return await listRecordOwnerOptions();
-  } catch (error) {
-    if (!(error instanceof GoApiError)) throw error;
-    console.error("RECORD_OWNER_OPTIONS_UNAVAILABLE", error.status, error.code);
-    return [];
-  }
+  return loadOr(
+    "RECORD_OWNER_OPTIONS_UNAVAILABLE",
+    () => listRecordOwnerOptions(),
+    [],
+  );
 }
 
 // What a records page shows above its content for the viewed owner.

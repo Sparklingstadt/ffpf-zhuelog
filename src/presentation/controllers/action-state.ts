@@ -65,18 +65,21 @@ export async function attemptGoAction(
 // What an action the browser calls directly (not through a form) reports.
 export type ActionResult = { ok: true } | { ok: false; message: string };
 
-// Runs such an action's Go call. Like attemptGoAction, only a GoApiError
-// becomes a result and anything else is rethrown. 403 means not allowed; a
-// 404 gets `notFound` when the action gives one; other failures go through
-// goFailureMessage.
-export async function attemptGoResult(
+// The value a Go call returned, or the message the user sees instead.
+export type GoAttempt<T> =
+  { ok: true; value: T } | { ok: false; message: string };
+
+// Runs an action's Go call and keeps its value. Only a GoApiError becomes a
+// message; anything else, including Next's redirect to /signin, is rethrown.
+// 403 means not allowed; a 404 gets `notFound` when the action gives one;
+// other failures go through goFailureMessage, which logs codes only.
+export async function attemptGo<T>(
   code: string,
-  run: () => Promise<unknown>,
+  run: () => Promise<T>,
   { notFound }: { notFound?: string } = {},
-): Promise<ActionResult> {
+): Promise<GoAttempt<T>> {
   try {
-    await run();
-    return { ok: true };
+    return { ok: true, value: await run() };
   } catch (error) {
     if (!(error instanceof GoApiError)) throw error;
     if (error.status === 403)
@@ -85,4 +88,14 @@ export async function attemptGoResult(
       return { ok: false, message: notFound };
     return { ok: false, message: goFailureMessage(code, error) };
   }
+}
+
+// attemptGo for an action that only reports whether it worked.
+export async function attemptGoResult(
+  code: string,
+  run: () => Promise<unknown>,
+  options: { notFound?: string } = {},
+): Promise<ActionResult> {
+  const attempt = await attemptGo(code, run, options);
+  return attempt.ok ? { ok: true } : attempt;
 }
