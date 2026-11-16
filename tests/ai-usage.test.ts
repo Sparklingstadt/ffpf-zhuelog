@@ -3,6 +3,8 @@ import { test } from "node:test";
 
 import {
   aiUsageFeatureLabel,
+  aiUsageMonthOf,
+  aiUsageMonthRange,
   isAiUsageMonth,
   shiftAiUsageMonth,
   summarizeAiUsage,
@@ -106,4 +108,25 @@ test("the gateway asks Go for the month and treats 404 as no summary", async () 
     throw new GoApiError(500, "internal");
   }) as GoApiCall;
   await assert.rejects(createAiUsageGateway(broken).month(), GoApiError);
+});
+
+test("AI usage months are Japan months", () => {
+  assert.deepEqual(aiUsageMonthRange("2026-11"), {
+    from: new Date("2026-10-31T15:00:00.000Z"),
+    to: new Date("2026-11-30T15:00:00.000Z"),
+  });
+  assert.deepEqual(
+    aiUsageMonthRange("2026-12").to,
+    new Date("2026-12-31T15:00:00.000Z"),
+  );
+  assert.deepEqual(
+    aiUsageMonthRange("2027-01").from,
+    new Date("2026-12-31T15:00:00.000Z"),
+  );
+  assert.throws(() => aiUsageMonthRange("2026-13"), RangeError);
+  assert.throws(() => aiUsageMonthRange("1999-12"), RangeError);
+
+  assert.equal(aiUsageMonthOf(new Date("2026-10-31T15:00:00.000Z")), "2026-11");
+  assert.equal(aiUsageMonthOf(new Date("2026-10-31T14:59:59.999Z")), "2026-10");
+  assert.equal(aiUsageMonthOf(new Date("2026-12-31T15:00:00.000Z")), "2027-01");
 });

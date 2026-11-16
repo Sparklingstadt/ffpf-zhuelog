@@ -6,6 +6,7 @@ import {
   parseMonth,
   shiftMonth,
   studyLevel,
+  studyLogRange,
   summarize,
   todayInJapan,
 } from "../src/domain/study-log/study-log";
@@ -83,4 +84,34 @@ test("levels and the month's summary", () => {
     ]),
     { reviews: 3, practiceQuestions: 25, notes: 1, words: 2, activeDays: 2 },
   );
+});
+
+test("study log ranges are Japan days, as Go read them", () => {
+  assert.deepEqual(studyLogRange("2026-10-27", "2026-12-06"), {
+    start: new Date("2026-10-26T15:00:00.000Z"),
+    end: new Date("2026-12-06T15:00:00.000Z"),
+  });
+  assert.deepEqual(studyLogRange("2026-11-02", "2026-11-02"), {
+    start: new Date("2026-11-01T15:00:00.000Z"),
+    end: new Date("2026-11-02T15:00:00.000Z"),
+  });
+  // 93 days, both ends included, is the longest range.
+  assert.notEqual(studyLogRange("2026-01-01", "2026-04-03"), null);
+  assert.deepEqual(
+    studyLogRange("2026-12-31", "2027-01-01")?.end,
+    new Date("2027-01-01T15:00:00.000Z"),
+  );
+  const refused: [string, string][] = [
+    ["2026-01-01", "2026-04-04"],
+    ["2026-11-02", "2026-11-01"],
+    ["", "2026-11-01"],
+    ["2026-11-31", "2026-12-01"],
+    ["2026-11-1", "2026-11-30"],
+    ["1999-12-27", "2000-01-02"],
+    ["9999-12-27", "10000-01-02"],
+    ["2026-02-29", "2026-03-01"],
+  ];
+  for (const [from, to] of refused) {
+    assert.equal(studyLogRange(from, to), null, `${from}..${to}`);
+  }
 });
