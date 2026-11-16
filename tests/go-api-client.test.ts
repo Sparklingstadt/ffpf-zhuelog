@@ -8,7 +8,6 @@ import {
   fetchMe,
   GoApiError,
   goApi,
-  goUpload,
   isDemoAvailable,
   loginDemo,
   loginPassword,
@@ -221,13 +220,16 @@ test("without a proxy secret neither IP nor secret header is sent", async () => 
 
 test("GoApiError carries the Go message apart from Error.message", async () => {
   stub(() =>
-    json({ error: { code: "invalid_csv", message: "3 行目が空です" } }, 400),
+    json(
+      { error: { code: "invalid_request", message: "3 行目が空です" } },
+      400,
+    ),
   );
   await assert.rejects(
     goApi("/v1/x", { method: "POST" }),
     (e: unknown) =>
       e instanceof GoApiError &&
-      e.code === "invalid_csv" &&
+      e.code === "invalid_request" &&
       e.userMessage === "3 行目が空です" &&
       !e.message.includes("3 行目"),
   );
@@ -248,50 +250,6 @@ test("the Go message is empty when the body has none", async () => {
   assert.equal(new GoApiError(0, "unavailable").userMessage, "");
 });
 
-test("goUpload sends multipart without setting content-type", async () => {
-  stub(() => json({ count: 2 }, 201));
-  const form = new FormData();
-  form.append("csvFile", new Blob(["a,b\n"], { type: "text/csv" }), "x.csv");
-  const out = await goUpload<{ count: number }>("/v1/imports/csv", form, {
-    accessToken: "tok",
-    clientIp: "1.2.3.4",
-  });
-  assert.equal(out.count, 2);
-  const init = calls[0]!.init;
-  const h = init.headers as Record<string, string>;
-  assert.equal(calls[0]!.url, "https://api.test/v1/imports/csv");
-  assert.equal(init.method, "POST");
-  assert.equal(init.body, form);
-  assert.equal(h["content-type"], undefined);
-  assert.equal(h.authorization, "Bearer tok");
-  assert.equal(h["X-Zhuelog-Client-IP"], "1.2.3.4");
-  assert.equal(h["X-Zhuelog-Proxy-Secret"], process.env.API_WEB_PROXY_SECRET);
-  assert.equal(init.redirect, "error");
-  assert.equal(init.cache, "no-store");
-  assert.ok(init.signal);
-});
-
-test("goUpload maps failures to GoApiError", async () => {
-  stub(() =>
-    json({ error: { code: "too_large", message: "大きすぎます" } }, 413),
-  );
-  await assert.rejects(
-    goUpload("/v1/imports/csv", new FormData(), { accessToken: "t" }),
-    (e: unknown) =>
-      e instanceof GoApiError &&
-      e.status === 413 &&
-      e.code === "too_large" &&
-      e.userMessage === "大きすぎます",
-  );
-  stub(() => {
-    throw new TypeError("fetch failed");
-  });
-  await assert.rejects(
-    goUpload("/v1/imports/csv", new FormData(), { accessToken: "t" }),
-    (e: unknown) => e instanceof GoApiError && e.status === 0,
-  );
-});
-
 test("an unsafe GO_API_URL is refused before anything is sent", async () => {
   for (const url of [
     "http://api.test",
@@ -302,27 +260,18 @@ test("an unsafe GO_API_URL is refused before anything is sent", async () => {
   ]) {
     process.env.GO_API_URL = url;
     stub(() => json({ ok: 1 }));
-    for (const call of [
-      () =>
-        goApi("/v1/x", {
-          method: "POST",
-          accessToken: "tok",
-          clientIp: "1.2.3.4",
-        }),
-      () =>
-        goUpload("/v1/imports/csv", new FormData(), {
-          accessToken: "tok",
-          clientIp: "1.2.3.4",
-        }),
-    ])
-      await assert.rejects(
-        call,
-        (error: unknown) =>
-          error instanceof GoApiError &&
-          error.status === 0 &&
-          error.code === "unavailable",
-        url,
-      );
+    await assert.rejects(
+      goApi("/v1/x", {
+        method: "POST",
+        accessToken: "tok",
+        clientIp: "1.2.3.4",
+      }),
+      (error: unknown) =>
+        error instanceof GoApiError &&
+        error.status === 0 &&
+        error.code === "unavailable",
+      url,
+    );
     assert.equal(calls.length, 0, url);
   }
 });

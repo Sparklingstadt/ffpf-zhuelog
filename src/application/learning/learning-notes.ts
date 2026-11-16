@@ -5,6 +5,10 @@ import {
 } from "../../domain/identity/entities/authenticated-user";
 import type { LearningEntry } from "../../domain/learning/entities/learning-entry";
 import type { EntrySearch } from "../../domain/learning/entry-search";
+import {
+  CsvValidationError,
+  type LearningCsvDraft,
+} from "../../domain/learning/learning-csv";
 import type {
   DailyLearningEntry,
   LogDateSummary,
@@ -19,6 +23,9 @@ import type { ViewedOwner } from "../../domain/learning/viewed-owner";
 export class LearningForbiddenError extends Error {
   override name = "LearningForbiddenError";
 }
+
+export type CsvImportResult =
+  { ok: true; count: number } | { ok: false; message: string }; // a CsvValidationError's message
 
 export type LearningNotesDeps = {
   currentUser: () => Promise<AuthenticatedUser | null>;
@@ -47,6 +54,21 @@ export type LearningNotesDeps = {
     purge(ownerId: string, id: string): Promise<boolean>;
     emptyTrash(ownerId: string): Promise<number>;
     setShared(ownerId: string, id: string, shared: boolean): Promise<boolean>;
+  };
+  // The CSV import: the checks and the parser throw CsvValidationError (or,
+  // for checkFile, return its message) with the text to show the user.
+  csvImport: {
+    // The checks made before the file is read; null when it may be read.
+    checkFile(file: { name: string; size: number }): string | null;
+    parse(text: string): LearningCsvDraft[];
+    // The file name stored with the batch.
+    fileName(name: string): string;
+    // Stores every draft or none; returns how many notes were added.
+    importBatch(
+      ownerId: string,
+      fileName: string,
+      drafts: LearningCsvDraft[],
+    ): Promise<number>;
   };
 };
 
@@ -139,6 +161,31 @@ export function createLearningNotes(deps: LearningNotesDeps) {
       if (user.role !== "member" || user.demo === true)
         throw new LearningForbiddenError();
       return deps.writes.setShared(user.githubId, id, shared);
+    },
+
+    // Adds the CSV's rows to the signed-in user's own notes (the member an
+    // admin acts as; the demo may import too). A problem with the file comes
+    // back as its message and nothing is written; other failures are thrown.
+    async importCsv(file: {
+      name: string;
+      size: number;
+      text(): Promise<string>;
+    }): Promise<CsvImportResult> {
+      const ownerId = await own();
+      let fileName: string;
+      let drafts: LearningCsvDraft[];
+      try {
+        const problem = deps.csvImport.checkFile(file);
+        if (problem) return { ok: false, message: problem };
+        drafts = deps.csvImport.parse(await file.text());
+        fileName = deps.csvImport.fileName(file.name);
+      } catch (error) {
+        if (error instanceof CsvValidationError)
+          return { ok: false, message: error.message };
+        throw error;
+      }
+      const count = await deps.csvImport.importBatch(ownerId, fileName, drafts);
+      return { ok: true, count };
     },
   };
 }
