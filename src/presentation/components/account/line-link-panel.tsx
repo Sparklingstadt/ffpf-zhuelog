@@ -1,7 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { useActionState, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 import { LoaderCircle, MessageCircle, Unlink } from "lucide-react";
 
@@ -19,6 +18,7 @@ import { Button } from "@/presentation/components/ui/button";
 import { lineLinkMessageUrl } from "@/domain/line/official-account";
 import { cn } from "@/presentation/lib/utils";
 import { LineLinkQr } from "./line-link-qr";
+import { useRefreshUntilLinked } from "./use-refresh-until-linked";
 
 const initialState: LineLinkState = { status: "idle" };
 
@@ -62,36 +62,13 @@ export function LineLinkPanel({
     issueLineLinkCodeAction,
     initialState,
   );
-  const router = useRouter();
   const expiresAt = state.status === "issued" ? state.expiresAt : undefined;
   const messageUrl =
     state.status === "issued" && officialAccountId
       ? lineLinkMessageUrl(officialAccountId, state.code)
       : undefined;
 
-  useEffect(() => {
-    if (linked) return;
-    const refresh = () => {
-      if (document.visibilityState === "visible") router.refresh();
-    };
-    window.addEventListener("focus", refresh);
-    document.addEventListener("visibilitychange", refresh);
-    // Linking happens in LINE, outside this page. Poll only while a code is
-    // valid, and stop once the refreshed server props report the link.
-    const interval = expiresAt ? window.setInterval(refresh, 5000) : undefined;
-    const expiryTimer = expiresAt
-      ? window.setTimeout(
-          () => window.clearInterval(interval),
-          Math.max(0, Date.parse(expiresAt) - Date.now()),
-        )
-      : undefined;
-    return () => {
-      window.removeEventListener("focus", refresh);
-      document.removeEventListener("visibilitychange", refresh);
-      window.clearInterval(interval);
-      window.clearTimeout(expiryTimer);
-    };
-  }, [linked, expiresAt, router]);
+  useRefreshUntilLinked({ linked, expiresAt });
 
   if (linked) {
     return (
