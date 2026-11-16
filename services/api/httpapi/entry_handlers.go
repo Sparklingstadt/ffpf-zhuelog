@@ -3,7 +3,9 @@ package httpapi
 import (
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
@@ -179,6 +181,13 @@ func listEntries(e Entries) http.Handler {
 
 // maxFilterRunes bounds the q and hint filters of GET /v1/entries.
 const maxFilterRunes = 100
+
+// runesWithin is s trimmed, and whether it has min to max characters.
+func runesWithin(s string, min, max int) (string, bool) {
+	s = strings.TrimSpace(s)
+	n := utf8.RuneCountInString(s)
+	return s, n >= min && n <= max
+}
 
 // readEntryFilter reads q, kind and hint. Each may appear once; q and hint
 // are trimmed and at most 100 characters, and kind is "correction" or

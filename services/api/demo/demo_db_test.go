@@ -51,9 +51,8 @@ func TestResetWithTheFixture(t *testing.T) {
 	if err != nil || len(entries) != 12 {
 		t.Fatalf("%d notes, %v; want 12", len(entries), err)
 	}
-	words, err := s.ListVocabulary(ctx, owner, 100)
-	if err != nil || len(words) != 10 {
-		t.Fatalf("%d words, %v; want 10", len(words), err)
+	if words := countWords(t, url, owner); words != 10 {
+		t.Fatalf("%d words; want 10", words)
 	}
 	due, err := s.ListDueReviewItems(ctx, owner, now, 100)
 	if err != nil || len(due) == 0 {
@@ -72,6 +71,23 @@ func TestResetWithTheFixture(t *testing.T) {
 	if err != nil || len(days) < 5 {
 		t.Fatalf("study log = %+v, %v; want most of the last 7 days", days, err)
 	}
+}
+
+// countWords counts the owner's vocabulary words; the store no longer lists
+// them (the web owns the vocabulary book).
+func countWords(t *testing.T, url, owner string) int {
+	t.Helper()
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	var n int
+	if err := conn.QueryRow(ctx, `SELECT count(*) FROM "VocabularyEntry" WHERE "ownerId" = $1`, owner).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
 }
 
 func mustSeed(t *testing.T, now time.Time) store.DemoSeed {

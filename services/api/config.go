@@ -19,8 +19,7 @@ const (
 	// names another.
 	defaultChatModel = "gpt-6.1-sol"
 	// defaultLearningModel is the model of the LINE bot's corrections and
-	// translations and of the vocabulary drafts unless OPENAI_LEARNING_MODEL
-	// names another.
+	// translations unless OPENAI_LEARNING_MODEL names another.
 	defaultLearningModel = learning.DefaultModel
 )
 

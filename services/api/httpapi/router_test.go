@@ -213,7 +213,6 @@ func TestSavedNotesReadableWithoutOpenAI(t *testing.T) {
 
 	wantError(t, do(h, "POST", "/v1/chat", oneUserMessage, jsonAuth), http.StatusNotFound, "not_found")
 	wantError(t, do(h, "POST", "/v1/quick-question", oneUserMessage, jsonAuth), http.StatusNotFound, "not_found")
-	wantError(t, do(h, "POST", "/v1/vocabulary/draft", `{"word":"认真"}`, jsonAuth), http.StatusNotFound, "not_found")
 	// Saving answers 405: the path exists (GET), the method does not.
 	putConv := `{"title":"t","modelName":"m","ended":false,"createdAt":"2026-01-01T00:00:00Z","messages":[]}`
 	wantError(t, do(h, "PUT", "/v1/conversations/"+testConversationID, putConv, jsonAuth), http.StatusMethodNotAllowed, "method_not_allowed")

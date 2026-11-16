@@ -131,10 +131,6 @@ type Deps struct {
 	// Reviews is the spaced-repetition queue. Saved practice rounds add their
 	// missed questions to it; nil leaves the review routes out.
 	Reviews Reviews
-	// Vocabulary keeps the words owners pick out; VocabularyDrafter (OpenAI)
-	// drafts their pinyin and meaning, and is nil without OpenAI.
-	Vocabulary        Vocabulary
-	VocabularyDrafter VocabularyDrafter
 	// StudyLog counts what owners did each day.
 	StudyLog StudyLog
 	// AIUsage records the tokens of every OpenAI call and sums them up for
@@ -198,7 +194,6 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	r.adminRoutes()
 	r.practiceRecordRoutes()
 	r.reviewRoutes()
-	r.vocabularyRoutes()
 	r.studyLogRoutes()
 	r.lineRoutes()
 	r.conversationRoutes()
@@ -405,19 +400,6 @@ func (r *registrar) reviewRoutes() {
 	r.private("GET /v1/entries/{id}/review", entryReviewStatus(rv))
 	r.private("PUT /v1/entries/{id}/review", addEntryReview(rv, now))
 	r.private("DELETE /v1/entries/{id}/review", removeEntryReview(rv))
-}
-
-// vocabularyRoutes are the vocabulary book, for members and admins, and the
-// OpenAI draft of a word when OpenAI is configured.
-func (r *registrar) vocabularyRoutes() {
-	if v := r.d.Vocabulary; v != nil {
-		r.private("GET /v1/vocabulary", listVocabulary(v))
-		r.private("PUT /v1/vocabulary/{id}", putVocabulary(v, r.d.Now))
-		r.private("DELETE /v1/vocabulary/{id}", deleteVocabulary(v))
-	}
-	if r.d.VocabularyDrafter != nil {
-		r.notForDemo("POST /v1/vocabulary/draft", r.trackAI(aiusage.FeatureVocabularyDraft, draftVocabulary(r.d.VocabularyDrafter)))
-	}
 }
 
 // studyLogRoutes are the study log, for members and admins.

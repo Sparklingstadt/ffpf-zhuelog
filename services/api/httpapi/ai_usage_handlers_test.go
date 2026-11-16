@@ -11,7 +11,6 @@ import (
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/aiusage"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
-	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/learning"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
 
@@ -105,15 +104,13 @@ func TestChatRecordsUsageForTheCaller(t *testing.T) {
 	}
 }
 
-func TestQuickQuestionAndDraftRecordTheirFeature(t *testing.T) {
+func TestQuickQuestionRecordsItsFeature(t *testing.T) {
 	u := &fakeAIUsage{}
 	h, _, _ := routerWith(t, auth.RoleMember, Deps{
-		QuickChat: &fakeChat{pieces: []string{"好"}}, Questions: &fakeQuestions{},
-		VocabularyDrafter: &reportingDrafter{}, AIUsage: u,
+		QuickChat: &fakeChat{pieces: []string{"好"}}, Questions: &fakeQuestions{}, AIUsage: u,
 	})
 	do(h, "POST", "/v1/quick-question", `{"messages":[{"role":"user","text":"你好"}]}`, jsonAuth)
-	do(h, "POST", "/v1/vocabulary/draft", `{"word":"认真"}`, jsonAuth)
-	if len(u.rows) != 2 || u.rows[0].Feature != aiusage.FeatureQuickQuestion || u.rows[1].Feature != aiusage.FeatureVocabularyDraft {
+	if len(u.rows) != 1 || u.rows[0].Feature != aiusage.FeatureQuickQuestion {
 		t.Fatalf("usage = %+v", u.rows)
 	}
 }
@@ -140,12 +137,4 @@ func TestUsageFailureDoesNotBreakTheAnswer(t *testing.T) {
 	if !strings.Contains(logs.String(), "ai usage not recorded") {
 		t.Errorf("logs = %s, want the failed record logged", logs)
 	}
-}
-
-// reportingDrafter is a VocabularyDrafter that reports usage like OpenAI.
-type reportingDrafter struct{ fakeDrafter }
-
-func (r *reportingDrafter) DraftVocabulary(ctx context.Context, word, sentence string) (learning.VocabularyDraft, error) {
-	aiusage.Report(ctx, aiusage.Usage{Model: "gpt-5-mini", InputTokens: 5, OutputTokens: 6})
-	return r.fakeDrafter.DraftVocabulary(ctx, word, sentence)
 }
