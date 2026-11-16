@@ -1,5 +1,5 @@
 // Shared fakes and fixtures for the Service tests (login, session, me,
-// password change, demo).
+// demo).
 package auth
 
 import (
@@ -50,7 +50,6 @@ type fakeStore struct {
 	pruneErr       error
 	throttleErr    error
 	setPasswordErr error
-	setPasswordAt  []time.Time // now passed to each SetPassword
 
 	ffpf          map[string]*store.FfpfAccount // by sub; see ffpfAccounts
 	upsertFfpfErr error
@@ -114,24 +113,6 @@ func (f *fakeStore) FindPasswordAccountByID(_ context.Context, id string) (store
 		}
 	}
 	return store.PasswordAccount{}, store.ErrNotFound
-}
-
-// SetPassword mirrors the store: it replaces the hash and bumps the session
-// version.
-func (f *fakeStore) SetPassword(_ context.Context, id, hash string, now time.Time) error {
-	f.log.add("SetPassword")
-	f.setPasswordAt = append(f.setPasswordAt, now)
-	if f.setPasswordErr != nil {
-		return f.setPasswordErr
-	}
-	for _, a := range f.accounts {
-		if a.ID == id {
-			a.PasswordHash = hash
-			a.SessionVersion++
-			return nil
-		}
-	}
-	return store.ErrNotFound
 }
 
 // ConsumeThrottle mirrors the store: an ended window (expires <= now) restarts
@@ -309,8 +290,6 @@ type fakeHasher struct {
 	count     int
 	passwords []string
 	err       error
-	hashes    int
-	hashErr   error
 }
 
 func (h *fakeHasher) Verify(_ context.Context, password, hash string) (bool, error) {
@@ -321,16 +300,6 @@ func (h *fakeHasher) Verify(_ context.Context, password, hash string) (bool, err
 		return false, h.err
 	}
 	return hash == "hash:"+password, nil
-}
-
-// Hash is not a verification, so it is counted in hashes, not count.
-func (h *fakeHasher) Hash(_ context.Context, password string) (string, error) {
-	h.log.add("Hash")
-	h.hashes++
-	if h.hashErr != nil {
-		return "", h.hashErr
-	}
-	return "hash:" + password, nil
 }
 
 func (h *fakeHasher) Simulate(_ context.Context, password string) error {

@@ -27,6 +27,7 @@ test("the demo reset needs the cron secret", async () => {
 
 test("anyone can try the members' pages in the demo, without AI", async ({
   page,
+  db,
 }) => {
   await resetDemo();
   await page.goto("/signin");
@@ -109,6 +110,25 @@ test("anyone can try the members' pages in the demo, without AI", async ({
   // The demo has no follows: /follow sends it home.
   await page.goto("/follow");
   await expect(page).toHaveURL((url) => url.pathname === "/");
+
+  // The demo has no password to change: the form is refused as forbidden.
+  await page.goto("/account/password");
+  await page.getByLabel("現在のパスワード").fill("member-password-1");
+  await page
+    .getByLabel("新しいパスワード", { exact: true })
+    .fill("member-password-2");
+  await page.getByLabel("新しいパスワード（確認）").fill("member-password-2");
+  await page.getByRole("button", { name: "パスワードを変更" }).click();
+  await expect(
+    page.getByRole("alert").filter({
+      hasText: "この操作を行う権限がありません。再度ログインしてください。",
+    }),
+  ).toBeVisible();
+  const { rows } = await db.query(
+    `SELECT "passwordHash" FROM "PasswordAccount" WHERE "loginId" = $1`,
+    [demoLoginId],
+  );
+  expect(rows).toEqual([{ passwordHash: "demo:no-password" }]);
 
   // Leaving the demo signs out.
   await banner.getByRole("button", { name: "デモを終える" }).click();

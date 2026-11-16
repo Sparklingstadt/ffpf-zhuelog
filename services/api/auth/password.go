@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/base64"
-	"errors"
 	"strconv"
 	"strings"
 	"sync"
@@ -168,23 +167,6 @@ func (v *PasswordVerifier) Warm() {
 	})
 }
 
-// Hash returns a new scrypt hash of password in the web app's format,
-// scrypt:32768:8:1:<16-byte salt>:<64-byte key> (unpadded base64url), with a
-// fresh random salt. It shares the concurrency bound with Verify and Simulate
-// and returns ctx's error if ctx is done before a slot frees up.
-func (v *PasswordVerifier) Hash(ctx context.Context, password string) (string, error) {
-	salt := randomBytes(scryptSaltBytes)
-	if err := v.acquire(ctx); err != nil {
-		return "", err
-	}
-	defer v.release()
-	key, err := v.derive([]byte(password), salt, scryptN, scryptR, scryptP, scryptKeyBytes)
-	if err != nil {
-		return "", errors.New("auth: scrypt failed")
-	}
-	return formatScryptHash(salt, key), nil
-}
-
 // formatScryptHash encodes a hash written with the current parameters.
 func formatScryptHash(salt, key []byte) string {
 	enc := base64.RawURLEncoding
@@ -193,10 +175,4 @@ func formatScryptHash(salt, key []byte) string {
 		strconv.Itoa(scryptN), strconv.Itoa(scryptR), strconv.Itoa(scryptP),
 		enc.EncodeToString(salt), enc.EncodeToString(key),
 	}, ":")
-}
-
-// GeneratePassword returns a random password: 15 random bytes as unpadded
-// base64url (20 characters), like the web app's generate().
-func GeneratePassword() string {
-	return base64.RawURLEncoding.EncodeToString(randomBytes(generatedBytes))
 }

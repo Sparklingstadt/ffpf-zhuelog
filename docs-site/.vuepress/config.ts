@@ -29,7 +29,6 @@ export default defineUserConfig({
         children: [
           "/reference/auth.md",
           "/reference/line.md",
-          "/reference/admin.md",
           "/reference/health.md",
         ],
       },
