@@ -32,6 +32,9 @@ test("an admin acting as a member saves the conversation as the member's", async
   // The member's password is not the acting admin's to change.
   await page.goto("/account/password");
   await expect(page).toHaveURL((url) => url.pathname === "/");
+  // Nor is the member's LINE link.
+  await page.goto("/account/line");
+  await expect(page).toHaveURL((url) => url.pathname === "/");
 
   // The chat is the member's; the admin pays for it.
   await page.goto("/chat");

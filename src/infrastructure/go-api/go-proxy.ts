@@ -92,10 +92,14 @@ function cookieValue(headers: Headers, name: string): string | undefined {
   return undefined;
 }
 
+// The LINE webhook and the cron routes carry no session cookie: they check
+// their own credential (the LINE signature, the cron secret).
 function isPublicRoute(pathname: string): boolean {
   return (
     pathname === "/signin" ||
     pathname.startsWith("/api/auth/") ||
+    pathname === "/api/line/webhook" ||
+    pathname.startsWith("/api/cron/") ||
     isMetadataFile(pathname)
   );
 }
