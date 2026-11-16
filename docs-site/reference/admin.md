@@ -138,7 +138,7 @@ OpenAI を呼んだ回数とトークン数を、1 か月（日本時間）ぶ�
 | `line`             | LINE の添削・翻訳（[LINE 連携](./line.md)。翌朝の拾い直しも含みます） |
 | `chat`             | 会話練習（`POST /v1/chat`）                                           |
 | `quick_question`   | クイック質問（`POST /v1/quick-question`）                             |
-| `vocabulary_draft` | 単語帳の下書き（`POST /v1/vocabulary/draft`）                         |
+| `vocabulary_draft` | 単語帳の下書き（Web が記録）                                          |
 
 - 1 回の呼び出しごとに、OpenAI の応答にある `usage` の入力・出力トークン数を `AiUsage` に 1 行保存します。答えが使えない形だったとき、会話を途中で止めたときも、OpenAI が数えたトークンは記録します。応答が `200` でなかった呼び出しは記録しません。
 - 記録するのは、そのリクエストをした人です。admin が [会員として操作](../guide/auth.md#会員として操作する) しているときは、admin に数えます。LINE はノートを受け取る持ち主に数えます。

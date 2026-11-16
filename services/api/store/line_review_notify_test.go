@@ -79,16 +79,10 @@ func TestReviewNotifyTargetsAndClaim(t *testing.T) {
 	}
 	// New words are due right away; the one added after the run is not.
 	for _, w := range []string{"认真", "学习"} {
-		if _, err := s.PutVocabulary(ctx, withDue, word(w, "意味"), morning.Add(-time.Hour)); err != nil {
-			t.Fatal(err)
-		}
+		addWord(t, s, withDue, word(w, "意味"), morning.Add(-time.Hour))
 	}
-	if _, err := s.PutVocabulary(ctx, nothingDue, word("明天", "あした"), morning.Add(time.Hour)); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.PutVocabulary(ctx, notAsked, word("今天", "きょう"), morning.Add(-time.Hour)); err != nil {
-		t.Fatal(err)
-	}
+	addWord(t, s, nothingDue, word("明天", "あした"), morning.Add(time.Hour))
+	addWord(t, s, notAsked, word("今天", "きょう"), morning.Add(-time.Hour))
 
 	got := notifyTargetsOf(t, s, morning, u1, u2, u3)
 	if len(got) != 1 || got[0].LineUserID != u1 || got[0].OwnerID != withDue || got[0].Due != 2 || got[0].Role != "member" {

@@ -105,3 +105,47 @@ export function demoLoginId(): string | undefined {
   const id = process.env.DEMO_LOGIN_ID?.trim();
   return id ? id : undefined;
 }
+
+export type OpenAiConfig = {
+  apiKey: string;
+  baseUrl: string;
+  learningModel: string;
+};
+
+const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com";
+const DEFAULT_LEARNING_MODEL = "gpt-5-mini";
+
+// The API key travels to the base URL, so an override must be an http(s)
+// loopback URL (for tests), as in the Go API. Without a key, or with any
+// other override, OpenAI is treated as not configured.
+export function openAiConfig(): OpenAiConfig | undefined {
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) return undefined;
+  const override = process.env.OPENAI_API_BASE_URL?.trim();
+  let baseUrl = DEFAULT_OPENAI_BASE_URL;
+  if (override) {
+    if (!isLoopbackHttpUrl(override)) return undefined;
+    baseUrl = override;
+  }
+  const learningModel =
+    process.env.OPENAI_LEARNING_MODEL?.trim() || DEFAULT_LEARNING_MODEL;
+  return { apiKey, baseUrl, learningModel };
+}
+
+// Whether an OpenAI API key is set at all, to tell "not configured" from a
+// rejected OPENAI_API_BASE_URL.
+export function openAiKeySet(): boolean {
+  return Boolean(process.env.OPENAI_API_KEY?.trim());
+}
+
+function isLoopbackHttpUrl(raw: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+  if (url.username || url.password) return false;
+  return ["127.0.0.1", "[::1]", "localhost"].includes(url.hostname);
+}

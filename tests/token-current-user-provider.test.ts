@@ -165,6 +165,7 @@ test("an admin acts as an existing member", async () => {
     githubId: "password:abc",
     role: "admin",
     actingAs: { ownerId: "password:abc", loginId: "taro", displayName: "太郎" },
+    actorId: "10001",
   });
 });
 

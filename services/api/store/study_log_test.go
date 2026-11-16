@@ -33,9 +33,7 @@ func TestStudyLogCountsEachKindByJapanDay(t *testing.T) {
 	if _, err := s.AddComplementRecord(ctx, a, complementRecord(nov2, nil, nil), nov2); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.PutVocabulary(ctx, a, word("认真", "まじめに"), nov2); err != nil {
-		t.Fatal(err)
-	}
+	addWord(t, s, a, word("认真", "まじめに"), nov2)
 	due, _ := s.ListDueReviewItems(ctx, a, nov2, 10)
 	if _, err := s.RecordReview(ctx, a, due[0].ID, newUUID(), review.Good, nov2); err != nil {
 		t.Fatal(err)

@@ -65,6 +65,59 @@ test("a word added to the book comes up as a flashcard and can be removed", asyn
   expect(rows).toEqual([{ n: 0 }]);
 });
 
+test("the same word twice is refused with Go's message", async ({
+  page,
+  db,
+}) => {
+  await createMember(db, "taro", "太郎", "member-password-1");
+  await asMember(page, "taro", "member-password-1");
+  await page.goto("/vocabulary");
+  const list = page.getByRole("region", { name: "単語の一覧" });
+
+  await page.getByLabel("語句").fill("学习");
+  await page.getByLabel("意味").fill("学ぶ");
+  await page.getByRole("button", { name: "単語帳に入れる" }).click();
+  await expect(page.getByText("「学习」を単語帳に入れました。")).toBeVisible();
+
+  // Surrounding spaces are trimmed, so this is the same word.
+  await page.getByLabel("語句").fill(" 学习 ");
+  await page.getByLabel("意味").fill("勉強する");
+  await page.getByRole("button", { name: "単語帳に入れる" }).click();
+  await expect(
+    page.getByText("この語句はすでに単語帳にあります。"),
+  ).toBeVisible();
+
+  await page.reload();
+  await expect(list.getByRole("listitem")).toHaveCount(1);
+  await expect(list).toContainText("学ぶ");
+  await expect(list).not.toContainText("勉強する");
+});
+
+test("the AI draft comes from OpenAI and its usage is recorded", async ({
+  page,
+  db,
+}) => {
+  const accountId = await createMember(db, "taro", "太郎", "member-password-1");
+  const owner = memberOwnerId(accountId);
+  await asMember(page, "taro", "member-password-1");
+  await page.goto("/vocabulary");
+
+  await page.getByLabel("語句").fill("图书馆");
+  await page.getByRole("button", { name: "AIで下書き" }).click();
+  // The OpenAI stub (e2e/openai-stub.ts) drafts from the word it was sent.
+  await expect(page.getByLabel("意味")).toHaveValue("「图书馆」の下書き");
+  await expect(page.getByLabel("ピンイン")).toHaveValue("e2e pīnyīn");
+  await expect(page.getByText("AI の下書き")).toBeVisible();
+
+  const { rows } = await db.query(
+    `SELECT "feature", "inputTokens", "outputTokens" FROM "AiUsage" WHERE "ownerId" = $1`,
+    [owner],
+  );
+  expect(rows).toEqual([
+    { feature: "vocabulary_draft", inputTokens: 12, outputTokens: 34 },
+  ]);
+});
+
 test("guests have no vocabulary book", async ({ page }) => {
   await asGuest(page);
   await page.goto("/vocabulary");

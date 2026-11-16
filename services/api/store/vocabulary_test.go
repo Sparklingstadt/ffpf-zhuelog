@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -24,7 +23,31 @@ func word(w, meaning string) VocabularyEntry {
 	return VocabularyEntry{ID: newUUID(), Language: "zh", Word: w, Pinyin: "pīnyīn", Meaning: meaning}
 }
 
-func TestPutVocabularyAddsAWordAndItsCard(t *testing.T) {
+// addWord saves e for the owner with a new review card due at now, as the
+// web's vocabulary book does.
+func addWord(t *testing.T, s *Store, owner string, e VocabularyEntry, now time.Time) {
+	t.Helper()
+	ctx := context.Background()
+	now = dbTime(now)
+	var source *string
+	if e.SourceEntryID != "" {
+		source = &e.SourceEntryID
+	}
+	if _, err := s.pool.Exec(ctx, `INSERT INTO "VocabularyEntry"
+ ("id", "ownerId", "language", "word", "pinyin", "meaning", "sourceEntryId", "createdAt", "updatedAt")
+ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)`,
+		e.ID, owner, e.Language, e.Word, e.Pinyin, e.Meaning, source, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.pool.Exec(ctx, `INSERT INTO "ReviewItem"
+ ("id", "ownerId", "language", "kind", "targetId", "due", "state", "createdAt", "updatedAt")
+ VALUES ($1, $2, $3, $4, $5, $6, $7, $6, $6)`,
+		newID(), owner, e.Language, ReviewKindVocabulary, e.ID, now, int(review.New)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDueVocabularyCarriesItsWord(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	a, b := vocabularyOwner(t, s), vocabularyOwner(t, s)
@@ -32,74 +55,17 @@ func TestPutVocabularyAddsAWordAndItsCard(t *testing.T) {
 
 	e := word("认真", "まじめに")
 	e.SourceEntryID = "centry0000000000000000001"
-	saved, err := s.PutVocabulary(ctx, a, e, now)
-	if err != nil || saved.Word != "认真" || saved.SourceEntryID != e.SourceEntryID || !saved.CreatedAt.Equal(dbTime(now)) {
-		t.Fatalf("put = %+v, %v", saved, err)
-	}
+	addWord(t, s, a, e, now)
+
 	due, err := s.ListDueReviewItems(ctx, a, now, 10)
-	if err != nil || len(due) != 1 || due[0].Kind != ReviewKindVocabulary || due[0].TargetID != e.ID ||
-		due[0].Vocabulary == nil || due[0].Vocabulary.Meaning != "まじめに" || due[0].State != review.New {
+	if err != nil || len(due) != 1 || due[0].Kind != ReviewKindVocabulary || due[0].TargetID != e.ID || due[0].Vocabulary == nil {
 		t.Fatalf("due = %+v, %v", due, err)
 	}
-
-	// Saving the id again edits the reading and the meaning, and keeps the card's schedule.
-	if _, err := s.RecordReview(ctx, a, due[0].ID, newUUID(), review.Easy, now); err != nil {
-		t.Fatal(err)
+	if v := *due[0].Vocabulary; v.Word != "认真" || v.Meaning != "まじめに" || v.SourceEntryID != e.SourceEntryID ||
+		!v.CreatedAt.Equal(dbTime(now)) {
+		t.Errorf("word = %+v", v)
 	}
-	edit := e
-	edit.Word, edit.Meaning, edit.SourceEntryID = "别的", "真剣に", ""
-	edited, err := s.PutVocabulary(ctx, a, edit, now.Add(time.Hour))
-	if err != nil || edited.Word != "认真" || edited.Meaning != "真剣に" || edited.SourceEntryID != e.SourceEntryID ||
-		!edited.UpdatedAt.Equal(dbTime(now.Add(time.Hour))) || !edited.CreatedAt.Equal(dbTime(now)) {
-		t.Fatalf("edit = %+v, %v", edited, err)
-	}
-	if n, _ := s.CountDueReviewItems(ctx, a, now.Add(time.Hour)); n != 0 {
-		t.Errorf("an edit put the card back: %d due", n)
-	}
-
-	if _, err := s.PutVocabulary(ctx, a, word("认真", "別の意味"), now); !errors.Is(err, ErrVocabularyExists) {
-		t.Errorf("same word under a new id: %v", err)
-	}
-	if _, err := s.PutVocabulary(ctx, b, e, now); !errors.Is(err, ErrNotFound) {
-		t.Errorf("another owner's id: %v", err)
-	}
-	if _, err := s.PutVocabulary(ctx, b, word("认真", "まじめに"), now); err != nil {
-		t.Errorf("another owner's same word: %v", err)
-	}
-
-	list, err := s.ListVocabulary(ctx, a, 100)
-	if err != nil || len(list) != 1 || list[0].ID != e.ID {
-		t.Fatalf("list = %+v, %v", list, err)
-	}
-	// The list says when the word's card is next due: after the 簡単 answer.
-	after, _ := s.ListDueReviewItems(ctx, a, now.AddDate(1, 0, 0), 10)
-	if len(after) != 1 || !list[0].NextReview.Equal(after[0].Due) || !list[0].NextReview.After(now) {
-		t.Errorf("next review = %v, card = %+v", list[0].NextReview, after)
-	}
-}
-
-func TestDeleteVocabularyTakesItsCard(t *testing.T) {
-	s := testStore(t)
-	ctx := context.Background()
-	a, b := vocabularyOwner(t, s), vocabularyOwner(t, s)
-	now := fixedNow()
-	e := word("认真", "まじめに")
-	if _, err := s.PutVocabulary(ctx, a, e, now); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.DeleteVocabulary(ctx, b, e.ID); !errors.Is(err, ErrNotFound) {
-		t.Errorf("another owner's delete: %v", err)
-	}
-	if err := s.DeleteVocabulary(ctx, a, e.ID); err != nil {
-		t.Fatal(err)
-	}
-	if n, _ := s.CountDueReviewItems(ctx, a, now); n != 0 {
-		t.Errorf("card left after delete: %d", n)
-	}
-	if err := s.DeleteVocabulary(ctx, a, e.ID); !errors.Is(err, ErrNotFound) {
-		t.Errorf("second delete: %v", err)
-	}
-	if list, _ := s.ListVocabulary(ctx, a, 100); len(list) != 0 {
-		t.Errorf("list after delete = %+v", list)
+	if other, _ := s.ListDueReviewItems(ctx, b, now, 10); len(other) != 0 {
+		t.Errorf("another owner sees %+v", other)
 	}
 }
