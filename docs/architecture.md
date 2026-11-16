@@ -17,7 +17,7 @@ flowchart LR
   end
   subgraph API[Go API on Vercel]
     AUTH[auth]
-    DATA[学習ノート・復習・練習・単語帳]
+    DATA[学習ノート・復習・練習]
     LINEBOT[linebot]
     AI[OpenAI の呼び出しと利用量の記録]
   end
@@ -30,6 +30,8 @@ flowchart LR
   UI -->|HttpOnly Cookie| Web
   Web -->|Bearer JWT<br/>サーバー間| API
   API --> DB
+  Web -->|Prisma: アカウントの確認・単語帳| DB
+  Web -->|単語帳の下書き| OpenAI
   AI --> OpenAI
   LINE -->|Webhook| LINEBOT
   LINEBOT -->|push| LINE
@@ -38,7 +40,7 @@ flowchart LR
 ```
 
 - ブラウザーが話す相手は Web だけです。Go API を直接は呼びません。
-- Web は、ログイン中の人を決めるために、実行時に DB のアカウント（`PasswordAccount`・`FfpfAccount`）を Prisma（`src/infrastructure/prisma/`）で読みます。アクセストークンも Web が自分で確かめます。ほかの読み書き、ログイン、AI は今も Go API を通します。機能は、設計書（[2026-11-16-deprecate-go-backend-design.md](superpowers/specs/2026-11-16-deprecate-go-backend-design.md)）の段階ごとに、Go から Web へ移していきます。
+- Web は、ログイン中の人を決めるために、実行時に DB のアカウント（`PasswordAccount`・`FfpfAccount`）を Prisma（`src/infrastructure/prisma/`）で読みます。アクセストークンも Web が自分で確かめます。単語帳（一覧・保存・削除）も Prisma で読み書きし、「AI で下書き」は Web が OpenAI を直接呼んで、使った量を `AiUsage` に記録します。ほかの読み書き、ログイン、AI は今も Go API を通します。機能は、設計書（[2026-11-16-deprecate-go-backend-design.md](superpowers/specs/2026-11-16-deprecate-go-backend-design.md)）の段階ごとに、Go から Web へ移していきます。
 - LINE は Go API に Webhook を送ります。添削の結果は Go API が LINE に push で返します。
 
 ## 2. Web と Go API を分けた理由
@@ -167,7 +169,7 @@ sequenceDiagram
 
 ## 8. AI と費用
 
-**呼ぶところ**：OpenAI を呼ぶのは Go API だけで、次の 4 か所です。どれも Responses API を使います。
+**呼ぶところ**：OpenAI を呼ぶのは次の 4 か所で、単語帳の下書きだけ Web（`src/infrastructure/openai/`）、ほかは Go API です。どれも Responses API を使います。
 
 | 機能              | モデル                           | 返し方                          |
 | ----------------- | -------------------------------- | ------------------------------- |
