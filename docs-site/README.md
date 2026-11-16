@@ -75,7 +75,7 @@ Web（Next.js）は、ログイン中の人の確認、単語帳、学習ノー�
 | `API_WEB_PROXY_SECRET`                                                          | 32 バイト以上。Web が `X-Zhuelog-Proxy-Secret` で渡す秘密（Web から使うときは必要）。一致したときだけ `X-Zhuelog-Client-IP` を利用者の IP として信頼します                                                         |
 | `AUTH_ALLOWED_GITHUB_IDS`                                                       | admin の許可リスト。GitHub の数値のユーザー ID をカンマ区切りで並べる（前後の空白は除き、数字以外の値は無視）                                                                                                      |
 
-`PORT`・`GITHUB_WEB_*`・`API_WEB_PROXY_SECRET` 以外はすべて必須で、無い・不正なときは起動時に終了します。`GITHUB_WEB_*` と `API_WEB_PROXY_SECRET` は API の起動には要りませんが、Web から使うときは必要です。LINE 連携とデモのリセットの設定（`LINE_*`・`OPENAI_API_KEY`・`CRON_SECRET`）は、段階 10b から Go では使いません（Web に設定します）。
+`PORT`・`GITHUB_WEB_*`・`API_WEB_PROXY_SECRET`・`FFPF_ID_*`・`DEMO_LOGIN_ID` 以外はすべて必須で、無い・不正なときは起動時に終了します。`GITHUB_WEB_*` と `API_WEB_PROXY_SECRET` は API の起動には要りませんが、Web から使うときは必要です。`FFPF_ID_*`（4 つそろえるか、すべて空）と `DEMO_LOGIN_ID` は任意です。LINE 連携とデモのリセットの設定は、段階 10b から Go では使いません（Web に設定します）。Go の Vercel プロジェクトからは、`LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`OPENAI_API_KEY`・`OPENAI_LEARNING_MODEL`・`CRON_SECRET`・`OPENAI_API_BASE_URL`・`LINE_API_BASE_URL` を消してよく、`DEMO_LOGIN_ID` は残します（Go の再デプロイのあとに消します）。
 
 ## 関連する文書
 
