@@ -247,3 +247,73 @@ test("a first delivery inserts with the new id", async () => {
   });
   assert.equal(queries[0][0], "cnew");
 });
+
+// Records each Prisma model call as [model.method, args].
+function fakeModelDb(results: Record<string, unknown> = {}) {
+  const calls: [string, unknown][] = [];
+  const model = (name: string) =>
+    new Proxy(
+      {},
+      {
+        get: (_, method: string) => async (args: unknown) => {
+          calls.push([`${name}.${method}`, args]);
+          return results[`${name}.${method}`] ?? { count: 0 };
+        },
+      },
+    );
+  const db = {
+    lineMessage: model("lineMessage"),
+    lineLinkCode: model("lineLinkCode"),
+  } as unknown as PrismaClient;
+  return { db, calls };
+}
+
+test("fail settles only a pending message and clears its text", async () => {
+  const { db, calls } = fakeModelDb();
+  await createLineMessageStore(() => db).fail("cid", now);
+  assert.deepEqual(calls, [
+    [
+      "lineMessage.updateMany",
+      {
+        where: { id: "cid", status: "pending" },
+        data: { status: "failed", text: null, updatedAt: now },
+      },
+    ],
+  ]);
+});
+
+test("listStale reads the oldest pending messages first, up to the limit", async () => {
+  const before = new Date("2026-11-17T20:58:00.000Z");
+  const { db, calls } = fakeModelDb({ "lineMessage.findMany": [] });
+  assert.deepEqual(
+    await createLineMessageStore(() => db).listStale(before, 20),
+    [],
+  );
+  assert.deepEqual(calls, [
+    [
+      "lineMessage.findMany",
+      {
+        where: { status: "pending", createdAt: { lt: before } },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        take: 20,
+      },
+    ],
+  ]);
+});
+
+test("prune drops settled messages older than 7 days and expired codes", async () => {
+  const { db, calls } = fakeModelDb();
+  await createLineMessageStore(() => db).prune(now);
+  assert.deepEqual(calls, [
+    [
+      "lineMessage.deleteMany",
+      {
+        where: {
+          status: { in: ["done", "failed"] },
+          updatedAt: { lt: new Date("2026-11-10T21:00:00.000Z") },
+        },
+      },
+    ],
+    ["lineLinkCode.deleteMany", { where: { expiresAt: { lte: now } } }],
+  ]);
+});

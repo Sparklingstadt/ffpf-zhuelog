@@ -199,6 +199,8 @@ Go API の次の 5 つのルートで動きます。LINE の設定（上の「3.
 
 ### 切り替えの手順
 
+これは Go だけで LINE を動かしていたころの古い手順で、Go に戻すときにだけ使います。今の手順は `docs/api-deployment.md` の「段階10（LINE とデモのリセットの cron）のマージの前と後」にあります。
+
 LINE 連携を本番で使い始めるときは、次の順で行います。
 
 1. LINE Developers で、Messaging API のチャネルを用意します（以前のチャネルが残っていれば使えます）。**Webhook URL** を `https://ffpf-zhuelog-api.vercel.app/v1/line/webhook` にして、Webhook の利用をオンにします。「**応答メッセージ**」は **オフ** にします（オンのままだと、LINE の自動応答とこの API の返信が二重に届きます）。LINE の「検証」ボタンは、手順 5 で Go API をデプロイするまでは `404` で失敗します（まだ押さないでください）。

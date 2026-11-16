@@ -174,3 +174,93 @@ test("redeemCode moves both links in one transaction", async () => {
     });
   }
 });
+
+// Records each lineLink call as [method, args] and answers with `count` (or
+// the raw rows for $queryRaw).
+function fakeLinkDb(count: number, rows: unknown[] = []) {
+  const calls: [string, unknown][] = [];
+  const record =
+    (method: string, result: () => unknown) => async (args: unknown) => {
+      calls.push([method, args]);
+      return result();
+    };
+  const db = {
+    lineLink: {
+      updateMany: record("updateMany", () => ({ count })),
+      deleteMany: record("deleteMany", () => ({ count })),
+    },
+    $executeRaw: record("$executeRaw", () => count),
+    $queryRaw: record("$queryRaw", () => rows),
+  } as unknown as PrismaClient;
+  return { db, calls };
+}
+
+test("setReviewNotify writes only the owner's link and reports whether one was there", async () => {
+  for (const [count, linked] of [
+    [1, true],
+    [0, false],
+  ] as const) {
+    const { db, calls } = fakeLinkDb(count);
+    assert.equal(
+      await createLineLinkStore(() => db).setReviewNotify("password:c1", true),
+      linked,
+    );
+    assert.deepEqual(calls, [
+      [
+        "updateMany",
+        { where: { ownerId: "password:c1" }, data: { reviewNotify: true } },
+      ],
+    ]);
+  }
+});
+
+test("unlinkOwner and unlinkLineUser each delete by exactly one key", async () => {
+  const { db, calls } = fakeLinkDb(1);
+  const store = createLineLinkStore(() => db);
+  await store.unlinkOwner("password:c1");
+  await store.unlinkLineUser("U1");
+  assert.deepEqual(calls, [
+    ["deleteMany", { where: { ownerId: "password:c1" } }],
+    ["deleteMany", { where: { lineUserId: "U1" } }],
+  ]);
+  // Never an empty where, which would delete every link.
+  for (const [, args] of calls) {
+    const where = (args as { where: Record<string, unknown> }).where;
+    assert.equal(Object.keys(where).length, 1);
+  }
+});
+
+test("claimReviewNotify claims the JST day and is true only for one row", async () => {
+  for (const [count, claimed] of [
+    [1, true],
+    [0, false],
+    [2, false],
+  ] as const) {
+    const { db, calls } = fakeLinkDb(count);
+    assert.equal(
+      await createLineLinkStore(() => db).claimReviewNotify("U1", now),
+      claimed,
+    );
+    const sql = calls[0][1] as { values: unknown[] };
+    assert.equal(calls[0][0], "$executeRaw");
+    assert.deepEqual(sql.values, [japanDay, "U1", japanDay]);
+  }
+});
+
+test("reviewNotifyTargets passes the JST date and reads due as a number", async () => {
+  const { db, calls } = fakeLinkDb(0, [
+    {
+      lineUserId: "U1",
+      ownerId: "password:c1",
+      role: "member",
+      due: BigInt(3),
+    },
+  ]);
+  assert.deepEqual(
+    await createLineLinkStore(() => db).reviewNotifyTargets(now, 100),
+    [{ lineUserId: "U1", ownerId: "password:c1", role: "member", due: 3 }],
+  );
+  const sql = calls[0][1] as { values: unknown[] };
+  assert.equal(calls[0][0], "$queryRaw");
+  assert.deepEqual(sql.values, [now, japanDay, 100]);
+});

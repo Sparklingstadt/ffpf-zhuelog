@@ -31,13 +31,17 @@ const config = lineConfig();
 const openAi = openAiConfig();
 const links = createLineLinkStore(prisma);
 
-// The bot's log codes for what went wrong (Go logged these as warnings); the
-// others are routine.
-const FAILURE_CODES = new Set([
+// The bot's log codes that Go logged at Warn. They go to console.error, as
+// Go's other warnings do in the web (the unrecorded AI usage, for one); the
+// others are routine (Go's Info) and go to console.info.
+const WARNING_CODES = new Set([
   "LINE_REPLY_FAILED",
   "LINE_PUSH_FAILED",
   "LINE_THROTTLE_RESET_FAILED",
+  "LINE_EVENT_WITHOUT_ID",
+  "LINE_MESSAGE_SETTLED",
   "LINE_REVIEW_NOTIFY_QUOTA_UNKNOWN",
+  "LINE_REVIEW_NOTIFY_LIMITED",
   "LINE_REVIEW_NOTIFY_PUSH_FAILED",
 ]);
 
@@ -94,7 +98,7 @@ export const lineBot =
           hashCode: hashLinkCode,
           now: () => new Date(Math.trunc(Date.now())),
           log: (code, fields) =>
-            FAILURE_CODES.has(code)
+            WARNING_CODES.has(code)
               ? console.error(code, fields ?? {})
               : console.info(code, fields ?? {}),
         });

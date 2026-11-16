@@ -90,7 +90,7 @@ test("without LINE the webhook does not exist", async () => {
   }
 });
 
-test("an unsigned or wrongly signed webhook is refused before anything is read", async () => {
+test("an unsigned or wrongly signed webhook is refused after its body is read but before it is parsed", async () => {
   for (const signature of [null, "", sign("other body")]) {
     const h = harness();
     const { request } = webhook(twoEventBody, signature);

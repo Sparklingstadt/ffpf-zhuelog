@@ -93,7 +93,10 @@ function cookieValue(headers: Headers, name: string): string | undefined {
 }
 
 // The LINE webhook and the cron routes carry no session cookie: they check
-// their own credential (the LINE signature, the cron secret).
+// their own credential (the LINE signature, the cron secret). Every route
+// under /api/cron/ is public here, so each one must check the bearer secret
+// itself through handleCronRequest. The prefix is kept on purpose: stage 10b
+// adds /api/cron/demo-reset.
 function isPublicRoute(pathname: string): boolean {
   return (
     pathname === "/signin" ||
