@@ -193,17 +193,6 @@ func actAs(w http.ResponseWriter, r *http.Request, a Auth, p auth.Principal, val
 	return acting, true
 }
 
-// notActing answers 403 while an admin acts as a member.
-func notActing(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if principalFrom(r.Context()).ActorID != "" {
-			writeForbidden(w, msgNotWhileActing)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
 // RateLimiter is a fixed-window limiter keyed by an arbitrary string.
 type RateLimiter struct {
 	mu        sync.Mutex

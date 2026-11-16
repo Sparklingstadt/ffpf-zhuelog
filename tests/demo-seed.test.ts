@@ -25,9 +25,9 @@ const fixture: unknown = JSON.parse(
   ),
 );
 
-// Written by Go (services/api/demo/golden_test.go,
-// go test ./demo -run TestSeedGolden -update): what demo.Seed gives for each
-// reset time, without the random UUIDs.
+// Written by Go before its demo package was removed (stage 10b; it is now a
+// fixed file): what demo.Seed gave for each reset time, without the random
+// UUIDs.
 const golden: { cases: { now: string; seed: unknown }[] } = JSON.parse(
   readFileSync(
     join(import.meta.dirname, "fixtures", "demo-seed-golden.json"),

@@ -4,29 +4,22 @@
 
 ## 一覧
 
-> **LINE のルートについて**：Web の画面と webhook は段階 10a で Web に移り、Go の `/v1/line/*` は段階 10b で消えます（それまでは Go もまだ答えます）。
+> **LINE とデモのリセットについて**：LINE の webhook・連携・拾い直しとデモのリセットは Web（段階 10）が受け持ちます。Go の `/v1/line/*` と `/v1/cron/demo-reset` は段階 10b で消えました。
 
-権限の列：「公開」は認証不要（LINE のルートは、括弧の中の別の方法で確かめます。LINE の設定が無いときは `/v1/line/*` の 7 つが `404`）、「全員」は admin と会員（ゲストは `403`。`GET /v1/me` だけ「ゲストも」）、「会員・admin」は会員と admin のどちらも使えるもの（ゲストは `403`）。会員だけ、admin だけのルートは、Go にはもうありません。
+権限の列：「公開」は認証不要、「全員（ゲストも）」は admin・会員・ゲストのだれでも使えるものです。認証が要るルートは、Go にはもう `GET /v1/me` しかありません。
 
-| メソッド | パス                                                               | 権限                  | 成功 | 内容                                               |
-| -------- | ------------------------------------------------------------------ | --------------------- | ---- | -------------------------------------------------- |
-| POST     | [`/v1/auth/github`](./auth.md#post-v1-auth-github)                 | 公開                  | 200  | GitHub ログイン                                    |
-| POST     | [`/v1/auth/ffpf`](./auth.md#post-v1-auth-ffpf)                     | 公開                  | 200  | FFPF ID ログイン                                   |
-| POST     | [`/v1/auth/guest`](./auth.md#post-v1-auth-guest)                   | 公開                  | 200  | ゲストログイン                                     |
-| POST     | [`/v1/auth/password`](./auth.md#post-v1-auth-password)             | 公開                  | 200  | パスワードログイン                                 |
-| POST     | [`/v1/auth/refresh`](./auth.md#post-v1-auth-refresh)               | 公開                  | 200  | トークンのローテーション                           |
-| POST     | [`/v1/auth/logout`](./auth.md#post-v1-auth-logout)                 | 公開                  | 204  | ログアウト                                         |
-| GET      | [`/v1/me`](./auth.md#get-v1-me)                                    | 全員（ゲストも）      | 200  | 自分の情報                                         |
-| POST     | [`/v1/line/webhook`](./line.md#post-v1-line-webhook)               | 公開（LINE の署名）   | 200  | LINE からの通知を受けて添削・翻訳                  |
-| GET      | [`/v1/line/link`](./line.md#get-v1-line-link)                      | 会員・admin           | 200  | LINE と連携しているか                              |
-| POST     | [`/v1/line/link-code`](./line.md#post-v1-line-link-code)           | 会員・admin           | 200  | LINE の連携コードを出す                            |
-| DELETE   | [`/v1/line/link`](./line.md#delete-v1-line-link)                   | 会員・admin           | 204  | LINE の連携を解除                                  |
-| PUT      | [`/v1/line/review-notify`](./line.md#put-v1-line-review-notify)    | 会員・admin           | 200  | 復習のお知らせを受け取る                           |
-| DELETE   | [`/v1/line/review-notify`](./line.md#delete-v1-line-review-notify) | 会員・admin           | 200  | 復習のお知らせを止める                             |
-| GET      | [`/v1/line/drain`](./line.md#get-v1-line-drain)                    | 公開（`CRON_SECRET`） | 204  | 残ったメッセージの拾い直しと復習のお知らせ（Cron） |
-| GET      | [`/health`](./health.md)                                           | 公開                  | 200  | DB まで含めたヘルスチェック                        |
-| GET      | [`/healthz`](./health.md)                                          | 公開                  | 200  | `/health` と同じ（ローカル用）                     |
-| GET      | [`/ping`](./health.md)                                             | 公開                  | 200  | DB を見ない死活監視用                              |
+| メソッド | パス                                                   | 権限             | 成功 | 内容                           |
+| -------- | ------------------------------------------------------ | ---------------- | ---- | ------------------------------ |
+| POST     | [`/v1/auth/github`](./auth.md#post-v1-auth-github)     | 公開             | 200  | GitHub ログイン                |
+| POST     | [`/v1/auth/ffpf`](./auth.md#post-v1-auth-ffpf)         | 公開             | 200  | FFPF ID ログイン               |
+| POST     | [`/v1/auth/guest`](./auth.md#post-v1-auth-guest)       | 公開             | 200  | ゲストログイン                 |
+| POST     | [`/v1/auth/password`](./auth.md#post-v1-auth-password) | 公開             | 200  | パスワードログイン             |
+| POST     | [`/v1/auth/refresh`](./auth.md#post-v1-auth-refresh)   | 公開             | 200  | トークンのローテーション       |
+| POST     | [`/v1/auth/logout`](./auth.md#post-v1-auth-logout)     | 公開             | 204  | ログアウト                     |
+| GET      | [`/v1/me`](./auth.md#get-v1-me)                        | 全員（ゲストも） | 200  | 自分の情報                     |
+| GET      | [`/health`](./health.md)                               | 公開             | 200  | DB まで含めたヘルスチェック    |
+| GET      | [`/healthz`](./health.md)                              | 公開             | 200  | `/health` と同じ（ローカル用） |
+| GET      | [`/ping`](./health.md)                                 | 公開             | 200  | DB を見ない死活監視用          |
 
 ## 共通の決まり
 

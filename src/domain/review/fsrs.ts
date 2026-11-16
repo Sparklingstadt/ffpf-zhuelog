@@ -2,7 +2,8 @@
 // go-fsrs v4.0.0 (github.com/open-spaced-repetition/go-fsrs) with its default
 // parameters, the short-term ("basic") scheduler and no fuzz. Nothing here is
 // random, so the same card and time give the same answer as Go; the golden
-// file Go writes (tests/fixtures/fsrs-golden.json) holds both to it.
+// file Go wrote before its review package was removed (stage 10b;
+// tests/fixtures/fsrs-golden.json) holds it to that. It is now a fixed file.
 
 // 0 new, 1 learning, 2 review, 3 relearning (go-fsrs's numbers).
 export type FsrsState = 0 | 1 | 2 | 3;

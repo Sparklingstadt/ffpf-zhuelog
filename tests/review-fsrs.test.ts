@@ -11,9 +11,8 @@ import {
   nextFsrsDues,
 } from "../src/domain/review/fsrs";
 
-// Written by Go (services/api/review/golden_test.go,
-// go test ./review -run TestGolden -update): what go-fsrs gives for each
-// answer of each case.
+// Written by Go before its review package was removed (stage 10b; it is now
+// a fixed file): what go-fsrs gives for each answer of each case.
 type GoldenCard = {
   due: string;
   stability: number;

@@ -13,12 +13,8 @@ import (
 	"time"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
-	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/demo"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/httpapi"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/httpclient"
-	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/learning"
-	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/line"
-	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/linebot"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
 
@@ -43,61 +39,11 @@ func main() {
 	}
 }
 
-// newNoRedirectHTTPClient builds a client for a third-party API. It never
+// newGitHubHTTPClient builds the client used to talk to GitHub. It never
 // follows redirects, so a request body or header that carries a secret cannot
 // be replayed to a redirect target.
-func newNoRedirectHTTPClient(timeout time.Duration) *http.Client {
-	return httpclient.NoRedirect(nil, timeout)
-}
-
-// newGitHubHTTPClient builds the client used to talk to GitHub.
 func newGitHubHTTPClient() *http.Client {
-	return newNoRedirectHTTPClient(10 * time.Second)
-}
-
-// memberChecker is the part of *store.Store ownerValid needs.
-type memberChecker interface {
-	MemberExists(ctx context.Context, ownerID string) (bool, error)
-}
-
-// ownerValid reports whether a linked owner may still use the LINE bot: an
-// admin must still be on the allowlist and a member must still exist. Any
-// other role (guests included) is never valid.
-func ownerValid(allow auth.Allowlist, members memberChecker) linebot.OwnerCheck {
-	return func(ctx context.Context, ownerID, role string) (bool, error) {
-		switch role {
-		case auth.RoleAdmin:
-			return allow.Allows(ownerID), nil
-		case auth.RoleMember:
-			return members.MemberExists(ctx, ownerID)
-		}
-		return false, nil
-	}
-}
-
-// newLineService wires the LINE bot: OpenAI for the text, LINE for the
-// messages. Both clients refuse redirects because their requests carry keys.
-// OpenAI's own 20 s limit applies per generation.
-func newLineService(cfg Config, db *store.Store, allow auth.Allowlist, logger *slog.Logger) *linebot.Service {
-	messenger := &line.Client{
-		HTTP:        newNoRedirectHTTPClient(10 * time.Second),
-		BaseURL:     cfg.LineAPIBaseURL,
-		AccessToken: cfg.LineChannelAccessToken,
-	}
-	return &linebot.Service{
-		Store: db,
-		Generator: &learning.OpenAI{
-			HTTP:    newNoRedirectHTTPClient(20 * time.Second),
-			BaseURL: cfg.OpenAIBaseURL,
-			APIKey:  cfg.OpenAIAPIKey,
-			Model:   cfg.OpenAILearningModel,
-		},
-		Messenger:  messenger,
-		Quota:      messenger,
-		OwnerValid: ownerValid(allow, db),
-		Usage:      db,
-		Logger:     logger,
-	}
+	return httpclient.NoRedirect(nil, 10*time.Second)
 }
 
 // run serves the API until ctx is cancelled, then shuts down gracefully. When
@@ -133,12 +79,11 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 		})
 	}
 
-	allowlist := auth.ParseAllowlist(cfg.AllowedGitHubIDs)
 	service := &auth.Service{
 		Store:     db,
 		Signer:    auth.NewSigner(cfg.JWTSecret, time.Now),
 		GitHub:    githubApps,
-		Allowlist: allowlist,
+		Allowlist: auth.ParseAllowlist(cfg.AllowedGitHubIDs),
 		Passwords: passwords,
 
 		DemoLoginID: cfg.DemoLoginID,
@@ -164,18 +109,6 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 
 		WebProxySecret: cfg.WebProxySecret,
 		Throttle:       db,
-		// The cron secret guards the LINE drain and the demo reset.
-		CronSecret: cfg.CronSecret,
-	}
-	// Without DEMO_LOGIN_ID there is no demo and no reset route.
-	if cfg.DemoLoginID != "" {
-		deps.DemoReset = &demo.Resetter{Store: db, LoginID: cfg.DemoLoginID}
-	}
-	// Without the LINE settings the routes stay unregistered (404). Line is
-	// assigned only here so it is a nil interface, not a nil *linebot.Service.
-	if cfg.LineEnabled() {
-		deps.Line = newLineService(cfg, db, allowlist, logger)
-		deps.LineChannelSecret = cfg.LineChannelSecret
 	}
 	handler := httpapi.NewRouter(deps)
 

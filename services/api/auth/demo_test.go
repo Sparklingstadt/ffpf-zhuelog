@@ -78,53 +78,6 @@ func TestLoginDemoIsThrottledPerClient(t *testing.T) {
 	}
 }
 
-func TestIsDemo(t *testing.T) {
-	f := newFixture()
-	f.svc.DemoLoginID = "demo"
-	f.store.addAccount("cdemo", "demo", "unused", 0)
-	f.store.addAccount("calice", "alice", "pw", 0)
-	ctx := context.Background()
-	demo := store.MemberOwnerID("cdemo")
-
-	cases := []struct {
-		name string
-		p    Principal
-		want bool
-	}{
-		{"the demo account", Principal{OwnerID: demo, Role: RoleMember}, true},
-		{"another member", Principal{OwnerID: store.MemberOwnerID("calice"), Role: RoleMember}, false},
-		{"an admin acting as the demo", Principal{OwnerID: demo, Role: RoleAdmin, ActorID: "42"}, false},
-		{"an admin", Principal{OwnerID: "42", Role: RoleAdmin}, false},
-		{"a guest", Principal{OwnerID: GuestOwnerID, Role: RoleGuest}, false},
-		{"an FFPF ID member", Principal{OwnerID: store.FfpfOwnerID("cdemo"), Role: RoleMember}, false},
-		{"a deleted account", Principal{OwnerID: store.MemberOwnerID("cgone"), Role: RoleMember}, false},
-	}
-	for _, c := range cases {
-		got, err := f.svc.IsDemo(ctx, c.p)
-		if err != nil || got != c.want {
-			t.Errorf("%s: IsDemo = %v, %v; want %v", c.name, got, err, c.want)
-		}
-	}
-
-	// With the demo turned off, an account the reset made stays the demo
-	// (its sessions may still be live); one that merely has the old loginId
-	// does not.
-	f.svc.DemoLoginID = ""
-	if got, _ := f.svc.IsDemo(ctx, Principal{OwnerID: demo, Role: RoleMember}); got {
-		t.Error("IsDemo is true for a password account with the demo turned off")
-	}
-	f.store.accounts["demo"].PasswordHash = store.DemoPasswordHash
-	if got, _ := f.svc.IsDemo(ctx, Principal{OwnerID: demo, Role: RoleMember}); !got {
-		t.Error("the reset's account is not the demo with the demo turned off")
-	}
-
-	f.svc.DemoLoginID = "demo"
-	f.store.findAccountErr = errors.New("db down")
-	if _, err := f.svc.IsDemo(ctx, Principal{OwnerID: demo, Role: RoleMember}); err == nil {
-		t.Error("a store error was swallowed")
-	}
-}
-
 func TestMeReportsTheDemo(t *testing.T) {
 	f := newFixture()
 	f.svc.DemoLoginID = "demo"

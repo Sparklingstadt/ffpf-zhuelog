@@ -1,8 +1,8 @@
 // The demo account's data, built from the fixture (demo-fixture.json, a copy
-// of Go's services/api/demo/seed.json) with its dates made relative to the
-// reset, as Go's demo package builds it (services/api/demo/demo.go). The
-// golden file Go writes (tests/fixtures/demo-seed-golden.json) holds both to
-// the same seed.
+// of Go's former services/api/demo/seed.json) with its dates made relative to
+// the reset, as Go's demo package built it. The golden file Go wrote before
+// that package was removed (stage 10b; tests/fixtures/demo-seed-golden.json,
+// now a fixed file) holds it to the same seed.
 
 import { type FsrsCard, newFsrsCard, nextFsrsCard } from "../review/fsrs";
 

@@ -19,8 +19,7 @@ func TestNoRouteAcceptsUserParam(t *testing.T) {
 		return auth.Principal{OwnerID: testOwner, Role: auth.RoleAdmin}, nil
 	}}
 	d := Deps{
-		Auth: a,
-		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret,
+		Auth:   a,
 		Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
 	}.withDefaults()
 	mux, routes := newMux(d)
@@ -47,15 +46,11 @@ func TestNoRouteAcceptsUserParam(t *testing.T) {
 // TestPublicRouteSetIsExactlyTheKnownRoutes pins the routes that are not
 // behind requireAuth. Both the route table and real behaviour are checked: a
 // request without a token must get 401 on every route except these, so a
-// private route registered with public(...) by mistake fails here. The two
-// LINE routes are public but check their own credential (a signature, the
-// cron secret), so an anonymous request is expected to get 401 from them;
-// their credential checks are tested in line_handlers_test.go.
+// private route registered with public(...) by mistake fails here.
 func TestPublicRouteSetIsExactlyTheKnownRoutes(t *testing.T) {
 	d := Deps{
-		Auth: &fakeAuth{},
-		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret,
-		DemoReset: &fakeDemoReset{}, Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
+		Auth:   &fakeAuth{},
+		Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
 	}.withDefaults()
 	mux, routes := newMux(d)
 	h := wrap(d, jsonMuxErrors(mux))
@@ -72,14 +67,6 @@ func TestPublicRouteSetIsExactlyTheKnownRoutes(t *testing.T) {
 		"POST /v1/auth/guest",
 		"GET /v1/auth/demo",
 		"POST /v1/auth/demo",
-		"POST /v1/line/webhook",
-		"GET /v1/line/drain",
-		"GET /v1/cron/demo-reset",
-		"POST /v1/cron/demo-reset",
-	}
-	selfAuthenticated := map[string]bool{
-		"POST /v1/line/webhook": true, "GET /v1/line/drain": true,
-		"GET /v1/cron/demo-reset": true, "POST /v1/cron/demo-reset": true,
 	}
 	isPublic := map[string]bool{}
 	for _, p := range want {
@@ -94,12 +81,6 @@ func TestPublicRouteSetIsExactlyTheKnownRoutes(t *testing.T) {
 		}
 		method, path, _ := strings.Cut(rt.pattern, " ")
 		w := do(h, method, paths.Replace(path), "", nil)
-		if selfAuthenticated[rt.pattern] {
-			if w.Code != http.StatusUnauthorized {
-				t.Errorf("%s: no credential got %d, want 401", rt.pattern, w.Code)
-			}
-			continue
-		}
 		if isPublic[rt.pattern] {
 			if w.Code == http.StatusUnauthorized {
 				t.Errorf("%s: public route answered 401 without a token", rt.pattern)
@@ -125,8 +106,7 @@ func TestRoutesRejectGuests(t *testing.T) {
 		return auth.Principal{OwnerID: auth.GuestOwnerID, Role: auth.RoleGuest}, nil
 	}}
 	d := Deps{
-		Auth: a,
-		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret,
+		Auth:   a,
 		Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
 	}.withDefaults()
 	mux, routes := newMux(d)

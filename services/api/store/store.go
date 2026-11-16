@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -116,6 +117,17 @@ func secureURL(rawURL string) (string, string, error) {
 
 	u.RawQuery = q.Encode()
 	return u.String(), schema, nil
+}
+
+// dbtx is satisfied by both *pgxpool.Pool and pgx.Tx.
+type dbtx interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
+// dbTime converts t to what TIMESTAMP(3) columns store: UTC, millisecond precision.
+func dbTime(t time.Time) time.Time {
+	return t.UTC().Truncate(time.Millisecond)
 }
 
 // Ping checks that the database is reachable.

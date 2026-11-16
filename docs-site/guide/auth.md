@@ -79,7 +79,6 @@ admin は、認証つきのリクエストに `X-Zhuelog-Act-As: <会員の owne
 - 確かめる順番：トークンの確認とゲストの判定の後、admin でなければ `403 forbidden`（「他の人として操作できるのは管理者だけです。」）、ヘッダーが 2 つ以上・値が `^password:[a-z0-9]{1,64}$` に合わない（空・admin の ID・`guest` を含む）なら `400 invalid_request`、その会員がいなければ `404 not_found`（「会員が見つかりません。」）。
 - なれるのは会員だけです。admin やゲストにはなれません。
 - `GET /v1/me` は、`ownerId` に会員の `ownerId` を返し、`actingAs: {ownerId, loginId, displayName}` を付けます（[リファレンス](../reference/auth.md#get-v1-me)）。
-- LINE の連携（`/v1/line/link`・`/v1/line/link-code`）は、なりすまし中は `403 forbidden`（「会員として操作している間は使えません。」）です。admin の LINE が会員に結び付かないようにするためです（Web の「LINE 連携」画面は、なりすまし中は `/` に戻します。Go のこのルートは段階 10b で消えます）。
 - なりすましが通ったリクエストごとに、admin の ID・会員の `ownerId`・パスをログに出します。
 
 ## トークン

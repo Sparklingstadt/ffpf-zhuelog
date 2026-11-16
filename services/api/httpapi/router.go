@@ -30,7 +30,6 @@ type Auth interface {
 	ActAs(ctx context.Context, p auth.Principal, ownerID string) (auth.Principal, error)
 	DemoEnabled() bool
 	LoginDemo(ctx context.Context, client string) (auth.TokenPair, error)
-	IsDemo(ctx context.Context, p auth.Principal) (bool, error)
 }
 
 // Throttle is the fixed-window counter in the database (*store.Store), so a
@@ -57,15 +56,6 @@ type Deps struct {
 	// Throttle counts the per-client limits of the sign-in routes and of
 	// refresh; nil counts them in this process only (local runs and tests).
 	Throttle Throttle
-	// Line serves the LINE routes; nil means LINE is not configured and the
-	// routes are not registered. LineChannelSecret verifies webhook
-	// signatures and CronSecret guards GET /v1/line/drain.
-	Line              LineService
-	LineChannelSecret []byte
-	CronSecret        []byte
-	// DemoReset puts the demo account back to its fixture; nil (no demo)
-	// leaves its cron route out. CronSecret guards it.
-	DemoReset DemoResetter
 }
 
 const (
@@ -84,8 +74,6 @@ type route struct {
 	// allowGuest lets guest tokens through requireAuth. It is the only place
 	// that records it: every other authed route answers guests with 403.
 	allowGuest bool
-	// closedToDemo answers the demo account with 403 (see notDemo).
-	closedToDemo bool
 }
 
 // NewRouter builds the API handler with all middleware applied.
@@ -114,7 +102,6 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	r.authRoutes()
 	r.demoRoutes()
 	r.meRoute()
-	r.lineRoutes()
 	return r.mux, r.routes
 }
 
@@ -153,17 +140,6 @@ func (r *registrar) handle(rt route, h http.Handler) {
 // public registers a route that needs no authentication.
 func (r *registrar) public(pattern string, h http.Handler) { r.handle(route{pattern: pattern}, h) }
 
-// authed requires a valid token and rejects ?user= with 400; the safe default.
-func (r *registrar) authed(h http.Handler) http.Handler {
-	return requireAuth(r.d.Auth, false, rejectUserParam(h))
-}
-
-// notForDemo registers an authed route the demo account may not use: one
-// that changes the account (the LINE link).
-func (r *registrar) notForDemo(pattern string, h http.Handler) {
-	r.handle(route{pattern: pattern, authed: true, closedToDemo: true}, r.authed(notDemo(r.d.Auth, h)))
-}
-
 func (r *registrar) healthRoutes() {
 	// /health checks the database too; /healthz is kept for local use.
 	health := healthz(r.d.DB)
@@ -187,18 +163,12 @@ func (r *registrar) authRoutes() {
 	r.public("POST /v1/auth/guest", r.limited(requireProxySecret(r.d.WebProxySecret, loginGuest(a))))
 }
 
-// demoRoutes: whether the demo account exists (for the sign-in page), a
-// session for it (no password and only from the web, like guests), and its
-// nightly reset when a DemoReset is configured.
+// demoRoutes: whether the demo account exists (for the sign-in page) and a
+// session for it (no password and only from the web, like guests). The web
+// resets the account every night (stage 10b of the Go retirement).
 func (r *registrar) demoRoutes() {
 	r.public("GET /v1/auth/demo", demoStatus(r.d.Auth))
 	r.public("POST /v1/auth/demo", r.limited(requireProxySecret(r.d.WebProxySecret, loginDemo(r.d.Auth, r.clientKey))))
-	if r.d.DemoReset != nil {
-		// Vercel Cron calls with GET; POST is for running it by hand.
-		reset := demoReset(r.d.DemoReset, r.d.CronSecret, r.d.Now)
-		r.public("GET "+demoResetPath, reset)
-		r.public("POST "+demoResetPath, reset)
-	}
 }
 
 // meRoute is the only route guests may call: it tells the web who is signed
@@ -206,25 +176,6 @@ func (r *registrar) demoRoutes() {
 func (r *registrar) meRoute() {
 	r.handle(route{pattern: "GET /v1/me", authed: true, allowGuest: true},
 		requireAuth(r.d.Auth, true, rejectUserParam(me(r.d.Auth))))
-}
-
-// lineRoutes exist only when the bot is configured. The webhook and the drain
-// are public but check their own credential (the LINE signature, the cron
-// secret); the link routes are for members and admins, and closed while an
-// admin acts as a member, so the admin's LINE account is never tied to the
-// member.
-func (r *registrar) lineRoutes() {
-	l := r.d.Line
-	if l == nil {
-		return
-	}
-	r.public("POST "+lineWebhookPath, lineWebhook(l, r.d.LineChannelSecret, r.d.Now))
-	r.public("GET "+lineDrainPath, lineDrain(l, r.d.CronSecret, r.d.Now))
-	r.notForDemo("GET /v1/line/link", notActing(lineLinked(l)))
-	r.notForDemo("POST /v1/line/link-code", notActing(lineLinkCode(l)))
-	r.notForDemo("DELETE /v1/line/link", notActing(lineUnlink(l)))
-	r.notForDemo("PUT /v1/line/review-notify", notActing(lineReviewNotify(l, true)))
-	r.notForDemo("DELETE /v1/line/review-notify", notActing(lineReviewNotify(l, false)))
 }
 
 func ping() http.Handler {
