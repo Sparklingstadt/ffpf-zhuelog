@@ -29,11 +29,16 @@ async function main() {
   // Explicit values take precedence over .env.local/.env.production.local.
   const env: NodeJS.ProcessEnv = {
     ...process.env,
-    // For prisma migrate deploy; the web itself reads no database.
+    // For prisma migrate deploy, and read by the web at runtime (who is
+    // signed in).
     DATABASE_URL: databaseUrl,
     AUTH_URL: baseURL,
     GO_API_URL: goApiURL,
     API_WEB_PROXY_SECRET: goProxySecret(),
+    // The web verifies the Go API's access tokens itself.
+    API_JWT_SECRET: goJwtSecret(),
+    AUTH_ALLOWED_GITHUB_IDS: "10001", // adminOwnerId in fixtures.ts
+    DEMO_LOGIN_ID: demoLoginId,
     // Only shows the GitHub button; the e2e never completes a GitHub login.
     AUTH_GITHUB_ID: "e2e-client",
     LINE_OFFICIAL_ACCOUNT_ID: "@393bohaw",

@@ -112,7 +112,7 @@ export function isMetadataFile(pathname: string): boolean {
 }
 
 // Only checks that a session cookie exists; pages confirm it with
-// GET /v1/me. Returns null to pass.
+// the web's own token check. Returns null to pass.
 function gate(request: NextRequest, signedIn: boolean): NextResponse | null {
   const pathname = request.nextUrl.pathname;
   if (isPublicRoute(pathname) || signedIn) return null;
