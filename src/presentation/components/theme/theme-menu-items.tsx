@@ -10,7 +10,7 @@ import {
   getThemeSnapshot,
   setThemePreference,
   subscribeToTheme,
-} from "@/infrastructure/theme/browser-theme-store";
+} from "@/composition/browser-preferences";
 
 const options = [
   { value: "system", label: "システム", Icon: Monitor },

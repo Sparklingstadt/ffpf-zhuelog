@@ -6,8 +6,7 @@ import {
   getCurrentViewerUser,
   memberAccounts,
 } from "@/composition/identity-container";
-import { GoApiError } from "@/infrastructure/go-api/client";
-import { goFailureMessage } from "@/presentation/controllers/action-state";
+import { attemptGo } from "@/presentation/controllers/action-state";
 import { accountForbiddenMessage } from "@/presentation/presenters/account-action-errors";
 
 export type LineLinkState =
@@ -26,23 +25,15 @@ async function getLinkOwner() {
 export async function issueLineLinkCodeAction(): Promise<LineLinkState> {
   if (!(await getLinkOwner()))
     return { status: "error", message: accountForbiddenMessage };
-  try {
-    const issued = await memberAccounts.issueLineLinkCode();
-    return {
-      status: "issued",
-      code: issued.code,
-      expiresAt: issued.expiresAt.toISOString(),
-    };
-  } catch (error) {
-    // Anything but a Go failure (including Next's redirect) is rethrown.
-    if (!(error instanceof GoApiError)) throw error;
-    if (error.status === 403)
-      return { status: "error", message: accountForbiddenMessage };
-    return {
-      status: "error",
-      message: goFailureMessage("LINE_LINK_CODE_FAILED", error),
-    };
-  }
+  const issued = await attemptGo("LINE_LINK_CODE_FAILED", () =>
+    memberAccounts.issueLineLinkCode(),
+  );
+  if (!issued.ok) return { status: "error", message: issued.message };
+  return {
+    status: "issued",
+    code: issued.value.code,
+    expiresAt: issued.value.expiresAt.toISOString(),
+  };
 }
 
 export async function unlinkLineAction(): Promise<void> {
@@ -65,23 +56,16 @@ export async function setLineReviewNotifyAction(
   if (!(await getLinkOwner()))
     return { status: "error", message: accountForbiddenMessage };
   const on = formData.get("on") === "1";
-  try {
-    const saved = await memberAccounts.setLineReviewNotify(on);
-    if (!saved)
-      return {
-        status: "error",
-        message:
-          "お知らせを切り替えられませんでした。LINE と連携しているか、ページを読み込み直して確かめてください。",
-      };
-    revalidatePath("/account/line");
-    return { status: "saved", on };
-  } catch (error) {
-    if (!(error instanceof GoApiError)) throw error;
-    if (error.status === 403)
-      return { status: "error", message: accountForbiddenMessage };
+  const saved = await attemptGo("LINE_REVIEW_NOTIFY_FAILED", () =>
+    memberAccounts.setLineReviewNotify(on),
+  );
+  if (!saved.ok) return { status: "error", message: saved.message };
+  if (!saved.value)
     return {
       status: "error",
-      message: goFailureMessage("LINE_REVIEW_NOTIFY_FAILED", error),
+      message:
+        "お知らせを切り替えられませんでした。LINE と連携しているか、ページを読み込み直して確かめてください。",
     };
-  }
+  revalidatePath("/account/line");
+  return { status: "saved", on };
 }

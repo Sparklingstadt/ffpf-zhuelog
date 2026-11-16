@@ -173,8 +173,12 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 		Vocabulary:         db,
 		StudyLog:           db,
 		AIUsage:            db,
-		WebProxySecret:     cfg.WebProxySecret,
-		Throttle:           db,
+		// Saved conversations and question notes stay readable without
+		// OpenAI; only the routes that call it need the streamers below.
+		Conversations:  db,
+		Questions:      db,
+		WebProxySecret: cfg.WebProxySecret,
+		Throttle:       db,
 		// The cron secret guards the LINE drain and the demo reset.
 		CronSecret: cfg.CronSecret,
 	}
@@ -200,8 +204,6 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 			HTTP: newNoRedirectHTTPClient(65 * time.Second), BaseURL: cfg.OpenAIBaseURL,
 			APIKey: cfg.OpenAIAPIKey, Model: cfg.OpenAIChatModel, Instructions: chat.QuickQuestionPrompt, RequireComplete: true,
 		}
-		deps.Questions = db
-		deps.Conversations = db
 		// OpenAI's own 20 s limit applies per draft.
 		deps.VocabularyDrafter = &learning.OpenAI{
 			HTTP:    newNoRedirectHTTPClient(20 * time.Second),

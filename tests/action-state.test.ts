@@ -5,6 +5,7 @@ import { GoApiError } from "../src/infrastructure/go-api/client";
 import {
   actionSuccess,
   actionUnauthorized,
+  attemptGo,
   attemptGoAction,
   attemptGoResult,
   goFailureMessage,
@@ -109,6 +110,44 @@ test("Go helpers rethrow anything that is not a Go failure", async () => {
   );
   await assert.rejects(
     attemptGoAction("C", async () => {
+      throw redirect;
+    }),
+    redirect,
+  );
+});
+
+test("attemptGo returns the value, or a message for each Go failure", async (t) => {
+  const logged = captureErrors(t);
+  assert.deepEqual(await attemptGo("C", async () => 42), {
+    ok: true,
+    value: 42,
+  });
+  assert.deepEqual(
+    await attemptGo("C", async () => {
+      throw new GoApiError(403, "forbidden");
+    }),
+    { ok: false, message: accountForbiddenMessage },
+  );
+  assert.deepEqual(
+    await attemptGo(
+      "C",
+      async () => {
+        throw new GoApiError(404, "not_found");
+      },
+      { notFound: "ありません。" },
+    ),
+    { ok: false, message: "ありません。" },
+  );
+  assert.deepEqual(
+    await attemptGo("ISSUE_FAILED", async () => {
+      throw new GoApiError(500, "internal");
+    }),
+    { ok: false, message: genericErrorMessage },
+  );
+  assert.deepEqual(logged, [["ISSUE_FAILED", 500, "internal"]]);
+  const redirect = new Error("NEXT_REDIRECT");
+  await assert.rejects(
+    attemptGo("C", async () => {
       throw redirect;
     }),
     redirect,

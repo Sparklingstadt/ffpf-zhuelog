@@ -114,9 +114,12 @@ type Deps struct {
 	Line              LineService
 	LineChannelSecret []byte
 	CronSecret        []byte
-	// Chat serves the admin chat and its saved conversations; nil means
-	// OpenAI is not configured and the routes are not registered. ChatModel
-	// is the model name the conversation list reports.
+	// Conversations and Questions keep the saved conversations and question
+	// notes; with them alone the notes can be read (and conversations
+	// deleted). Chat and QuickChat call OpenAI and are nil when it is not
+	// configured, which leaves out sending a message, asking a question and
+	// saving either. ChatModel is the model name the lists report ("" without
+	// OpenAI, which the web reads as "the chat is off").
 	Chat          ChatStreamer
 	Conversations Conversations
 	ChatModel     string
@@ -181,180 +184,303 @@ func (d Deps) withDefaults() Deps {
 }
 
 // newMux registers every route and returns the mux with the route table. d
-// must already have its defaults applied.
+// must already have its defaults applied. Each feature registers its own
+// routes; a feature whose collaborator is nil is left out (404).
 func newMux(d Deps) (*http.ServeMux, []route) {
-	mux := http.NewServeMux()
-	var routes []route
-	handle := func(rt route, h http.Handler) {
-		routes = append(routes, rt)
-		mux.Handle(rt.pattern, h)
-	}
-	// public registers a route that needs no authentication.
-	public := func(pattern string, h http.Handler) { handle(route{pattern: pattern}, h) }
-	// limited applies the per-client rate limit.
-	limiter := newLimiter(d.Throttle, "route:auth:", authRateLimit, authRateWindow, d.Now)
-	clientKey := clientKeyFunc(d.WebProxySecret)
-	limited := func(h http.Handler) http.Handler { return rateLimit(limiter, clientKey, h) }
-	// refreshLimited is the separate per-client limit for POST /v1/auth/refresh.
-	refreshLimiter := newLimiter(d.Throttle, "route:refresh:", refreshRateLimit, authRateWindow, d.Now)
-	refreshLimited := func(h http.Handler) http.Handler { return rateLimit(refreshLimiter, clientKey, h) }
-	// authed requires a valid token and rejects ?user= with 400; the safe default.
-	authed := func(h http.Handler) http.Handler { return requireAuth(d.Auth, false, rejectUserParam(h)) }
-	// authedAllowUser requires a valid token and lets read handlers honour ?user=.
-	authedAllowUser := func(h http.Handler) http.Handler { return requireAuth(d.Auth, false, h) }
-	// adminOnly is authed plus a 403 for non-admins.
-	adminOnly := func(h http.Handler) http.Handler { return authed(requireAdmin(h)) }
-	// private registers an authed route; privateReadUser one that accepts ?user=.
-	private := func(pattern string, h http.Handler) { handle(route{pattern: pattern, authed: true}, h) }
-	privateReadUser := func(pattern string, h http.Handler) {
-		handle(route{pattern: pattern, authed: true, allowUser: true}, h)
-	}
-	// notForDemo registers an authed route the demo account may not use: one
-	// that calls OpenAI, reaches other members or changes the account. h is
-	// the handler before authentication; authed (or wrap) goes around it.
-	notForDemo := func(pattern string, wrap func(http.Handler) http.Handler, h http.Handler) {
-		handle(route{pattern: pattern, authed: true, closedToDemo: true}, wrap(notDemo(d.Auth, h)))
-	}
+	r := newRegistrar(d)
+	r.healthRoutes()
+	r.authRoutes()
+	r.demoRoutes()
+	r.meRoute()
+	r.entryRoutes()
+	r.memberRoutes()
+	r.accountRoutes()
+	r.adminRoutes()
+	r.practiceRecordRoutes()
+	r.reviewRoutes()
+	r.vocabularyRoutes()
+	r.studyLogRoutes()
+	r.lineRoutes()
+	r.conversationRoutes()
+	r.questionRoutes()
+	return r.mux, r.routes
+}
 
+// registrar holds the mux, the route table and the wrappers every feature
+// registers its routes with.
+type registrar struct {
+	d      Deps
+	mux    *http.ServeMux
+	routes []route
+
+	clientKey func(*http.Request) string
+	// limited applies the per-client /v1/auth/* rate limit; refreshLimited is
+	// the separate, looser one for POST /v1/auth/refresh.
+	limited        func(http.Handler) http.Handler
+	refreshLimited func(http.Handler) http.Handler
+}
+
+func newRegistrar(d Deps) *registrar {
+	clientKey := clientKeyFunc(d.WebProxySecret)
+	limiter := newLimiter(d.Throttle, "route:auth:", authRateLimit, authRateWindow, d.Now)
+	refreshLimiter := newLimiter(d.Throttle, "route:refresh:", refreshRateLimit, authRateWindow, d.Now)
+	return &registrar{
+		d:              d,
+		mux:            http.NewServeMux(),
+		clientKey:      clientKey,
+		limited:        func(h http.Handler) http.Handler { return rateLimit(limiter, clientKey, h) },
+		refreshLimited: func(h http.Handler) http.Handler { return rateLimit(refreshLimiter, clientKey, h) },
+	}
+}
+
+func (r *registrar) handle(rt route, h http.Handler) {
+	r.routes = append(r.routes, rt)
+	r.mux.Handle(rt.pattern, h)
+}
+
+// public registers a route that needs no authentication.
+func (r *registrar) public(pattern string, h http.Handler) { r.handle(route{pattern: pattern}, h) }
+
+// authed requires a valid token and rejects ?user= with 400; the safe default.
+func (r *registrar) authed(h http.Handler) http.Handler {
+	return requireAuth(r.d.Auth, false, rejectUserParam(h))
+}
+
+// private registers an authed route.
+func (r *registrar) private(pattern string, h http.Handler) {
+	r.handle(route{pattern: pattern, authed: true}, r.authed(h))
+}
+
+// privateReadUser registers an authed route whose handler honours ?user=.
+func (r *registrar) privateReadUser(pattern string, h http.Handler) {
+	r.handle(route{pattern: pattern, authed: true, allowUser: true}, requireAuth(r.d.Auth, false, h))
+}
+
+// adminOnly registers an authed route that answers non-admins with 403.
+func (r *registrar) adminOnly(pattern string, h http.Handler) { r.private(pattern, requireAdmin(h)) }
+
+// notForDemo registers an authed route the demo account may not use: one
+// that calls OpenAI, reaches other members or changes the account.
+func (r *registrar) notForDemo(pattern string, h http.Handler) {
+	r.notForDemoWrapped(pattern, r.authed, h)
+}
+
+// notForDemoWrapped is notForDemo with its own wrapper instead of authed; h
+// is the handler before authentication and wrap goes around it.
+func (r *registrar) notForDemoWrapped(pattern string, wrap func(http.Handler) http.Handler, h http.Handler) {
+	r.handle(route{pattern: pattern, authed: true, closedToDemo: true}, wrap(notDemo(r.d.Auth, h)))
+}
+
+// trackAI records the OpenAI tokens h uses under feature.
+func (r *registrar) trackAI(feature string, h http.Handler) http.Handler {
+	return trackAIUsage(r.d.AIUsage, feature, r.d.Now, h)
+}
+
+func (r *registrar) healthRoutes() {
 	// /health checks the database too; /healthz is kept for local use.
-	health := healthz(d.DB)
-	public("GET /health", health)
-	public("GET /healthz", health)
+	health := healthz(r.d.DB)
+	r.public("GET /health", health)
+	r.public("GET /healthz", health)
 	// /ping does not touch the database, for frequent liveness checks (for
 	// example a container health check): a DB check every few seconds would
 	// keep Neon from ever suspending.
-	public("GET /ping", ping())
+	r.public("GET /ping", ping())
+}
 
-	public("POST /v1/auth/github", limited(loginGitHub(d.Auth)))
-	public("POST /v1/auth/ffpf", limited(loginFFPF(d.Auth)))
-	public("POST /v1/auth/password", limited(loginPassword(d.Auth, clientKey)))
-	public("POST /v1/auth/refresh", refreshLimited(refresh(d.Auth)))
-	public("POST /v1/auth/logout", limited(logout(d.Auth)))
+func (r *registrar) authRoutes() {
+	a := r.d.Auth
+	r.public("POST /v1/auth/github", r.limited(loginGitHub(a)))
+	r.public("POST /v1/auth/ffpf", r.limited(loginFFPF(a)))
+	r.public("POST /v1/auth/password", r.limited(loginPassword(a, r.clientKey)))
+	r.public("POST /v1/auth/refresh", r.refreshLimited(refresh(a)))
+	r.public("POST /v1/auth/logout", r.limited(logout(a)))
 	// With a proxy secret configured, only the web server may start guest
 	// sessions; without one (local development) anyone may.
-	public("POST /v1/auth/guest", limited(requireProxySecret(d.WebProxySecret, loginGuest(d.Auth))))
-	// The demo account: whether it exists (for the sign-in page) and a
-	// session for it, with no password and only from the web, like guests.
-	public("GET /v1/auth/demo", demoStatus(d.Auth))
-	public("POST /v1/auth/demo", limited(requireProxySecret(d.WebProxySecret, loginDemo(d.Auth, clientKey))))
-	if d.DemoReset != nil {
+	r.public("POST /v1/auth/guest", r.limited(requireProxySecret(r.d.WebProxySecret, loginGuest(a))))
+}
+
+// demoRoutes: whether the demo account exists (for the sign-in page), a
+// session for it (no password and only from the web, like guests), and its
+// nightly reset when a DemoReset is configured.
+func (r *registrar) demoRoutes() {
+	r.public("GET /v1/auth/demo", demoStatus(r.d.Auth))
+	r.public("POST /v1/auth/demo", r.limited(requireProxySecret(r.d.WebProxySecret, loginDemo(r.d.Auth, r.clientKey))))
+	if r.d.DemoReset != nil {
 		// Vercel Cron calls with GET; POST is for running it by hand.
-		reset := demoReset(d.DemoReset, d.CronSecret, d.Now)
-		public("GET "+demoResetPath, reset)
-		public("POST "+demoResetPath, reset)
+		reset := demoReset(r.d.DemoReset, r.d.CronSecret, r.d.Now)
+		r.public("GET "+demoResetPath, reset)
+		r.public("POST "+demoResetPath, reset)
 	}
+}
 
-	// The only route guests may call: it tells the web who is signed in.
-	handle(route{pattern: "GET /v1/me", authed: true, allowGuest: true},
-		requireAuth(d.Auth, true, rejectUserParam(me(d.Auth))))
+// meRoute is the only route guests may call: it tells the web who is signed
+// in.
+func (r *registrar) meRoute() {
+	r.handle(route{pattern: "GET /v1/me", authed: true, allowGuest: true},
+		requireAuth(r.d.Auth, true, rejectUserParam(me(r.d.Auth))))
+}
 
+// entryRoutes are the learning notes, their log dates, CSV import and the
+// trash.
+func (r *registrar) entryRoutes() {
+	e, now := r.d.Entries, r.d.Now
 	// Only these five read routes accept ?user=; every other authed route
 	// rejects it with 400 so it can never be mistaken for being honoured.
-	privateReadUser("GET /v1/entries", authedAllowUser(listEntries(d.Entries)))
-	privateReadUser("GET /v1/entries/{id}", authedAllowUser(getEntry(d.Entries)))
-	privateReadUser("GET /v1/log-dates", authedAllowUser(listLogDates(d.Entries)))
-	privateReadUser("GET /v1/log-dates/{date}/entries", authedAllowUser(listDailyEntries(d.Entries)))
-	privateReadUser("GET /v1/log-dates/{date}/entries/{number}", authedAllowUser(getDailyEntry(d.Entries)))
+	r.privateReadUser("GET /v1/entries", listEntries(e))
+	r.privateReadUser("GET /v1/entries/{id}", getEntry(e))
+	r.privateReadUser("GET /v1/log-dates", listLogDates(e))
+	r.privateReadUser("GET /v1/log-dates/{date}/entries", listDailyEntries(e))
+	r.privateReadUser("GET /v1/log-dates/{date}/entries/{number}", getDailyEntry(e))
 
-	private("POST /v1/batches", authed(createBatch(d.Entries, d.Now)))
+	r.private("POST /v1/batches", createBatch(e, now))
 	// CSV import into the caller's own notes (admin and member). Its body
 	// limit is 4 MiB + 256 KiB instead of 1 MiB; see limitBody.
-	private("POST "+csvImportPath, authed(importCSV(d.Entries, d.Now)))
-	private("PATCH /v1/entries/{id}", authed(patchEntry(d.Entries)))
-	private("DELETE /v1/entries/{id}", authed(deleteEntry(d.Entries, d.Now)))
-	private("GET /v1/trash", authed(listTrash(d.Entries)))
-	private("DELETE /v1/trash", authed(emptyTrash(d.Entries)))
-	private("POST /v1/trash/{id}/restore", authed(restoreEntry(d.Entries)))
-	private("DELETE /v1/trash/{id}", authed(purgeEntry(d.Entries)))
-	// Sharing and following reach other members, so the demo account (shared
-	// by strangers) has neither.
-	notForDemo("PUT /v1/entries/{id}/share", authed, shareEntry(d.Entries, d.Now, true))
-	notForDemo("DELETE /v1/entries/{id}/share", authed, shareEntry(d.Entries, d.Now, false))
-	notForDemo("GET /v1/members", authed, listMembers(d.Follows))
-	notForDemo("PUT /v1/follows/{ownerId}", authed, followMember(d.Follows, d.Now))
-	notForDemo("DELETE /v1/follows/{ownerId}", authed, unfollowMember(d.Follows))
-	notForDemo("GET /v1/timeline", authed, listTimeline(d.Follows))
+	r.private("POST "+csvImportPath, importCSV(e, now))
+	r.private("PATCH /v1/entries/{id}", patchEntry(e))
+	r.private("DELETE /v1/entries/{id}", deleteEntry(e, now))
+	r.private("GET /v1/trash", listTrash(e))
+	r.private("DELETE /v1/trash", emptyTrash(e))
+	r.private("POST /v1/trash/{id}/restore", restoreEntry(e))
+	r.private("DELETE /v1/trash/{id}", purgeEntry(e))
+}
+
+// memberRoutes are sharing, the member directory, follows and the timeline.
+// They reach other members, so the demo account (shared by strangers) has
+// none of them.
+func (r *registrar) memberRoutes() {
+	e, f, now := r.d.Entries, r.d.Follows, r.d.Now
+	r.notForDemo("PUT /v1/entries/{id}/share", shareEntry(e, now, true))
+	r.notForDemo("DELETE /v1/entries/{id}/share", shareEntry(e, now, false))
+	r.notForDemo("GET /v1/members", listMembers(f))
+	r.notForDemo("PUT /v1/follows/{ownerId}", followMember(f, now))
+	r.notForDemo("DELETE /v1/follows/{ownerId}", unfollowMember(f))
+	r.notForDemo("GET /v1/timeline", listTimeline(f))
+}
+
+func (r *registrar) accountRoutes() {
 	// Changing a password checks the current one, so it shares the /v1/auth/*
 	// limit. The limit runs before authentication so failed tokens count too.
-	notForDemo("POST /v1/account/password", func(h http.Handler) http.Handler { return limited(authed(h)) }, changePassword(d.Auth))
-	// Admin-only member management. Passwords are hashed with the shared
-	// scrypt semaphore and are never logged.
-	private("GET /v1/admin/accounts", adminOnly(listAccounts(d.Accounts)))
-	private("POST /v1/admin/accounts", adminOnly(createAccount(d.Accounts, d.Hasher, d.Now)))
-	private("POST /v1/admin/accounts/{id}/password", adminOnly(resetAccountPassword(d.Accounts, d.Hasher, d.Now)))
-	if d.AIUsage != nil {
-		private("GET /v1/admin/ai-usage", adminOnly(aiUsageMonth(d.AIUsage, d.Now)))
-	}
+	r.notForDemoWrapped("POST /v1/account/password",
+		func(h http.Handler) http.Handler { return r.limited(r.authed(h)) }, changePassword(r.d.Auth))
+}
 
-	// Finished rounds of preposition practice, for members and admins.
-	// Guests may practice in the web, but nothing of theirs is saved.
-	private("GET /v1/preposition-records", authed(listPracticeRecords(prepositionPractice(d.PrepositionRecords))))
-	private("GET /v1/preposition-records/{id}", authed(getPracticeRecord(prepositionPractice(d.PrepositionRecords))))
-	private("PUT /v1/preposition-records/{id}", authed(putPracticeRecord(prepositionPractice(d.PrepositionRecords), d.Reviews, d.Now)))
-
-	private("GET /v1/complement-records", authed(listPracticeRecords(complementPractice(d.ComplementRecords))))
-	private("GET /v1/complement-records/{id}", authed(getPracticeRecord(complementPractice(d.ComplementRecords))))
-	private("PUT /v1/complement-records/{id}", authed(putPracticeRecord(complementPractice(d.ComplementRecords), d.Reviews, d.Now)))
-
-	// Today's reviews, for members and admins, and the learning notes they
-	// put in them (always their own; a note in the trash is 404).
-	if d.Reviews != nil {
-		private("GET /v1/reviews/due", authed(listDueReviews(d.Reviews, d.Now)))
-		private("GET /v1/reviews/count", authed(countDueReviews(d.Reviews, d.Now)))
-		private("GET /v1/reviews/entries", authed(listEntriesInReview(d.Reviews)))
-		private("POST /v1/reviews/{itemId}", authed(answerReview(d.Reviews, d.Now)))
-		private("GET /v1/entries/{id}/review", authed(entryReviewStatus(d.Reviews)))
-		private("PUT /v1/entries/{id}/review", authed(addEntryReview(d.Reviews, d.Now)))
-		private("DELETE /v1/entries/{id}/review", authed(removeEntryReview(d.Reviews)))
+// adminRoutes are member management (passwords are hashed with the shared
+// scrypt semaphore and are never logged) and, when recorded, the AI usage
+// summary.
+func (r *registrar) adminRoutes() {
+	r.adminOnly("GET /v1/admin/accounts", listAccounts(r.d.Accounts))
+	r.adminOnly("POST /v1/admin/accounts", createAccount(r.d.Accounts, r.d.Hasher, r.d.Now))
+	r.adminOnly("POST /v1/admin/accounts/{id}/password", resetAccountPassword(r.d.Accounts, r.d.Hasher, r.d.Now))
+	if r.d.AIUsage != nil {
+		r.adminOnly("GET /v1/admin/ai-usage", aiUsageMonth(r.d.AIUsage, r.d.Now))
 	}
+}
 
-	// The vocabulary book, for members and admins.
-	if d.Vocabulary != nil {
-		private("GET /v1/vocabulary", authed(listVocabulary(d.Vocabulary)))
-		private("PUT /v1/vocabulary/{id}", authed(putVocabulary(d.Vocabulary, d.Now)))
-		private("DELETE /v1/vocabulary/{id}", authed(deleteVocabulary(d.Vocabulary)))
-	}
-	// The study log, for members and admins.
-	if d.StudyLog != nil {
-		private("GET /v1/study-log", authed(listStudyLog(d.StudyLog)))
-	}
-	if d.VocabularyDrafter != nil {
-		notForDemo("POST /v1/vocabulary/draft", authed, trackAIUsage(d.AIUsage, aiusage.FeatureVocabularyDraft, d.Now, draftVocabulary(d.VocabularyDrafter)))
-	}
+// practiceRecordRoutes keep finished rounds of preposition and complement
+// practice, for members and admins. Guests may practice in the web, but
+// nothing of theirs is saved.
+func (r *registrar) practiceRecordRoutes() {
+	prep := prepositionPractice(r.d.PrepositionRecords)
+	r.private("GET /v1/preposition-records", listPracticeRecords(prep))
+	r.private("GET /v1/preposition-records/{id}", getPracticeRecord(prep))
+	r.private("PUT /v1/preposition-records/{id}", putPracticeRecord(prep, r.d.Reviews, r.d.Now))
 
-	// The LINE routes exist only when the bot is configured. The webhook and
-	// the drain are public but check their own credential (the LINE signature,
-	// the cron secret); the three link routes are for members and admins, and
-	// closed while an admin acts as a member, so the admin's LINE account is
-	// never tied to the member.
-	if d.Line != nil {
-		public("POST "+lineWebhookPath, lineWebhook(d.Line, d.LineChannelSecret, d.Now))
-		public("GET "+lineDrainPath, lineDrain(d.Line, d.CronSecret, d.Now))
-		notForDemo("GET /v1/line/link", authed, notActing(lineLinked(d.Line)))
-		notForDemo("POST /v1/line/link-code", authed, notActing(lineLinkCode(d.Line)))
-		notForDemo("DELETE /v1/line/link", authed, notActing(lineUnlink(d.Line)))
-		notForDemo("PUT /v1/line/review-notify", authed, notActing(lineReviewNotify(d.Line, true)))
-		notForDemo("DELETE /v1/line/review-notify", authed, notActing(lineReviewNotify(d.Line, false)))
-	}
+	comp := complementPractice(r.d.ComplementRecords)
+	r.private("GET /v1/complement-records", listPracticeRecords(comp))
+	r.private("GET /v1/complement-records/{id}", getPracticeRecord(comp))
+	r.private("PUT /v1/complement-records/{id}", putPracticeRecord(comp, r.d.Reviews, r.d.Now))
+}
 
-	// The chat, for members and admins (guests get 403 from requireAuth),
-	// exists only when OpenAI is configured.
-	if d.Chat != nil {
-		notForDemo("POST /v1/chat", authed, trackAIUsage(d.AIUsage, aiusage.FeatureChat, d.Now, streamChat(d.Chat)))
-		private("GET /v1/conversations", authed(listConversations(d.Conversations, d.ChatModel)))
-		private("GET /v1/conversations/{id}", authed(getConversation(d.Conversations)))
-		private("PUT /v1/conversations/{id}", authed(putConversation(d.Conversations, d.Now)))
-		private("DELETE /v1/conversations/{id}", authed(deleteConversation(d.Conversations)))
+// reviewRoutes are today's reviews, for members and admins, and the learning
+// notes they put in them (always their own; a note in the trash is 404).
+func (r *registrar) reviewRoutes() {
+	rv, now := r.d.Reviews, r.d.Now
+	if rv == nil {
+		return
 	}
+	r.private("GET /v1/reviews/due", listDueReviews(rv, now))
+	r.private("GET /v1/reviews/count", countDueReviews(rv, now))
+	r.private("GET /v1/reviews/entries", listEntriesInReview(rv))
+	r.private("POST /v1/reviews/{itemId}", answerReview(rv, now))
+	r.private("GET /v1/entries/{id}/review", entryReviewStatus(rv))
+	r.private("PUT /v1/entries/{id}/review", addEntryReview(rv, now))
+	r.private("DELETE /v1/entries/{id}/review", removeEntryReview(rv))
+}
 
-	if d.QuickChat != nil && d.Questions != nil {
-		notForDemo("POST /v1/quick-question", authed, trackAIUsage(d.AIUsage, aiusage.FeatureQuickQuestion, d.Now, streamMessages(d.QuickChat, true)))
-		private("GET /v1/questions", authed(listQuestions(d.Questions, d.ChatModel)))
-		private("GET /v1/questions/{id}", authed(getQuestion(d.Questions)))
-		private("PUT /v1/questions/{id}", authed(putQuestion(d.Questions, d.ChatModel, d.Now)))
+// vocabularyRoutes are the vocabulary book, for members and admins, and the
+// OpenAI draft of a word when OpenAI is configured.
+func (r *registrar) vocabularyRoutes() {
+	if v := r.d.Vocabulary; v != nil {
+		r.private("GET /v1/vocabulary", listVocabulary(v))
+		r.private("PUT /v1/vocabulary/{id}", putVocabulary(v, r.d.Now))
+		r.private("DELETE /v1/vocabulary/{id}", deleteVocabulary(v))
 	}
+	if r.d.VocabularyDrafter != nil {
+		r.notForDemo("POST /v1/vocabulary/draft", r.trackAI(aiusage.FeatureVocabularyDraft, draftVocabulary(r.d.VocabularyDrafter)))
+	}
+}
 
-	return mux, routes
+// studyLogRoutes are the study log, for members and admins.
+func (r *registrar) studyLogRoutes() {
+	if r.d.StudyLog != nil {
+		r.private("GET /v1/study-log", listStudyLog(r.d.StudyLog))
+	}
+}
+
+// lineRoutes exist only when the bot is configured. The webhook and the drain
+// are public but check their own credential (the LINE signature, the cron
+// secret); the link routes are for members and admins, and closed while an
+// admin acts as a member, so the admin's LINE account is never tied to the
+// member.
+func (r *registrar) lineRoutes() {
+	l := r.d.Line
+	if l == nil {
+		return
+	}
+	r.public("POST "+lineWebhookPath, lineWebhook(l, r.d.LineChannelSecret, r.d.Now))
+	r.public("GET "+lineDrainPath, lineDrain(l, r.d.CronSecret, r.d.Now))
+	r.notForDemo("GET /v1/line/link", notActing(lineLinked(l)))
+	r.notForDemo("POST /v1/line/link-code", notActing(lineLinkCode(l)))
+	r.notForDemo("DELETE /v1/line/link", notActing(lineUnlink(l)))
+	r.notForDemo("PUT /v1/line/review-notify", notActing(lineReviewNotify(l, true)))
+	r.notForDemo("DELETE /v1/line/review-notify", notActing(lineReviewNotify(l, false)))
+}
+
+// conversationRoutes are the chat with ChatGPT and its saved conversations,
+// for members and admins (guests get 403 from requireAuth). Reading and
+// deleting saved conversations needs only the store, so they stay readable
+// when OpenAI is not configured (ChatModel is then "", which tells the web
+// the chat itself is off); sending a message and saving one exist only with
+// OpenAI.
+func (r *registrar) conversationRoutes() {
+	if cs := r.d.Conversations; cs != nil {
+		r.private("GET /v1/conversations", listConversations(cs, r.d.ChatModel))
+		r.private("GET /v1/conversations/{id}", getConversation(cs))
+		r.private("DELETE /v1/conversations/{id}", deleteConversation(cs))
+	}
+	if r.d.Chat == nil {
+		return
+	}
+	r.notForDemo("POST /v1/chat", r.trackAI(aiusage.FeatureChat, streamChat(r.d.Chat)))
+	if cs := r.d.Conversations; cs != nil {
+		r.private("PUT /v1/conversations/{id}", putConversation(cs, r.d.Now))
+	}
+}
+
+// questionRoutes are quick questions and the question notes they leave, like
+// conversationRoutes: the notes stay readable without OpenAI; asking and
+// saving exist only with it.
+func (r *registrar) questionRoutes() {
+	qs := r.d.Questions
+	if qs == nil {
+		return
+	}
+	r.private("GET /v1/questions", listQuestions(qs, r.d.ChatModel))
+	r.private("GET /v1/questions/{id}", getQuestion(qs))
+	if r.d.QuickChat != nil {
+		r.notForDemo("POST /v1/quick-question", r.trackAI(aiusage.FeatureQuickQuestion, streamMessages(r.d.QuickChat, true)))
+		r.private("PUT /v1/questions/{id}", putQuestion(qs, r.d.ChatModel, r.d.Now))
+	}
 }
 
 func ping() http.Handler {

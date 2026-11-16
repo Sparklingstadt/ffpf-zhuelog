@@ -12,7 +12,7 @@ import {
   getServerExamplePinyinSnapshot,
   setExamplePinyinPreference,
   subscribeToExamplePinyin,
-} from "@/infrastructure/preferences/example-pinyin-store";
+} from "@/composition/browser-preferences";
 import {
   draftVocabularyAction,
   saveVocabularyAction,

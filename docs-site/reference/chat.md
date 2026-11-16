@@ -1,6 +1,6 @@
 # 会話練習
 
-会員と管理者が ChatGPT（OpenAI）と中国語の会話練習をし、その会話を会話ノートとして保存するためのルートです。`OPENAI_API_KEY` が無いときは、このページのルートはすべて `404 not_found` で、API は普通に起動します。
+会員と管理者が ChatGPT（OpenAI）と中国語の会話練習をし、その会話を会話ノートとして保存するためのルートです。`OPENAI_API_KEY` が無いときも、保存済みの会話ノートの読み出しと削除（`GET /v1/conversations`、`GET /v1/conversations/{id}`、`DELETE /v1/conversations/{id}`）は使えます（一覧の `chatModel` は空文字）。OpenAI を呼ぶ `POST /v1/chat` は `404 not_found`、保存の `PUT /v1/conversations/{id}` は `405 method_not_allowed` になり、API は普通に起動します。
 
 - 使えるのは会員と admin です。ゲストは `403`（`forbidden`）です。
 - 会話は、いつもトークンの持ち主のものです。`?user=` は受け付けません（`400`）。
@@ -84,7 +84,7 @@
 }
 ```
 
-`chatModel` は、`POST /v1/chat` が今使うモデルの名前です。`ended` は、上限に達して読むだけになった会話です。
+`chatModel` は、`POST /v1/chat` が今使うモデルの名前です。`OPENAI_API_KEY` が無いときは空文字です（Web はこれで会話を始められないことを知ります）。`ended` は、上限に達して読むだけになった会話です。
 
 ## GET /v1/conversations/{id}
 

@@ -1,6 +1,6 @@
 # クイック質問と質問ノート
 
-中国語学習の疑問を1回だけ質問し、質問と回答を質問ノートに残します。会話ノートとは独立した記録です。会員と管理者が自分のノートを利用でき、ゲストは `403`、`?user=` は `400` になります。`OPENAI_API_KEY` が未設定の場合は各ルートが `404` になります。
+中国語学習の疑問を1回だけ質問し、質問と回答を質問ノートに残します。会話ノートとは独立した記録です。会員と管理者が自分のノートを利用でき、ゲストは `403`、`?user=` は `400` になります。`OPENAI_API_KEY` が未設定でも、保存済みの質問ノートは `GET /v1/questions` と `GET /v1/questions/{id}` で読めます（一覧の `chatModel` は空文字）。そのときOpenAIを呼ぶ `POST /v1/quick-question` は `404`、保存の `PUT /v1/questions/{id}` は `405` になります。
 
 ## POST /v1/quick-question
 
@@ -22,7 +22,7 @@
 
 ## GET /v1/questions
 
-`{ "chatModel": "...", "questions": [...] }` を返します。質問ノートは保存日時の新しい順に最新100件。各項目には `id`、`question`、`modelName`、`createdAt` があり、回答本文は含みません。
+`{ "chatModel": "...", "questions": [...] }` を返します。`chatModel` は `OPENAI_API_KEY` が無いときは空文字です。質問ノートは保存日時の新しい順に最新100件。各項目には `id`、`question`、`modelName`、`createdAt` があり、回答本文は含みません。
 
 ## GET /v1/questions/{id}
 
