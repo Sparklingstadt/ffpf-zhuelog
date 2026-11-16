@@ -6,7 +6,7 @@ import {
   Sparkles,
   TextCursorInput,
 } from "lucide-react";
-import { useId, useState, type FormEvent } from "react";
+import { useId, type FormEvent } from "react";
 
 import { VOCABULARY_LIMITS } from "@/domain/vocabulary/vocabulary-entry";
 import type {
@@ -15,18 +15,14 @@ import type {
 } from "@/presentation/actions/vocabulary-actions";
 import { Button } from "@/presentation/components/ui/button";
 import { Input } from "@/presentation/components/ui/input";
+import { useVocabularyDraft } from "@/presentation/components/vocabulary/use-vocabulary-draft";
 import { cn } from "@/presentation/lib/utils";
-
-type Status =
-  | { kind: "idle" }
-  | { kind: "drafting" | "saving" }
-  | { kind: "saved"; word: string }
-  | { kind: "error"; message: string };
 
 // Picks a word into the vocabulary book. The word comes from the user (typed,
 // or the text selected on the page); AI drafts its pinyin and meaning from
 // the word and the sentence it came from, and the user edits both before
-// saving. The id is made here, so a retried save keeps one word.
+// saving. The word and its draft live in useVocabularyDraft; this draws the
+// fields and reads the page's selection.
 export function VocabularyAddForm({
   sentence = "",
   sourceEntryId,
@@ -53,75 +49,33 @@ export function VocabularyAddForm({
   }) => Promise<SaveVocabularyResult>;
 }) {
   const ids = useId();
-  const [id, setId] = useState(() => crypto.randomUUID());
-  const [word, setWord] = useState("");
-  const [pinyin, setPinyin] = useState("");
-  const [meaning, setMeaning] = useState("");
-  const [status, setStatus] = useState<Status>({ kind: "idle" });
-  // The pinyin and meaning came from AI and are still to be checked.
-  const [drafted, setDrafted] = useState(false);
-  const busy = status.kind === "drafting" || status.kind === "saving";
+  const {
+    word,
+    pinyin,
+    meaning,
+    status,
+    drafted,
+    busy,
+    changeWord,
+    setPinyin,
+    setMeaning,
+    takeSelected,
+    draft,
+    save,
+  } = useVocabularyDraft({
+    sentence,
+    sourceEntryId,
+    draftVocabulary,
+    saveVocabulary,
+  });
 
   function takeSelection() {
-    const selected = window.getSelection()?.toString().trim() ?? "";
-    if (selected) setWord(selected.slice(0, VOCABULARY_LIMITS.word));
-    else
-      setStatus({
-        kind: "error",
-        message: "先に、文の中の語句をドラッグして選んでください。",
-      });
+    takeSelected(window.getSelection()?.toString() ?? "");
   }
 
-  async function draft() {
-    if (!word.trim()) {
-      setStatus({ kind: "error", message: "語句を入力してください。" });
-      return;
-    }
-    setStatus({ kind: "drafting" });
-    let result: DraftVocabularyResult;
-    try {
-      result = await draftVocabulary({ word, sentence });
-    } catch {
-      result = { ok: false, message: "下書きを作れませんでした。" };
-    }
-    if (!result.ok) {
-      setStatus({ kind: "error", message: result.message });
-      return;
-    }
-    setPinyin(result.pinyin);
-    setMeaning(result.meaning);
-    setDrafted(true);
-    setStatus({ kind: "idle" });
-  }
-
-  async function save(event: FormEvent) {
+  function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    setStatus({ kind: "saving" });
-    let result: SaveVocabularyResult;
-    try {
-      result = await saveVocabulary({
-        id,
-        word,
-        pinyin,
-        meaning,
-        ...(sourceEntryId ? { sourceEntryId } : {}),
-      });
-    } catch {
-      result = {
-        ok: false,
-        message: "保存できませんでした。もう一度お試しください。",
-      };
-    }
-    if (!result.ok) {
-      setStatus({ kind: "error", message: result.message });
-      return;
-    }
-    setStatus({ kind: "saved", word: word.trim() });
-    setId(crypto.randomUUID());
-    setWord("");
-    setPinyin("");
-    setMeaning("");
-    setDrafted(false);
+    void save();
   }
 
   const draftedField = drafted && "border-primary/40 bg-primary/5";
@@ -136,10 +90,7 @@ export function VocabularyAddForm({
           lang="zh-CN"
           value={word}
           maxLength={VOCABULARY_LIMITS.word}
-          onChange={(e) => {
-            setWord(e.target.value);
-            setDrafted(false);
-          }}
+          onChange={(e) => changeWord(e.target.value)}
           placeholder="例：认真"
           className={cn(
             layout === "row" ? "h-11 min-w-0 flex-1 text-lg" : "max-w-56",
@@ -243,7 +194,7 @@ export function VocabularyAddForm({
 
   if (layout === "row")
     return (
-      <form onSubmit={save} className="flex flex-col gap-3">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
         <div className="grid items-end gap-3 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.4fr)] lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.4fr)_auto]">
           {wordField}
           {pinyinField}
@@ -255,7 +206,7 @@ export function VocabularyAddForm({
     );
 
   return (
-    <form onSubmit={save} className="flex flex-col gap-4">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       {wordField}
       <div className="grid gap-4 sm:grid-cols-2">
         {pinyinField}
