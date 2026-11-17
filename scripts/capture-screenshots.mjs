@@ -3,7 +3,7 @@ import { chromium } from "@playwright/test";
 
 // Captures the README's screenshots (docs/images/) from a running local app
 // with the sample members (docs/development.md). Signs in as "demo".
-// Usage: docker compose up -d, pnpm run db:deploy, pnpm run db:seed:sample,
+// Usage: docker compose up -d --wait, pnpm run db:deploy, pnpm run db:seed:sample,
 //   pnpm run dev, then
 //   BASE_URL=http://localhost:3000 node scripts/capture-screenshots.mjs
 const base = process.env.BASE_URL ?? "http://localhost:3000";

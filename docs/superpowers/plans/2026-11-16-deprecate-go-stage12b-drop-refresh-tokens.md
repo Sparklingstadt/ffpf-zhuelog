@@ -115,11 +115,11 @@ DROP TABLE "ApiRefreshToken";
   - `git grep -nI "ApiRefreshToken\|refresh token\|リフレッシュ" -- README.md docs .env.example ':!docs/superpowers' ':!docs/releases'` の結果を 1 行ずつ読む。残ってよいのは、`docs/deployment.md` の「移行の記録」と、`docs/architecture.md` の「2.」の過去の話だけ。
   - 変えたファイルで `node_modules/.bin/prettier --check` が通る。
 - [ ] **Step 3: コミット。** `docs: ApiRefreshToken を消して Go の移行が終わったことを書く`
-- [ ] **Step 4: PR を draft で作る（コントローラー）。** 題と説明の 1 行目は判断 1 のとおり。説明には、12a の計画の「利用者が行うこと（順番）」の手順 5・6 を貼る。ready にもマージにもしない。
+- [ ] **Step 4: PR を draft で作る（コントローラー）。** 題と説明の 1 行目は判断 1 のとおり。説明には、`docs/deployment.md` の「利用者が行うことの順番（段階 12）」の手順 6・7 を貼る。ready にもマージにもしない。
 
 ## 利用者が行うこと
 
-1. 12a の計画の「利用者が行うこと（順番）」の手順 1〜5（12a のマージと promote、Web の 3 つの環境変数の削除、Go の Vercel プロジェクトの削除）が終わっていることを確かめる。
+1. `docs/deployment.md` の「利用者が行うことの順番（段階 12）」の手順 1〜6（12a のマージと promote、Web の 3 つの環境変数の削除、手元の DB の片付け、Go の Vercel プロジェクトの削除）が終わっていることを確かめる。
 2. この PR を ready にしてマージする。本番のビルドが `ApiRefreshToken` を消してから Web をビルドする。
 3. Ready になったら `vercel promote`。`docs/deployment.md` の「1. 本番の DB とマイグレーション」の手順で `migrate status` が up to date、Neon の SQL Editor で `SELECT to_regclass('"ApiRefreshToken"');` が `NULL` であることを確かめる。
 4. 次の朝、デモのリセット（`/api/cron/demo-reset`）が 200 で動いたことを、Vercel の Cron のログで確かめる。

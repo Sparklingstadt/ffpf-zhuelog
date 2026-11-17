@@ -1,6 +1,6 @@
 // Checking a finished round before it is saved, the shape it is saved in,
 // and which of its questions go to the review queue. The rules are the ones
-// the Go API had, so rows written by either side read the same.
+// the Go API had, so rows the Go API wrote earlier read the same.
 import {
   COMPLEMENT_ROUND_MODES,
   type ComplementRoundMode,

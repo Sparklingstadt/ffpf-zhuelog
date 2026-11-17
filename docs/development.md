@@ -11,7 +11,7 @@
 ```bash
 cp .env.example .env
 pnpm install --frozen-lockfile
-docker compose up -d
+docker compose up -d --wait
 pnpm run db:deploy
 pnpm run db:seed:sample   # サンプルの会員（下の表）
 pnpm run dev
