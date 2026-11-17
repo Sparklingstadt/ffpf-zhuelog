@@ -1,4 +1,4 @@
-// Mirrors services/api/auth/login_test.go (password, guest, GitHub) and
+// Mirrors the retired services/api/auth/login_test.go (password, guest, GitHub) and
 // services/api/auth/demo_test.go.
 import assert from "node:assert/strict";
 import { test } from "node:test";

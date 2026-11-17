@@ -83,7 +83,7 @@ function toEntry(row: Row, nextReview: Date | null): VocabularyEntry {
   };
 }
 
-// Reads and writes the vocabulary book the way the Go API's store does.
+// Reads and writes the vocabulary book the way the retired Go API's store did.
 export function createVocabularyStore(
   db: () => PrismaClient,
   now: () => Date = () => new Date(),

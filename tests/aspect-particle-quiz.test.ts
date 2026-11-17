@@ -48,7 +48,7 @@ test("every 了・过・着 question is well formed", () => {
     );
     assert.match(usage.prompt, /[。？！”]$/, usage.id);
     assert.ok(usage.translation.endsWith("。"), usage.id);
-    // The Go API keeps prompts of up to 100 characters.
+    // The retired Go API kept prompts of up to 100 characters.
     assert.ok([...usage.prompt].length <= 100, usage.id);
   }
 });

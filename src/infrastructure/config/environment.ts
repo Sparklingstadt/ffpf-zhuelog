@@ -123,7 +123,7 @@ const DEFAULT_LEARNING_MODEL = "gpt-5-mini";
 const DEFAULT_CHAT_MODEL = "gpt-6.1-sol";
 
 // The API key travels to the base URL, so an override must be an http(s)
-// loopback URL (for tests), as in the Go API. Without a key, or with any
+// loopback URL (for tests), as in the retired Go API. Without a key, or with any
 // other override, OpenAI is treated as not configured.
 export function openAiConfig(): OpenAiConfig | undefined {
   const apiKey = process.env.OPENAI_API_KEY?.trim();

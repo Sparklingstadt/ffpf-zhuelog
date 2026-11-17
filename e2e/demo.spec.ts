@@ -59,7 +59,7 @@ test("the demo reset needs the cron secret", async () => {
   await resetDemo("GET");
 });
 
-// Go: TestResetWithTheFixture (services/api/demo/demo_db_test.go).
+// Was Go's TestResetWithTheFixture (services/api/demo/demo_db_test.go, removed in stage 10b).
 test("the reset seeds the demo as Go did", async ({ db }) => {
   await resetDemo();
   const account = await demoAccount(db);

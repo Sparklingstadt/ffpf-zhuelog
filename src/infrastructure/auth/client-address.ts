@@ -9,8 +9,9 @@ export function clientAddress(headers: Headers): string {
 }
 
 // IPv4 as is. IPv6 by its /64 prefix, because one host usually controls a
-// whole /64. The format must match the Go API's auth.ClientAddress exactly:
-// four lowercase hex groups without leading zeros, then "::/64".
+// whole /64. The format matches the retired Go API's auth.ClientAddress exactly, so
+// the SignInThrottle keys it wrote still count: four lowercase hex groups
+// without leading zeros, then "::/64".
 export function normaliseClientAddress(raw: string): string {
   const address = raw.trim().split("%")[0]!;
   if (isIPv4(address)) return address;

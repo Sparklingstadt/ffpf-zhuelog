@@ -37,7 +37,7 @@ const FFPF_PREFIX = "ffpf:";
 export const ACT_AS_PATTERN = /^password:[a-z0-9]{1,64}$/;
 
 // Decides who is signed in from the zl_session cookie's Session row and the
-// account tables, following the Go API's Authenticate and Me
+// account tables, following the retired Go API's Authenticate and Me
 // (services/api/auth). findSession answers null for an unknown, expired,
 // deleted or malformed session. Every rule below runs on every request, so a
 // change to an account's sessionVersion or to zl_act_as applies at once. The

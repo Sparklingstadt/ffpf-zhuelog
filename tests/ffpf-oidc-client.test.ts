@@ -1,4 +1,4 @@
-// Mirrors services/api/auth/ffpf_test.go with a fake fetch and a P-256 key
+// Mirrors the retired services/api/auth/ffpf_test.go with a fake fetch and a P-256 key
 // made here; the real FFPF ID is never called.
 import assert from "node:assert/strict";
 import { generateKeyPairSync, sign, type KeyObject } from "node:crypto";
