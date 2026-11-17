@@ -492,15 +492,16 @@ curl -s -o /dev/null -w '%{http_code}' https://ffpf-zhuelog.sparklingstadt.com/a
 
 戻すとき（10b）:
 
+- 10c を出したあとは、**先に** 手順 4 の「戻すとき（10c）」に従って、Web の Cron を消します。Web の Cron が登録されたまま Go だけを戻し、Go に 7 つの値が残っていると、拾い直しが Go と Web の両方で動きます（OpenAI の呼び出しが二重になりえます）。
 - Go だけを戻すと、Go の LINE のルートと Cron が戻ります。ただし、手順 3 の 6 で上の 7 つの値を Vercel から消したあとは、戻した Go はそれらの値を読めず、LINE も Cron も動きません（消した値は Vercel から読み戻せないので、動かすなら入れ直します）。動くとすれば、値を残している間だけです。ただし、Webhook の URL は Web を向いているので、Go の Webhook は使われません。Web に Cron が無いうちは、Go の拾い直しの Cron が動いても害はありません。
 - Web だけを戻すと、デモのリセットのルートが無くなり、Go にも無いので、リセットは手でもできなくなります（デモのデータは、そのときのまま残ります）。Web を戻すなら、Go も戻します。
 - 症状の見分け方：LINE の文に返事が無く、LINE Developers の Webhook の確認が `404` なら、Webhook が Go に向いたままです（手順 2 をやり直します）。「デモで試す」が「デモは今は利用できません。」になるなら、デモのアカウントが無いので、手順 3 の `curl` でリセットします。リセットの `curl` が `404` なら、Web の `DEMO_LOGIN_ID` がありません。`401` なら、`CRON_SECRET` が違います。リセットの `curl` が `204` を返すのに「デモで試す」が「デモは今は利用できません。」になるなら、Web と Go の `DEMO_LOGIN_ID` が違います（Web がリセットしたのとは別の loginId を、Go のログインが探しています）。2 つが同じ値か確かめます。
 
 ##### 手順 4（10c のマージの前と後）
 
-手順 3 で Go を出し直したあとで、10c をマージします。この PR（10c）は、Web の `vercel.json` に `crons` を足すだけです（コードは、コメントのほかは変えません）。これで段階 10 の 4 つの手順はすべて終わり、Go に残るのはログインだけになります。
+手順 3 で Go を出し直したあとで、10c をマージします。この PR（10c）は、Web の `vercel.json` に `crons` を足すだけです（アプリのコードは、コメントのほかは変えません。テストを 1 つ足しました）。これで段階 10 の 4 つの手順はすべて終わり、Go に残るのはログインだけになります。
 
-Cron は Production のデプロイで登録されます。時刻は UTC で、`/api/cron/line-drain` は `0 21 * * *`（06:00 JST）、`/api/cron/demo-reset` は `0 19 * * *`（04:00 JST）です。Hobby の Cron は時刻が 1 時間単位で、指定の時刻から最大 59 分遅れることがあります（[Vercel の説明](https://vercel.com/docs/cron-jobs/usage-and-pricing)）。
+Cron は Production のデプロイで登録されます。時刻は UTC で、`/api/cron/line-drain` は `0 21 * * *`（06:00 JST）、`/api/cron/demo-reset` は `0 19 * * *`（04:00 JST）です。Hobby の Cron は時刻が 1 時間単位で、指定の時刻から最大 59 分遅れることがあります（[Vercel の説明](https://vercel.com/docs/schedules/cron-jobs/usage-and-pricing)）。
 
 マージの前:
 
@@ -513,13 +514,13 @@ Cron は Production のデプロイで登録されます。時刻は UTC で、`
 1. Web の Production のデプロイが Ready になるのを待ちます。
 2. `vercel promote` で、そのデプロイを本番に切り替えます（Cron は Production のデプロイで登録されます）。
 3. Web の Vercel プロジェクトの **Settings → Cron Jobs** に、ちょうど 2 つ、`/api/cron/line-drain`（`0 21 * * *`）と `/api/cron/demo-reset`（`0 19 * * *`）が出ることを確かめます。
-4. 待たずに確かめるなら、同じ画面から、それぞれの Cron を 1 回だけ実行できます（任意）。成功すると、Web のログ（Vercel の **Logs**）に、リクエストの結果として `204` が出ます。`demo-reset` は `DEMO_RESET_DONE`、`line-drain` は `LINE_REVIEW_NOTIFY_SENT`（お知らせを送ったとき）が出ます。`401` なら `CRON_SECRET` が無いか違い、`404` なら `DEMO_LOGIN_ID` か LINE の設定がありません。
+4. 待たずに確かめるなら、同じ画面から、それぞれの Cron を 1 回だけ実行できます（任意）。ただし、実行には副作用があります。`line-drain` を実行すると、本物の復習のお知らせを送り、LINE の送信数の枠を使い、その日（JST）の実行として数えられます。`demo-reset` を昼間に実行すると、今デモを試している人のデータが元に戻ります。成功すると、Web のログ（Vercel の **Logs**）に、リクエストの結果として `204` が出ます。`demo-reset` は `DEMO_RESET_DONE`、`line-drain` は `LINE_REVIEW_NOTIFY_SENT`（お知らせを送ったとき）が出ます。`401` なら `CRON_SECRET` が無いか違い、`404` なら、`demo-reset` では Web の `DEMO_LOGIN_ID` が、`line-drain` では LINE の値（`LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`OPENAI_API_KEY`）がありません。
 5. 次の朝（04:00 JST ごろと 06:00 JST ごろ。遅れても 1 時間以内）に、Web のログで、2 つの実行があったことを確かめます。
 
 戻すとき（10c）:
 
 - この PR だけを戻す（Web を戻す）と、Web の Cron が消えるだけで、ほかは動きます。拾い直しとデモのリセットが定期には動かなくなります（手で `curl` すれば呼べます）。Go に Cron は無いので、二重には動きません。
-- Go の Cron を戻したいときは、先にこの PR を戻して Web の Cron を消してから、Go を 10b の前に戻します（2 つの Cron を並べない）。
+- Go の Cron を戻したいときは、先にこの PR を戻し、戻した Web を promote して、Web の **Settings → Cron Jobs** の一覧が空になったことを確かめてから、Go を 10b の前に戻します（2 つの Cron を並べない）。
 
 ##### 戻すとき（10a）
 
