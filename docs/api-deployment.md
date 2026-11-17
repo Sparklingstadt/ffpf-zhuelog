@@ -72,7 +72,7 @@ DB への接続は、TLS で証明書まで検証します。ホストが `local
 
 ## 4. 本番の DB の確認
 
-Go API が使うテーブルは、Prisma のマイグレーションで本番の Neon に適用済みです（`ApiRefreshToken`、`SignInThrottle` など）。マイグレーションは、Web の **本番ビルド** が自動で適用します。`vercel.json` の `buildCommand` が `scripts/vercel-build.sh` を動かし、`VERCEL_ENV=production` のときだけ `prisma migrate deploy` を実行してから `next build` します（Preview のビルドは自分の Neon ブランチを使い、マイグレーションは当てません）。そのため、Web の Production には `DATABASE_URL` が必要です。無い・つながらない・DDL が失敗すると、本番の Web のデプロイが失敗します（失敗したビルドの本番は、前のバージョンのままです）。
+Go API が使うテーブルは、Prisma のマイグレーションで本番の Neon に適用済みです（`ApiRefreshToken`、`SignInThrottle` など）。段階 11a で足した `Session`（Web のログイン用。11b まで空）も、Web の本番ビルドが当てます。マイグレーションは、Web の **本番ビルド** が自動で適用します。`vercel.json` の `buildCommand` が `scripts/vercel-build.sh` を動かし、`VERCEL_ENV=production` のときだけ `prisma migrate deploy` を実行してから `next build` します（Preview のビルドは自分の Neon ブランチを使い、マイグレーションは当てません）。そのため、Web の Production には `DATABASE_URL` が必要です。無い・つながらない・DDL が失敗すると、本番の Web のデプロイが失敗します（失敗したビルドの本番は、前のバージョンのままです）。
 
 **マイグレーションの制約**: Web のデプロイで自動的に当たる一方、Go API は別のプロジェクトで、あとから手で（main をマージした後に）デプロイします。この間、DB のスキーマは新しく、動いている Go API は古いままです。そのため、マイグレーションは今動いている Go API とそのまま両立する形にします。足してよいのは、表の追加と、null を許す列（または既定値のある列）の追加だけです。列・表の削除や名前の変更、型の変更、NOT NULL の追加のような壊す変更は、2 段階に分けます（1 回目で新しい形を足して Go API を切り替え、2 回目のリリースで古い形を削除します）。
 
@@ -103,7 +103,7 @@ curl -i https://<プロジェクト>.vercel.app/health
 
 ## 6. Web の設定
 
-Web（Next.js）は、ログインも学習ノートの読み書きも Go API で行います。ただし、ログイン中の人を決めるところは Web が自分で行います。Go が出すアクセストークン（`zl_access`）を `API_JWT_SECRET` で確かめ、DB の `PasswordAccount`・`FfpfAccount` を Prisma（`src/infrastructure/prisma/`）で読み、会員の管理とパスワードの変更では `PasswordAccount`（作成・パスワードの再設定と変更）と `SignInThrottle`（パスワード変更の回数）にも書きます（Go API を畳む移行の段階 0。設計は `docs/superpowers/specs/2026-11-16-deprecate-go-backend-design.md`）。ほかのデータとログインは今も Go API を通します。仕様は `docs/superpowers/specs/2026-10-21-web-auth-via-go-api-design.md` と `docs/superpowers/specs/2026-10-22-web-data-via-go-api-design.md` にあります。
+Web（Next.js）は、ログインも学習ノートの読み書きも Go API で行います。ただし、ログイン中の人を決めるところは Web が自分で行います。Go が出すアクセストークン（`zl_access`）を `API_JWT_SECRET` で確かめ、DB の `PasswordAccount`・`FfpfAccount` を Prisma（`src/infrastructure/prisma/`）で読み、会員の管理とパスワードの変更では `PasswordAccount`（作成・パスワードの再設定と変更）と `SignInThrottle`（パスワード変更の回数）にも書きます（Go API を畳む移行の段階 0。設計は `docs/superpowers/specs/2026-11-16-deprecate-go-backend-design.md`）。ほかのデータとログインは今も Go API を通します。段階 11a で、Web が自分でログインするための部品（`Session` の表、セッションの保存、各ログインのユースケース、GitHub と FFPF ID のクライアント）を足しましたが、まだどこからも呼びません（つなぐのは 11b です）。パスワードの変更と管理者の再設定は、そのアカウントの `Session` も同じトランザクションで消します。仕様は `docs/superpowers/specs/2026-10-21-web-auth-via-go-api-design.md` と `docs/superpowers/specs/2026-10-22-web-data-via-go-api-design.md` にあります。
 
 Go API の Vercel プロジェクトには、`GITHUB_WEB_CLIENT_ID`・`GITHUB_WEB_CLIENT_SECRET`・`GITHUB_WEB_REDIRECT_URI`・`API_WEB_PROXY_SECRET` を入れておきます（上の「3. 環境変数」の表）。Web の Vercel プロジェクトに入れる値は、次の 4 つに、あとの「Web が実行時に使う DB と秘密」の 3 つ（と `DATABASE_URL`）を足したものです。
 
@@ -529,6 +529,49 @@ Cron は Production のデプロイで登録されます。時刻は UTC で、`
 - Go は、10a では何も変えていないので、戻す必要はありません。
 - ただし、10b を出したあとの Go には Webhook のルートがありません。Webhook URL を Go に戻す前に、Go も 10a の状態に戻します。
 
+#### 段階11（ログイン）のマージの前と後
+
+ログインを Go から Web に移す段階（段階11）を本番に出す順番です。2 つの PR（11a・11b）に分けました。
+
+- **11a**：ログインのセッションを置く `Session` の表と、Web がログインを行うための部品（セッションの保存、パスワード・ゲスト・デモ・GitHub・FFPF ID のログインのユースケース、GitHub と FFPF ID のクライアント）を足します。どこからも呼ばないので、ログインは Go のままです。
+- **11b**：ログインの画面とルートを、この部品につなぎます（Go から Web への切り替え）。
+- 11a の PR では、動きは何も変わりません。
+
+##### 11a のマージの前と後
+
+マージの前:
+
+- 行うことは無いです。
+- `Session` の表を足すマイグレーション（`20261117090000_add_session`）は、表と索引を作るだけで、今の Go と両立します。
+
+マージのあと:
+
+1. Web の本番のビルドが、`prisma migrate deploy` で `Session` の表を足します（「4. 本番の DB の確認」）。
+2. `migrate status` で「Database schema is up to date!」を確かめます。
+3. **Preview の Neon ブランチ**には、手で `prisma migrate deploy` を当てます（プレビューのビルドは当てません。「Web のプレビュー（Preview）」の手順です）。`DATABASE_URL=<そのブランチの direct の URL> pnpm exec prisma migrate deploy` です。当てるまでは、Preview でパスワードの変更と管理者による再設定が `500` で失敗します。この 2 つは、同じトランザクションで `Session` から消す（その人のセッションを失効させる）ためです。
+4. ログインの動きは変わりません。ログインは Go のままで、`Session` の表は空のままです。
+
+11b の前に、Web の Production に次の 2 つを入れておいてよいです（11a のコードは読みません）。
+
+- `GITHUB_WEB_CLIENT_SECRET`：Go の同じ名前の値です。Vercel から読み戻せないときは、GitHub の OAuth App の画面で **Generate a new client secret** を押して作ります。古い Secret は、11b のあと Go を出し直すまで消しません。
+- `FFPF_ID_CLIENT_SECRET`：Go と同じ値です。
+
+Preview には入れません。プレビューの URL は、GitHub と FFPF ID に登録したコールバックの URL と合わないためです。
+
+11b の準備として、11a で決めたセッションの性質を書いておきます。
+
+- セッションは固定の長さです。会員と管理者は 30 日、ゲストは 24 時間で、使っても延びません。Go の refresh のように、使うたびに延びることはありません。そのため、11b のあとは、30 日ごとにログインし直してもらうことになります。
+- 期限の切れたセッションは、ログインのたびに、最大 100 行まで消します。消すための別のジョブが要らないからです。
+
+戻すとき（11a）:
+
+- Go だけを戻しても害はありません（11a は Go を変えません）。
+- Web を戻すと、空の `Session` の表が残ります。何も読まないので、そのままで害はありません。
+
+##### 11b のマージの前と後
+
+11b の計画の Task 5 で書く。
+
 ### Web のプレビュー（Preview）
 
 PR ごとの Web のプレビューも、ログインとデータの読み書きを Go API で行います。そのため、Web の Vercel プロジェクトの **Preview** の環境変数にも、次の 4 つ（と、下の注の DB と秘密）を入れます。
@@ -631,7 +674,7 @@ FFPF ID（ffpf-portal が提供する OpenID Connect のプロバイダー）の
 採用担当など、アカウントを持たない人が会員向けの画面（学習ノート・今日の復習・単語帳・会話ノート・練習の記録）を試せるようにする機能です。ログイン画面の「デモで試す」から入ります。
 
 - アカウント：`DEMO_LOGIN_ID` の ID の、普通のパスワード会員です。パスワードのハッシュは使えない値なので、ID とパスワードではログインできません。アカウントは下のリセットが作ります（手で作る必要はありません）。
-- データ：デモを試す全員で 1 つのアカウントを共有します。毎晩 04:00（日本時間）ごろに、Web の `vercel.json` の Cron（`0 19 * * *`、UTC）が `GET /api/cron/demo-reset` を呼び、1 つのトランザクションで、デモの持ち物（学習ノートとヒント、CSV の取り込みの記録、復習の項目と記録、単語帳、会話ノート、クイック質問、練習の記録（介詞・補語）、フォロー（デモがしたものと、デモをフォローしているもの）、LINE の連携・連携コード・受け取った文）を消してから、`src/domain/demo/demo-fixture.json` の内容を、Web の FSRS で復習の項目にして入れ直します（例のデータは、Go が最後に作った内容と同じであることを `tests/fixtures/demo-seed-golden.json` で確かめています）。消さないものは、AI の利用量（`AiUsage`。管理者が費用を見る記録）とログインのセッション（`ApiRefreshToken`）です。日付は「リセットの何日前か」で書いてあるので、いつ見ても直近 7 日の記録に見えます。ログイン中のセッションは消しません。
+- データ：デモを試す全員で 1 つのアカウントを共有します。毎晩 04:00（日本時間）ごろに、Web の `vercel.json` の Cron（`0 19 * * *`、UTC）が `GET /api/cron/demo-reset` を呼び、1 つのトランザクションで、デモの持ち物（学習ノートとヒント、CSV の取り込みの記録、復習の項目と記録、単語帳、会話ノート、クイック質問、練習の記録（介詞・補語）、フォロー（デモがしたものと、デモをフォローしているもの）、LINE の連携・連携コード・受け取った文）を消してから、`src/domain/demo/demo-fixture.json` の内容を、Web の FSRS で復習の項目にして入れ直します（例のデータは、Go が最後に作った内容と同じであることを `tests/fixtures/demo-seed-golden.json` で確かめています）。消さないものは、AI の利用量（`AiUsage`。管理者が費用を見る記録）とログインのセッション（`ApiRefreshToken` と、段階 11a で足した `Session`）です。日付は「リセットの何日前か」で書いてあるので、いつ見ても直近 7 日の記録に見えます。ログイン中のセッションは消しません。
 - 使えないもの：OpenAI を呼ぶルート（Web の `POST /api/chat` と `POST /api/quick-question`）は、デモには `403`（「デモでは使えません。」）です。Web の LINE 連携の画面（`/account/line`）は `/` に戻します。パスワードの変更も、デモには使えません。断るのは Web です（Go のルートはもうありません）。フォロー・会員の一覧・タイムライン・共有（ほかの会員に届くため）は、Web が断ります（`/follow` は `/` に戻し、フォローや共有を直接送ると画面には「ログインし直してください。」と出ます）。管理者がデモとして操作しているときや、ほかの会員には当てはまりません。Web の AI のルート（単語帳の下書き・クイック質問・ChatGPT と話す）は、Web が自分でデモかどうかを確かめて断ります。Web は、自分の DB の確認（`passwordHash` が使えない値で、ログイン ID が `DEMO_LOGIN_ID` と同じ）でデモかどうかを決め、すべてのページに「デモアカウントです。…」を出し、メニューから使えない機能を外します。
 - リセットは Web が行います（段階 10b で Go から移しました。`DEMO_LOGIN_ID` が空なら、Web のルートは `404` です）。Hobby の Cron は時刻が 1 時間単位なので、04:00 から最大 59 分遅れることがあります。Vercel が `Authorization: Bearer <CRON_SECRET>` を付けて呼ぶので、Web の Production に `CRON_SECRET` が要ります。`maxDuration` は route に 30 秒と書いてあります。すぐ戻したいときは、下の `curl` で手でリセットします。
 - 手でリセットする：`curl -i -X POST https://ffpf-zhuelog.sparklingstadt.com/api/cron/demo-reset -H "Authorization: Bearer $CRON_SECRET"` が `204` を返します（`GET` でも同じです）。`CRON_SECRET` を知っている人だけが呼べます。`$CRON_SECRET` は Web の Production の値です。

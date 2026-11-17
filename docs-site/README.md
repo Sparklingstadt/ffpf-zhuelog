@@ -56,7 +56,7 @@ services/api/
 
 Web（Next.js）は、ログイン中の人の確認、単語帳、学習ノート、復習、学習ログ、AI の利用量の集計、フォロー（一覧・タイムラインを含む）、会員の管理（作成・パスワードの再設定）と自分のパスワードの変更については DB を Prisma で直接読み書きします。ログインなど、ほかのデータはこの API を通して行います。DB は本番の Neon です。
 
-- スキーマの管理は Prisma に一本化しています。Go は既存のテーブルを SQL で読み書きするだけで、テーブルの追加（API 用の `ApiRefreshToken` など）も Prisma のマイグレーションで行います。
+- スキーマの管理は Prisma に一本化しています。Go は既存のテーブルを SQL で読み書きするだけで、テーブルの追加（API 用の `ApiRefreshToken`、Web のログイン用の `Session` など）も Prisma のマイグレーションで行います。
 - Go が作る行の ID は Prisma と同じ cuid 形式なので、以前 Web が作った行と区別がつきません。
 - 日付の区切り（日本時間）、会員一覧の並び（ICU の日本語照合順）、入力の検証の文言は、以前の Web と同じにしてあります。
 - 会員のパスワードのハッシュ（`scrypt:N:r:p:salt:key`）は、Web が書き、Go のログインが確かめます。同じ形であることは `tests/fixtures/scrypt-golden.json`（Go の `password_golden_test.go` が書く）で確かめています。Web でパスワードを変える・再設定すると、ハッシュと `sessionVersion` を 1 つの `UPDATE` で変え、既存のログインがすべて無効になります。
