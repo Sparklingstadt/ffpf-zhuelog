@@ -1,5 +1,9 @@
 import { DEMO_PASSWORD_HASH } from "../../domain/identity/demo-account";
 import {
+  FFPF_SUB_PATTERN,
+  ffpfDisplayName,
+} from "../../domain/identity/ffpf-account";
+import {
   CURRENT_PASSWORD_MAX_CODE_POINTS,
   firstCodePoints,
   isPlausibleCurrentPassword,
@@ -91,6 +95,7 @@ export type SignInDeps = {
 };
 
 const PASSWORD_OWNER_PREFIX = "password:";
+const FFPF_OWNER_PREFIX = "ffpf:";
 
 function failure(reason: SignInFailure): SignInResult {
   return { ok: false, reason };
@@ -232,7 +237,9 @@ export function createSignIn(deps: SignInDeps) {
       return issue({ role: "admin", ownerId, login: outcome.user.login }, now);
     },
 
-    // Go: LoginFFPF. Filled in by the FFPF ID client's task.
+    // Go: LoginFFPF. Any verified FFPF ID account may sign in (no
+    // allowlist), as the member ffpf:<sub>; each sign-in records its email
+    // and display name and reads the account's sessionVersion.
     async withFfpf(
       input: {
         code: string;
@@ -242,10 +249,28 @@ export function createSignIn(deps: SignInDeps) {
       },
       client: string,
     ): Promise<SignInResult> {
-      void input;
       const now = deps.now();
       if (!(await withinRouteLimit(client, now))) return failure("throttled");
-      return failure("unavailable");
+      if (deps.ffpf === null) return failure("unavailable");
+      const outcome = await deps.ffpf.exchange(
+        input.code,
+        input.verifier,
+        input.redirectUri,
+        input.nonce,
+      );
+      if (!outcome.ok) return failure(outcome.reason);
+      const { sub, email, name } = outcome.user;
+      // The client already checks the sub; checked again so no client can
+      // make a malformed owner id.
+      if (!FFPF_SUB_PATTERN.test(sub)) return failure("invalid");
+      const { sessionVersion } = await deps.ffpfAccounts.upsert(
+        { id: sub, email, displayName: ffpfDisplayName(name, email) },
+        now,
+      );
+      return issue(
+        { role: "member", ownerId: FFPF_OWNER_PREFIX + sub, sessionVersion },
+        now,
+      );
     },
   };
 }

@@ -117,6 +117,17 @@ test("fetchLimited cuts the body at maxBytes", async () => {
     assert.equal(result.text.length, OAUTH_MAX_BODY_BYTES);
 });
 
+test("fetchLimited keeps a byte order mark, as Go reads the bytes as they are", async () => {
+  const { fetchFn } = recordingFetch(
+    () => new Response(new Uint8Array([0xef, 0xbb, 0xbf, 0x7b, 0x7d])),
+  );
+  const result = await fetchLimited(fetchFn, "https://idp.example/x", {
+    method: "GET",
+    headers: {},
+  });
+  assert.deepEqual(result, { status: 200, text: "\uFEFF{}" });
+});
+
 test('fetchLimited turns a network error or a timeout into "unavailable"', async () => {
   const failing = recordingFetch(() => {
     throw new TypeError("fetch failed: secret-in-cause");

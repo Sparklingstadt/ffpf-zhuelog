@@ -53,6 +53,10 @@ export function formUrlEncode(value: string): string {
   return out;
 }
 
+// Go reads the body as it is: a byte order mark is kept, so a JSON body that
+// starts with one does not parse.
+const utf8 = new TextDecoder("utf-8", { ignoreBOM: true });
+
 async function readLimited(
   response: Response,
   maxBytes: number,
@@ -106,7 +110,7 @@ export async function fetchLimited(
       response,
       options.maxBytes ?? OAUTH_MAX_BODY_BYTES,
     );
-    return { status: response.status, text: new TextDecoder().decode(bytes) };
+    return { status: response.status, text: utf8.decode(bytes) };
   } catch {
     return "unavailable";
   }

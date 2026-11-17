@@ -6,6 +6,7 @@ import { test } from "node:test";
 import {
   createSignIn,
   type ExchangeOutcome,
+  type FfpfIdentity,
   type GitHubIdentity,
   type SignInDeps,
 } from "../src/application/identity/sign-in";
@@ -26,11 +27,15 @@ function fixture({
   accounts = { alice: account("cacc1", "pw", 0) },
   demoLoginId,
   github = null,
+  ffpf = null,
+  ffpfSessionVersion = 0,
   allowedGitHubIds = new Set<string>(),
 }: {
   accounts?: Record<string, Account>;
   demoLoginId?: string;
   github?: SignInDeps["github"];
+  ffpf?: SignInDeps["ffpf"];
+  ffpfSessionVersion?: number;
   allowedGitHubIds?: ReadonlySet<string>;
 } = {}) {
   let t = start;
@@ -40,6 +45,8 @@ function fixture({
   const lookups: string[] = [];
   const hashed: string[] = [];
   const started: SessionPrincipal[] = [];
+  const upserts: [{ id: string; email: string; displayName: string }, Date][] =
+    [];
   const deps: SignInDeps = {
     throttle: {
       async consume(key: string, rule: ThrottleRule, now: Date) {
@@ -64,8 +71,9 @@ function fixture({
       },
     },
     ffpfAccounts: {
-      async upsert() {
-        throw new Error("not in this test");
+      async upsert(input, now) {
+        upserts.push([input, now]);
+        return { sessionVersion: ffpfSessionVersion };
       },
     },
     passwords: {
@@ -84,7 +92,7 @@ function fixture({
       },
     },
     github,
-    ffpf: null,
+    ffpf,
     allowedGitHubIds,
     demoLoginId,
     now: () => new Date(t),
@@ -97,6 +105,7 @@ function fixture({
     lookups,
     hashed,
     started,
+    upserts,
     count: (key: string) => counts.get(key)?.count ?? 0,
     advance(ms: number) {
       t += ms;
@@ -471,7 +480,7 @@ test("the 21st demo sign-in from one client is throttled", async () => {
   assert.equal((await f.signIn.asDemo(otherClient)).ok, true);
 });
 
-test("no GitHub client is unavailable; FFPF ID is until its client exists", async () => {
+test("no GitHub or FFPF ID client is unavailable", async () => {
   const f = fixture();
   assert.deepEqual(
     await f.signIn.withGitHub(
@@ -596,4 +605,113 @@ test("GitHub's invalid and unavailable pass through; no GitHub is unavailable", 
     reason: "unavailable",
   });
   assert.deepEqual(none.started, []);
+});
+
+// An FFPF ID client that answers `outcome` and records what it was asked.
+function fakeFfpf(outcome: ExchangeOutcome<FfpfIdentity>) {
+  const calls: [string, string, string, string][] = [];
+  return {
+    calls,
+    client: {
+      async exchange(
+        code: string,
+        verifier: string,
+        redirectUri: string,
+        nonce: string,
+      ) {
+        calls.push([code, verifier, redirectUri, nonce]);
+        return outcome;
+      },
+    },
+  };
+}
+
+const ffpfInput = {
+  code: "code",
+  verifier: "verifier",
+  redirectUri: "https://zhuelog.example/api/auth/callback/ffpf",
+  nonce: "nonce",
+};
+
+test("an FFPF ID user is upserted and signs in as ffpf:<sub> with its sessionVersion", async () => {
+  const id = fakeFfpf({
+    ok: true,
+    user: {
+      sub: "cabc123",
+      email: "alice@example.com",
+      name: "  " + "あ".repeat(51),
+    },
+  });
+  const f = fixture({ ffpf: id.client, ffpfSessionVersion: 2 });
+  assert.deepEqual(await f.signIn.withFfpf(ffpfInput, client), {
+    ok: true,
+    session: { token: "token-1", maxAgeSeconds: 2_592_000 },
+  });
+  assert.deepEqual(id.calls, [
+    [
+      ffpfInput.code,
+      ffpfInput.verifier,
+      ffpfInput.redirectUri,
+      ffpfInput.nonce,
+    ],
+  ]);
+  assert.deepEqual(f.upserts, [
+    [
+      {
+        id: "cabc123",
+        email: "alice@example.com",
+        displayName: "あ".repeat(50),
+      },
+      new Date(start),
+    ],
+  ]);
+  assert.deepEqual(f.started, [
+    { role: "member", ownerId: "ffpf:cabc123", sessionVersion: 2 },
+  ]);
+  assert.deepEqual(f.consumed, ["route:auth:203.0.113.7"]);
+
+  // A blank name stands in with the email before its "@".
+  const blank = fixture({
+    ffpf: fakeFfpf({
+      ok: true,
+      user: { sub: "cabc123", email: "alice@example.com", name: " " },
+    }).client,
+  });
+  assert.equal((await blank.signIn.withFfpf(ffpfInput, client)).ok, true);
+  assert.equal(blank.upserts[0]![0].displayName, "alice");
+});
+
+test("a sub that cannot form an owner id is invalid", async () => {
+  for (const sub of ["A/B", "", "a".repeat(65)]) {
+    const f = fixture({
+      ffpf: fakeFfpf({
+        ok: true,
+        user: { sub, email: "alice@example.com", name: "ふわ" },
+      }).client,
+    });
+    assert.deepEqual(await f.signIn.withFfpf(ffpfInput, client), {
+      ok: false,
+      reason: "invalid",
+    });
+    assert.deepEqual(f.upserts, []);
+    assert.deepEqual(f.started, []);
+  }
+});
+
+test("no FFPF ID is unavailable; its invalid and unavailable pass through", async () => {
+  const none = fixture();
+  assert.deepEqual(await none.signIn.withFfpf(ffpfInput, client), {
+    ok: false,
+    reason: "unavailable",
+  });
+  assert.deepEqual(none.consumed, ["route:auth:203.0.113.7"]);
+  for (const reason of ["invalid", "unavailable"] as const) {
+    const f = fixture({ ffpf: fakeFfpf({ ok: false, reason }).client });
+    assert.deepEqual(await f.signIn.withFfpf(ffpfInput, client), {
+      ok: false,
+      reason,
+    });
+    assert.deepEqual(f.upserts, []);
+    assert.deepEqual(f.started, []);
+  }
 });
