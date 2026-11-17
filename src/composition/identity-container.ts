@@ -1,3 +1,10 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+
+import type {
+  IssuedSession,
+  SignInResult,
+} from "@/application/identity/sign-in";
 import { RequireAdminUser } from "@/application/identity/use-cases/require-admin-user";
 import { RequireMemberUser } from "@/application/identity/use-cases/require-member-user";
 import { RequireViewerUser } from "@/application/identity/use-cases/require-viewer-user";
@@ -7,20 +14,51 @@ import {
 } from "@/application/identity/use-cases/resolve-record-owner";
 import type { AuthenticatedUser } from "@/domain/identity/entities/authenticated-user";
 import type { CurrentUserProvider } from "@/application/identity/ports/current-user-provider";
+import { clientAddress } from "@/infrastructure/auth/client-address";
 import {
-  signInAsDemoViaGo,
-  signInAsGuestViaGo,
-  signInWithFfpfViaGo,
-  signInWithGitHubViaGo,
-  signInWithPasswordViaGo,
-  signOutViaGo,
-  startActingAsViaGo,
-  stopActingViaGo,
-} from "@/infrastructure/go-api/go-api-session";
-import { isDemoAvailable } from "@/infrastructure/go-api/client";
+  createFfpfOAuthStart,
+  ffpfAuthorizeUrl,
+  ffpfRedirectUri,
+} from "@/infrastructure/auth/ffpf-oauth";
+import {
+  createOAuthStart,
+  githubAuthorizeUrl,
+  githubRedirectUri,
+  OAUTH_COOKIE_MAX_AGE,
+  publicOrigin,
+  requestOrigin,
+} from "@/infrastructure/auth/github-oauth";
+import { isSecureRequest } from "@/infrastructure/auth/secure-request";
+import {
+  actAsCookieWrite,
+  clearedActAsCookieWrite,
+  cookieWrite,
+  OAUTH_COOKIE,
+  signedOutCookieWrites,
+} from "@/infrastructure/auth/session-cookies";
+import {
+  readSessionToken,
+  requestIsSecure,
+  writeCookies,
+} from "@/infrastructure/auth/web-session";
+import {
+  demoLoginId,
+  ffpfIdConfig,
+  githubOAuthConfig,
+} from "@/infrastructure/config/environment";
+import { ACT_AS_PATTERN } from "@/infrastructure/identity/session-current-user-provider";
+import { prismaIdentityAccounts } from "@/infrastructure/prisma/identity-accounts";
+import {
+  demoFailureUrl,
+  errorName,
+  guestFailureUrl,
+  passwordFailureUrl,
+} from "@/presentation/controllers/sign-in-controller";
 import { getCachedCurrentUser } from "./current-user";
+import { newSessionCookies, sessionStore, signIn } from "./sign-in-container";
 
-// Decided from the access token and the account tables, once per request.
+// Decided from the zl_session cookie's Session row and the account tables,
+// once per request.
 const currentUserProvider: CurrentUserProvider = {
   getCurrentUser: getCachedCurrentUser,
 };
@@ -51,49 +89,173 @@ export async function getRecordOwner(requested: string | undefined): Promise<{
   return { user, owner: resolveRecordOwner(user, requested) };
 }
 
-export async function signInWithGitHub(redirectTo: string) {
-  await signInWithGitHubViaGo(redirectTo);
+// Sign-in and sign-out, for Server Actions only: they set cookies, which
+// Server Components cannot do. Next.js accepts Server Actions by POST only
+// and checks their Origin against the Host; the cookies are SameSite=Lax.
+// redirect() throws NEXT_REDIRECT, so it is never called inside a try block.
+
+// Every sign-in gets a new token: the browser's previous Session row is
+// ended, and zl_act_as and Go's old cookies are cleared with it.
+async function startSession(session: IssuedSession) {
+  await writeCookies(
+    await newSessionCookies(
+      await readSessionToken(),
+      session,
+      await requestIsSecure(),
+    ),
+  );
 }
 
-export async function signInWithFfpf(redirectTo: string) {
-  await signInWithFfpfViaGo(redirectTo);
-}
-
-export async function signInAsGuest(redirectTo: string) {
-  await signInAsGuestViaGo(redirectTo);
-}
-
-export async function signInAsDemo(redirectTo: string) {
-  await signInAsDemoViaGo(redirectTo);
-}
-
-// Whether the sign-in page offers the demo account.
-export function demoAvailable() {
-  return isDemoAvailable();
-}
-
+// Store and hasher errors are thrown (the sign-in page's error boundary);
+// every refusal is the one credential message.
 export async function signInWithPassword(input: {
   loginId: string;
   password: string;
   redirectTo: string;
 }) {
-  await signInWithPasswordViaGo(input);
+  const client = clientAddress(await headers());
+  const result = await signIn.withPassword(
+    { loginId: input.loginId, password: input.password },
+    client,
+  );
+  if (!result.ok) redirect(passwordFailureUrl(result.reason, input.redirectTo));
+  await startSession(result.session);
+  redirect(input.redirectTo);
+}
+
+export async function signInAsGuest(redirectTo: string) {
+  const client = clientAddress(await headers());
+  let result: SignInResult;
+  try {
+    result = await signIn.asGuest(client);
+  } catch (error) {
+    console.error("SIGN_IN_GUEST_FAILED", errorName(error));
+    redirect(guestFailureUrl(redirectTo));
+  }
+  if (!result.ok) {
+    console.error("SIGN_IN_GUEST_REFUSED", result.reason);
+    redirect(guestFailureUrl(redirectTo));
+  }
+  await startSession(result.session);
+  redirect(redirectTo);
+}
+
+export async function signInAsDemo(redirectTo: string) {
+  const client = clientAddress(await headers());
+  let result: SignInResult;
+  try {
+    result = await signIn.asDemo(client);
+  } catch (error) {
+    console.error("SIGN_IN_DEMO_FAILED", errorName(error));
+    redirect(demoFailureUrl("error", redirectTo));
+  }
+  if (!result.ok) {
+    console.error("SIGN_IN_DEMO_REFUSED", result.reason);
+    redirect(demoFailureUrl(result.reason, redirectTo));
+  }
+  await startSession(result.session);
+  redirect(redirectTo);
+}
+
+// Starts GitHub sign-in: PKCE and state go into zl_oauth (SameSite=Lax, so
+// it comes back with GitHub's top-level redirect), and the browser goes to
+// GitHub. /api/auth/callback/github/go finishes it with the same redirect
+// URI (requestOrigin -> publicOrigin, so AUTH_URL when set).
+export async function signInWithGitHub(redirectTo: string) {
+  const config = githubOAuthConfig();
+  if (!config) redirect("/signin?error=Configuration");
+  const requestHeaders = await headers();
+  const start = createOAuthStart(redirectTo);
+  await writeCookies([
+    cookieWrite(
+      OAUTH_COOKIE,
+      start.cookieValue,
+      OAUTH_COOKIE_MAX_AGE,
+      isSecureRequest(requestHeaders),
+    ),
+  ]);
+  redirect(
+    githubAuthorizeUrl({
+      clientId: config.clientId,
+      redirectUri: githubRedirectUri(
+        publicOrigin(requestOrigin(requestHeaders)),
+      ),
+      state: start.state,
+      challenge: start.challenge,
+    }),
+  );
+}
+
+// Starts FFPF ID sign-in the same way: PKCE, state and nonce go into
+// zl_oauth (provider "ffpf"), and the browser goes to the portal's authorize
+// endpoint. /api/auth/callback/ffpf finishes it.
+export async function signInWithFfpf(redirectTo: string) {
+  const config = ffpfIdConfig();
+  if (!config) redirect("/signin?error=Configuration");
+  const requestHeaders = await headers();
+  const start = createFfpfOAuthStart(redirectTo);
+  await writeCookies([
+    cookieWrite(
+      OAUTH_COOKIE,
+      start.cookieValue,
+      OAUTH_COOKIE_MAX_AGE,
+      isSecureRequest(requestHeaders),
+    ),
+  ]);
+  redirect(
+    ffpfAuthorizeUrl({
+      issuer: config.issuer,
+      clientId: config.clientId,
+      redirectUri: ffpfRedirectUri(publicOrigin(requestOrigin(requestHeaders))),
+      state: start.state,
+      challenge: start.challenge,
+      nonce: start.nonce,
+    }),
+  );
+}
+
+// Whether the sign-in page offers the demo account (Go: GET /v1/auth/demo
+// answered by whether DEMO_LOGIN_ID is set).
+export function demoAvailable() {
+  return Promise.resolve(Boolean(demoLoginId()));
 }
 
 export async function signOutCurrentUser() {
   await signOutTo("/signin");
 }
 
+// Signs out even when the database cannot be reached: the cookies are
+// cleared either way, and an undeleted row simply expires.
 export async function signOutTo(redirectTo: string) {
-  await signOutViaGo(redirectTo);
+  const token = await readSessionToken();
+  if (token) {
+    try {
+      await sessionStore.end(token);
+    } catch (error) {
+      console.error("SESSION_END_FAILED", errorName(error));
+    }
+  }
+  await writeCookies(signedOutCookieWrites(await requestIsSecure()));
+  redirect(redirectTo);
 }
 
 // An admin acting as a member: their records become the member's while the
-// admin keeps the admin role. Returns whether Go confirmed the member.
-export function startActingAs(ownerId: string) {
-  return startActingAsViaGo(ownerId);
+// admin keeps the admin role. The cookie is written only for a signed-in
+// admin and an existing password member of the one allowed shape; the
+// provider checks the same again on every request. Returns whether it
+// started.
+export async function startActingAs(ownerId: string): Promise<boolean> {
+  const user = await getCachedCurrentUser();
+  if (user?.role !== "admin") return false;
+  if (!ACT_AS_PATTERN.test(ownerId)) return false;
+  const account = await prismaIdentityAccounts.findPasswordAccount(
+    ownerId.slice("password:".length),
+  );
+  if (account === null) return false;
+  await writeCookies([actAsCookieWrite(ownerId, await requestIsSecure())]);
+  return true;
 }
 
-export function stopActing() {
-  return stopActingViaGo();
+export async function stopActing() {
+  await writeCookies([clearedActAsCookieWrite(await requestIsSecure())]);
 }

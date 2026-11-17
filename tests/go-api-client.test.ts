@@ -1,18 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
-import {
-  goApiUrl,
-  isAuthConfigured,
-} from "../src/infrastructure/config/environment";
-import {
-  fetchMe,
-  GoApiError,
-  goApi,
-  isDemoAvailable,
-  loginDemo,
-  loginPassword,
-  logout,
-} from "../src/infrastructure/go-api/client";
+import { goApiUrl } from "../src/infrastructure/config/environment";
+import { GoApiError, goApi } from "../src/infrastructure/go-api/client";
 
 const realFetch = globalThis.fetch;
 const saved = { ...process.env };
@@ -46,55 +35,6 @@ test("goApiUrl trims, strips trailing slashes and maps empty to undefined", () =
   assert.equal(goApiUrl(), undefined);
 });
 
-test("isAuthConfigured is false without GO_API_URL, whatever else is set", () => {
-  delete process.env.GO_API_URL;
-  process.env.AUTH_SECRET = "a";
-  process.env.AUTH_GITHUB_ID = "b";
-  process.env.AUTH_GITHUB_SECRET = "c";
-  process.env.AUTH_ALLOWED_GITHUB_IDS = "1";
-  assert.equal(isAuthConfigured(), false);
-});
-
-test("isAuthConfigured needs AUTH_GITHUB_ID", () => {
-  process.env.GO_API_URL = "https://api.test/";
-  delete process.env.AUTH_GITHUB_ID;
-  assert.equal(isAuthConfigured(), false);
-  process.env.AUTH_GITHUB_ID = "b";
-  assert.equal(isAuthConfigured(), true);
-});
-
-test("the Go rule needs a proxy secret of at least 32 bytes", () => {
-  process.env.GO_API_URL = "https://api.test";
-  process.env.AUTH_GITHUB_ID = "b";
-  process.env.API_WEB_PROXY_SECRET = "x".repeat(31);
-  assert.equal(isAuthConfigured(), false);
-  process.env.API_WEB_PROXY_SECRET = "x".repeat(32);
-  assert.equal(isAuthConfigured(), true);
-  // Bytes, not characters: 11 three-byte characters are 33 bytes.
-  process.env.API_WEB_PROXY_SECRET = "秘".repeat(11);
-  assert.equal(isAuthConfigured(), true);
-  delete process.env.API_WEB_PROXY_SECRET;
-  assert.equal(isAuthConfigured(), false);
-});
-
-test("the Go rule needs HTTPS unless GO_API_URL is localhost or 127.0.0.1", () => {
-  process.env.AUTH_GITHUB_ID = "b";
-  const cases: [string, boolean][] = [
-    ["https://api.test", true],
-    ["http://api.test", false],
-    ["http://localhost:3108", true],
-    ["http://127.0.0.1:3108/", true],
-    ["http://localhost.evil.test", false],
-    ["http://10.0.0.1:3108", false],
-    ["ftp://localhost", false],
-    ["not a url", false],
-  ];
-  for (const [url, want] of cases) {
-    process.env.GO_API_URL = url;
-    assert.equal(isAuthConfigured(), want, url);
-  }
-});
-
 test("sends IP and secret headers only with clientIp", async () => {
   stub(() => json({ ok: 1 }));
   await goApi("/v1/x", { method: "POST", body: { a: 1 }, clientIp: "1.2.3.4" });
@@ -114,38 +54,10 @@ test("sends IP and secret headers only with clientIp", async () => {
   assert.equal(h2.authorization, undefined);
 });
 
-test("logout forwards the client IP with the proxy secret", async () => {
-  stub(() => new Response(null, { status: 204 }));
-  await logout("refresh-tok", "203.0.113.9");
-  const h = calls[0]!.init.headers as Record<string, string>;
-  assert.equal(calls[0]!.url, "https://api.test/v1/auth/logout");
-  assert.equal(h["X-Zhuelog-Client-IP"], "203.0.113.9");
-  assert.equal(h["X-Zhuelog-Proxy-Secret"], process.env.API_WEB_PROXY_SECRET);
-  assert.equal(calls[0]!.init.body, '{"refreshToken":"refresh-tok"}');
-});
-
-test("fetchMe sends a Bearer token", async () => {
-  stub(() => json({ ownerId: "o", role: "member", login: "l" }));
-  const me = await fetchMe("tok");
-  assert.equal(me.role, "member");
-  const h = calls[0]!.init.headers as Record<string, string>;
-  assert.equal(h.authorization, "Bearer tok");
-});
-
-test("fetchMe names the member an admin acts as, and only then", async () => {
-  stub(() => json({ ownerId: "o", role: "admin", login: "l" }));
-  await fetchMe("tok", "password:abc");
-  await fetchMe("tok");
-  const acting = calls[0]!.init.headers as Record<string, string>;
-  const plain = calls[1]!.init.headers as Record<string, string>;
-  assert.equal(acting["X-Zhuelog-Act-As"], "password:abc");
-  assert.equal("X-Zhuelog-Act-As" in plain, false);
-});
-
 test("maps the Go error JSON to GoApiError", async () => {
   stub(() => json({ error: { code: "rate_limited", message: "x" } }, 429));
   await assert.rejects(
-    loginPassword("u", "pw-secret", "1.1.1.1"),
+    goApi("/v1/x", { method: "POST", body: { password: "pw-secret" } }),
     (e: unknown) =>
       e instanceof GoApiError &&
       e.status === 429 &&
@@ -283,32 +195,4 @@ test("plain HTTP is allowed for this machine (local development and e2e)", async
     await goApi("/v1/x", { method: "GET", accessToken: "tok" });
     assert.equal(calls[0]!.url, `${url.replace(/\/$/, "")}/v1/x`);
   }
-});
-
-test("loginDemo posts an empty body with the client IP", async () => {
-  stub(() =>
-    json({ accessToken: "a", refreshToken: "r", expiresIn: 900 }, 200),
-  );
-  const tokens = await loginDemo("203.0.113.5");
-  assert.equal(tokens.accessToken, "a");
-  assert.equal(calls[0].url, "https://api.test/v1/auth/demo");
-  assert.equal(calls[0].init.method, "POST");
-  assert.equal(calls[0].init.body, "{}");
-  const headers = calls[0].init.headers as Record<string, string>;
-  assert.equal(headers["X-Zhuelog-Client-IP"], "203.0.113.5");
-});
-
-test("isDemoAvailable is true only when Go answers 2xx", async () => {
-  stub(() => new Response(null, { status: 204 }));
-  assert.equal(await isDemoAvailable(), true);
-  assert.equal(calls[0].url, "https://api.test/v1/auth/demo");
-  assert.equal(calls[0].init.method, "GET");
-
-  stub(() => json({ error: { code: "not_found", message: "x" } }, 404));
-  assert.equal(await isDemoAvailable(), false);
-
-  stub(() => {
-    throw new Error("offline");
-  });
-  assert.equal(await isDemoAvailable(), false);
 });

@@ -5,8 +5,9 @@ import {
   allowedGitHubIds,
   cronSecret,
   demoLoginId,
-  ffpfIdClientSecret,
+  ffpfIdConfig,
   githubOAuthConfig,
+  isHttpsOrLoopbackUrl,
   lineConfig,
 } from "../src/infrastructure/config/environment";
 
@@ -24,6 +25,8 @@ const LINE_KEYS = [
   "CRON_SECRET",
   "AUTH_GITHUB_ID",
   "GITHUB_WEB_CLIENT_SECRET",
+  "FFPF_ID_ISSUER",
+  "FFPF_ID_CLIENT_ID",
   "FFPF_ID_CLIENT_SECRET",
 ] as const;
 const savedLine = Object.fromEntries(
@@ -65,6 +68,28 @@ test("demoLoginId is undefined when blank", () => {
 test("demoLoginId is trimmed", () => {
   process.env.DEMO_LOGIN_ID = " demo ";
   assert.equal(demoLoginId(), "demo");
+});
+
+test("demoLoginId must already be a login id, as Go's config", () => {
+  const logged: unknown[][] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => void logged.push(args);
+  try {
+    for (const id of ["demo", " demo ", "demo.user_1-x"]) {
+      process.env.DEMO_LOGIN_ID = id;
+      assert.equal(demoLoginId(), id.trim(), id);
+    }
+    assert.deepEqual(logged, []);
+    // Upper case, too short, a space inside, a character Go refuses, too long.
+    for (const id of ["Demo", "ab", "demo user", "demo!", "d".repeat(33)]) {
+      process.env.DEMO_LOGIN_ID = id;
+      assert.equal(demoLoginId(), undefined, id);
+    }
+  } finally {
+    console.error = original;
+  }
+  // Said once, by its code only, never with the value.
+  assert.deepEqual(logged, [["DEMO_LOGIN_ID_INVALID"]]);
 });
 
 function setLine(values: Partial<Record<(typeof LINE_KEYS)[number], string>>) {
@@ -155,11 +180,45 @@ test("githubOAuthConfig needs both the client id and the secret", () => {
   }
 });
 
-test("ffpfIdClientSecret is the trimmed secret", () => {
-  setLine({ FFPF_ID_CLIENT_SECRET: " s " });
-  assert.equal(ffpfIdClientSecret(), "s");
-  setLine({ FFPF_ID_CLIENT_SECRET: "  " });
-  assert.equal(ffpfIdClientSecret(), undefined);
+test("ffpfIdConfig needs the issuer, the client id and the secret", () => {
+  const complete = {
+    FFPF_ID_ISSUER: " https://ffpf.example/ ",
+    FFPF_ID_CLIENT_ID: " zhuelog ",
+    FFPF_ID_CLIENT_SECRET: " secret ",
+  };
+  setLine(complete);
+  assert.deepEqual(ffpfIdConfig(), {
+    issuer: "https://ffpf.example",
+    clientId: "zhuelog",
+    clientSecret: "secret",
+  });
+  for (const key of Object.keys(complete) as (keyof typeof complete)[]) {
+    setLine({ ...complete, [key]: " " });
+    assert.equal(ffpfIdConfig(), undefined, `${key} blank`);
+  }
   setLine({});
-  assert.equal(ffpfIdClientSecret(), undefined);
+  assert.equal(ffpfIdConfig(), undefined);
+});
+
+test("ffpfIdConfig keeps the https-or-loopback rule for the issuer", () => {
+  const rest = { FFPF_ID_CLIENT_ID: "zhuelog", FFPF_ID_CLIENT_SECRET: "s" };
+  setLine({ ...rest, FFPF_ID_ISSUER: "http://ffpf.example" });
+  assert.equal(ffpfIdConfig(), undefined);
+  setLine({ ...rest, FFPF_ID_ISSUER: "http://127.0.0.1:3110" });
+  assert.equal(ffpfIdConfig()?.issuer, "http://127.0.0.1:3110");
+});
+
+test("isHttpsOrLoopbackUrl needs HTTPS unless the host is localhost or 127.0.0.1", () => {
+  const cases: [string, boolean][] = [
+    ["https://api.test", true],
+    ["http://api.test", false],
+    ["http://localhost:3108", true],
+    ["http://127.0.0.1:3108/", true],
+    ["http://localhost.evil.test", false],
+    ["http://10.0.0.1:3108", false],
+    ["ftp://localhost", false],
+    ["not a url", false],
+  ];
+  for (const [url, want] of cases)
+    assert.equal(isHttpsOrLoopbackUrl(url), want, url);
 });

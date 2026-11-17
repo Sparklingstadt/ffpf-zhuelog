@@ -87,28 +87,39 @@ export function generatePassword() {
   return randomBytes(SCRYPT_PARAMS.generatedBytes).toString("base64url");
 }
 
+// The key derivation verify runs; swappable only so tests can make it fail.
+export type DeriveKey = (
+  password: string,
+  salt: Buffer,
+  keyLength: number,
+  options: ScryptOptions,
+) => Promise<Buffer>;
+
 export class ScryptPasswordHasher {
   private dummyHash: Promise<string> | undefined;
+
+  constructor(private readonly derive: DeriveKey = deriveKey) {}
 
   hash(password: string) {
     return hashWithSalt(password, randomBytes(SALT_BYTES));
   }
 
+  // false for a wrong password or a hash it cannot read. A failure of the
+  // computation itself is thrown, never a mismatch, so it never counts as a
+  // wrong password: sign-in answers it as an error, as Go answered its
+  // hasher's errors (TestLoginPasswordHasherErrorIsNotUnauthorized). Go's own
+  // Verify errs only when no hashing slot frees up; the web has no slots, and
+  // the one error it can meet is the computation's.
   async verify(password: string, passwordHash: string) {
     const parsed = parse(passwordHash);
     if (!parsed) return false;
-    try {
-      const actual = await deriveKey(password, parsed.salt, parsed.key.length, {
-        ...parsed.params,
-        maxmem: MAX_MEMORY,
-      });
-      return (
-        actual.length === parsed.key.length &&
-        timingSafeEqual(actual, parsed.key)
-      );
-    } catch {
-      return false;
-    }
+    const actual = await this.derive(password, parsed.salt, parsed.key.length, {
+      ...parsed.params,
+      maxmem: MAX_MEMORY,
+    });
+    return (
+      actual.length === parsed.key.length && timingSafeEqual(actual, parsed.key)
+    );
   }
 
   // The dummy hash of a random password that simulate verifies against,

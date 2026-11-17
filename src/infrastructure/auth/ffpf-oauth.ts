@@ -2,11 +2,11 @@ import { randomBytes } from "node:crypto";
 
 import { pkceChallenge } from "./github-oauth";
 
-// FFPF ID sign-in through the Go API, the same shape as github-oauth.ts plus
-// an OIDC nonce. The web keeps PKCE, state and nonce in the zl_oauth cookie
-// with provider "ffpf", so a GitHub start never finishes here and an FFPF
-// start never finishes at the GitHub callback. Go exchanges the code and
-// checks the ID token's nonce. The redirect URI is built from
+// FFPF ID sign-in, the same shape as github-oauth.ts plus an OIDC nonce.
+// The web keeps PKCE, state and nonce in the zl_oauth cookie with provider
+// "ffpf", so a GitHub start never finishes here and an FFPF start never
+// finishes at the GitHub callback. The web exchanges the code and checks the
+// ID token's nonce (ffpf-oidc-client.ts). The redirect URI is built from
 // requestOrigin -> publicOrigin -> ffpfRedirectUri in both steps.
 
 export const FFPF_CALLBACK_PATH = "/api/auth/callback/ffpf";

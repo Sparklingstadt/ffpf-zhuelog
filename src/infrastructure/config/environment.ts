@@ -1,3 +1,4 @@
+import { normalizeLoginId } from "@/domain/identity/password-account";
 import { goTrimSpace } from "@/domain/line/go-text";
 import { normalizeLineOfficialAccountId } from "@/domain/line/official-account";
 
@@ -7,25 +8,10 @@ export function goApiUrl(): string | undefined {
   return url ? url : undefined;
 }
 
-// Matches the Go API's own minimum for API_WEB_PROXY_SECRET.
-const MIN_PROXY_SECRET_BYTES = 32;
-
-// Sign-in goes through the Go API, so it needs the API's URL, the proxy
-// secret it shares with the web, and the GitHub OAuth App's client id.
-export function isAuthConfigured(): boolean {
-  const url = goApiUrl();
-  const secret = process.env.API_WEB_PROXY_SECRET ?? "";
-  return Boolean(
-    url &&
-    isSafeGoApiUrl(url) &&
-    new TextEncoder().encode(secret).length >= MIN_PROXY_SECRET_BYTES &&
-    process.env.AUTH_GITHUB_ID,
-  );
-}
-
-// The proxy secret and tokens travel to GO_API_URL, so it must be HTTPS
-// unless it is this machine (local development and e2e).
-export function isSafeGoApiUrl(raw: string): boolean {
+// Tokens and secrets travel to these URLs (GO_API_URL, the FFPF ID issuer),
+// so they must be HTTPS unless they are this machine (local development and
+// e2e).
+export function isHttpsOrLoopbackUrl(raw: string): boolean {
   let url: URL;
   try {
     url = new URL(raw);
@@ -39,16 +25,19 @@ export function isSafeGoApiUrl(raw: string): boolean {
   );
 }
 
-// FFPF ID sign-in on the web needs the portal's issuer (to build the
-// authorize URL) and this service's client id (the secret is
-// ffpfIdClientSecret). Without both, the FFPF ID button is not shown. The
-// issuer must be HTTPS unless it is this machine (local development and e2e).
+// FFPF ID sign-in needs the portal's issuer (the authorize, token and JWKS
+// URLs are built from it), this service's client id and its client secret
+// (Go: FFPF_ID_CLIENT_SECRET, trimmed as strings.TrimSpace). Without all
+// three, the FFPF ID button is not shown. The issuer must be HTTPS unless it
+// is this machine (local development and e2e).
 export function ffpfIdConfig():
-  { issuer: string; clientId: string } | undefined {
+  { issuer: string; clientId: string; clientSecret: string } | undefined {
   const issuer = process.env.FFPF_ID_ISSUER?.trim().replace(/\/+$/, "");
   const clientId = process.env.FFPF_ID_CLIENT_ID?.trim();
-  if (!issuer || !clientId || !isSafeGoApiUrl(issuer)) return undefined;
-  return { issuer, clientId };
+  const clientSecret = goTrimSpace(process.env.FFPF_ID_CLIENT_SECRET ?? "");
+  if (!issuer || !clientId || !clientSecret || !isHttpsOrLoopbackUrl(issuer))
+    return undefined;
+  return { issuer, clientId, clientSecret };
 }
 
 // The web's GitHub OAuth App for the code exchange: AUTH_GITHUB_ID (the id
@@ -61,13 +50,6 @@ export function githubOAuthConfig():
   const clientSecret = goTrimSpace(process.env.GITHUB_WEB_CLIENT_SECRET ?? "");
   if (!clientId || !clientSecret) return undefined;
   return { clientId, clientSecret };
-}
-
-// FFPF ID's client secret (Go: FFPF_ID_CLIENT_SECRET), trimmed; undefined
-// when blank.
-export function ffpfIdClientSecret(): string | undefined {
-  const secret = goTrimSpace(process.env.FFPF_ID_CLIENT_SECRET ?? "");
-  return secret ? secret : undefined;
 }
 
 // Link to add the LINE official account as a friend. It is shown as a link
@@ -104,12 +86,6 @@ export function siteUrl(): string {
   return "http://localhost:3000";
 }
 
-// Secret that signs the access tokens the API issues. Empty when unset; the
-// token verifier treats a secret that is too short as "every token invalid".
-export function apiJwtSecret(): string {
-  return process.env.API_JWT_SECRET ?? "";
-}
-
 // GitHub account ids allowed to act as administrator: comma separated,
 // trimmed as Go's strings.TrimSpace, digits only. Empty means no
 // administrator gets through.
@@ -121,10 +97,22 @@ export function allowedGitHubIds(): ReadonlySet<string> {
   return new Set(ids);
 }
 
-// Login id of the demo password account, when one is configured.
+let demoLoginIdReported = false;
+
+// Login id of the demo password account, when one is configured. As Go's
+// config (services/api/config.go:127-133), it must already be a login id:
+// trimmed, then unchanged by normalizeLoginId (3 to 32 of a-z, 0-9, '.', '_'
+// and '-'). Go refused to start otherwise; the web cannot, so it offers no
+// demo and says so once, without the value.
 export function demoLoginId(): string | undefined {
-  const id = process.env.DEMO_LOGIN_ID?.trim();
-  return id ? id : undefined;
+  const raw = goTrimSpace(process.env.DEMO_LOGIN_ID ?? "");
+  if (!raw) return undefined;
+  if (normalizeLoginId(raw) === raw) return raw;
+  if (!demoLoginIdReported) {
+    demoLoginIdReported = true;
+    console.error("DEMO_LOGIN_ID_INVALID");
+  }
+  return undefined;
 }
 
 export type OpenAiConfig = {

@@ -1,9 +1,10 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
-// GitHub sign-in through the Go API: the web keeps PKCE and state in the
-// zl_oauth cookie, and Go exchanges the code. The redirect URI must be the
-// same string in the authorize step and in the code exchange, so both build
-// it from requestOrigin -> publicOrigin -> githubRedirectUri.
+// GitHub sign-in: the web keeps PKCE and state in the zl_oauth cookie and
+// exchanges the code itself (github-oauth-client.ts). The redirect URI must
+// be the same string in the authorize step and in the code exchange, so both
+// build it from requestOrigin -> publicOrigin -> githubRedirectUri. The path
+// keeps the name Go's sign-in gave it, as registered with the OAuth App.
 
 export const GITHUB_CALLBACK_PATH = "/api/auth/callback/github/go";
 export const OAUTH_COOKIE_MAX_AGE = 600;

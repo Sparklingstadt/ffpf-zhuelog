@@ -35,7 +35,7 @@ export async function signInWithPasswordAction(
   const password = formData.get("password");
 
   // A rejected sign-in redirects to the sign-in page with one generic
-  // message and never echoes the input back (goPasswordFailureUrl).
+  // message and never echoes the input back (passwordFailureUrl).
   await signInWithPassword({
     loginId: typeof loginId === "string" ? loginId : "",
     password: typeof password === "string" ? password : "",

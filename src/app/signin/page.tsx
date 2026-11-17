@@ -16,7 +16,7 @@ import {
 } from "@/composition/identity-container";
 import {
   ffpfIdConfig,
-  isAuthConfigured,
+  githubOAuthConfig,
 } from "@/infrastructure/config/environment";
 import {
   signInAsDemoAction,
@@ -68,7 +68,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
 
   const params = await searchParams;
   const callbackPath = getSafeCallbackPath(params.callbackUrl);
-  const isConfigured = isAuthConfigured();
+  const isConfigured = Boolean(githubOAuthConfig());
   const showFfpfId = Boolean(ffpfIdConfig());
   const showDemo = await demoAvailable();
   const errorMessage = params.error

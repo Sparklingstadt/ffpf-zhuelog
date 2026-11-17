@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { NextRequest } from "next/server";
-import { GoApiError, type GoTokens } from "../src/infrastructure/go-api/client";
 import {
   createOAuthStart,
   githubAuthorizeUrl,
@@ -10,7 +9,12 @@ import {
   pkceChallenge,
   publicOrigin,
   requestOrigin,
-} from "../src/infrastructure/go-api/github-oauth";
+} from "../src/infrastructure/auth/github-oauth";
+import type {
+  IssuedSession,
+  SignInResult,
+} from "../src/application/identity/sign-in";
+import { signedInCookieWrites } from "../src/infrastructure/auth/session-cookies";
 import { handleGitHubCallback } from "../src/presentation/http/github-callback";
 
 const originalAuthUrl = process.env.AUTH_URL;
@@ -113,36 +117,51 @@ test("the authorize URL asks GitHub for read:user with PKCE", () => {
   assert.equal(url.searchParams.get("code_challenge_method"), "S256");
 });
 
-const tokens: GoTokens = {
-  accessToken: "access-1",
-  refreshToken: "refresh-1",
-  expiresIn: 900,
+// The callback, with the sign-in faked: the code exchange itself is tested
+// in github-oauth-client.test.ts and sign-in.test.ts.
+type SignInCall = [
+  { code: string; verifier: string; redirectUri: string },
+  string,
+];
+
+const issued: IssuedSession = {
+  token: "new-session-token",
+  maxAgeSeconds: 2_592_000,
 };
 
-type LoginCall = [string, string, string, string];
-
-function callback(query: string, cookie?: string) {
+function callback(query: string, cookies: Record<string, string> = {}) {
   const headers = new Headers({
     host: "app.example.com",
     "x-forwarded-proto": "https",
     "x-real-ip": "203.0.113.7",
   });
-  if (cookie !== undefined) headers.set("cookie", `zl_oauth=${cookie}`);
+  const pairs = Object.entries(cookies).map(([k, v]) => `${k}=${v}`);
+  if (pairs.length) headers.set("cookie", pairs.join("; "));
   return new NextRequest(
     `https://app.example.com/api/auth/callback/github/go${query}`,
     { headers },
   );
 }
 
-function deps(result: GoTokens | Error) {
-  const calls: LoginCall[] = [];
+function deps(result: SignInResult | Error) {
+  const calls: SignInCall[] = [];
+  const previous: (string | undefined)[] = [];
   return {
     calls,
+    previous,
     deps: {
-      login: async (...args: LoginCall) => {
+      signIn: async (...args: SignInCall) => {
         calls.push(args);
         if (result instanceof Error) throw result;
         return result;
+      },
+      sessionCookies: async (
+        previousToken: string | undefined,
+        session: IssuedSession,
+        secure: boolean,
+      ) => {
+        previous.push(previousToken);
+        return signedInCookieWrites(session, secure);
       },
     },
   };
@@ -159,44 +178,105 @@ function assertOAuthCleared(response: Response) {
   assert.match(cleared, /Max-Age=0/i);
 }
 
-test("a successful callback sets the session and goes to the saved path", async () => {
-  delete process.env.AUTH_URL;
-  const start = createOAuthStart("/logs?a=1");
-  const { calls, deps: d } = deps(tokens);
+function quietConsole() {
+  const logged: unknown[][] = [];
+  const original = { warn: console.warn, error: console.error };
+  console.warn = (...args: unknown[]) => void logged.push(args);
+  console.error = (...args: unknown[]) => void logged.push(args);
+  return {
+    logged,
+    restore() {
+      console.warn = original.warn;
+      console.error = original.error;
+    },
+  };
+}
+
+test("a successful callback sets zl_session, clears the act-as and Go cookies and goes to the saved path", async () => {
+  process.env.AUTH_URL = "https://zhuelog.test";
+  const start = createOAuthStart("/notes?x=1");
+  const { calls, deps: d } = deps({ ok: true, session: issued });
   const response = await handleGitHubCallback(
-    callback(`?code=code-1&state=${start.state}`, start.cookieValue),
+    callback(`?code=code-1&state=${start.state}`, {
+      zl_oauth: start.cookieValue,
+    }),
     d,
   );
   assert.equal(response.status, 303);
   assert.equal(
     response.headers.get("location"),
-    "https://app.example.com/logs?a=1",
+    "https://zhuelog.test/notes?x=1",
   );
   assert.deepEqual(calls, [
     [
-      "code-1",
-      start.verifier,
-      "https://app.example.com/api/auth/callback/github/go",
+      {
+        code: "code-1",
+        verifier: start.verifier,
+        redirectUri: "https://zhuelog.test/api/auth/callback/github/go",
+      },
       "203.0.113.7",
     ],
   ]);
   const cookies = setCookies(response);
-  assert.ok(cookies.some((c) => c.startsWith("zl_access=access-1;")));
-  assert.ok(cookies.some((c) => c.startsWith("zl_refresh=refresh-1;")));
+  assert.equal(cookies.length, 5);
+  const starts = [
+    /^zl_oauth=;/,
+    /^zl_session=new-session-token;.*Max-Age=2592000/i,
+    /^zl_act_as=;/,
+    /^zl_access=;/,
+    /^zl_refresh=;/,
+  ];
+  for (const pattern of starts)
+    assert.ok(
+      cookies.some((c) => pattern.test(c)),
+      `${pattern} in ${cookies.join(" | ")}`,
+    );
   for (const c of cookies) {
     assert.match(c, /HttpOnly/i);
     assert.match(c, /SameSite=lax/i);
+    assert.match(c, /Path=\//);
     assert.match(c, /Secure/i);
   }
-  assertOAuthCleared(response);
+});
+
+test("the redirect URI follows the request without AUTH_URL", async () => {
+  delete process.env.AUTH_URL;
+  const start = createOAuthStart("/");
+  const { calls, deps: d } = deps({ ok: true, session: issued });
+  await handleGitHubCallback(
+    callback(`?code=c&state=${start.state}`, { zl_oauth: start.cookieValue }),
+    d,
+  );
+  assert.equal(
+    calls[0]?.[0].redirectUri,
+    "https://app.example.com/api/auth/callback/github/go",
+  );
+});
+
+test("a browser's previous session is handed over to be ended", async () => {
+  delete process.env.AUTH_URL;
+  const start = createOAuthStart("/");
+  const { previous, deps: d } = deps({ ok: true, session: issued });
+  await handleGitHubCallback(
+    callback(`?code=c&state=${start.state}`, {
+      zl_oauth: start.cookieValue,
+      zl_session: "old-token",
+    }),
+    d,
+  );
+  await handleGitHubCallback(
+    callback(`?code=c&state=${start.state}`, { zl_oauth: start.cookieValue }),
+    d,
+  );
+  assert.deepEqual(previous, ["old-token", undefined]);
 });
 
 test("an unsafe saved path falls back to /", async () => {
   delete process.env.AUTH_URL;
   const start = createOAuthStart("//evil.example/x");
   const response = await handleGitHubCallback(
-    callback(`?code=c&state=${start.state}`, start.cookieValue),
-    deps(tokens).deps,
+    callback(`?code=c&state=${start.state}`, { zl_oauth: start.cookieValue }),
+    deps({ ok: true, session: issued }).deps,
   );
   assert.equal(response.headers.get("location"), "https://app.example.com/");
 });
@@ -204,13 +284,13 @@ test("an unsafe saved path falls back to /", async () => {
 const failure = (code: string) =>
   `https://app.example.com/signin?error=${code}`;
 
-test("a state mismatch is rejected without calling the Go API", async () => {
+test("a state mismatch is rejected without signing in", async () => {
   delete process.env.AUTH_URL;
   const start = createOAuthStart("/");
-  const { calls, deps: d } = deps(tokens);
+  const { calls, deps: d } = deps({ ok: true, session: issued });
   for (const state of ["other", `${start.state}x`, ""]) {
     const response = await handleGitHubCallback(
-      callback(`?code=c&state=${state}`, start.cookieValue),
+      callback(`?code=c&state=${state}`, { zl_oauth: start.cookieValue }),
       d,
     );
     assert.equal(response.status, 303);
@@ -219,6 +299,7 @@ test("a state mismatch is rejected without calling the Go API", async () => {
       failure("OAuthCallbackError"),
     );
     assertOAuthCleared(response);
+    assert.equal(setCookies(response).length, 1);
   }
   assert.equal(calls.length, 0);
 });
@@ -226,14 +307,13 @@ test("a state mismatch is rejected without calling the Go API", async () => {
 test("an error parameter or a missing cookie is rejected", async () => {
   delete process.env.AUTH_URL;
   const start = createOAuthStart("/");
-  const { calls, deps: d } = deps(tokens);
+  const { calls, deps: d } = deps({ ok: true, session: issued });
   for (const request of [
-    callback(
-      `?error=access_denied&state=${start.state}&code=c`,
-      start.cookieValue,
-    ),
+    callback(`?error=access_denied&state=${start.state}&code=c`, {
+      zl_oauth: start.cookieValue,
+    }),
     callback(`?code=c&state=${start.state}`),
-    callback(`?state=${start.state}`, start.cookieValue),
+    callback(`?state=${start.state}`, { zl_oauth: start.cookieValue }),
   ]) {
     const response = await handleGitHubCallback(request, d);
     assert.equal(
@@ -245,23 +325,68 @@ test("an error parameter or a missing cookie is rejected", async () => {
   assert.equal(calls.length, 0);
 });
 
-test("a 403 from the Go API is AccessDenied; other failures are OAuthCallbackError", async () => {
+test("forbidden is AccessDenied; other failures and errors are OAuthCallbackError", async () => {
   delete process.env.AUTH_URL;
   const start = createOAuthStart("/");
-  const request = () =>
-    callback(`?code=c&state=${start.state}`, start.cookieValue);
-  const cases: [Error, string][] = [
-    [new GoApiError(403, "forbidden"), "AccessDenied"],
-    [new GoApiError(401, "unauthorized"), "OAuthCallbackError"],
-    [new GoApiError(0, "unavailable"), "OAuthCallbackError"],
-    [new Error("boom"), "OAuthCallbackError"],
+  const cases: [SignInResult | Error, string][] = [
+    [{ ok: false, reason: "forbidden" }, "AccessDenied"],
+    [{ ok: false, reason: "invalid" }, "OAuthCallbackError"],
+    [{ ok: false, reason: "unavailable" }, "OAuthCallbackError"],
+    [{ ok: false, reason: "throttled" }, "OAuthCallbackError"],
+    [new Error("db"), "OAuthCallbackError"],
   ];
-  for (const [error, code] of cases) {
-    const response = await handleGitHubCallback(request(), deps(error).deps);
-    assert.equal(response.headers.get("location"), failure(code));
-    assert.ok(
-      !setCookies(response).some((c) => /^zl_(access|refresh)=/.test(c)),
-    );
-    assertOAuthCleared(response);
+  const spy = quietConsole();
+  try {
+    for (const [result, code] of cases) {
+      const response = await handleGitHubCallback(
+        callback(`?code=c&state=${start.state}`, {
+          zl_oauth: start.cookieValue,
+        }),
+        deps(result).deps,
+      );
+      assert.equal(response.headers.get("location"), failure(code));
+      assert.ok(!setCookies(response).some((c) => /^zl_session=/.test(c)));
+      assertOAuthCleared(response);
+    }
+  } finally {
+    spy.restore();
   }
+  assert.deepEqual(spy.logged, [
+    ["SIGN_IN_GITHUB_REFUSED", "forbidden"],
+    ["SIGN_IN_GITHUB_REFUSED", "invalid"],
+    ["SIGN_IN_GITHUB_REFUSED", "unavailable"],
+    ["SIGN_IN_GITHUB_REFUSED", "throttled"],
+    ["SIGN_IN_GITHUB_FAILED", "Error"],
+  ]);
+});
+
+test("nothing secret is logged", async () => {
+  delete process.env.AUTH_URL;
+  const start = createOAuthStart("/");
+  const spy = quietConsole();
+  try {
+    for (const result of [
+      { ok: false, reason: "invalid" } as const,
+      new Error(`boom code-secret ${start.verifier}`),
+    ])
+      await handleGitHubCallback(
+        callback(`?code=code-secret&state=${start.state}`, {
+          zl_oauth: start.cookieValue,
+          zl_session: "old-token-secret",
+        }),
+        deps(result).deps,
+      );
+  } finally {
+    spy.restore();
+  }
+  const text = JSON.stringify(spy.logged);
+  assert.ok(spy.logged.length > 0);
+  for (const secret of [
+    "code-secret",
+    start.state,
+    start.verifier,
+    start.cookieValue,
+    "old-token-secret",
+  ])
+    assert.ok(!text.includes(secret), secret);
 });
