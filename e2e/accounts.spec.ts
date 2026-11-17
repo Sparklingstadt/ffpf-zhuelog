@@ -1,7 +1,6 @@
-import { type BrowserContext, type Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
 import type { Client } from "pg";
 
-import { goApiURL } from "./environment";
 import {
   asAdmin,
   asMember,
@@ -33,18 +32,12 @@ async function readOutputPassword(page: Page) {
   return match[1];
 }
 
-// A direct call to Go's /v1/auth/<route>, as the web's server would make.
-function goAuth(route: string, body: Record<string, unknown>) {
-  return fetch(`${goApiURL}/v1/auth/${route}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-}
-
-async function refreshCookie(context: BrowserContext) {
-  const cookies = await context.cookies();
-  return cookies.find((c) => c.name === "zl_refresh")?.value;
+async function memberSessions(db: Client, accountId: string) {
+  const { rows } = await db.query(
+    `SELECT count(*)::int AS n FROM "Session" WHERE "ownerId" = 'password:' || $1`,
+    [accountId],
+  );
+  return rows[0].n as number;
 }
 
 async function account(db: Client, loginId: string) {
@@ -203,32 +196,19 @@ test("reset revokes existing member sessions", async ({
   baseURL,
   db,
 }) => {
-  await createMember(db, "taro", "太郎", "member-password-1");
+  const accountId = await createMember(db, "taro", "太郎", "member-password-1");
+  // The member is signed in from two browsers.
   const memberContext = await browser.newContext({ baseURL });
+  const secondContext = await browser.newContext({ baseURL });
   try {
     const memberPage = await memberContext.newPage();
+    const secondPage = await secondContext.newPage();
     await asMember(memberPage, "taro", "member-password-1", "/logs");
     await expect(
       memberPage.getByRole("heading", { name: "日付別の学習ノート" }),
     ).toBeVisible();
-    const refreshToken = await refreshCookie(memberContext);
-    expect(refreshToken).toBeTruthy();
-
-    // Control: a second session of the same member, refreshed once before the
-    // reset, so the 401s below can only come from the reset. A refresh rotates
-    // the token (reusing one revokes its family), so the browser's token is
-    // left alone and this session's rotated token is kept for after the reset.
-    const signedIn = await goAuth("password", {
-      loginId: "taro",
-      password: "member-password-1",
-    });
-    expect(signedIn.status).toBe(200);
-    const controlRefreshed = await goAuth("refresh", {
-      refreshToken: (await signedIn.json()).refreshToken,
-    });
-    expect(controlRefreshed.status).toBe(200);
-    const controlToken = (await controlRefreshed.json()).refreshToken;
-    expect(controlToken).toBeTruthy();
+    await asMember(secondPage, "taro", "member-password-1", "/logs");
+    expect(await memberSessions(db, accountId)).toBe(2);
 
     await asAdmin(context);
     await page.goto("/admin/accounts");
@@ -237,16 +217,12 @@ test("reset revokes existing member sessions", async ({
     const newPassword = await readOutputPassword(page);
     expect(newPassword).not.toBe("member-password-1");
     expect((await account(db, "taro"))?.sessionVersion).toBe(1);
+    expect(await memberSessions(db, accountId)).toBe(0);
 
-    // Go still signs members in until stage 11; it sees the version the web
-    // bumped and refuses the member's old refresh tokens.
-    expect((await goAuth("refresh", { refreshToken })).status).toBe(401);
-    expect(
-      (await goAuth("refresh", { refreshToken: controlToken })).status,
-    ).toBe(401);
-
-    await memberPage.goto("/logs");
-    await expect(memberPage).toHaveURL(/\/signin/);
+    for (const signedOut of [memberPage, secondPage]) {
+      await signedOut.goto("/logs");
+      await expect(signedOut).toHaveURL(/\/signin/);
+    }
 
     // The old password no longer works; the reissued one does.
     await signInWithPassword(memberPage, "taro", "member-password-1");
@@ -254,6 +230,7 @@ test("reset revokes existing member sessions", async ({
     await asMember(memberPage, "taro", newPassword, "/logs");
   } finally {
     await memberContext.close();
+    await secondContext.close();
   }
 });
 
@@ -280,6 +257,7 @@ test("member changes own password", async ({ page, db }) => {
   expect(after?.sessionVersion).toBe(1);
   expect(after?.passwordHash).not.toBe(hashBefore);
   expect(await passwordChangeAttempts(db, accountId)).toEqual([]);
+  expect(await memberSessions(db, accountId)).toBe(0);
 
   await signInWithPassword(page, "taro", "member-password-1");
   await expect(page.getByText(lockMessage)).toBeVisible();
@@ -315,7 +293,7 @@ test("the admin's form errors are the same", async ({ page, context, db }) => {
   expect((await account(db, "taro"))?.sessionVersion).toBe(0);
 });
 
-test("a created member signs in through Go with the password the web hashed", async ({
+test("a created member signs in with the password the web hashed", async ({
   page,
   context,
   browser,

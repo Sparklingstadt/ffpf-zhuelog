@@ -4,17 +4,14 @@ import {
   type BrowserContext,
   type Page,
 } from "@playwright/test";
-import { createHmac, randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { Client } from "pg";
 import { ScryptPasswordHasher } from "../src/infrastructure/security/scrypt-password-hasher";
-import { baseURL, cookieName, databaseUrl, goJwtSecret } from "./environment";
+import { baseURL, databaseUrl, sessionCookieName } from "./environment";
 
 export const test = base.extend<{ db: Client }>({
-  // The Go API also limits /v1/auth/* to 10 calls a minute per client
-  // address. That limit lives in its memory, so unlike the SignInThrottle
-  // table (truncated below) it cannot be reset between tests. Give each test
-  // its own address instead; locally the web takes it from X-Forwarded-For
-  // and hands it to the Go API.
+  // Each test gets its own client address, so the per-client sign-in limits
+  // in SignInThrottle never carry over within a test file's flow.
   extraHTTPHeaders: async ({ extraHTTPHeaders }, provide) => {
     const [a, b, c] = randomBytes(3);
     await provide({
@@ -34,7 +31,7 @@ export const test = base.extend<{ db: Client }>({
         if (rows[0].name !== "zhuelog_e2e")
           throw new Error("Refusing to reset a non-E2E database");
         await db.query(
-          'TRUNCATE "PasswordAccount", "FfpfAccount", "Follow", "SignInThrottle", "ChatConversation", "QuickQuestion", "PrepositionPracticeRecord", "ComplementPracticeRecord", "ReviewLog", "ReviewItem", "VocabularyEntry", "AiUsage", "LineLink", "LineLinkCode", "LineMessage"',
+          'TRUNCATE "Session", "PasswordAccount", "FfpfAccount", "Follow", "SignInThrottle", "ChatConversation", "QuickQuestion", "PrepositionPracticeRecord", "ComplementPracticeRecord", "ReviewLog", "ReviewItem", "VocabularyEntry", "AiUsage", "LineLink", "LineLinkCode", "LineMessage"',
         );
         await db.query(
           'TRUNCATE "Hint", "LearningEntry", "ImportBatch" CASCADE',
@@ -53,46 +50,47 @@ export { expect };
 // admin's notes.
 export const adminOwnerId = "10001";
 
+// Opens its own connection so the many callers need not take the db fixture.
 export async function asAdmin(context: BrowserContext) {
-  await addAdminSession(context, {
-    githubId: adminOwnerId,
-    login: "e2e-admin",
-  });
+  const db = new Client({ connectionString: databaseUrl });
+  await db.connect();
+  try {
+    await addAdminSession(context, db, {
+      githubId: adminOwnerId,
+      login: "e2e-admin",
+    });
+  } finally {
+    await db.end();
+  }
 }
 
-// Puts an admin session cookie in the context. Test-only cookie, signed with
-// this run's random secret. No app auth bypass.
+// Puts an admin session cookie in the context. Test-only session row, as the
+// web's sign-in writes it. No app auth bypass.
 export async function addAdminSession(
   context: BrowserContext,
+  db: Client,
   admin: { githubId: string; login: string },
 ) {
-  const value = goAccessToken({
-    // The Go API puts the numeric GitHub id in sub.
-    sub: admin.githubId,
-    role: "admin",
-    login: admin.login,
-  });
+  const token = randomBytes(32).toString("base64url");
+  await db.query(
+    `INSERT INTO "Session" ("id","tokenHash","ownerId","role","login","expiresAt")
+     VALUES ($1,$2,$3,'admin',$4, NOW() + interval '1 hour')`,
+    [
+      `c${randomBytes(12).toString("hex")}`,
+      createHash("sha256").update(token).digest("hex"),
+      admin.githubId,
+      admin.login,
+    ],
+  );
   await context.addCookies([
-    { name: cookieName, value, url: baseURL, httpOnly: true, sameSite: "Lax" },
+    {
+      name: sessionCookieName,
+      value: token,
+      url: baseURL,
+      httpOnly: true,
+      sameSite: "Lax",
+    },
   ]);
-}
-
-// An HS256 access token as services/api/auth/token.go issues it.
-function goAccessToken(claims: { sub: string; role: string; login: string }) {
-  const now = Math.floor(Date.now() / 1000);
-  const encodePart = (part: object) =>
-    Buffer.from(JSON.stringify(part)).toString("base64url");
-  const unsigned = `${encodePart({ alg: "HS256", typ: "JWT" })}.${encodePart({
-    iss: "ffpf-zhuelog-api",
-    aud: ["ffpf-zhuelog-mobile"],
-    iat: now,
-    exp: now + 3600,
-    ...claims,
-  })}`;
-  const signature = createHmac("sha256", goJwtSecret())
-    .update(unsigned)
-    .digest("base64url");
-  return `${unsigned}.${signature}`;
 }
 
 export async function signInWithPassword(
