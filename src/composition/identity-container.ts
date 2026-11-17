@@ -133,7 +133,7 @@ export async function signInAsGuest(redirectTo: string) {
     redirect(guestFailureUrl(redirectTo));
   }
   if (!result.ok) {
-    console.error("SIGN_IN_GUEST_REFUSED", result.reason);
+    console.warn("SIGN_IN_GUEST_REFUSED", result.reason);
     redirect(guestFailureUrl(redirectTo));
   }
   await startSession(result.session);
@@ -150,7 +150,7 @@ export async function signInAsDemo(redirectTo: string) {
     redirect(demoFailureUrl("error", redirectTo));
   }
   if (!result.ok) {
-    console.error("SIGN_IN_DEMO_REFUSED", result.reason);
+    console.warn("SIGN_IN_DEMO_REFUSED", result.reason);
     redirect(demoFailureUrl(result.reason, redirectTo));
   }
   await startSession(result.session);

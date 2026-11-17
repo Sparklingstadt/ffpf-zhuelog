@@ -15,7 +15,7 @@ afterEach(() => {
   console.error = realError;
 });
 
-test("a new sign-in ends the browser's previous session first", async () => {
+test("the new session comes with the browser's previous row deleted", async () => {
   const ended: string[] = [];
   sessionStore.end = async (token) => void ended.push(token);
   assert.deepEqual(

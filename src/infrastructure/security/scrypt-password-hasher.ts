@@ -104,22 +104,27 @@ export class ScryptPasswordHasher {
     return hashWithSalt(password, randomBytes(SALT_BYTES));
   }
 
-  // false for a wrong password or a hash it cannot read. A failure of the
-  // computation itself is thrown, never a mismatch, so it never counts as a
-  // wrong password: sign-in answers it as an error, as Go answered its
-  // hasher's errors (TestLoginPasswordHasherErrorIsNotUnauthorized). Go's own
-  // Verify errs only when no hashing slot frees up; the web has no slots, and
-  // the one error it can meet is the computation's.
+  // false for a wrong password, a hash it cannot read, or a failure of the
+  // computation itself, as Go's Verify (services/api/auth/password.go): a
+  // failure must look like a mismatch, or verify and simulate would answer
+  // differently and tell whether an account exists.
   async verify(password: string, passwordHash: string) {
     const parsed = parse(passwordHash);
     if (!parsed) return false;
-    const actual = await this.derive(password, parsed.salt, parsed.key.length, {
-      ...parsed.params,
-      maxmem: MAX_MEMORY,
-    });
-    return (
-      actual.length === parsed.key.length && timingSafeEqual(actual, parsed.key)
-    );
+    try {
+      const actual = await this.derive(
+        password,
+        parsed.salt,
+        parsed.key.length,
+        { ...parsed.params, maxmem: MAX_MEMORY },
+      );
+      return (
+        actual.length === parsed.key.length &&
+        timingSafeEqual(actual, parsed.key)
+      );
+    } catch {
+      return false;
+    }
   }
 
   // The dummy hash of a random password that simulate verifies against,
@@ -134,7 +139,7 @@ export class ScryptPasswordHasher {
 
   // Builds the dummy hash now, so the first simulate costs one verify like
   // the rest (Go: Warm at startup). Never throws; a failure is retried by
-  // simulate. Not called at import: the sign-in wiring calls it.
+  // simulate. Not called at import: the sign-in page calls it (warmSignIn).
   async warm() {
     try {
       await this.dummy();

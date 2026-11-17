@@ -54,17 +54,14 @@ test("verify treats malformed hashes as a mismatch without throwing", async () =
   }
 });
 
-test("verify rethrows a scrypt failure but refuses an unreadable hash", async () => {
+test("a scrypt failure is false, as in Go", async () => {
   // A hash parse() accepts cannot make the real scrypt fail (N, r and p are
   // capped), so the computation is swapped for one that fails.
   const stored = await hasher.hash("correct horse battery");
   const failing = new ScryptPasswordHasher(async () => {
     throw new RangeError("scrypt failed");
   });
-  await assert.rejects(failing.verify("correct horse battery", stored), {
-    name: "RangeError",
-  });
-  // An unreadable hash never reaches the computation: still a mismatch.
+  assert.equal(await failing.verify("correct horse battery", stored), false);
   assert.equal(await failing.verify("anything", "scrypt:1:2"), false);
 });
 
