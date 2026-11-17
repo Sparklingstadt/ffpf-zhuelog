@@ -13,11 +13,6 @@ pre-commit:
     typecheck:
       priority: 3
       run: pnpm run typecheck
-    gofmt:
-      priority: 4
-      root: "services/api/"
-      glob: "*.go"
-      run: test -z "$(gofmt -l {staged_files})" || { gofmt -l {staged_files}; echo "gofmt が必要です"; exit 1; }
 
 pre-push:
   piped: true
@@ -28,14 +23,8 @@ pre-push:
     typecheck:
       priority: 2
       run: pnpm run typecheck
-    # Store and server tests that need Postgres skip unless
-    # API_TEST_DATABASE_URL is set (see services/api/main_test.go).
-    go:
-      priority: 3
-      root: "services/api/"
-      run: go vet ./... && go test ./...
     e2e:
-      priority: 4
+      priority: 3
       run: |
         set -e
         trap 'pnpm run test:e2e:stop' EXIT

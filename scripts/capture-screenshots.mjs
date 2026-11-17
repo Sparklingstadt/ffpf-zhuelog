@@ -1,10 +1,10 @@
 import { mkdir } from "node:fs/promises";
 import { chromium } from "@playwright/test";
 
-// Captures the README's screenshots (docs/images/) from a running local app:
-// the web on BASE_URL and the local Go API with its sample data
-// (docs/api-local.md). Signs in as the sample member "demo".
-// Usage: pnpm run api:db && pnpm run api:dev, pnpm run dev, then
+// Captures the README's screenshots (docs/images/) from a running local app
+// with the sample members (docs/development.md). Signs in as "demo".
+// Usage: docker compose up -d, pnpm run db:deploy, pnpm run db:seed:sample,
+//   pnpm run dev, then
 //   BASE_URL=http://localhost:3000 node scripts/capture-screenshots.mjs
 const base = process.env.BASE_URL ?? "http://localhost:3000";
 const out = "docs/images";
