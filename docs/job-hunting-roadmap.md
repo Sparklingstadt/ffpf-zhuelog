@@ -60,7 +60,7 @@
 1. 全体の図（ブラウザー、Next.js、Go API、Postgres、OpenAI、LINE、FFPF ID）
 2. Web と Go API を分けた理由と、Web が DB を読まない決まり
 3. 層の構成と、依存の向き（README の節を移す）
-4. 認証：GitHub OAuth・ID とパスワード・FFPF ID（OIDC）・ゲストと、Go API の JWT と refresh token
+4. 認証：GitHub OAuth・ID とパスワード・FFPF ID（OIDC）・ゲストと、Web のセッション（ランダムなトークンのハッシュを `Session` に置く。30 日で切れる）
 5. 復習：FSRS を選んだ理由、`ReviewItem` の列に状態を持つ理由、ノート・練習・単語帳を同じ列に載せた理由
 6. 練習：4 択の共通部品、記録の表の共有（`mode`）、HSK の級の 2 通りの決め方と最長一致
 7. LINE：Webhook を受けて非同期に処理する流れ、やり直し、送信数の枠

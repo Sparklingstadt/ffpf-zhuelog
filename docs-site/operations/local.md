@@ -36,7 +36,7 @@ pnpm run api:smoke
 
 ## サンプルのデータ
 
-`scripts/api-local-seed.ts` は、ローカル専用のテスト用の会員と共有済みのエントリーを作ります。Go のログインのためのもので、段階 11 からは使いません（段階 12 で消します）。
+`scripts/api-local-seed.ts` は、ローカル専用のテスト用の会員と共有済みのエントリーを作ります。Web のログイン画面の「ID とパスワード」でも使えます（`.env` の `DATABASE_URL` をこの DB にしたとき。Go は要りません）。Go のログインのためのものでしたが、段階 11 から Go は使いません。Go は health だけです。
 
 LINE とデモのリセットは Web（段階 10）が受け持ち、Go にはもうありません。LINE 連携はローカルでは使えません（本物の LINE のチャネルと OpenAI の API キーが要るため）。Web に LINE の環境変数が無いと、「LINE 連携」画面（`/account/line`）には「LINE 連携は今は使えません。」と出ます。e2e は偽の LINE API（`e2e/line-stub.ts`）で確かめます。
 

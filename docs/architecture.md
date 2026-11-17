@@ -13,11 +13,11 @@ flowchart LR
     RSC[Server Components]
     SA[Server Actions]
     RH[Route Handlers<br/>チャット・クイック質問の答え・OAuth の callback・LINE の webhook と拾い直し・デモのリセット]
-    PX[proxy.ts<br/>refresh token の更新]
+    PX[proxy.ts<br/>zl_session があるかだけを見る]
     CRON[Vercel Cron（Web の vercel.json）<br/>/api/cron/line-drain・/api/cron/demo-reset]
   end
   subgraph API[Go API on Vercel]
-    AUTH[auth]
+    HEALTH["/health だけ<br/>段階 12 で消す"]
   end
   DB[(PostgreSQL / Neon<br/>スキーマは Prisma)]
   OpenAI[OpenAI API]
@@ -26,21 +26,20 @@ flowchart LR
   FFPF[FFPF ID<br/>OpenID Connect]
 
   UI -->|HttpOnly Cookie| Web
-  Web -->|Bearer JWT<br/>サーバー間| API
-  API --> DB
-  Web -->|Prisma: アカウントの確認・会員の管理・パスワード変更・単語帳・学習ノート・CSV の取り込み・復習・練習の記録・質問ノート・会話ノート・フォロー・タイムライン・学習ログ・AI の利用量の集計・LINE の連携とメッセージ・デモのリセット| DB
+  API -.->|health の確認だけ| DB
+  Web -->|Prisma: ログインのセッション（Session）・ログインの試行回数・アカウントの確認・会員の管理・パスワード変更・単語帳・学習ノート・CSV の取り込み・復習・練習の記録・質問ノート・会話ノート・フォロー・タイムライン・学習ログ・AI の利用量の集計・LINE の連携とメッセージ・デモのリセット| DB
   Web -->|単語帳の下書き・クイック質問・チャット・LINE の添削と翻訳| OpenAI
   LINE -->|Webhook| Web
   Web -->|reply・push| LINE
   CRON -->|拾い直し・お知らせの push| LINE
   CRON --> OpenAI
   CRON -->|デモのリセット| DB
-  AUTH --> GH
-  AUTH --> FFPF
+  Web -->|ログインの code の交換| GH
+  Web -->|ログインの code の交換| FFPF
 ```
 
-- ブラウザーが話す相手は Web だけです。Go API を直接は呼びません。
-- Web は、ログイン中の人を決めるために、実行時に DB のアカウント（`PasswordAccount`・`FfpfAccount`）を Prisma（`src/infrastructure/prisma/`）で読みます。アクセストークンも Web が自分で確かめます。単語帳（一覧・保存・削除）と学習ノート（一覧・検索・カレンダー・日ごとの表示・ゴミ箱・共有・CSV の取り込み）と練習の記録（介詞・補語）も Prisma で読み書きし（CSV は Web が自分で検証・解析し、1 つのトランザクションで保存します）、「AI で下書き」・クイック質問・ChatGPT と話すは Web が OpenAI を直接呼んで、使った量を `AiUsage` に記録し、質問ノートと会話ノートも Prisma で読み書きし、フォロー（会員の一覧・タイムライン・フォローする／外す）も Prisma で読み書きし、会員の管理（作成・一覧・パスワードの再設定）と自分のパスワードの変更も Prisma で書き（ハッシュは Web が scrypt で Go と同じ形に作ります）、学習ログ（カレンダー）と AI の利用量の月ごとの集計は Prisma で読むだけです。LINE も Web が受け、webhook の署名を確かめ、添削・翻訳の OpenAI を直接呼んで reply し、連携とメッセージ（`LineLink`・`LineLinkCode`・`LineMessage`）を Prisma で読み書きします。デモのリセットも Web が 1 つのトランザクションで行います。ログインは今も Go API を通します。機能は、設計書（[2026-11-16-deprecate-go-backend-design.md](superpowers/specs/2026-11-16-deprecate-go-backend-design.md)）の段階ごとに、Go から Web へ移していきます。
+- ブラウザーが話す相手は Web だけです。Web は Go API を呼びません。Go API は `/health` と `/ping` を返すだけで、段階 12 で消します。
+- Web は、ログイン中の人を決めるために、実行時に `Session` の行と DB のアカウント（`PasswordAccount`・`FfpfAccount`）を Prisma（`src/infrastructure/prisma/`）で読みます。単語帳（一覧・保存・削除）と学習ノート（一覧・検索・カレンダー・日ごとの表示・ゴミ箱・共有・CSV の取り込み）と練習の記録（介詞・補語）も Prisma で読み書きし（CSV は Web が自分で検証・解析し、1 つのトランザクションで保存します）、「AI で下書き」・クイック質問・ChatGPT と話すは Web が OpenAI を直接呼んで、使った量を `AiUsage` に記録し、質問ノートと会話ノートも Prisma で読み書きし、フォロー（会員の一覧・タイムライン・フォローする／外す）も Prisma で読み書きし、会員の管理（作成・一覧・パスワードの再設定）と自分のパスワードの変更も Prisma で書き（ハッシュは Web が scrypt で作り、確かめます）、学習ログ（カレンダー）と AI の利用量の月ごとの集計は Prisma で読むだけです。LINE も Web が受け、webhook の署名を確かめ、添削・翻訳の OpenAI を直接呼んで reply し、連携とメッセージ（`LineLink`・`LineLinkCode`・`LineMessage`）を Prisma で読み書きします。デモのリセットも Web が 1 つのトランザクションで行います。ログイン（GitHub・ID とパスワード・FFPF ID・ゲスト・デモ）とログアウトも Web が行い、`Session` を読み書きします（段階 11）。機能は、設計書（[2026-11-16-deprecate-go-backend-design.md](superpowers/specs/2026-11-16-deprecate-go-backend-design.md)）の段階ごとに、Go から Web へ移してきました。残りの Go（`services/api`）は、段階 12 で、`GO_API_URL`・`API_WEB_PROXY_SECRET`・`API_JWT_SECRET`・`ApiRefreshToken`・`docs-site/` と一緒に消します。
 - LINE は Web の `POST /api/line/webhook` に Webhook を送ります。Web が署名を確かめ、OpenAI で添削・翻訳し、結果を reply で返します。拾い直しと朝のお知らせは Web の `GET /api/cron/line-drain` で、Web の `vercel.json` の Cron が毎日 06:00 JST ごろに呼びます。Go API には LINE のコードも Cron もありません。
 
 ## 2. Web と Go API を分けた理由
@@ -55,7 +54,9 @@ flowchart LR
 
 スキーマとマイグレーションは Prisma に残しました。Go は pgx で SQL を書きます。
 
-**守っている決まり**：`src` から Prisma・pg・next-auth を import しないことを、`tests/architecture.test.ts` が検査します。
+**その後**：段階 1 から 11 で、Web のデータの読み書きとログインを、順に Web（Prisma）へ戻しました。いまの Go は `/health` と `/ping` だけです。
+
+**守っている決まり**：Prisma を import してよいのは `src/infrastructure/prisma/` だけで、pg と next-auth は import できません。これを `tests/architecture.test.ts` が検査します。
 
 **捨てた案**：Go API を AWS ECS に置く案（最初の計画）。Vercel だけで足りると分かったので、置き場所を 1 つにしました。
 
@@ -65,7 +66,7 @@ flowchart LR
 src/
 ├── domain/          # エンティティ、値オブジェクト、リポジトリの契約（Next.js・React に依存しない）
 ├── application/     # ユースケースと外部サービスのポート
-├── infrastructure/  # Go API の呼び出し、Cookie、設定の実装
+├── infrastructure/  # Prisma、Cookie とセッション、OAuth、OpenAI、設定の実装
 ├── presentation/    # 画面部品、Server Action、コントローラー、表示用の変換
 ├── composition/     # 実装を組み立ててユースケースを公開
 └── app/             # Next.js App Router のエントリーポイント
@@ -78,54 +79,58 @@ src/
 - ポートには `Request`・`Response`・`Headers` を使わない。
 - `domain`・`application` で `console` を使わない。
 
-Web から Go API への呼び出しは `src/infrastructure/go-api/` にまとめています。
+Web から Go API を呼ぶ処理は、段階 11b からありません。`src/infrastructure/go-api/` の呼び出しの部品とエラーの型だけが残っていて、`GO_API_URL`・`API_WEB_PROXY_SECRET` を読みますが、どこからも呼びません。段階 12 で消します。
 
-- **呼び出し方**：`fetch` は `cache: "no-store"` と `redirect: "error"` で呼び、10 秒で切ります（アップロードは 270 秒）。
-- **ログインの切れ目**：トークンが無いときや、Go API が 401 を返したときは、ログイン画面へ送ります。
-- **接続元の IP**：`X-Zhuelog-Client-IP` と共有の秘密（`X-Zhuelog-Proxy-Secret`）を一緒に送ります。Go API は、秘密が合うときだけその IP を信じます。
+- **ログインの切れ目**：Cookie `zl_session` が無いときは Proxy が、行が無い・期限切れのときは各ページと Server Action が、ログイン画面へ送ります。
+- **接続元の IP**：`x-real-ip` / `x-forwarded-for` から Web が自分で決め、ログインの試行回数に使います。
 
 ## 4. 認証
 
-| ログイン        | 中身                                                                                                                                                                                                                                                                   |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GitHub OAuth    | PKCE つき。管理者は GitHub の数字の ID の許可リスト（`AUTH_ALLOWED_GITHUB_IDS`）で決める                                                                                                                                                                               |
-| ID とパスワード | 管理者が発行する会員。パスワードは scrypt（N=2^15, r=8, p=1）。Web が `src/infrastructure/security/scrypt-password-hasher.ts` で書き、Go のログインが確かめる。`tests/fixtures/scrypt-golden.json`（Go の `password_golden_test.go` が書く）で両者が同じことを確かめる |
-| FFPF ID         | 自作の ID 基盤の OpenID Connect。ES256 の署名、iss・aud・nonce・exp を確かめる                                                                                                                                                                                         |
-| ゲスト          | データを持たない。練習だけ使える                                                                                                                                                                                                                                       |
+ログインとログアウトは、すべて Web が行います（段階 11）。Go API は関わりません。
 
-**トークン**
+| ログイン        | 中身                                                                                                                                                                                                                |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GitHub OAuth    | PKCE つき。管理者だけ。管理者は GitHub の数字の ID の許可リスト（`AUTH_ALLOWED_GITHUB_IDS`）で決める。code の交換は Web（`AUTH_GITHUB_ID` と `GITHUB_WEB_CLIENT_SECRET`）                                           |
+| ID とパスワード | 管理者が発行する会員。パスワードは scrypt（N=2^15, r=8, p=1）で、書き込みも確認も Web（`src/infrastructure/security/scrypt-password-hasher.ts`）。`tests/fixtures/scrypt-golden.json` は、Go が書いた固定のファイル |
+| FFPF ID         | 自作の ID 基盤の OpenID Connect。ES256 の署名、iss・aud・nonce・exp を確かめる。code の交換は Web（`FFPF_ID_CLIENT_SECRET`）                                                                                        |
+| ゲスト          | データを持たない。練習だけ使える                                                                                                                                                                                    |
+| デモ            | `DEMO_LOGIN_ID` のアカウントに、パスワードなしで入る。全員で 1 つのアカウントを使う                                                                                                                                 |
 
-- Go API がアクセストークン（HS256 の JWT、15 分）と refresh token（30 日、ゲストは 24 時間）を発行します。
-- Web はどちらも HttpOnly の Cookie に入れ、`proxy.ts` がアクセストークンの切れたときに更新します。
+GitHub と FFPF ID が code を交換するときの `redirect_uri` は、`AUTH_URL` の origin から決まります（GitHub は `/api/auth/callback/github/go`、FFPF ID は `/api/auth/callback/ffpf`）。GitHub の OAuth App と FFPF ID の portal に登録した URL と 1 文字でも違うと、ログインできません。
 
-**refresh token**
+**セッション（`zl_session`）**
 
-- DB には SHA-256 のハッシュだけを置きます。
-- 使うたびに新しいものに替えます（ローテーション）。替えたあとの古いトークンが使われたら、同じログインの系列（family）をまとめて無効にします。
-- 例外として、ブラウザーの並行リクエストのため、30 秒だけは古いトークンも受け付けます。この 30 秒は、盗まれたトークンを見逃しうる時間として、わかったうえで受け入れています。
+- ブラウザーの Cookie `zl_session`（HttpOnly・SameSite=Lax）に、ランダムな 32 バイトのトークンを置きます。DB の `Session` には、トークンの SHA-256 のハッシュだけを保存します。
+- ログインのたびに、新しいトークンを出します。そのブラウザーの前のセッションの行は消し、`zl_act_as` と、Go の時代の Cookie（`zl_access`・`zl_refresh`）も消します。
+- 期限は固定です。会員と管理者は 30 日、ゲストは 24 時間で、使っても延びません（Go の refresh のようには延ばしません）。期限が来たら、ログインし直します。
+- 期限切れの行は、ログインのたびに最大 100 行まで消します。別のジョブは要りません。
+- ログアウトは、自分の行を消し、Cookie を消します。DB が失敗しても、Cookie は消します。
+
+**毎回の確かめ**：リクエストのたびに、Cookie のトークンから `Session` の行を引き、次を確かめます。許可リストなどを変えたら、すぐ効きます。
+
+- 行が無い・期限切れ・形が違うときは、未ログインです。
+- 管理者は、`AUTH_ALLOWED_GITHUB_IDS` に載っているときだけ管理者です。外れていると `revoked` で、どのページも使えません。この許可リストは、モジュールを読み込むときに 1 度だけ読むので、値を変えたら再デプロイが要ります。
+- 会員は、アカウントがあり、`sessionVersion` が行に書いた値と同じときだけ通ります。デモのアカウントには、デモの印を付けます。
+- ゲストは、DB のアカウントを読みません。
+
+**Proxy**：`src/proxy.ts` は、Cookie `zl_session` があるかだけを見ます。DB は読まず、更新もしません。無ければログイン画面へ送ります。中身の確かめは、上の「毎回の確かめ」を各ページ・Server Action・Route Handler が行います。
 
 **失効**
 
-- 会員はパスワードを変えると `sessionVersion` が上がり、古いトークンは次のリクエストで 401 になります。管理者がパスワードを再設定したときも同じです。変更も再設定も、Web が 1 つの `UPDATE` でハッシュと `sessionVersion` を変えます。Go のログインと refresh も、Web も、次のリクエストで古いセッションを断ります。
-- 管理者は、許可リストから外れた時点で 403 になります。
+- 会員がパスワードを変えると、またはパスワードを管理者が再設定すると、Web が 1 つの `UPDATE` でハッシュと `sessionVersion` を変え、その人の `Session` の行をすべて消します。ほかの端末も、次のリクエストでログインし直しになります。
+- 管理者は、許可リストから外れた時点で `revoked` になります（行は期限まで残ります）。
+- 全員をログアウトさせたいときは、`DELETE FROM "Session"` を実行します（[api-deployment.md](api-deployment.md) の「運用上の注意」）。
 
 **試行回数**
 
-- 接続元ごと、接続元とログイン ID の組ごとに、15 分の窓で数えます（`SignInThrottle`）。
+- 接続元ごと、接続元とログイン ID の組ごとに、15 分の窓で数えます（`SignInThrottle`）。Web が数えます。
 - アカウントそのものはロックしません。ほかの場所からの失敗で、本人が締め出されないようにするためです。
 
-**Web のセッション（段階 11a で部品を足しました。11b から使います）**
-
-- ブラウザーの Cookie に、ランダムな 32 バイトのトークンを置き、DB の `Session` には SHA-256 のハッシュだけを保存します。11a では表も部品もありますが、どこからも呼ばないので、ログインは Go のままで、表は空です。
-- 期限は固定です。会員と管理者は 30 日、ゲストは 24 時間で、使っても延びません（Go の refresh のようにはローテーションしません）。
-- 期限切れの行は、ログインのたびに最大 100 行まで消します。別のジョブは要りません。
-- パスワードの変更と管理者の再設定は、そのアカウントの `Session` を同じトランザクションで消します。
-
-**会員として操作**：管理者は、会員の画面を閲覧のみで見られます。トークンには、操作している管理者（ActorID）と、見ている会員（OwnerID）の両方が入ります。LINE の連携はできず（LINE 連携の画面は `/` に戻ります）、AI の利用量は管理者のほうに数えます。
+**会員として操作**：管理者は、会員の画面を閲覧のみで見られます。管理者がメニューから会員を選ぶと、Web が Cookie `zl_act_as`（会員の `ownerId`）を書きます。Web は、リクエストのたびに、管理者であることを確かめ、`zl_act_as` が `password:` ＋英小文字と数字だけの形で、そのパスワードアカウントが DB にあることを確かめます。1 つでも外れると、`zl_act_as` は無視して、管理者自身の画面を出します。管理者以外には効きません。LINE の連携はできず（LINE 連携の画面は `/` に戻ります）、AI の利用量は管理者のほうに数えます。新しくログインすると、`zl_act_as` は消えます。
 
 ## 5. 復習
 
-- **計算**：FSRS v4 で次の期日を決めます。Web が `src/domain/review/fsrs.ts`（[go-fsrs](https://github.com/open-spaced-repetition/go-fsrs) を手で移した TypeScript）で計算し、`ReviewItem` と `ReviewLog` も Prisma で直接読み書きします。Go の `review` パッケージには同じ計算が残っていて（デモのリセットだけが `review.NewCard` と `review.Next` を使います）、`tests/fixtures/fsrs-golden.json` で両者の結果が同じことをテストで確かめます（golden ファイルは Go の `golden_test.go` が書き、Web のテストが読みます）。定着率 90%、学習中のステップは 1 分と 10 分です。評価は「もう一度・難しい・できた・簡単」の 4 段階です。
+- **計算**：FSRS v4 で次の期日を決めます。Web が `src/domain/review/fsrs.ts`（[go-fsrs](https://github.com/open-spaced-repetition/go-fsrs) を手で移した TypeScript）で計算し、`ReviewItem` と `ReviewLog` も Prisma で直接読み書きします。Go の `review` パッケージは消えていて、`tests/fixtures/fsrs-golden.json`（go-fsrs の結果を書いた固定のファイル）と同じ結果になることを、Web のテストで確かめます。定着率 90%、学習中のステップは 1 分と 10 分です。評価は「もう一度・難しい・できた・簡単」の 4 段階です。
 - **1 つの列にまとめる**：学習ノート、介詞と補語の練習の間違い、単語帳の語句を、どれも `ReviewItem`（`kind` と `targetId`）として同じ表に置きます。そのため、「今日の復習」は 1 つの列で済みます。FSRS のカードの状態（stability、difficulty、due など）は列に持ち、`(ownerId, due)` の索引で期日の来たものを引きます。
 - **答えの記録**：答えは `ReviewLog` に残します。あとで FSRS のパラメーターを本人の記録に合わせられるようにするためです。
 - **ゴミ箱との関係**：ゴミ箱に入れた学習ノートは、復習の列から外します。
@@ -197,26 +202,26 @@ sequenceDiagram
 
 ## 9. テスト
 
-| 種類       | 数                    | 中身                                                                                                  |
-| ---------- | --------------------- | ----------------------------------------------------------------------------------------------------- |
-| 単体（TS） | 378 件                | ドメインの規則、表示の変換、層の検査、Go API の呼び方                                                 |
-| Go         | テストファイル 81 本  | ハンドラー、認証、FSRS。`store` は本物の Postgres に対して走る                                        |
-| E2E        | 206 件（PC とスマホ） | Playwright。Docker の Postgres、Go API、Web、OpenAI と LINE と FFPF ID のスタブを立ち上げて画面を通す |
+| 種類       | 数                    | 中身                                                                                                             |
+| ---------- | --------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| 単体（TS） | 762 件                | ドメインの規則、表示の変換、層の検査、ログインとセッション                                                       |
+| Go         | テストファイル 7 本   | health・設定・ミドルウェア。`store` は本物の Postgres に対して走る                                               |
+| E2E        | 320 件（PC とスマホ） | Playwright。Docker の Postgres、Web、OpenAI と LINE と FFPF ID のスタブを立ち上げて画面を通す（Go は起動しない） |
 
-- **E2E の土台**：`e2e/server.ts` が、マイグレーション、`next build`、スタブ、Go のビルドと起動を行います。テストのたびに表を空にします。
+- **E2E の土台**：`e2e/server.ts` が、マイグレーション、`next build`、スタブの起動を行います。Go は起動しません。ログインは Web の `Session` で行い、テストの側が行を書いて `zl_session` を作ります。テストのたびに表を空にします。
 - **CSV のパースの検証**：CSV の取り込みを Web に戻したので、約 45 件の CSV の見本は `tests/fixtures/learning-csv/` にあり、TS のパーサー（csv-parse）がその見本と同じ結果を返すことを確かめています。
 - **lefthook**：commit の前に format・lint・型チェック、push の前に単体と E2E を走らせます。GitHub Actions の CI は置いていないので、このローカルの確認が関門です。
 
 ## 10. デプロイ
 
-- **2 つのプロジェクト**：Vercel に Web と Go API の 2 つのプロジェクトがあります。Go API は Vercel の Go ランタイム（Fluid compute）で動きます。
+- **2 つのプロジェクト**：Vercel に Web と Go API の 2 つのプロジェクトがあります。Go API は Vercel の Go ランタイム（Fluid compute）で動き、`/health` と `/ping` だけを返します。段階 12 で Go API のプロジェクトごと消します。
 - **マイグレーション**：本番のマイグレーションは、Web の本番ビルド（`scripts/vercel-build.sh`）が `prisma migrate deploy` で当てます。Go API は別にデプロイするので、マイグレーションは今動いている Go API と両立する形（表の追加、null を許す列の追加）にします。表や列の削除は 2 回のリリースに分けます。
 - **DB**：Neon のプール接続を使い、ローカル以外では TLS の検証（`verify-full`）を強制します。
 
 ## 11. いまの課題
 
-- **入力の検証が 2 か所にある**：会員の作成とパスワードの規則は Web（`src/domain/identity/password-account.ts`）だけになりました。Go に残るのは、ログインのときのログイン ID の正規化（`NormalizeLoginID`、同じ規則）だけです。この規則を変えるときは、Web と Go の 2 か所を直す必要があります。
+- **Go が残っている**：Go（`services/api`）は `/health` と `/ping` だけで、使っていません。段階 12 で、`services/api`・`GO_API_URL`・`API_WEB_PROXY_SECRET`・`API_JWT_SECRET`・`ApiRefreshToken`・`docs-site/` を消します。それまでは、本番の Go API のプロジェクトが残ります。
+- **セッションは延びない**：Web のセッションは、30 日（ゲストは 24 時間）で必ず切れます。使っていても延ばしません。長く使う人は、月に 1 回ログインし直します。
 - **外部キーがない**：管理者は DB に行を持たないので、`ownerId` に外部キーがありません。持ち主の整合性はコードで守っています（フォローは、相手のアカウントがあるときだけ行を足す 1 つの SQL）。
-- **Preview の DB**：Preview の Go API がどの DB を使うかについて、文書の記述が食い違っています（`api-deployment.md` の 62 行目と 80 行目）。どちらかにそろえる必要があります。
 - **CI がない**：GitHub Actions の CI は外しました。確認は lefthook のローカルの検査だけで、`pnpm audit` と `pnpm run build` は自動では走りません。
 - **層の検査に抜けがある**：`presentation` から `infrastructure` への import は、まだ制限していません。

@@ -12,8 +12,20 @@ OpenAI を呼ぶ 4 つの機能（LINE の添削・翻訳、ChatGPT と話す、
 
 - **共有と毎晩のリセット**: デモは試す人全員で 1 つのアカウントを使います。書いたものはほかの人にも見え、毎晩 04:00（日本時間）ごろに例のデータへ戻ります（リセットは Web が行い、Web の `vercel.json` の Cron（`0 19 * * *`、UTC）が呼びます。Hobby の Cron は時刻が 1 時間単位なので、最大 59 分遅れることがあります）。例のデータは `src/domain/demo/demo-fixture.json` です。
 - **使えないもの**: AI（ChatGPT と話す、クイック質問、単語帳の下書き）、LINE 連携、フォローと共有、パスワード変更は、断られます。ChatGPT と話す・クイック質問の API、Web のパスワード変更は「デモでは使えません。」と答えます。LINE 連携の画面（`/account/line`）は `/` に戻ります。単語帳の下書きは「この操作を行う権限がありません。再度ログインしてください。」、フォローと共有を直接送ったときは「ログインし直してください。」と出ます。デモが `/follow` を開くと `/` に戻ります。メニューにも出ません。すべてのページの上に「デモアカウントです。」と出ます。
-- **設定**: 環境変数 `DEMO_LOGIN_ID`（例: `demo`）で有効になります。Web（リセット）と Go API（ログイン）の両方に同じ値を入れます。空のときはデモが無く、ボタンも出ません（Web のリセットのルートは 404）。リセットは `CRON_SECRET` で守られた Web の `GET`/`POST /api/cron/demo-reset` で、1 つのトランザクションで作り直します。
-- **本番で有効にする**: Web と Go API の Vercel プロジェクトに `DEMO_LOGIN_ID` を入れてデプロイし、`curl -X POST https://ffpf-zhuelog.sparklingstadt.com/api/cron/demo-reset -H "Authorization: Bearer $CRON_SECRET"` を 1 回呼んでアカウントとデータを作ります。詳しくは [docs/api-deployment.md](api-deployment.md) の「10. デモアカウント」にあります。
+- **設定**: 環境変数 `DEMO_LOGIN_ID`（例: `demo`）で有効になります。Web だけに入れます（ログインもリセットも Web が行います）。空のときはデモが無く、ボタンも出ません（Web のリセットのルートは 404）。リセットは `CRON_SECRET` で守られた Web の `GET`/`POST /api/cron/demo-reset` で、1 つのトランザクションで作り直します。
+- **本番で有効にする**: Web の Vercel プロジェクトに `DEMO_LOGIN_ID` を入れてデプロイし、`curl -X POST https://ffpf-zhuelog.sparklingstadt.com/api/cron/demo-reset -H "Authorization: Bearer $CRON_SECRET"` を 1 回呼んでアカウントとデータを作ります。詳しくは [docs/api-deployment.md](api-deployment.md) の「10. デモアカウント」にあります。
+
+## ログインとセッション
+
+ログインとログアウトは Web が行います（段階 11。以前は Go API でした）。
+
+- **ログインの方法**: ID とパスワード（管理者が発行した会員）、FFPF ID、ゲスト（「ゲストとして使う」）、デモ（「デモで試す」）、GitHub（管理者だけ）です。
+- **30 日でログインし直す**: 会員と管理者のログインは 30 日、ゲストは 24 時間で切れます。使っていても延びないので、切れたらログイン画面からやり直します。
+- **ログアウト**: そのブラウザーのセッションだけが終わります。ほかの端末のセッションは残ります。
+- **パスワードを変えたとき**: 自分で変えても、管理者が再設定しても、その人のセッションはすべて終わります。新しいパスワードで入り直します。
+- **GitHub は管理者だけ**: GitHub の数字の ID が許可リスト（`AUTH_ALLOWED_GITHUB_IDS`）にある人だけが、管理者として入れます。それ以外の人は、ログインが断られます。
+
+仕組みは [architecture.md](architecture.md) の「4. 認証」にあります。
 
 ## 画面の移動
 
