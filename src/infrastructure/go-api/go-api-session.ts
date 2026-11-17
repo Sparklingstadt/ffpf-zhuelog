@@ -2,6 +2,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { clientAddress } from "../auth/client-address";
+import { isSecureRequest } from "../auth/secure-request";
 import {
   fetchMe,
   GoApiError,
@@ -42,14 +43,8 @@ import {
 // cookies, which Server Components cannot do. redirect() throws NEXT_REDIRECT,
 // so it is never called inside a try block.
 
-// HTTPS behind Vercel's proxy shows up as x-forwarded-proto; AUTH_URL covers
-// deployments that state their public origin.
-export function isSecureRequest(requestHeaders: Headers): boolean {
-  const proto = requestHeaders.get("x-forwarded-proto")?.split(",")[0]?.trim();
-  return (
-    proto === "https" || Boolean(process.env.AUTH_URL?.startsWith("https:"))
-  );
-}
+// Moved to auth/secure-request.ts; re-exported until this file goes (Task 2).
+export { isSecureRequest };
 
 // One message for every rejected password sign-in: 400 (malformed input),
 // 401 (wrong credentials) and 429 (too many attempts) are not told apart, and

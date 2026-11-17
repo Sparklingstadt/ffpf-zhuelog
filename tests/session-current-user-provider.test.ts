@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { AccessClaims } from "../src/infrastructure/identity/access-token";
+import type { SessionPrincipal } from "../src/domain/identity/session";
 import {
   type FfpfIdentityAccount,
   type IdentityAccount,
   type IdentityAccounts,
-  TokenCurrentUserProvider,
-  type TokenIdentityConfig,
-} from "../src/infrastructure/identity/token-current-user-provider";
+  SessionCurrentUserProvider,
+  type SessionIdentityConfig,
+} from "../src/infrastructure/identity/session-current-user-provider";
 
 const password: IdentityAccount = {
   id: "abc",
@@ -35,41 +35,61 @@ function accounts(
 }
 
 function provider(
-  claims: AccessClaims | null,
+  principal: SessionPrincipal | null,
   options: {
     token?: string | undefined;
     actAs?: string;
     accounts?: IdentityAccounts;
-    config?: Partial<TokenIdentityConfig>;
+    config?: Partial<SessionIdentityConfig>;
   } = {},
 ) {
-  const token = "token" in options ? options.token : "access";
-  return new TokenCurrentUserProvider(
+  const token = "token" in options ? options.token : "session-token";
+  const lookups: string[] = [];
+  const instance = new SessionCurrentUserProvider(
     async () => token,
     async () => options.actAs,
-    () => claims,
+    async (t) => {
+      lookups.push(t);
+      return principal;
+    },
     options.accounts ?? accounts(),
     { allowedGitHubIds: new Set(["10001"]), ...options.config },
   );
+  return Object.assign(instance, { lookups });
 }
 
-const admin: AccessClaims = {
+const admin: SessionPrincipal = {
   role: "admin",
   ownerId: "10001",
   login: "octocat",
 };
-const member = (ownerId: string, sessionVersion: number): AccessClaims => ({
+const member = (ownerId: string, sessionVersion: number): SessionPrincipal => ({
   role: "member",
   ownerId,
   sessionVersion,
 });
 
-test("no cookie or an invalid token is signed out", async () => {
+test("no cookie or an unknown token is signed out", async () => {
   assert.equal(
     await provider(admin, { token: undefined }).getCurrentUser(),
     null,
   );
   assert.equal(await provider(null).getCurrentUser(), null);
+});
+
+test("a cookie the store does not find is signed out", async () => {
+  // The store answers null for an expired, deleted or malformed session.
+  const p = provider(null, { actAs: "password:abc" });
+  assert.equal(await p.getCurrentUser(), null);
+  assert.deepEqual(p.lookups, ["session-token"]);
+});
+
+test("no cookie never asks the store", async () => {
+  for (const token of [undefined, ""]) {
+    const p = provider(admin, { token });
+    assert.equal(await p.getCurrentUser(), null);
+    assert.deepEqual(p.lookups, []);
+  }
 });
 
 test("an admin on the allowlist keeps the GitHub login and id", async () => {

@@ -21,7 +21,7 @@ const secretTooShort = Buffer.byteLength(apiJwtSecret(), "utf8") < 32;
 const provider = new TokenCurrentUserProvider(
   readAccessToken,
   readActAsCookie,
-  (t) => verifyAccessToken(t, apiJwtSecret()),
+  async (t) => verifyAccessToken(t, apiJwtSecret()),
   prismaIdentityAccounts,
   { allowedGitHubIds: allowedGitHubIds(), demoLoginId: demoLoginId() },
 );
