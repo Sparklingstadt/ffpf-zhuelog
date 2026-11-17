@@ -5,6 +5,8 @@ import {
   allowedGitHubIds,
   cronSecret,
   demoLoginId,
+  ffpfIdClientSecret,
+  githubOAuthConfig,
   lineConfig,
 } from "../src/infrastructure/config/environment";
 
@@ -20,6 +22,9 @@ const LINE_KEYS = [
   "OPENAI_API_KEY",
   "OPENAI_API_BASE_URL",
   "CRON_SECRET",
+  "AUTH_GITHUB_ID",
+  "GITHUB_WEB_CLIENT_SECRET",
+  "FFPF_ID_CLIENT_SECRET",
 ] as const;
 const savedLine = Object.fromEntries(
   LINE_KEYS.map((key) => [key, process.env[key]]),
@@ -124,4 +129,31 @@ test("cronSecret is the trimmed CRON_SECRET", () => {
   assert.equal(cronSecret(), undefined);
   setLine({});
   assert.equal(cronSecret(), undefined);
+});
+
+test("githubOAuthConfig needs both the client id and the secret", () => {
+  setLine({ AUTH_GITHUB_ID: " id ", GITHUB_WEB_CLIENT_SECRET: " secret " });
+  assert.deepEqual(githubOAuthConfig(), {
+    clientId: "id",
+    clientSecret: "secret",
+  });
+  for (const values of [
+    { AUTH_GITHUB_ID: "id" },
+    { GITHUB_WEB_CLIENT_SECRET: "secret" },
+    { AUTH_GITHUB_ID: "id", GITHUB_WEB_CLIENT_SECRET: "  " },
+    { AUTH_GITHUB_ID: " \t", GITHUB_WEB_CLIENT_SECRET: "secret" },
+    {},
+  ]) {
+    setLine(values);
+    assert.equal(githubOAuthConfig(), undefined, JSON.stringify(values));
+  }
+});
+
+test("ffpfIdClientSecret is the trimmed secret", () => {
+  setLine({ FFPF_ID_CLIENT_SECRET: " s " });
+  assert.equal(ffpfIdClientSecret(), "s");
+  setLine({ FFPF_ID_CLIENT_SECRET: "  " });
+  assert.equal(ffpfIdClientSecret(), undefined);
+  setLine({});
+  assert.equal(ffpfIdClientSecret(), undefined);
 });

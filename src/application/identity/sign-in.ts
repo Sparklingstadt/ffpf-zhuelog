@@ -211,15 +211,25 @@ export function createSignIn(deps: SignInDeps) {
       );
     },
 
-    // Go: LoginGitHub. Filled in by the GitHub client's task.
+    // Go: LoginGitHub. Administrators only: the numeric GitHub id (never the
+    // login, which its owner can rename and someone else can take) must be
+    // on AUTH_ALLOWED_GITHUB_IDS. The login is kept for display only.
     async withGitHub(
       input: { code: string; verifier: string; redirectUri: string },
       client: string,
     ): Promise<SignInResult> {
-      void input;
       const now = deps.now();
       if (!(await withinRouteLimit(client, now))) return failure("throttled");
-      return failure("unavailable");
+      if (deps.github === null) return failure("unavailable");
+      const outcome = await deps.github.exchange(
+        input.code,
+        input.verifier,
+        input.redirectUri,
+      );
+      if (!outcome.ok) return failure(outcome.reason);
+      const ownerId = String(outcome.user.id);
+      if (!deps.allowedGitHubIds.has(ownerId)) return failure("forbidden");
+      return issue({ role: "admin", ownerId, login: outcome.user.login }, now);
     },
 
     // Go: LoginFFPF. Filled in by the FFPF ID client's task.

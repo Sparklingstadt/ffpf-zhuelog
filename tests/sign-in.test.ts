@@ -1,10 +1,12 @@
-// Mirrors services/api/auth/login_test.go (password and guest) and
+// Mirrors services/api/auth/login_test.go (password, guest, GitHub) and
 // services/api/auth/demo_test.go.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
   createSignIn,
+  type ExchangeOutcome,
+  type GitHubIdentity,
   type SignInDeps,
 } from "../src/application/identity/sign-in";
 import type { SessionPrincipal } from "../src/domain/identity/session";
@@ -23,9 +25,13 @@ function codePoints(s: string) {
 function fixture({
   accounts = { alice: account("cacc1", "pw", 0) },
   demoLoginId,
+  github = null,
+  allowedGitHubIds = new Set<string>(),
 }: {
   accounts?: Record<string, Account>;
   demoLoginId?: string;
+  github?: SignInDeps["github"];
+  allowedGitHubIds?: ReadonlySet<string>;
 } = {}) {
   let t = start;
   const counts = new Map<string, { count: number; since: number }>();
@@ -77,9 +83,9 @@ function fixture({
         return `token-${started.length}`;
       },
     },
-    github: null,
+    github,
     ffpf: null,
-    allowedGitHubIds: new Set(),
+    allowedGitHubIds,
     demoLoginId,
     now: () => new Date(t),
   };
@@ -465,7 +471,7 @@ test("the 21st demo sign-in from one client is throttled", async () => {
   assert.equal((await f.signIn.asDemo(otherClient)).ok, true);
 });
 
-test("GitHub and FFPF ID are unavailable until their clients exist", async () => {
+test("no GitHub client is unavailable; FFPF ID is until its client exists", async () => {
   const f = fixture();
   assert.deepEqual(
     await f.signIn.withGitHub(
@@ -485,4 +491,109 @@ test("GitHub and FFPF ID are unavailable until their clients exist", async () =>
     "route:auth:203.0.113.7",
     "route:auth:203.0.113.7",
   ]);
+});
+
+// A GitHub client that answers `outcome` and records what it was asked.
+function fakeGitHub(outcome: ExchangeOutcome<GitHubIdentity>) {
+  const calls: [string, string, string][] = [];
+  return {
+    calls,
+    client: {
+      async exchange(code: string, verifier: string, redirectUri: string) {
+        calls.push([code, verifier, redirectUri]);
+        return outcome;
+      },
+    },
+  };
+}
+
+const githubInput = {
+  code: "code",
+  verifier: "verifier",
+  redirectUri: "https://zhuelog.example/api/auth/callback/github",
+};
+
+test("an allowlisted GitHub id signs in as an admin with the login", async () => {
+  const gh = fakeGitHub({ ok: true, user: { id: 10001, login: "Alice" } });
+  const f = fixture({
+    github: gh.client,
+    allowedGitHubIds: new Set(["10001"]),
+  });
+  assert.deepEqual(await f.signIn.withGitHub(githubInput, client), {
+    ok: true,
+    session: { token: "token-1", maxAgeSeconds: 2_592_000 },
+  });
+  assert.deepEqual(gh.calls, [
+    [githubInput.code, githubInput.verifier, githubInput.redirectUri],
+  ]);
+  assert.deepEqual(f.started, [
+    { role: "admin", ownerId: "10001", login: "Alice" },
+  ]);
+  assert.deepEqual(f.consumed, ["route:auth:203.0.113.7"]);
+});
+
+test("a GitHub id off the allowlist is forbidden and starts nothing", async () => {
+  const gh = fakeGitHub({ ok: true, user: { id: 99, login: "Alice" } });
+  const f = fixture({
+    github: gh.client,
+    allowedGitHubIds: new Set(["10001"]),
+  });
+  assert.deepEqual(await f.signIn.withGitHub(githubInput, client), {
+    ok: false,
+    reason: "forbidden",
+  });
+  assert.deepEqual(f.started, []);
+
+  // An empty allowlist lets no one in.
+  const empty = fixture({ github: gh.client });
+  assert.deepEqual(await empty.signIn.withGitHub(githubInput, client), {
+    ok: false,
+    reason: "forbidden",
+  });
+  assert.deepEqual(empty.started, []);
+});
+
+test("the allowlist is by id whatever the login", async () => {
+  const allowed = new Set(["10001"]);
+  const root = fixture({
+    github: fakeGitHub({ ok: true, user: { id: 10002, login: "root" } }).client,
+    allowedGitHubIds: allowed,
+  });
+  assert.deepEqual(await root.signIn.withGitHub(githubInput, client), {
+    ok: false,
+    reason: "forbidden",
+  });
+  assert.deepEqual(root.started, []);
+
+  const renamed = fixture({
+    github: fakeGitHub({
+      ok: true,
+      user: { id: 10001, login: "someone-else" },
+    }).client,
+    allowedGitHubIds: allowed,
+  });
+  assert.equal((await renamed.signIn.withGitHub(githubInput, client)).ok, true);
+  assert.deepEqual(renamed.started, [
+    { role: "admin", ownerId: "10001", login: "someone-else" },
+  ]);
+});
+
+test("GitHub's invalid and unavailable pass through; no GitHub is unavailable", async () => {
+  for (const reason of ["invalid", "unavailable"] as const) {
+    const f = fixture({
+      github: fakeGitHub({ ok: false, reason }).client,
+      allowedGitHubIds: new Set(["10001"]),
+    });
+    assert.deepEqual(await f.signIn.withGitHub(githubInput, client), {
+      ok: false,
+      reason,
+    });
+    assert.deepEqual(f.started, []);
+  }
+  const none = fixture({ allowedGitHubIds: new Set(["10001"]) });
+  assert.deepEqual(await none.signIn.withGitHub(githubInput, client), {
+    ok: false,
+    reason: "unavailable",
+  });
+  assert.deepEqual(none.started, []);
 });
