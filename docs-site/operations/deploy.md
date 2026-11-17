@@ -4,70 +4,38 @@
 このページは `docs/api-deployment.md` を元にしています。手順が変わったときは、そちらと合わせて直してください。
 :::
 
-Go API を、Vercel へデプロイするための準備と手順です。Go API は、ネイティブアプリと Web（Next.js）の両方が使います。Web（Next.js）とは **別の Vercel プロジェクト** として、同じリポジトリの `services/api` をデプロイします。仕様は `docs/superpowers/specs/2026-10-20-go-mobile-api-design.md` と `docs/superpowers/specs/2026-10-21-go-api-on-vercel-design.md` にあります。
+Go API を、Vercel へデプロイするための準備と手順です。段階 11 からは、Go に残るのは health のルート（`/health`・`/healthz`・`/ping`）だけで、ログインは Web（Next.js）が受け持ちます。`services/api` と Go の Vercel プロジェクトは、段階 12 で消します。Web とは **別の Vercel プロジェクト** として、同じリポジトリの `services/api` をデプロイします。仕様は `docs/superpowers/specs/2026-10-21-go-api-on-vercel-design.md` にあります。
 
 Vercel の Go の Framework Preset は、`services/api` の `go.mod` と `main.go` を見つけて、普通の `net/http` サーバーとして動かします（Fluid compute）。設定は `services/api/vercel.json`（`"framework": "go"`）にあります。Go の実行は Vercel では Beta です。
 
-Vercel の準備とモバイル用 GitHub OAuth App の登録は、リポジトリの管理者が手作業で 1 回だけ行います。以後は Vercel の Git 連携で、main へのマージが本番、PR がプレビューにデプロイされます。
+以後は Vercel の Git 連携で、main へのマージが本番、PR がプレビューにデプロイされます。
 
-## 1. モバイル用 GitHub OAuth App の登録
+## 1. Vercel プロジェクト
 
-Web 用とは別の OAuth App を新しく作ります。GitHub の **Settings → Developer settings → OAuth Apps → New OAuth App** で登録します。
-
-- Application name: 任意（例: `学习録 mobile`）
-- Homepage URL: Web の本番 URL
-- Authorization callback URL: アプリのカスタム URL スキーム（例: `yourapp://oauth/callback`）
-
-控える値は Client ID と Client Secret の 2 つです（手順 3 で使います）。カスタム URL スキームは `GITHUB_MOBILE_REDIRECT_URI` にも同じ値を設定します。Go API は、リクエストの `redirectUri` がこの値と完全一致することを要求します。
-
-アプリがまだ無いときは、OAuth App を作らずに仮の値（例: Client ID `unused-mobile-client`、Client Secret `unused-mobile-secret`、`GITHUB_MOBILE_REDIRECT_URI` は `zhuelog://oauth/callback`）を入れて構いません。Go API は起動し、モバイルの GitHub ログインだけが失敗します（Web とパスワードのログインには影響しません）。アプリを作るときに本物の値に替えます。
-
-## 2. Vercel プロジェクトを作る
-
-1. Vercel のダッシュボードで **Add New… → Project** を選び、このリポジトリ（`Sparklingstadt/ffpf-zhuelog`）を Import します。Web のプロジェクトとは別に、新しいプロジェクト（本番は `ffpf-zhuelog-api`）を作ります。
+1. Vercel のダッシュボードで **Add New… → Project** を選び、このリポジトリ（`Sparklingstadt/ffpf-zhuelog`）を Import します。Web のプロジェクトとは別のプロジェクト（本番は `ffpf-zhuelog-api`）です。
 2. **Root Directory** に `services/api` を指定します。
 3. **Framework Preset** が `Go` になっていることを確かめます（`services/api/vercel.json` でも指定しています）。
-4. **Settings → Deployment Protection** で **Vercel Authentication** を外します。新しいプロジェクトには最初から付いていて、付いたままだと Web のサーバーもアプリも API を呼べません（API はアプリ層の JWT で認証します）。
-5. **Settings → Build and Deployment → Root Directory** の **Skip deployments when there are no changes to the root directory or its dependencies** をオンにし、`services/api/` に変更が無いときはデプロイを飛ばします。Vercel のビルド環境には `.git` が無いので、`git diff` を使う Ignored Build Step は動きません（エラーになります）。
+4. **Settings → Build and Deployment → Root Directory** の **Skip deployments when there are no changes to the root directory or its dependencies** をオンにし、`services/api/` に変更が無いときはデプロイを飛ばします。Vercel のビルド環境には `.git` が無いので、`git diff` を使う Ignored Build Step は動きません（エラーになります）。
 
-## 3. 環境変数
+## 2. 環境変数
 
 **Settings → Environment Variables** に設定します。`PORT` は Vercel が設定するので不要です。
 
 ビルドのために `GOFLAGS` に `-buildvcs=false` を入れます（Production と Preview）。Vercel のビルド環境には `.git` が無く、`go build` がコミットの情報を埋め込めずに失敗するためです。
 
-| 名前                          | 内容                                                                                                |
-| ----------------------------- | --------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                | Neon の pooled 接続文字列（ホスト名に `-pooler` を含むもの）。`?schema=` は付けない（下の注を参照） |
-| `API_JWT_SECRET`              | アクセス JWT の HS256 鍵。`openssl rand -base64 48` で作る（32 バイト以上）                         |
-| `GITHUB_MOBILE_CLIENT_ID`     | モバイル用 GitHub OAuth App の Client ID                                                            |
-| `GITHUB_MOBILE_CLIENT_SECRET` | モバイル用 GitHub OAuth App の Client Secret                                                        |
-| `GITHUB_MOBILE_REDIRECT_URI`  | アプリのカスタム URL スキーム                                                                       |
-| `AUTH_ALLOWED_GITHUB_IDS`     | admin の許可リスト。GitHub の数値 ID をカンマ区切りで（Go API と Web の両方に、同じ値を設定します） |
-| `GITHUB_WEB_CLIENT_ID`        | Web 用 GitHub OAuth App の Client ID（Web の GitHub ログインに必要。下の注を参照）                  |
-| `GITHUB_WEB_CLIENT_SECRET`    | Web 用 GitHub OAuth App の Client Secret                                                            |
-| `GITHUB_WEB_REDIRECT_URI`     | `https://<Web のホスト>/api/auth/callback/github/go`                                                |
-| `API_WEB_PROXY_SECRET`        | Web サーバーと共有する秘密。32 バイト以上（`openssl rand -base64 48`）。Web から使うときは必要      |
+| 名前           | 内容                                                                                                |
+| -------------- | --------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL` | Neon の pooled 接続文字列（ホスト名に `-pooler` を含むもの）。`?schema=` は付けない（下の注を参照） |
 
 - `DATABASE_URL` は、手で入れなくても、チームの **Storage** タブで Web が使っている Neon のストアを開き、**Connect Project** から Go API のプロジェクトをつなぐと入ります（pooled の接続文字列です。`channel_binding=require` が付いていても Go API はそのまま使えます）。
-- `GITHUB_WEB_CLIENT_SECRET` は、Vercel に入れた値を読み戻せないので、GitHub の OAuth App の画面で **Generate a new client secret** を押して新しく作ります。段階3をマージするまでは、本番の Web（Auth.js）のログインが古い Secret を使うので、古い Secret を消さないでください。
-
-**Production と Preview で値を分けてください。**
-
-- PR ごとのプレビューのデプロイが本番の DB を書き換えないよう、Preview の `DATABASE_URL` には本番の接続文字列を入れず、Neon のブランチなど別の DB を指定します。
-- Preview の `API_JWT_SECRET` は、本番とは **別の値** にします。同じ値だと、プレビューのデプロイが発行したアクセストークンが本番でもそのまま通り、本番で他人のデータを読み書きできてしまうためです。
-- Preview で GitHub ログインを試すなら、本番とは別のモバイル用 OAuth App（と Client Secret）を使います。Preview に `DATABASE_URL` を入れない場合、プレビューのデプロイは起動時に止まります（必須の値が無いため）。
-- `GITHUB_WEB_*` の 3 つは **すべて設定するか、すべて空** にします（一部だけだと起動時に止まります）。Go API は `POST /v1/auth/github` の `redirectUri` が `GITHUB_WEB_REDIRECT_URI` と完全一致したときは Web 用の OAuth App で、`GITHUB_MOBILE_REDIRECT_URI` と一致したときはモバイル用で `code` を交換します。どちらとも一致しなければ `401` です。
-- `GITHUB_WEB_*` と `API_WEB_PROXY_SECRET` は、Go API の起動には要りません。ただし Web は Go API でログインするので、Web から使うときは必要です。
-- Web 用の OAuth App は、以前から Web で使っているものをそのまま使えます。GitHub は登録した callback URL の **下の階層** を `redirect_uri` に使えるので、Web の callback（`https://<Web>/api/auth/callback/github/go`）は登録済みの callback（`/api/auth/callback/github`）の下になり、OAuth App の設定を変える必要はありません。
-- `API_WEB_PROXY_SECRET` は、Web（Next.js）が利用者の IP を渡すための共有の秘密です。使い方は [レート制限とクライアントの IP](#レート制限とクライアントの-ip) を見てください。空のときは `X-Zhuelog-Client-IP` を常に無視します。
-- `API_WEB_PROXY_SECRET` も `API_JWT_SECRET` と同じく、Production と Preview で **別の値** にします。同じだと、プレビューの Web が本番の Go API に任意の IP を名乗れてしまいます。
+- Preview の `DATABASE_URL` には本番の接続文字列を入れず、Neon のブランチなど別の DB を指定します。Preview に `DATABASE_URL` が無いと、プレビューのデプロイは起動時に止まります。
+- Go はこのほかの環境変数を読みません。以前のログインのための値が残っていても起動には影響しません。消す値と順番は `docs/api-deployment.md` にあります。
 
 DB への接続は、TLS で証明書まで検証します。ホストが `localhost`・`127.0.0.1`・`::1` 以外のとき（または `sslmode` が `prefer`・`require`・`verify-ca` のとき）、Go API は `sslmode` を `verify-full` に置き換えます。Neon の接続文字列の `sslmode=require` はそのままで構いません。`?schema=public` は無視しますが、それ以外のスキーマは `search_path` の起動パラメータになり、プーラーに拒否されることがあるので付けないでください。
 
-## 4. 本番の DB の確認
+## 3. 本番の DB
 
-Go API が使うテーブルは、Prisma のマイグレーションで本番の Neon に適用済みです（`ApiRefreshToken`、`SignInThrottle` など）。Web のログイン用の `Session`（段階 11a で追加。11b まで空）も、Web のビルドが当てます。今後スキーマを変えるときは、main へマージする前に本番へ適用します（main は Web と Go API の両方の本番へ自動でデプロイされるため）。
+テーブルは Prisma のマイグレーションで本番の Neon に適用します。Go はテーブルを読み書きせず、DB に ping するだけです。今後スキーマを変えるときは、main へマージする前に本番へ適用します（main は Web と Go API の両方の本番へ自動でデプロイされるため）。
 
 ```bash
 vercel env pull .env.production.local --environment=production --yes
@@ -76,13 +44,7 @@ node --env-file=.env.production.local node_modules/prisma/build/index.js migrate
 rm .env.production.local
 ```
 
-会員の一覧（Web の `/follow`）は、DB の日本語の照合順序 `ja-x-icu` で並べます。本番の Neon にあるかを一度確かめてください（1 行返れば問題ありません。無いと `/follow` がエラーになります）。
-
-```sql
-SELECT 1 FROM pg_collation WHERE collname = 'ja-x-icu';
-```
-
-## 5. デプロイと確認
+## 4. デプロイと確認
 
 main にマージすると本番にデプロイされます（`services/api/` に変更がある場合）。初回や変更が無いときは、ダッシュボードの **Deployments → Redeploy** で実行します。
 
@@ -90,126 +52,18 @@ main にマージすると本番にデプロイされます（`services/api/` �
 curl -i https://<プロジェクト>.vercel.app/health
 ```
 
-`200` が返れば、DB への接続まで確認できています（失敗時は `503`）。`/ping` は DB にアクセスせずに `200` を返します。アプリからのログインは `POST /v1/auth/password` か `POST /v1/auth/github` で確認します。
+`200` が返れば、DB への接続まで確認できています（失敗時は `503`）。`/ping` は DB にアクセスせずに `200` を返します。
 
-## 6. Web の設定
+## 5. Web の設定
 
-Web（Next.js）は、DB を Prisma（`src/infrastructure/prisma/`）で読み書きし、Go が出すアクセストークン（`zl_access`）も `API_JWT_SECRET` で自分で確かめます。会員の管理とパスワードの変更では、`PasswordAccount`（作成・パスワードの再設定と変更）と `SignInThrottle`（パスワード変更の回数）にも書きます。ログインは今も Go API が行います（Web が自分でログインするための部品と `Session` の表は段階 11a で足しましたが、まだ使いません）。LINE とデモのリセットは段階 10 で Web に移り、Go からは消えました（段階 10b）。仕様は `docs/superpowers/specs/2026-10-21-web-auth-via-go-api-design.md` と `docs/superpowers/specs/2026-10-22-web-data-via-go-api-design.md` にあります。
-
-Go API の Vercel プロジェクトには、`GITHUB_WEB_CLIENT_ID`・`GITHUB_WEB_CLIENT_SECRET`・`GITHUB_WEB_REDIRECT_URI`・`API_WEB_PROXY_SECRET` を入れておきます（上の「3. 環境変数」の表）。Web の Vercel プロジェクトに入れる値は、次の 4 つに、あとの「Web が実行時に使う DB と秘密」の値を足したものです。
-
-| 名前                   | 内容                                                                        |
-| ---------------------- | --------------------------------------------------------------------------- |
-| `GO_API_URL`           | Go API の URL（例: `https://<プロジェクト>.vercel.app`）。末尾の `/` は不要 |
-| `API_WEB_PROXY_SECRET` | Go API と **同じ値**                                                        |
-| `AUTH_URL`             | Web の公開されている origin（例: `https://<Web のホスト>`）                 |
-| `AUTH_GITHUB_ID`       | Go API の `GITHUB_WEB_CLIENT_ID` と **同じ OAuth App** の Client ID         |
-
-注意:
-
-- `GO_API_URL` は `https://` にします（`http://` は `localhost` と `127.0.0.1` だけ使えます）。4 つのどれかが無いと、Web はログインできません。
-- `AUTH_URL` は必ず設定し、利用者が開く Web の origin と同じにします。GitHub ログインの `redirect_uri` は、この origin から作ります。
-- Go API の `GITHUB_WEB_REDIRECT_URI` は、`<AUTH_URL の origin>/api/auth/callback/github/go` と **1 文字も違わず** 同じにします。違うと Go API が `401` を返し、GitHub ログインができません。そのため、URL が合わないプレビューのデプロイでは GitHub ログインは使えません（パスワードとゲストのログインは使えます）。
-- `AUTH_GITHUB_ID` と `GITHUB_WEB_CLIENT_ID` が別の OAuth App だと、GitHub が発行した `code` を Go API が交換できず、GitHub ログインが失敗します。
-- `AUTH_SECRET`・`AUTH_GITHUB_SECRET` は、Web では使いません。`DATABASE_URL` は、Web の実行時にも、**本番のビルド**の `prisma migrate deploy` にも使います（「4. 本番の DB の確認」）。消すと、ログイン中の人を決められず、本番の Web のデプロイも失敗します。
-
-LINE 連携を使うときは、Web の Vercel プロジェクトに、もう 1 つ次の値を入れます（無くても Web は動きます）。
-
-| 名前                       | 内容                                                                                                                         |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `LINE_ADD_FRIEND_URL`      | LINE 公式アカウントの友だち追加のリンク（例: `https://line.me/R/ti/p/@your-account`）。`https://` で始まるものだけ使います   |
-| `LINE_OFFICIAL_ACCOUNT_ID` | 連携 QR と「LINEで開く」の送信先となる公式アカウントの公開 ID（`@393bohaw`）。コードは入力欄に入るだけで、自動送信はしません |
-
-`LINE_ADD_FRIEND_URL` が無い・`https://` で始まらないときは、「LINE 連携」画面（`/account/line`）に友だち追加のリンクを出しません（連携コードの発行と解除はできます）。
-
-### Web が実行時に使う DB と秘密
-
-Web は実行時に、次の値を使います。Web の Vercel プロジェクトの Production に入れます。
-
-| 名前                      | 内容                                                                                                  |
-| ------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`            | Neon の接続文字列（pooled の URL）。実行時の読み書きと、本番のビルドの `prisma migrate deploy` に使う |
-| `API_JWT_SECRET`          | Go API と **同じ値**（32 バイト以上。足りないと、全員が未ログインになる）                             |
-| `AUTH_ALLOWED_GITHUB_IDS` | 管理者にする GitHub ユーザーの数字の ID（カンマ区切り。Go API と同じ値）                              |
-| `DEMO_LOGIN_ID`           | デモアカウントのログイン ID（Go API と同じ。デモを使わないなら入れなくてよい）                        |
-
-値は、Go API のプロジェクトに入れているものと同じにします。Web だけ値が違うと、Go が出したトークンを Web が確かめられず、管理者やデモの判定もずれます。詳しい説明は `docs/api-deployment.md` の同じ節にあります。
-
-### Web のプレビュー（Preview）
-
-PR ごとの Web のプレビューも、ログインとデータの読み書きを Go API で行います。そのため、Web の Vercel プロジェクトの **Preview** の環境変数にも、次の 4 つを入れます。
-
-| 名前                   | Preview に入れる値                                                               |
-| ---------------------- | -------------------------------------------------------------------------------- |
-| `GO_API_URL`           | **Preview の Go API** の URL（`https://`）。本番の Go API は指しません           |
-| `API_WEB_PROXY_SECRET` | その Preview の Go API の `API_WEB_PROXY_SECRET` と **同じ値**（本番とは別の値） |
-| `AUTH_URL`             | プレビューの Web の origin（例: `https://<プレビューのホスト>`）                 |
-| `AUTH_GITHUB_ID`       | その Preview の Go API の `GITHUB_WEB_CLIENT_ID` と同じ OAuth App の Client ID   |
-
-注意:
-
-- 4 つのどれかが無いと、プレビューの Web ではログインできません。ログインできないので、学習ノートも見られません。
-- Preview の Go API は、上の「3. 環境変数」のとおり、本番とは別の DB と別の秘密を使います。プレビューの Web を本番の Go API につながないでください。
-- プレビューの URL はデプロイごとに変わります。`AUTH_URL` と Go API の `GITHUB_WEB_REDIRECT_URI` が合わないときは、GitHub ログインは使えません。パスワードとゲストのログインは使えます。
-
-### 段階3のマージの前に行うこと
-
-段階3（Web のデータを Go API で読み書きする変更）をマージすると、Web から Auth.js と DB への接続が無くなります。Go API が無いと、Web は動きません。そのため、**マージの前に** 次を済ませてください。
-
-1. Go API の Vercel プロジェクトを作り（上の 1.〜5.）、`/health` が `200` を返すことを確かめます。
-2. Go API に `GITHUB_WEB_CLIENT_ID`・`GITHUB_WEB_CLIENT_SECRET`・`GITHUB_WEB_REDIRECT_URI`・`API_WEB_PROXY_SECRET` を入れ、再デプロイします。
-3. 本番の Web の Vercel プロジェクトに、上の表の 4 つ（`GO_API_URL` など）を入れ、再デプロイします。今の main の Web は、`GO_API_URL` があるとログインを Go API で行います。
-4. 本番の Web で、GitHub・パスワード・ゲストのログインと、ログアウトができることを確かめます。切り替えると Auth.js の Cookie は使われなくなるので、**全員が一度ログインし直し** になります。
-5. 確かめられたら、段階3をマージします。
-
-`DATABASE_URL`・`AUTH_SECRET`・`AUTH_GITHUB_SECRET`・`AUTH_ALLOWED_GITHUB_IDS` は、段階3が本番で問題なく動くまで Web に残しておきます（下の「戻す手順」で使います）。
-
-### 戻す手順
-
-段階3のあとは、Auth.js に切り替える設定はありません。戻すときは、段階3のマージを取り消し（revert し）、Web を再デプロイします。取り消した後の Web は、学習ノートを DB から直接読み書きするので、Web に `DATABASE_URL` が要ります。ログインは、`GO_API_URL` があるうちは Go API のままです。Auth.js のログインまで戻すときは、さらに Web から `GO_API_URL` を消して再デプロイします。このとき `AUTH_SECRET`・`AUTH_GITHUB_SECRET`・`AUTH_ALLOWED_GITHUB_IDS` も要り、全員がログインし直しになります。
-
-## 7. LINE 連携とデモのリセット
-
-LINE 連携（webhook・連携の画面・拾い直しと復習のお知らせ）とデモの毎晩のリセットは、段階 10 で Web に移り、Go からは消えました（段階 10b）。Go API の `services/api/vercel.json` には Cron がもうありません。Go API の Vercel プロジェクトの `LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`OPENAI_API_KEY`・`OPENAI_LEARNING_MODEL`・`CRON_SECRET`・`OPENAI_API_BASE_URL`・`LINE_API_BASE_URL` は使いません（Go を再デプロイしたあとに消してよい値です。`DEMO_LOGIN_ID` は Go のログインが使うので残します）。拾い直しとデモのリセットの Cron は、Web の `vercel.json` に登録してあります（06:00 JST と 04:00 JST。Hobby では最大 59 分遅れることがあります）。Web の環境変数と、LINE の Webhook URL を Web に変える手順は、リポジトリの `docs/api-deployment.md` の「7. LINE 連携」と「段階10（LINE とデモのリセットの cron）のマージの前と後」にあります。
-
-## 8. 会話練習（ChatGPT）
-
-Web に移りました。設定は Web の `OPENAI_API_KEY`・`OPENAI_CHAT_MODEL`（`docs/api-deployment.md` の 8.）
+Web（Next.js）は、ログインを含むすべての機能を自分で受け持ち、DB を Prisma（`src/infrastructure/prisma/`）で読み書きします。Web の Vercel プロジェクトに入れる値と、段階 11 の切り替えの前と後に行うことは、リポジトリの `docs/api-deployment.md` にあります。
 
 ## 運用上の注意
 
-### `API_JWT_SECRET` のローテーション
-
-ローテーションすると、**発行済みのアクセストークンはすべて無効になります**（署名が合わなくなるため）。リフレッシュトークンは DB のハッシュで検証するので影響を受けず、アプリは `POST /v1/auth/refresh` で新しいアクセストークンを取り直せます。新しい値を環境変数に設定し、再デプロイすると反映されます。入れ替えの途中は、古いインスタンスと新しいインスタンスが短い時間並んで動くため、古い鍵と新しい鍵のトークンが一時的に混在します。
-
-### レート制限とクライアントの IP
-
-`/v1/auth/*` には 2 種類の制限があります。
-
-- **IP ごとのレート制限**: DB の `SignInThrottle` テーブルで数えるので、インスタンスが増えても合計で数えます。1 分に 10 回までです。メモリ上で数えるのは、DB で数える設定が無いとき（ローカルのテスト）だけです。
-- **パスワードログインの試行回数**: DB の `SignInThrottle` テーブルで数えます。Web からのログインも Go API を通るので、Web とアプリの試行は合わせて数えます。15 分の枠で、1 つのクライアントからのパスワードログインは 20 回まで、同じクライアントから同じ loginId へは 5 回まで（成功すると 0 に戻ります）。超えると `429`（`rate_limited`）を返します。
-
-どちらも、クライアントのアドレスには、次の順で決まる値を使います。
-
-1. `X-Zhuelog-Proxy-Secret` ヘッダーが `API_WEB_PROXY_SECRET` と一致し（定数時間で比べます）、`X-Zhuelog-Client-IP` が空でなければ、その値。Web（Next.js）から Go API を呼ぶと、Go API から見た送信元は Vercel の関数になり、全員が 1 つの IP として数えられてしまいます。そこで Web が利用者の IP を `X-Zhuelog-Client-IP` で渡します。秘密が一致しないとき、`API_WEB_PROXY_SECRET` が未設定のときは、このヘッダーを常に無視します。
-2. そうでなければ、`X-Forwarded-For` の **最後の値**（無ければ接続元のアドレス）。Vercel はこのヘッダーをクライアントの IP で上書きし、クライアントが送った値は渡さないので、偽装されません。**Vercel の前に別のプロキシ（CDN など）を置かないでください。** 置くと、すべてのクライアントがそのプロキシの 1 つのアドレスとして数えられます。
-
-### リフレッシュの猶予（30 秒）
-
-ブラウザは同時に複数の要求を出すので、同じリフレッシュトークンで `POST /v1/auth/refresh` が同時に起こることがあります。2 本目を「使用済みのトークン」として扱うと、ファミリー全体が失効して利用者がログアウトされてしまいます。そこで、ローテーションから **30 秒以内** に、同じファミリーに有効なトークンが残っているときは、古いトークンが来てもファミリーを失効させず、同じファミリーで新しいトークン一式を出します。30 秒を過ぎた古いトークン、またはファミリーが失効済み（ログアウト・再利用の検知）のときは、今までどおり盗用とみなして `401` です。
-
-残るリスク：盗まれたトークンが、本人のリフレッシュと同じ 30 秒のうちに使われたときは、再利用として検知できません。猶予の長さは固定です（設定で変えられません）。
-
-### ゲストのセッション
-
-`POST /v1/auth/guest` は認証なしで、ゲストのトークン一式を返します（`role: "guest"`、`ownerId: "guest"`）。誰でも呼べるので、DB の行を増やされにくいよう、ゲストのリフレッシュトークンの寿命は **24 時間** です。期限切れの行は、ゲストがログインするたびに削除します。ゲストのトークンは `GET /v1/me` 以外の認証つきルートでは `403` です。
-
-### DB の接続数とパスワードの計算
+### DB の接続数
 
 Go API は 1 つのインスタンスあたり最大 3 本の DB 接続を持ちます。Vercel がインスタンスを増やすと接続数も増えるので、Neon の pooled 接続文字列を使ってください。
 
-パスワードの検証（scrypt、N=2^15・r=8）は 1 回ごとに 32 MiB を使うため、インスタンスごとに同時に 4 件までしか計算しません（5 件目以降は空くまで待ちます）。パスワードのハッシュ（作成・再設定・変更）と検証は、Web でも `crypto.scrypt` で計算します（1 回ごとに 32 MiB を使います）。専用の上限は付けていませんが、Node の threadpool（既定は 4 本）が上限になり、同時に動くのは 4 件まで、残りは待ちます。この threadpool はファイルや DNS の処理と共有です。
-
 ### 公開範囲
 
-エンドポイントはインターネットに公開します。アプリから直接呼ぶ API で、認証はアプリ層（アクセス JWT）で行うためです。CORS は設定していません（ブラウザから直接は呼びません）。
+エンドポイントはインターネットに公開します。残っているのは health のルートだけで、認証は要りません。CORS は設定していません（ブラウザから直接は呼びません）。頻繁な死活監視には、DB にアクセスしない `/ping` を使ってください。

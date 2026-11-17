@@ -10,108 +10,7 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
 )
-
-const (
-	testOwner  = "password:owner1"
-	otherOwner = "password:abcdefghij0123456789"
-)
-
-var authHeader = map[string]string{"Authorization": "Bearer tok"}
-
-// fakeAuth implements Auth with per-method hooks; an unset hook fails the test
-// by returning a sentinel error that maps to 500.
-type fakeAuth struct {
-	github       func(ctx context.Context, code, verifier, redirectURI string) (auth.TokenPair, error)
-	ffpf         func(ctx context.Context, code, verifier, redirectURI, nonce string) (auth.TokenPair, error)
-	password     func(ctx context.Context, client, loginID, password string) (auth.TokenPair, error)
-	refresh      func(ctx context.Context, token string) (auth.TokenPair, error)
-	logout       func(ctx context.Context, token string) error
-	authenticate func(ctx context.Context, accessToken string) (auth.Principal, error)
-	guest        func(ctx context.Context) (auth.TokenPair, error)
-	me           func(ctx context.Context, p auth.Principal) (auth.Me, error)
-	actAs        func(ctx context.Context, p auth.Principal, ownerID string) (auth.Principal, error)
-	demoEnabled  bool
-	loginDemo    func(ctx context.Context, client string) (auth.TokenPair, error)
-}
-
-type errUnexpectedCall struct{ name string }
-
-func (e errUnexpectedCall) Error() string { return "unexpected call to " + e.name }
-
-func (f *fakeAuth) LoginGitHub(ctx context.Context, code, verifier, redirectURI string) (auth.TokenPair, error) {
-	if f.github == nil {
-		return auth.TokenPair{}, errUnexpectedCall{"LoginGitHub"}
-	}
-	return f.github(ctx, code, verifier, redirectURI)
-}
-
-func (f *fakeAuth) LoginFFPF(ctx context.Context, code, verifier, redirectURI, nonce string) (auth.TokenPair, error) {
-	if f.ffpf == nil {
-		return auth.TokenPair{}, errUnexpectedCall{"LoginFFPF"}
-	}
-	return f.ffpf(ctx, code, verifier, redirectURI, nonce)
-}
-
-func (f *fakeAuth) LoginPassword(ctx context.Context, client, loginID, password string) (auth.TokenPair, error) {
-	if f.password == nil {
-		return auth.TokenPair{}, errUnexpectedCall{"LoginPassword"}
-	}
-	return f.password(ctx, client, loginID, password)
-}
-
-func (f *fakeAuth) Refresh(ctx context.Context, token string) (auth.TokenPair, error) {
-	if f.refresh == nil {
-		return auth.TokenPair{}, errUnexpectedCall{"Refresh"}
-	}
-	return f.refresh(ctx, token)
-}
-
-func (f *fakeAuth) Logout(ctx context.Context, token string) error {
-	if f.logout == nil {
-		return errUnexpectedCall{"Logout"}
-	}
-	return f.logout(ctx, token)
-}
-
-func (f *fakeAuth) Authenticate(ctx context.Context, accessToken string) (auth.Principal, error) {
-	if f.authenticate == nil {
-		return auth.Principal{}, errUnexpectedCall{"Authenticate"}
-	}
-	return f.authenticate(ctx, accessToken)
-}
-
-func (f *fakeAuth) LoginGuest(ctx context.Context) (auth.TokenPair, error) {
-	if f.guest == nil {
-		return auth.TokenPair{}, errUnexpectedCall{"LoginGuest"}
-	}
-	return f.guest(ctx)
-}
-
-func (f *fakeAuth) Me(ctx context.Context, p auth.Principal) (auth.Me, error) {
-	if f.me == nil {
-		return auth.Me{}, errUnexpectedCall{"Me"}
-	}
-	return f.me(ctx, p)
-}
-
-func (f *fakeAuth) ActAs(ctx context.Context, p auth.Principal, ownerID string) (auth.Principal, error) {
-	if f.actAs == nil {
-		return auth.Principal{}, errUnexpectedCall{"ActAs"}
-	}
-	return f.actAs(ctx, p, ownerID)
-}
-
-func (f *fakeAuth) DemoEnabled() bool { return f.demoEnabled }
-
-func (f *fakeAuth) LoginDemo(ctx context.Context, client string) (auth.TokenPair, error) {
-	if f.loginDemo == nil {
-		return auth.TokenPair{}, errUnexpectedCall{"LoginDemo"}
-	}
-	return f.loginDemo(ctx, client)
-}
 
 type fakePinger struct{ err error }
 
@@ -122,54 +21,22 @@ type clock struct{ t time.Time }
 
 func newClock() *clock { return &clock{t: time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)} }
 
-func (c *clock) Now() time.Time          { return c.t }
-func (c *clock) Advance(d time.Duration) { c.t = c.t.Add(d) }
+func (c *clock) Now() time.Time { return c.t }
 
 // testRouter builds the full router with a JSON logger writing to the
 // returned buffer.
-func testRouter(t *testing.T, a Auth, db Pinger, c *clock) (http.Handler, *bytes.Buffer) {
+func testRouter(t *testing.T, db Pinger, c *clock) (http.Handler, *bytes.Buffer) {
 	t.Helper()
 	buf := &bytes.Buffer{}
 	if c == nil {
 		c = newClock()
 	}
 	h := NewRouter(Deps{
-		Auth:   a,
 		DB:     db,
 		Logger: slog.New(slog.NewJSONHandler(buf, nil)),
 		Now:    c.Now,
 	})
 	return h, buf
-}
-
-// tokenAuth authenticates the test token "tok" as testOwner with the given
-// role (use "" for no role) and rejects every other token.
-func tokenAuth(role string) *fakeAuth {
-	return &fakeAuth{authenticate: func(_ context.Context, tok string) (auth.Principal, error) {
-		if tok != "tok" {
-			return auth.Principal{}, auth.ErrUnauthorized
-		}
-		return auth.Principal{OwnerID: testOwner, Role: role}, nil
-	}}
-}
-
-// routerWith builds the full router around d. Unset Auth defaults to
-// tokenAuth(role); Logger writes JSON to the returned buffer and Now follows
-// the returned clock, unless d sets them.
-func routerWith(t *testing.T, role string, d Deps) (http.Handler, *clock, *bytes.Buffer) {
-	t.Helper()
-	buf := &bytes.Buffer{}
-	c := newClock()
-	if d.Auth == nil {
-		d.Auth = tokenAuth(role)
-	}
-	if d.Logger == nil {
-		d.Logger = slog.New(slog.NewJSONHandler(buf, nil))
-	}
-	if d.Now == nil {
-		d.Now = c.Now
-	}
-	return NewRouter(d), c, buf
 }
 
 func do(h http.Handler, method, target, body string, headers map[string]string) *httptest.ResponseRecorder {

@@ -1,6 +1,8 @@
-// The password hash format Go verifies at sign-in
-// (services/api/auth/password.go). The web writes every hash: admin accounts,
-// own password changes, the e2e fixtures and the local seed.
+// The password hash format Go verified at sign-in
+// (services/api/auth/password.go). The web writes and verifies every hash:
+// admin accounts, own password changes, sign-in, the e2e fixtures and the
+// local seed. tests/fixtures/scrypt-golden.json is the golden file Go wrote
+// before its auth package was removed (stage 11b); it is now a fixed file.
 
 import {
   randomBytes,
@@ -9,7 +11,7 @@ import {
   type ScryptOptions,
 } from "node:crypto";
 
-// The parameters Go writes and the web writes (services/api/auth/password.go).
+// The parameters Go wrote and the web writes (services/api/auth/password.go).
 export const SCRYPT_PARAMS = {
   n: 32768,
   r: 8,

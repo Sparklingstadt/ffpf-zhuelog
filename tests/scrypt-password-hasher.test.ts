@@ -9,8 +9,8 @@ import {
   ScryptPasswordHasher,
 } from "../src/infrastructure/security/scrypt-password-hasher";
 
-// Written by Go (services/api/auth/password_golden_test.go), which verifies
-// the web's hashes at sign-in.
+// The golden file Go wrote before its auth package was removed (stage 11b;
+// services/api/auth/password_golden_test.go); it is now a fixed file.
 type Golden = {
   params: typeof SCRYPT_PARAMS;
   hashes: { name: string; password: string; salt: string; hash: string }[];

@@ -2,31 +2,27 @@
 home: true
 title: 概要
 heroText: Zhuelog API
-tagline: 学习録（Zhuelog）のネイティブアプリ向け Go API
+tagline: 学习録（Zhuelog）の Go API（段階 11 からは health だけ）
 actions:
-  - text: 認証の仕組み
-    link: /guide/auth.md
-    type: primary
   - text: エンドポイント
     link: /reference/
-    type: secondary
+    type: primary
 features:
-  - title: Web も同じ API を使う
-    details: Web（Next.js）も、ログインなどをこの API で行います。会員の管理（作成・パスワードの再設定）と自分のパスワードの変更は、Web が DB を直接読み書きします。学習ノートの一覧・ゴミ箱・共有・カレンダーと復習、学習ログと AI の利用量の集計は Web が DB を直接読み書きし、この API には残っていません。
-  - title: アプリ向けのトークン
-    details: GitHub（PKCE）とパスワードでログインし、15 分のアクセストークンと 30 日のリフレッシュトークンで呼び出します。
+  - title: Go に残るのは health だけ
+    details: ログイン（GitHub・FFPF ID・パスワード・ゲスト・デモ）、ログアウト、ログイン中の人の確認は、段階 11 で Web（Next.js）に移りました。Go に残るのは /health・/healthz・/ping だけです。
+  - title: 段階 12 で消す
+    details: services/api とこのサイトは、段階 12 で消します。
   - title: 依存の少ない Go
-    details: 標準の net/http と pgx・golang-jwt・x/crypto だけで書かれ、Vercel（Go の Framework Preset）で動きます。
+    details: 標準の net/http と pgx だけで書かれ、Vercel（Go の Framework Preset）で動きます。
 ---
 
 ## 何のための API か
 
-学习録は、中国語の作文を添削・翻訳した結果（学習ノート）を記録する Web アプリです。この Go API（`services/api/`）は、移行の途中で Go に残っている機能（認証）を、Web とネイティブアプリに提供します。学習ノートそのものの読み書きは Web が直接行います。
+学习録は、中国語の作文を添削・翻訳した結果（学習ノート）を記録する Web アプリです。この Go API（`services/api/`）は、Web の機能を 1 つずつ Go から Web へ移すあいだ、Go に残った機能を受け持ってきました。段階 11 でログインが Web に移り、**Go に残るのは health のルート（`/health`・`/healthz`・`/ping`）だけ** です。`services/api/` とこのサイトは、段階 12 で消します。
 
-- 利用できるのは、GitHub でログインする **admin**（許可リスト `AUTH_ALLOWED_GITHUB_IDS` に GitHub の数値のユーザー ID が載っている人）と、パスワードでログインする **会員**（`PasswordAccount`）です。ゲスト（`POST /v1/auth/guest`）も入れますが、ゲストのトークンで呼べるのは `GET /v1/me` だけです。
-- 学習ノートの一覧・詳細・編集・削除、CSV のインポート、ゴミ箱、共有、日付ごとの記録（カレンダー）、今日の復習（一覧・回答・ノートの出し入れ）、練習の記録（介詞・補語）、質問ノート、会話ノート、学習ログ（カレンダー）、AI の利用量の集計、フォローとタイムライン、会員の一覧、会員の管理（作成・パスワードの再設定）、自分のパスワードの変更は Web が Prisma で直接扱い、クイック質問と「ChatGPT と話す」は Web が OpenAI を直接呼ぶため、この API にはありません。
+- ログイン（GitHub・FFPF ID・パスワード・ゲスト・デモ）、ログアウト、ログイン中の人の確認、会員として見る操作は、Web が `Session` の表と `zl_session` の Cookie で行います。
+- 学習ノート、復習、学習ログ、フォロー、会員の管理、LINE 連携、デモの毎晩のリセットなど、ほかの機能はすべて Web が受け持ちます（段階 1〜10）。
 - ブラウザから呼ぶことは想定していません（CORS は無効です）。
-- LINE 連携（webhook・連携の画面・拾い直しと復習のお知らせ）とデモの毎晩のリセットは、段階 10 で Web（`POST /api/line/webhook`・`/account/line`・`GET /api/cron/line-drain`・`GET /api/cron/demo-reset`）に移り、Go からは消えました。
 
 ## 構成
 
@@ -35,47 +31,31 @@ features:
 ```text
 services/api/
 ├── main.go        # 起動・設定の読み込み・graceful shutdown
-├── config.go      # 環境変数の読み込みと検証
-├── httpapi/       # ルーター、ハンドラ、ミドルウェア、入力の検証
-├── auth/          # GitHub のコード交換、パスワードの検証、JWT、リフレッシュのローテーション、失効の確認
-├── store/         # pgx による SQL（アカウントの読み取り・リフレッシュトークン・ログインの試行回数）
-├── jsstr/         # JavaScript の文字列操作（trim・length・toLowerCase など）の再現
-└── Dockerfile        # 任意（コンテナで動かすとき用。Vercel では使わない）
+├── config.go      # 環境変数の読み込み（PORT と DATABASE_URL だけ）
+├── httpapi/       # ルーター（health だけ）、ミドルウェア、JSON の応答
+├── store/         # pgx による DB への接続と ping
+└── Dockerfile     # 任意（コンテナで動かすとき用。Vercel では使わない）
 ```
 
-| パッケージ | 役割                                                                                                                                                                                                         |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `httpapi`  | 標準の `net/http` のパターンルーティング（`POST /v1/auth/password` の形）。`auth` と `store` をインターフェース経由で受け取り、テストではフェイクに差し替えます                                              |
-| `auth`     | ログイン、アクセストークン（HS256 の JWT）の発行と検証、リフレッシュトークンのローテーションと再利用の検知、毎リクエストの失効の確認、scrypt のパスワードのハッシュの検証（ハッシュを作るのは Web だけです） |
-| `store`    | Prisma が作ったテーブルを SQL で読み書きします。所有者（`ownerId`）での絞り込みはすべてここで行います                                                                                                        |
-| `jsstr`    | JavaScript の文字列操作（`trim`・`length`（UTF-16 の単位）・`toLowerCase`）を再現し、入力を Web（zod）と同じように判定するためのパッケージ                                                                   |
+| パッケージ | 役割                                                                                                          |
+| ---------- | ------------------------------------------------------------------------------------------------------------- |
+| `httpapi`  | 標準の `net/http` のパターンルーティング（`GET /health` の形）。DB は `Pinger` インターフェースで受け取ります |
+| `store`    | DB への接続（TLS の検証を含む）と ping。テーブルは読み書きしません                                            |
 
-依存は `github.com/jackc/pgx/v5`、`github.com/golang-jwt/jwt/v5`、`golang.org/x/crypto`（scrypt）だけで、ルーターやフレームワークは使いません。ログは `log/slog` の JSON 形式で、トークン・認可コード・パスワード・ノートの本文はログに出しません。
+依存は `github.com/jackc/pgx/v5` だけで、ルーターやフレームワークは使いません。ログは `log/slog` の JSON 形式です。
 
 ## Web と API と DB
 
-Web（Next.js）は、ログイン中の人の確認、単語帳、学習ノート、復習、学習ログ、AI の利用量の集計、フォロー（一覧・タイムラインを含む）、会員の管理（作成・パスワードの再設定）と自分のパスワードの変更については DB を Prisma で直接読み書きします。ログインなど、ほかのデータはこの API を通して行います。DB は本番の Neon です。
-
-- スキーマの管理は Prisma に一本化しています。Go は既存のテーブルを SQL で読み書きするだけで、テーブルの追加（API 用の `ApiRefreshToken`、Web のログイン用の `Session` など）も Prisma のマイグレーションで行います。
-- Go が作る行の ID は Prisma と同じ cuid 形式なので、以前 Web が作った行と区別がつきません。
-- 日付の区切り（日本時間）、会員一覧の並び（ICU の日本語照合順）、入力の検証の文言は、以前の Web と同じにしてあります。
-- 会員のパスワードのハッシュ（`scrypt:N:r:p:salt:key`）は、Web が書き、Go のログインが確かめます。同じ形であることは `tests/fixtures/scrypt-golden.json`（Go の `password_golden_test.go` が書く）で確かめています。Web でパスワードを変える・再設定すると、ハッシュと `sessionVersion` を 1 つの `UPDATE` で変え、既存のログインがすべて無効になります。
-- パスワードログインの試行回数は `SignInThrottle` テーブルで数えます。Web からのログインも API を通るので、同じクライアントからの Web とアプリの試行は、合わせて数えられます。
+Web（Next.js）は、DB を Prisma で直接読み書きします。Go は DB に ping するだけです。スキーマの管理は Prisma に一本化しています。
 
 ### 環境変数
 
-| 名前                                                                            | 内容                                                                                                                                                                                                               |
-| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `PORT`                                                                          | 待ち受けポート（既定 8080）                                                                                                                                                                                        |
-| `DATABASE_URL`                                                                  | Neon の接続文字列（pooled）                                                                                                                                                                                        |
-| `API_JWT_SECRET`                                                                | アクセストークンの HS256 鍵。32 バイト以上                                                                                                                                                                         |
-| `GITHUB_MOBILE_CLIENT_ID` / `GITHUB_MOBILE_CLIENT_SECRET`                       | モバイル用の GitHub OAuth App（Web 用とは別）                                                                                                                                                                      |
-| `GITHUB_MOBILE_REDIRECT_URI`                                                    | アプリのカスタム URL スキーム。リクエストの `redirectUri` と完全一致を要求します                                                                                                                                   |
-| `GITHUB_WEB_CLIENT_ID` / `GITHUB_WEB_CLIENT_SECRET` / `GITHUB_WEB_REDIRECT_URI` | Web 用の GitHub OAuth App（Web の GitHub ログインに必要）。3 つとも設定するか、すべて空。`redirectUri` が完全一致した方の OAuth App で交換します（Web の callback は `https://<Web>/api/auth/callback/github/go`） |
-| `API_WEB_PROXY_SECRET`                                                          | 32 バイト以上。Web が `X-Zhuelog-Proxy-Secret` で渡す秘密（Web から使うときは必要）。一致したときだけ `X-Zhuelog-Client-IP` を利用者の IP として信頼します                                                         |
-| `AUTH_ALLOWED_GITHUB_IDS`                                                       | admin の許可リスト。GitHub の数値のユーザー ID をカンマ区切りで並べる（前後の空白は除き、数字以外の値は無視）                                                                                                      |
+| 名前           | 内容                        |
+| -------------- | --------------------------- |
+| `PORT`         | 待ち受けポート（既定 8080） |
+| `DATABASE_URL` | Neon の接続文字列（pooled） |
 
-`PORT`・`GITHUB_WEB_*`・`API_WEB_PROXY_SECRET`・`FFPF_ID_*`・`DEMO_LOGIN_ID` 以外はすべて必須で、無い・不正なときは起動時に終了します。`GITHUB_WEB_*` と `API_WEB_PROXY_SECRET` は API の起動には要りませんが、Web から使うときは必要です。`FFPF_ID_*`（4 つそろえるか、すべて空）と `DEMO_LOGIN_ID` は任意です。LINE 連携とデモのリセットの設定は、段階 10b から Go では使いません（Web に設定します）。Go の Vercel プロジェクトからは、`LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`OPENAI_API_KEY`・`OPENAI_LEARNING_MODEL`・`CRON_SECRET`・`OPENAI_API_BASE_URL`・`LINE_API_BASE_URL` を消してよく、`DEMO_LOGIN_ID` は残します（Go の再デプロイのあとに消します）。
+`DATABASE_URL` は必須で、無いときは起動時に終了します。Go はこの 2 つのほかの環境変数を読みません。以前のログインの設定が Go の Vercel プロジェクトに残っていても、起動には影響しません（消し方は [Vercel へのデプロイ](./operations/deploy.md) を見てください）。
 
 ## 関連する文書
 

@@ -4,20 +4,14 @@ package store
 
 import (
 	"context"
-	"crypto/rand"
 	"errors"
 	"fmt"
-	"math/big"
 	neturl "net/url"
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-// ErrNotFound is returned when a requested row does not exist.
-var ErrNotFound = errors.New("store: not found")
 
 // Store wraps a pgx connection pool.
 type Store struct {
@@ -119,17 +113,6 @@ func secureURL(rawURL string) (string, string, error) {
 	return u.String(), schema, nil
 }
 
-// dbtx is satisfied by both *pgxpool.Pool and pgx.Tx.
-type dbtx interface {
-	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
-	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
-}
-
-// dbTime converts t to what TIMESTAMP(3) columns store: UTC, millisecond precision.
-func dbTime(t time.Time) time.Time {
-	return t.UTC().Truncate(time.Millisecond)
-}
-
 // Ping checks that the database is reachable.
 func (s *Store) Ping(ctx context.Context) error {
 	return s.pool.Ping(ctx)
@@ -138,23 +121,4 @@ func (s *Store) Ping(ctx context.Context) error {
 // Close releases the connection pool.
 func (s *Store) Close() {
 	s.pool.Close()
-}
-
-const idAlphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
-
-// newID returns an ID shaped like a Prisma cuid: "c" followed by 24 random
-// lowercase alphanumeric characters.
-func newID() string {
-	const n = 24
-	max := big.NewInt(int64(len(idAlphabet)))
-	b := make([]byte, 0, n+1)
-	b = append(b, 'c')
-	for i := 0; i < n; i++ {
-		v, err := rand.Int(rand.Reader, max) // uniform, no modulo bias
-		if err != nil {
-			panic(fmt.Sprintf("store: crypto/rand failed: %v", err))
-		}
-		b = append(b, idAlphabet[v.Int64()])
-	}
-	return string(b)
 }

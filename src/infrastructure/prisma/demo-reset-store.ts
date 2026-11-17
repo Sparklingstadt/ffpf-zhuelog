@@ -4,10 +4,10 @@
 //
 // It is one transaction so a visitor never sees the demo half emptied, and a
 // second reset running at the same time waits on the account row (the
-// SELECT ... FOR UPDATE) instead of inserting the seed twice. Go's sign-in
-// reads the account it writes until stage 11, so the account row is exactly
-// Go's: the same loginId, DEMO_PASSWORD_HASH, session version 0 and, when the
-// account is already there, no change at all.
+// SELECT ... FOR UPDATE) instead of inserting the seed twice. The account
+// row stays exactly as Go's sign-in read it before stage 11: the same
+// loginId, DEMO_PASSWORD_HASH, session version 0 and, when the account is
+// already there, no change at all.
 
 import { DEMO_PASSWORD_HASH } from "../../domain/identity/demo-account";
 import type { DemoSeed, DemoCardHistory } from "../../domain/demo/demo-seed";
