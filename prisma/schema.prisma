@@ -121,6 +121,24 @@ model ApiRefreshToken {
   @@index([ownerId])
 }
 
+// A signed-in browser (stage 11 of the Go retirement). The cookie holds a
+// random token; only its SHA-256 is kept here. role/login/sessionVersion are
+// what ApiRefreshToken kept, so the per-request check stays the same. The
+// CHECK constraint in the migration pins the shape of each role.
+model Session {
+  id             String   @id @default(cuid())
+  tokenHash      String   @unique // SHA-256 hex of the cookie's token
+  ownerId        String
+  role           String // "admin" | "member" | "guest"
+  login          String? // admin only: GitHub login at sign-in (display only)
+  sessionVersion Int? // member only: the account's sessionVersion at sign-in
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+
+  @@index([ownerId])
+  @@index([expiresAt])
+}
+
 // Ties one LINE account to one Zhuelog owner (a PasswordAccount id prefixed
 // "password:", or an admin's GitHub numeric id). ownerId has no foreign key:
 // admins have no row in the database. role is "member" | "admin" (CHECK).
