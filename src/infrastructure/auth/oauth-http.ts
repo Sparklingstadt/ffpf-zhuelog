@@ -57,23 +57,48 @@ export function formUrlEncode(value: string): string {
 // starts with one does not parse.
 const utf8 = new TextDecoder("utf-8", { ignoreBOM: true });
 
+// Rejects once signal aborts. A fetch is not bound to abort its body stream
+// when the signal fires after the headers, so each read races this.
+function whenAborted(signal: AbortSignal): {
+  promise: Promise<never>;
+  dispose: () => void;
+} {
+  let onAbort = () => {};
+  const promise = new Promise<never>((_resolve, reject) => {
+    onAbort = () => reject(signal.reason);
+    if (signal.aborted) onAbort();
+    else signal.addEventListener("abort", onAbort, { once: true });
+  });
+  promise.catch(() => {});
+  return {
+    promise,
+    dispose: () => signal.removeEventListener("abort", onAbort),
+  };
+}
+
 async function readLimited(
   response: Response,
   maxBytes: number,
+  signal: AbortSignal,
 ): Promise<Uint8Array> {
   const out = new Uint8Array(maxBytes);
   let length = 0;
   if (!response.body) return out.subarray(0, 0);
   const reader = response.body.getReader();
+  const aborted = whenAborted(signal);
   try {
     while (length < maxBytes) {
-      const { done, value } = await reader.read();
+      const { done, value } = await Promise.race([
+        reader.read(),
+        aborted.promise,
+      ]);
       if (done) break;
       const take = Math.min(value.byteLength, maxBytes - length);
       out.set(value.subarray(0, take), length);
       length += take;
     }
   } finally {
+    aborted.dispose();
     // The rest is dropped, as Go's io.LimitReader leaves it unread.
     reader.cancel().catch(() => {});
   }
@@ -109,6 +134,7 @@ export async function fetchLimited(
     const bytes = await readLimited(
       response,
       options.maxBytes ?? OAUTH_MAX_BODY_BYTES,
+      signal,
     );
     return { status: response.status, text: utf8.decode(bytes) };
   } catch {

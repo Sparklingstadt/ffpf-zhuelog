@@ -106,6 +106,21 @@ test("the code exchange posts Go's form and reads the user with Go's headers", a
   assert.deepEqual(f.logs, []);
 });
 
+test("both GitHub requests name the app in User-Agent", async () => {
+  // GitHub's REST API refuses requests without a User-Agent; Go's net/http
+  // sent its own default, so the web names itself explicitly.
+  const f = fakeGitHub();
+  await f.exchange();
+  assert.equal(f.calls.length, 2);
+  for (const call of f.calls) {
+    assert.equal(
+      new Headers(call.init.headers).get("User-Agent"),
+      "ffpf-zhuelog",
+      call.url,
+    );
+  }
+});
+
 test("a trailing slash on the API URL is dropped", async () => {
   const calls: string[] = [];
   const client = createGitHubOAuthClient({

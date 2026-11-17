@@ -535,23 +535,26 @@ Cron は Production のデプロイで登録されます。時刻は UTC で、`
 
 - **11a**：ログインのセッションを置く `Session` の表と、Web がログインを行うための部品（セッションの保存、パスワード・ゲスト・デモ・GitHub・FFPF ID のログインのユースケース、GitHub と FFPF ID のクライアント）を足します。どこからも呼ばないので、ログインは Go のままです。
 - **11b**：ログインの画面とルートを、この部品につなぎます（Go から Web への切り替え）。
-- 11a の PR では、動きは何も変わりません。
+- 11a の PR では、ログインの動きは変わりません。ただし、Preview の Neon ブランチに `Session` の表を足すまでは、Preview でパスワードの変更と管理者による再設定が `500` で失敗します（下の「11a のマージの前と後」）。
 
 ##### 11a のマージの前と後
 
 マージの前:
 
-- 行うことは無いです。
+- 本番で行うことはありません。
 - `Session` の表を足すマイグレーション（`20261117090000_add_session`）は、表と索引を作るだけで、今の Go と両立します。
+- **Preview の Neon ブランチ**には、マージの前に手で `prisma migrate deploy` を当てることを勧めます（プレビューのビルドは当てません。「Web のプレビュー（Preview）」の手順です）。`DATABASE_URL=<そのブランチの direct の URL> pnpm exec prisma migrate deploy` です。
+  - 表を足すだけなので、今の Preview にも害はありません。
+  - 当てておくと、この PR のプレビューでも、パスワードの変更と管理者による再設定を試せます。当てるまでは、この 2 つが `500` で失敗します。同じトランザクションで `Session` から消す（その人のセッションを失効させる）ためです。
 
 マージのあと:
 
 1. Web の本番のビルドが、`prisma migrate deploy` で `Session` の表を足します（「4. 本番の DB の確認」）。
 2. `migrate status` で「Database schema is up to date!」を確かめます。
-3. **Preview の Neon ブランチ**には、手で `prisma migrate deploy` を当てます（プレビューのビルドは当てません。「Web のプレビュー（Preview）」の手順です）。`DATABASE_URL=<そのブランチの direct の URL> pnpm exec prisma migrate deploy` です。当てるまでは、Preview でパスワードの変更と管理者による再設定が `500` で失敗します。この 2 つは、同じトランザクションで `Session` から消す（その人のセッションを失効させる）ためです。
+3. マージの前に **Preview の Neon ブランチ**へ当てていなければ、ここで同じ手順で当てます。当てるまでは、Preview でパスワードの変更と管理者による再設定が `500` で失敗します。
 4. ログインの動きは変わりません。ログインは Go のままで、`Session` の表は空のままです。
 
-11b の前に、Web の Production に次の 2 つを入れておいてよいです（11a のコードは読みません）。
+11b の前に、Web の Production に次の 2 つを入れておいてよいです（11a には読む関数がありますが、まだどこからも呼びません）。
 
 - `GITHUB_WEB_CLIENT_SECRET`：Go の同じ名前の値です。Vercel から読み戻せないときは、GitHub の OAuth App の画面で **Generate a new client secret** を押して作ります。古い Secret は、11b のあと Go を出し直すまで消しません。
 - `FFPF_ID_CLIENT_SECRET`：Go と同じ値です。
@@ -570,7 +573,7 @@ Preview には入れません。プレビューの URL は、GitHub と FFPF ID 
 
 ##### 11b のマージの前と後
 
-11b の計画の Task 5 で書く。
+11b の計画の Task 5 で書きます。
 
 ### Web のプレビュー（Preview）
 

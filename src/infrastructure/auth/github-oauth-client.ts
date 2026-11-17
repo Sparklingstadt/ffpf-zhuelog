@@ -21,6 +21,10 @@ import {
 export const GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token";
 export const GITHUB_API_URL = "https://api.github.com";
 
+// GitHub's REST API refuses requests without a User-Agent. Go's net/http sent
+// its own default; the web names itself on both requests.
+const USER_AGENT = "ffpf-zhuelog";
+
 type ExchangeFailure = Extract<ExchangeOutcome<never>, { ok: false }>;
 
 const INVALID = { ok: false, reason: "invalid" } as const;
@@ -82,6 +86,7 @@ export function createGitHubOAuthClient(config: {
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
           Accept: "application/json",
+          "User-Agent": USER_AGENT,
         },
         body,
       },
@@ -117,6 +122,7 @@ export function createGitHubOAuthClient(config: {
           Authorization: `Bearer ${token}`,
           Accept: "application/vnd.github+json",
           "X-GitHub-Api-Version": "2022-11-28",
+          "User-Agent": USER_AGENT,
         },
       },
       options,

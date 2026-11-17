@@ -2,6 +2,8 @@
 -- nothing reads or writes it until the web signs people in itself. The CHECK
 -- pins each role's shape as Go's Signer.Verify does (auth/token.go:126-145).
 -- "sessionVersion" IS NOT NULL is spelled out because a CHECK passes on NULL.
+-- Admins and members need a non-empty "ownerId", as Verify refuses an empty
+-- subject; a guest's is always 'guest'.
 
 -- CreateTable
 CREATE TABLE "Session" (
@@ -16,8 +18,8 @@ CREATE TABLE "Session" (
 
     CONSTRAINT "Session_pkey" PRIMARY KEY ("id"),
     CONSTRAINT "Session_role_check" CHECK (
-      ("role" = 'admin' AND "login" IS NOT NULL AND "login" <> '' AND "sessionVersion" IS NULL)
-      OR ("role" = 'member' AND "login" IS NULL AND "sessionVersion" IS NOT NULL AND "sessionVersion" >= 0)
+      ("role" = 'admin' AND "ownerId" <> '' AND "login" IS NOT NULL AND "login" <> '' AND "sessionVersion" IS NULL)
+      OR ("role" = 'member' AND "ownerId" <> '' AND "login" IS NULL AND "sessionVersion" IS NOT NULL AND "sessionVersion" >= 0)
       OR ("role" = 'guest' AND "ownerId" = 'guest' AND "login" IS NULL AND "sessionVersion" IS NULL))
 );
 

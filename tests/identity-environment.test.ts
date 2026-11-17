@@ -46,6 +46,12 @@ test("allowedGitHubIds keeps only numeric ids", () => {
   assert.deepEqual([...allowedGitHubIds()].sort(), ["10001", "2002"]);
 });
 
+test("allowedGitHubIds trims Go's spaces, not String.prototype.trim's", () => {
+  // Go's strings.TrimSpace strips U+0085 but keeps U+FEFF.
+  process.env.AUTH_ALLOWED_GITHUB_IDS = "\u0085301\u0085,\uFEFF302";
+  assert.deepEqual([...allowedGitHubIds()], ["301"]);
+});
+
 test("allowedGitHubIds is empty when unset", () => {
   delete process.env.AUTH_ALLOWED_GITHUB_IDS;
   assert.equal(allowedGitHubIds().size, 0);

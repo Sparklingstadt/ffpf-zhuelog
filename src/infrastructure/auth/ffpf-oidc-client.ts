@@ -10,6 +10,9 @@
 // every refusal logs Go's reason word. JSON is read as Go's encoding/json
 // reads it into Go's structs: a field of the wrong JSON type fails the whole
 // read, null leaves a string field empty, and keys match fields ignoring case.
+// A duplicate key is the one exception: JSON.parse keeps the last value, while
+// Go also remembers a type error from an earlier one. This is harmless: the
+// token and the JWKS both come from FFPF ID over TLS, and the token is signed.
 //
 // Outcomes: "invalid" when FFPF ID refuses the code or the ID token is not
 // acceptable; "unavailable" for transport and upstream failures. Neither the

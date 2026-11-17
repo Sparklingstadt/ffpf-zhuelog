@@ -111,11 +111,12 @@ export function apiJwtSecret(): string {
 }
 
 // GitHub account ids allowed to act as administrator: comma separated,
-// trimmed, digits only. Empty means no administrator gets through.
+// trimmed as Go's strings.TrimSpace, digits only. Empty means no
+// administrator gets through.
 export function allowedGitHubIds(): ReadonlySet<string> {
   const ids = (process.env.AUTH_ALLOWED_GITHUB_IDS ?? "")
     .split(",")
-    .map((id) => id.trim())
+    .map((id) => goTrimSpace(id))
     .filter((id) => /^[0-9]+$/.test(id));
   return new Set(ids);
 }

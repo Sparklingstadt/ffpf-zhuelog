@@ -47,7 +47,7 @@
    - 管理者は、毎回 `AUTH_ALLOWED_GITHUB_IDS` を確かめる（11b。今と同じ）。
    - `sessionVersion` を行に持ち、毎回アカウントの今の値と比べるのは、決めたこと 5 を保つための守り。ログインの途中（パスワードを確かめたあと、行を入れる前）に変更が入っても、古い版の行は通らない。FFPF ID のアカウントの `sessionVersion` を上げる処理はアプリに無いが、DB で上げれば今と同じく効く。
 6. **期限切れの行は、ログインのたびに掃除する。cron は足さない。**
-   - 今の 2 つの cron（LINE の拾い直し、デモのリセット）は、LINE やデモを設定したときだけ動く。それに相乗りすると、設定しだいで掃除が止まる。Hobby の Cron は 2 つまでで、3 つ目は足せない。
+   - 今の 2 つの cron（LINE の拾い直し、デモのリセット）は、LINE やデモを設定したときだけ動く。それに相乗りすると、設定しだいで掃除が止まる。掃除だけの cron を足すこともできる（Hobby の Cron は 100 個まで、どれも 1 日 1 回）が、ログインのたびに掃除すれば、別の仕事を足さずに済む。
    - ログインごとに、期限切れの行を最大 100 行消す（`DELETE … WHERE "id" IN (SELECT "id" … WHERE "expiresAt" <= now LIMIT 100 FOR UPDATE SKIP LOCKED)`）。`SignInThrottle` の掃除（`pruneThrottleSql`）と同じ形。
    - ゲストは 1 分に 10 回（1 つの IP から）までしか作れない。1 回の掃除で 100 行消えるので、期限切れの行がたまり続けることはない。
 7. **ログインの決まりは、Go の数・キー・順番をそのまま使う（参照 §2・§5・§7）。**
@@ -151,8 +151,8 @@ CREATE TABLE "Session" (
 
     CONSTRAINT "Session_pkey" PRIMARY KEY ("id"),
     CONSTRAINT "Session_role_check" CHECK (
-      ("role" = 'admin' AND "login" IS NOT NULL AND "login" <> '' AND "sessionVersion" IS NULL)
-      OR ("role" = 'member' AND "login" IS NULL AND "sessionVersion" >= 0)
+      ("role" = 'admin' AND "ownerId" <> '' AND "login" IS NOT NULL AND "login" <> '' AND "sessionVersion" IS NULL)
+      OR ("role" = 'member' AND "ownerId" <> '' AND "login" IS NULL AND "sessionVersion" IS NOT NULL AND "sessionVersion" >= 0)
       OR ("role" = 'guest' AND "ownerId" = 'guest' AND "login" IS NULL AND "sessionVersion" IS NULL))
 );
 

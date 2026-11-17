@@ -179,3 +179,33 @@ test('fetchLimited turns a network error or a timeout into "unavailable"', async
     "unavailable",
   );
 });
+
+test(
+  "fetchLimited times out a body that stalls after the headers, as Go's Client.Timeout",
+  { timeout: 5_000 },
+  async () => {
+    // The headers arrive at once; the body sends two bytes and then nothing,
+    // and ignores the request's signal, as an injected fetch's body may.
+    const stalled = recordingFetch(
+      () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode("ab"));
+            },
+          }),
+        ),
+    );
+    const startedAt = Date.now();
+    assert.equal(
+      await fetchLimited(
+        stalled.fetchFn,
+        "https://idp.example/x",
+        { method: "GET", headers: {} },
+        { timeoutMs: 20 },
+      ),
+      "unavailable",
+    );
+    assert.ok(Date.now() - startedAt < 5_000);
+  },
+);

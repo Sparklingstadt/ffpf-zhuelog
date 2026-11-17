@@ -283,9 +283,13 @@ It is built from:
   - `passwordAccounts`（`prisma().passwordAccount.findUnique({where:{loginId}, select:{id, passwordHash, sessionVersion}})`）
   - `ffpfAccounts: createFfpfAccountStore(prisma)`
   - `passwords`（`new ScryptPasswordHasher()`。モジュールの読み込みで `void passwords.warm()`）
+    - 注意：今の `ScryptPasswordHasher.verify` は、scrypt の計算の失敗を飲み込んで `false` を返す（`scrypt-password-hasher.ts` の `catch { return false }`）。これでは、計算の失敗が「パスワードが違う」になり、回数に数えられる。Go は失敗をエラーとして返し、`ErrUnauthorized` にしなかった（`services/api/auth/login_test.go` の `TestLoginPasswordHasherErrorIsNotUnauthorized`）。
+    - この PR で、`verify` は計算の失敗を投げ直すようにする。保存されたハッシュの形が読めない（`parse` が `null`、N が大きすぎるなど）ときは、今のまま `false`。
+    - 段階 9b の `tests/own-password.test.ts` で、`verify` が投げたときの期待を合わせる（パスワードの変更は失敗として投げ、`invalid` にしない）。
   - `sessions: sessionStore`
   - `github`：`githubOAuthConfig()` があれば `createGitHubOAuthClient(…)`、なければ `null`
   - `ffpf`：`ffpfIdConfig()` があれば `createFfpfOidcClient(…)`、なければ `null`
+    - 注意：今の `ffpfIdConfig()` は秘密を返さない。この PR で `clientSecret` も返すようにする（判断 8、下の `environment.ts`）。返さないままでは、FFPF ID のクライアントを作れない。
   - `allowedGitHubIds()`、`demoLoginId()`、`now`
 
 ```ts
@@ -347,6 +351,7 @@ export function oauthFailurePath(reason: SignInFailure | "error"): string; // "/
   - `isAuthConfigured`・`apiJwtSecret` を消す。
   - `isSafeGoApiUrl` を `isHttpsOrLoopbackUrl` に名前替えし、`client.ts` の 1 か所も直す。
   - `ffpfIdConfig()` は `{issuer, clientId, clientSecret}` を返し、`FFPF_ID_CLIENT_SECRET` も要る。11a の `ffpfIdClientSecret` はこの中に畳む。
+  - `demoLoginId()` は、Go の `services/api/config.go:127-133` と同じく `DEMO_LOGIN_ID` の形を確かめる。`goTrimSpace` のあとの値を `normalizeLoginId` に通し、結果が元と同じでなければ（大文字・短すぎる・使えない文字）`undefined` を返し、`console.error("DEMO_LOGIN_ID_INVALID")` を 1 度だけ出す（値は出さない）。Go は起動を止めたが、Web は止められないので、デモのボタンを出さない。
   - 先頭のコメントの「Sign-in goes through the Go API」を消す。
 - `signin/page.tsx`：`isConfigured = Boolean(githubOAuthConfig())`。ほかは変えない。
 - `src/proxy.ts`：`return sessionGate(request, passThrough)`。`passThrough(request)` は `request.headers` を基にする（cookie のヘッダーを書き換えない）。`refreshTokens`・`goProxy` の import を消す。
@@ -375,6 +380,11 @@ export function oauthFailurePath(reason: SignInFailure | "error"): string; // "/
   - `tests/identity-environment.test.ts`：
     - `ffpfIdConfig needs the issuer, the client id and the secret`：秘密が無いと `undefined`。
     - `ffpfIdConfig keeps the https-or-loopback rule for the issuer`：`http://ffpf.example` → `undefined`、`http://127.0.0.1:3110` → ok。
+    - `demoLoginId must already be a login id, as Go's config`：`" demo "` → `"demo"`。`"Demo"`・`"ab"`・`"demo user"`・`"demo!"` → `undefined`。ログに値が出ない。
+  - `tests/scrypt-password-hasher.test.ts`：
+    - `verify rethrows a scrypt failure but refuses an unreadable hash`：`parse` が通すハッシュでは scrypt の失敗を起こせない（N・r・p に上限がある）。そこで、テストのためだけに scrypt の関数をコンストラクターで差し替えられるようにし、失敗する関数で `verify` が投げることを確かめる。今の「読めないハッシュ」の行は `false` のまま。
+  - `tests/sign-in.test.ts`：
+    - `a hasher failure is an error, not invalid`：`verify` が投げると `withPassword` も投げ、`login:` のキーは消えず、`Session` は作られない（Go の `TestLoginPasswordHasherErrorIsNotUnauthorized`）。
 - [ ] **Step 2: テストが失敗することを確かめる。**
 - [ ] **Step 3: 実装する。** 上のとおり。Go の部品を消したあと、次の grep で何も出ないことを確かめる。
   - `grep -rn "go-api-session\|go-proxy\|go-api/session-cookies\|go-api/authed\|go-api/act-as\|current-path\|access-token\|apiJwtSecret\|isAuthConfigured\|refreshTokens\|loginPassword\|loginGuest\|loginDemo\|loginGitHub\|loginFFPF\|fetchMe\|isDemoAvailable\|GoTokens\|readAccessToken\|x-zhuelog-path" src tests`
