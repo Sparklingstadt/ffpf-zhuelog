@@ -4,34 +4,49 @@
 
 ## 起動方法
 
-前提: Node.js 24 または 26、Docker Desktop（Go は要りません。Go の health を試すときだけ、`services/api/go.mod` の版が要ります）
+前提: Node.js 24 または 26、Docker Desktop
 
-ログインも学習ノートの読み書きも Web が行います（段階 11 で、ログインも Go から Web に移りました）。ログイン中の人は、Cookie `zl_session` のトークンから DB の `Session` の行を引いて決めるので、手元では DB だけが要ります。Go API は要りません。
+ログインも学習ノートの読み書きも Web が行います。ログイン中の人は、Cookie `zl_session` のトークンから DB の `Session` の行を引いて決めるので、手元では DB だけが要ります。
 
 ```bash
 cp .env.example .env
-pnpm install
-pnpm run api:db    # サンプルの会員を入れた DB を 127.0.0.1:55440 に起動する（Go は起動しない）
+pnpm install --frozen-lockfile
+docker compose up -d
+pnpm run db:deploy
+pnpm run db:seed:sample   # サンプルの会員（下の表）
 pnpm run dev
 ```
 
-ブラウザーで <http://localhost:3000> を開き、ゲストか、サンプルの会員（[docs/api-local.md](api-local.md) の表）でログインします。GitHub ログインは本物の OAuth App が要るので、手元では使えません。
+ブラウザーで <http://localhost:3000> を開き、ゲストか、サンプルの会員（下の「サンプルのアカウント」）でログインします。GitHub ログインは本物の OAuth App が要るので、手元では使えません。
 
-`.env` では、次のようにそろえます（値は `scripts/api-local-env.sh` にあります）。
+`.env` では、次のようにそろえます。
 
-- `DATABASE_URL`: `API_LOCAL_DATABASE_URL`（`pnpm run api:db` の DB）と同じ値。サンプルの会員がこの DB にあります。`docker compose up -d` の開発用 DB（`.env.example` の値）を使うと、会員がいないので、ログインできるのはゲストだけです。
+- `DATABASE_URL`: `.env.example` の値（`docker compose up -d` の開発用 DB）のまま。サンプルの会員は `pnpm run db:seed:sample` で、この DB に入ります。開発用 DB は `127.0.0.1:55432` で動きます（ほかの Postgres がよく使う 5432 とぶつからないように）。ポートは `ZHUELOG_DB_PORT` で替えられ、替えたら `DATABASE_URL` のポートも合わせます。「address already in use」や Prisma の `P1010` が出たら、ほかの Postgres がそのポートを使っています。
 - `AUTH_URL`: `http://localhost:3000`。GitHub と FFPF ID の `redirect_uri` を決めます。
 - `AUTH_ALLOWED_GITHUB_IDS`・`DEMO_LOGIN_ID`: ローカルでは `0` と `demo`。
 - `GITHUB_WEB_CLIENT_SECRET`（`AUTH_GITHUB_ID` と一緒）: GitHub のボタンを使うときだけ。無いと GitHub のボタンは押せません。
 - `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID`・`FFPF_ID_CLIENT_SECRET`: 手元で FFPF ID を試すときだけ。3 つそろわないと、FFPF ID のボタンは出ません。
 
-`GO_API_URL`・`API_WEB_PROXY_SECRET`・`API_JWT_SECRET` は、段階 11b から Web が読みません（段階 12 で消します）。`.env` に残っていても害はありません。
+Prisma のマイグレーションと seed は、同じ `DATABASE_URL` を使います。
 
-Prisma のマイグレーションと seed は、同じ `DATABASE_URL` を使います（`docker compose up -d` の開発用 DB に対して実行するときは、そちらの URL に替えます）。
+### サンプルのアカウント
+
+手元だけのテストの値で、`scripts/sample-members-seed.ts` が作ります（何度実行しても重複しません）。`docker compose down -v` で DB ごと消えます。Web のログイン画面の「ID とパスワード」で使えます。
+
+| loginId  | パスワード            | 内容                                |
+| -------- | --------------------- | ----------------------------------- |
+| `demo`   | `demo-password-123`   | 試すときに使う会員                  |
+| `friend` | `friend-password-123` | 共有済みのエントリーを 2 件持つ会員 |
+
+### LINE を手元で見る
+
+LINE 連携は手元では使えません。本物の LINE のチャネルと OpenAI の API キーが要るためです（e2e は偽の LINE API の `e2e/line-stub.ts` で確かめます）。Web に LINE の環境変数が無いと、「LINE 連携」画面（`/account/line`）には「LINE 連携は今は使えません。」と出ます。
+
+ダミーの LINE 設定でコード発行画面を確認する場合は、Web の `.env.local` に `LINE_LINK_PREVIEW_MODE="true"` を設定してください。本番ボットへ送る QR とボタンを隠し、表示確認用であることを明示します。ローカル DB で発行したコードは本番の LINE ボットには登録されないため、本番での連携には本番画面で発行したコードを使います。
 
 ## 認証・認可の設定
 
-ログインは Web が行います。Web の Vercel プロジェクトに入れる値は `AUTH_URL`・`AUTH_GITHUB_ID`・`GITHUB_WEB_CLIENT_SECRET`・`AUTH_ALLOWED_GITHUB_IDS`・`DEMO_LOGIN_ID`・`DATABASE_URL` です（FFPF ID を使うときは、下の「FFPF ID でのログイン」の 3 つも）。手順は [docs/api-deployment.md](api-deployment.md) の「6. Web の設定」にあります。
+ログインは Web が行います。Web の Vercel プロジェクトに入れる値は `AUTH_URL`・`AUTH_GITHUB_ID`・`GITHUB_WEB_CLIENT_SECRET`・`AUTH_ALLOWED_GITHUB_IDS`・`DEMO_LOGIN_ID`・`DATABASE_URL` です（FFPF ID を使うときは、下の「FFPF ID でのログイン」の 3 つも）。手順は [docs/deployment.md](deployment.md) の「2. Web の設定」にあります。
 
 GitHubの **Settings → Developer settings → OAuth Apps** で、Web 用のOAuth Appを作成します。
 
@@ -49,7 +64,7 @@ Client ID は Web の `AUTH_GITHUB_ID` に、Client Secret は Web の `GITHUB_W
 - portal で `pnpm run oidc:client zhuelog` を実行してクライアントを登録します（redirect URI は `https://本番ドメイン/api/auth/callback/ffpf`。手順は ffpf-portal の README）。
 - Web に `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID`・`FFPF_ID_CLIENT_SECRET` を入れます。`redirect_uri` は、`AUTH_URL` の origin に `/api/auth/callback/ffpf` を付けた値で、portal に登録した値と 1 文字も違わない必要があります。
 - 本番 DB にマイグレーション `20261027120000_add_ffpf_accounts`（`FfpfAccount` の追加）が必要です。main へのマージで Web の本番ビルドが自動で当てます（下の「マイグレーションの適用」）。
-- 詳しい手順は [docs/api-deployment.md](api-deployment.md) の「9. FFPF ID でのログイン」にあります。
+- 詳しい手順は [docs/deployment.md](deployment.md) の「5. FFPF ID でのログイン」にあります。
 
 ### ロールとID・パスワードのアカウント
 
@@ -69,7 +84,7 @@ ID・パスワードのmemberのアカウントは、GitHub管理者が `/admin/
 - **パスワードの保存**: scrypt（N=2^15, r=8, p=1）でハッシュ化したものだけを保存します。平文はDBにもログにも残しません。
 - **記録の持ち主**: memberの学習ノートは、所有者 `password:<アカウントID>`（FFPF ID のメンバーは `ffpf:<sub>`）に紐づきます。本人と管理者が見られます（詳細は「学習ノートの公開範囲」）。
 
-**マイグレーションの適用**: 本番へのDBマイグレーションは、mainへのマージで走るWebの本番ビルドが自動で当てます。`vercel.json` の `buildCommand` が `scripts/vercel-build.sh` を動かし、`VERCEL_ENV=production` のときだけ `prisma migrate deploy` を実行してから `next build` します。Previewは自分のNeonブランチを使い、マイグレーションは当てません（[docs/api-deployment.md](api-deployment.md) の「Web のプレビュー」を参照）。このためWebのProductionには `DATABASE_URL` が必要です（無い・つながらない・DDLが失敗すると、本番のWebのデプロイが失敗します）。Go APIは別プロジェクトで、あとから手でデプロイするので、**マイグレーションは今動いているGo APIと両立する形（表の追加、null許可の列の追加）にします**。列や表の削除のような壊す変更は、2回のリリースに分けます。以下の `migrate deploy` / `migrate status` の手順は、自動で当たらなかったときの手動の適用と、適用済みの確認に使います。詳しくは [docs/api-deployment.md](api-deployment.md) の「4. 本番の DB の確認」を参照してください。以下の各節にある「マージの前に適用」という記述は、自動化の前の手順なので、手動の適用として読んでください。
+**マイグレーションの適用**: 本番へのDBマイグレーションは、mainへのマージで走るWebの本番ビルドが自動で当てます。`vercel.json` の `buildCommand` が `scripts/vercel-build.sh` を動かし、`VERCEL_ENV=production` のときだけ `prisma migrate deploy` を実行してから `next build` します。Previewは自分のNeonブランチを使い、マイグレーションは当てません（[docs/deployment.md](deployment.md) の「2. Web の設定」の「Web のプレビュー（Preview）」を参照）。このためWebのProductionには `DATABASE_URL` が必要です（無い・つながらない・DDLが失敗すると、本番のWebのデプロイが失敗します）。ビルドのあいだは前のデプロイが動いているので、**マイグレーションは前のデプロイのコードと両立する形（表の追加、null許可の列の追加）にします**。列や表の削除のような壊す変更は、2回のリリースに分けます。以下の `migrate deploy` / `migrate status` の手順は、自動で当たらなかったときの手動の適用と、適用済みの確認に使います。詳しくは [docs/deployment.md](deployment.md) の「1. 本番の DB とマイグレーション」を参照してください。以下の各節にある「マージの前に適用」という記述は、自動化の前の手順なので、手動の適用として読んでください。
 
 パスワードアカウントのために新しい環境変数は要りません。ただしDBマイグレーション `20261007090000_password_accounts`（`PasswordAccount` テーブルの追加）が必要です。Vercelとリンク済みのmainのチェックアウトで、次の手順で本番DB（Neon）へ適用できます。`prisma.config.ts` は `.env` だけを読み込むので、`vercel env pull` だけでは本番の `DATABASE_URL` が使われません。`--environment=production` で取得したファイルを、`--env-file` で明示して渡します。
 
@@ -87,10 +102,6 @@ rm .env.production.local
 ログイン画面からは、GitHub認証を使わずゲストとしてログインすることもできます。学習ノート・日付別ログ・CSVインポート・フォローは管理者・メンバー専用です。書き込み権限と記録の持ち主はServer Actionでも検証します。
 
 開発用PostgreSQLはDockerホストの `127.0.0.1` にだけ公開されます。`.env` はGit管理対象外です。秘密情報をコミットせず、公開・漏洩した可能性がある場合は該当する認証情報を直ちに失効・再発行してください。
-
-## Go API（`services/api`）
-
-`services/api/` の Go 製 API は、段階 11b から `/health`・`/healthz`・`/ping` を返すだけです。Web とは別の Vercel プロジェクトで、読む環境変数は `PORT` と `DATABASE_URL` だけです。段階 12 で、`services/api`・`GO_API_URL`・`API_WEB_PROXY_SECRET`・`API_JWT_SECRET`・`ApiRefreshToken`・`docs-site/` と一緒に消します。ローカルでのテストは `pnpm run test:unit` に含まれます（DB を使うテストは `API_TEST_DATABASE_URL` が無いと skip されます）。デプロイの手順は [docs/api-deployment.md](api-deployment.md)、手元で試す手順（`pnpm run api:db` → `pnpm run api:dev` → `pnpm run api:smoke`）は [docs/api-local.md](api-local.md) にあります。
 
 ## 学習ノートの持ち主の本番への反映
 
@@ -168,7 +179,7 @@ pnpm run db:seed
 
 ## Playwright E2E
 
-Node.js 24 または 26、起動済みのDocker（Compose v2）が必要です。Go は要りません。
+Node.js 24 または 26、起動済みのDocker（Compose v2）が必要です。
 
 ```bash
 pnpm install --frozen-lockfile
@@ -181,7 +192,7 @@ pnpm run test:e2e:stop
 ```
 
 Desktop Chromiumとモバイル幅（Pixel 7 / Chromium）の両方で検証します。
-テスト起動時に専用PostgreSQLを起動し、既存マイグレーションを適用してTurbopackでビルド、`127.0.0.1:3107`に本番モードのサーバーを起動します。Go API は起動しません（段階 11b から、ログインも Web が受け持つため）。
+テスト起動時に専用PostgreSQLを起動し、既存マイグレーションを適用してTurbopackでビルド、`127.0.0.1:3107`に本番モードのサーバーを起動します。
 既存サーバーは再利用しません。通常の開発サーバーは停止してから実行してください（ビルド先の`.next`を共有します）。
 
 - 認証前のリダイレクト、ゲストログイン／ログアウト、外部URLへのリダイレクト拒否

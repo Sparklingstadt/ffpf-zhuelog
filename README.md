@@ -27,44 +27,46 @@
 
 ## 技術構成
 
-| 部分         | 使っているもの                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Web          | Next.js 16（App Router、Server Components、Server Actions）、React 19、TypeScript、Tailwind CSS 4、shadcn/ui                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| API          | Go（標準の `net/http`）。段階 11 で、ログインも Web に移り、Go に残るのは `/health` だけです（段階 12 で消します）。クイック質問・質問ノート・ChatGPT と話す・会話ノート・学習ログ・フォロー・会員の管理・LINE・デモのリセットも、すでに Web に移りました                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| DB           | PostgreSQL 17（本番は Neon）。スキーマとマイグレーションは Prisma 7。Web はアカウントを読み、会員のアカウント（作成・パスワードの再設定と変更）を書き、単語帳・学習ノート（CSV を含む）・復習・練習の記録・質問ノート・会話ノート・フォロー（会員の一覧とタイムラインを含む）を読み書きし、学習ログと AI の利用量の集計を読み、LINE の連携とメッセージ（`LineLink`・`LineLinkCode`・`LineMessage`）を読み書きします（LINE の復習のお知らせでは復習の項目も読みます）。デモのリセット（デモのアカウントと、そのデータの作り直し）も Web が書きます。ログインのセッション（`Session`）とログインの試行回数（`SignInThrottle`）も Web が書きます。Go は DB を `/health` の確認にしか使いません |
-| 認証         | GitHub OAuth（PKCE）、ID とパスワード（scrypt。ハッシュの書き込みも確認も Web）、FFPF ID（OpenID Connect）、ゲスト。ログインは Web が受け持ち、ランダムなトークン（Cookie `zl_session`）のハッシュを DB の `Session` に置きます。期限は 30 日（ゲストは 24 時間）で、使っても延びません                                                                                                                                                                                                                                                                                                                                                                                                     |
-| 外部サービス | OpenAI API、LINE Messaging API、Web Speech API（読み上げ）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| テスト       | Node の test runner、Go の testing、Playwright（PC とスマホの幅）、lefthook                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| デプロイ     | Vercel（Web と Go API の 2 プロジェクト）。本番のマイグレーションは Web のビルドで当てます                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 部分         | 使っているもの                                                                                                                                                                                                                                                         |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Web          | Next.js 16（App Router、Server Components、Server Actions）、React 19、TypeScript、Tailwind CSS 4、shadcn/ui                                                                                                                                                           |
+| DB           | PostgreSQL 17（本番は Neon）。スキーマとマイグレーションは Prisma 7。Web がすべてのデータを Prisma で読み書きします。Prisma を import してよいのは `src/infrastructure/prisma/` だけです                                                                               |
+| 認証         | GitHub OAuth（PKCE）、ID とパスワード（scrypt。ハッシュの書き込みも確認も Web）、FFPF ID（OpenID Connect）、ゲスト。ログインはランダムなトークン（Cookie `zl_session`）のハッシュを DB の `Session` に置きます。期限は 30 日（ゲストは 24 時間）で、使っても延びません |
+| 外部サービス | OpenAI API、LINE Messaging API、Web Speech API（読み上げ）                                                                                                                                                                                                             |
+| テスト       | Node の test runner、Playwright（PC とスマホの幅）、lefthook                                                                                                                                                                                                           |
+| デプロイ     | Vercel（Web の 1 プロジェクト）。本番のマイグレーションはビルドで当てます。毎日の定期実行は Vercel Cron（`vercel.json`）                                                                                                                                               |
 
 ## 設計の要点
 
-- **Web が DB に触るのは、ログイン中の人を決めるところと、単語帳と、学習ノート（CSV の取り込みを含む）と、復習と、練習の記録と、質問ノートと、会話ノートと、フォローと会員の一覧とタイムラインと、会員の管理とパスワードの変更と、学習ログと AI の利用量の読み取りと、LINE の連携とメッセージと、デモのリセットだけ**：Web は Cookie のトークンから `Session` の行を引いて、DB のアカウントを Prisma で読みます。単語帳（一覧・保存・削除）と学習ノート（一覧・検索・カレンダー・日ごとの表示・ゴミ箱・共有）と復習（今日の一覧・回答・ノートの出し入れ。FSRS の計算も Web）も Prisma で読み書きし、「AI で下書き」は Web が OpenAI を直接呼びます。練習の記録（保存と、間違えた問題を復習に入れる処理を 1 つのトランザクションで）と質問ノートと会話ノート（`ChatConversation`）も同じで、フォロー（一覧・タイムライン・フォローする／外す）も Prisma で読み書きします。会員の管理（作成・一覧・パスワードの再設定）と自分のパスワードの変更は、Web が scrypt のハッシュを書き、ハッシュと `sessionVersion` を 1 つの `UPDATE` で変えます（変えたあと、その人の `Session` の行はすべて消えます）。クイック質問と ChatGPT と話すの答えは Web が OpenAI から直接ストリームで受けて返します。LINE の webhook と「LINE 連携」の画面も Web が受け、`LineLink`・`LineLinkCode`・`LineMessage` を Prisma で読み書きして、添削・翻訳の OpenAI も直接呼びます。デモのリセットも Web の `/api/cron/demo-reset` で、1 つのトランザクションでデータを作り直します。毎日の定期実行（LINE の拾い直しとデモのリセット）は、Web の `vercel.json` に登録した Vercel Cron が行います。ログイン（GitHub・ID とパスワード・FFPF ID・ゲスト・デモ）とログアウトも Web が行い、`Session` を読み書きします。Go API は `/health` を返すだけです。Prisma を import してよいのは `src/infrastructure/prisma/` だけで、pg と next-auth は import できません。これをテストで確かめています。
+- **DB は Prisma でだけ触る**：画面・Server Action・Route Handler は、`src/composition/` で組み立てた application のユースケースを呼び、DB は `src/infrastructure/prisma/` の store が Prisma で読み書きします。ログイン中の人は、Cookie `zl_session` のトークンから `Session` の行を引いて決めます。Prisma を import してよいのは `src/infrastructure/prisma/` だけで、pg と next-auth は import できません。これをテストで確かめています。
 - **層を分ける**：Web のコードは `domain`・`application`・`infrastructure`・`presentation`・`composition` に分け、内側の層が Next.js や React に依存しないことを ESLint とテストで検査します。
 - **復習を 1 つの列にする**：学習ノート、練習の間違い、単語帳の語句を、同じ FSRS のカードとして 1 つの「今日の復習」に並べます。
 - **AI の費用を測ってから考える**：OpenAI を呼ぶ 4 か所のトークン数を記録し、料金や無料枠はその数字を見てから考える順にしました。
+- **Go をやめて Next.js 1 つにした**：以前は Go の API を別に持っていましたが、自分で読んで処理を追えるように、2026 年 11 月に機能ごとに Next.js へ移し、Go を消しました（段階 0〜12）。経緯は [docs/architecture.md](docs/architecture.md) の 2. にあります。
 
 全体の図、認証の流れ、選んだ理由と捨てた案は [docs/architecture.md](docs/architecture.md) にまとめています。
 
 ## 品質
 
-- 単体テスト 762 件（TypeScript）、Go のテスト（DB を使うものを含む）、E2E 320 件（Playwright、PC とスマホの 2 つの幅）があります。
-- E2E は、Docker の Postgres、Web、OpenAI と LINE と FFPF ID のスタブを立ち上げて（Go API は起動しません）、本物の画面を通して確かめます。
+- 単体テスト 739 件（TypeScript）、E2E 322 件（Playwright、PC とスマホの 2 つの幅）があります。
+- E2E は、Docker の Postgres、Web、OpenAI と LINE と FFPF ID のスタブを立ち上げて、本物の画面を通して確かめます。
 - commit の前に format・lint・型チェック、push の前に単体テストと E2E を lefthook が走らせます。
 - 本番の Lighthouse（6 ページとも性能・ベストプラクティス・SEO が 100）とアクセシビリティの記録は [docs/quality.md](docs/quality.md) にあります。
 
 ## 手元で動かす
 
-前提は Node.js 24 か 26、pnpm 11.25.0（`corepack enable`）、Docker です（Go は、`services/api` を試すときだけ要ります）。
+前提は Node.js 24 か 26、pnpm 11.25.0（`corepack enable`）、Docker です。
 
 ```bash
 cp .env.example .env
 pnpm install --frozen-lockfile
-pnpm run api:db    # サンプルの会員を入れた DB を起動する（`.env` の DATABASE_URL をこの DB に替える。docs/development.md）
+docker compose up -d
+pnpm run db:deploy
+pnpm run db:seed:sample   # サンプルの会員（docs/development.md）
 pnpm run dev
 ```
 
-ログインに Go は要らなくなりました（Go API を起動する手順は不要です）。<http://localhost:3000> を開き、ゲストか、サンプルの会員（[docs/api-local.md](docs/api-local.md) の表）でログインします。認証の設定、テスト、本番への反映の手順は [docs/development.md](docs/development.md) にあります。
+<http://localhost:3000> を開き、ゲストか、サンプルの会員（[docs/development.md](docs/development.md) の表）でログインします。認証の設定、テスト、本番への反映の手順は [docs/development.md](docs/development.md) にあります。
 
 ## 文書
 
@@ -74,8 +76,7 @@ pnpm run dev
 | [docs/features.md](docs/features.md)                       | 機能ごとの説明                           |
 | [docs/quality.md](docs/quality.md)                         | 表示速度とアクセシビリティの記録         |
 | [docs/development.md](docs/development.md)                 | 手元での動かし方、認証の設定、テスト     |
-| [docs/api-local.md](docs/api-local.md)                     | サンプルの DB と、Go の health を試す    |
-| [docs/api-deployment.md](docs/api-deployment.md)           | 本番への反映                             |
+| [docs/deployment.md](docs/deployment.md)                   | 本番への反映                             |
 | [docs/releases/](docs/releases/)                           | リリースノート                           |
 | [docs/roadmap.md](docs/roadmap.md)                         | これから取り組むこと                     |
 | [docs/job-hunting-roadmap.md](docs/job-hunting-roadmap.md) | このアプリをポートフォリオに仕上げる計画 |

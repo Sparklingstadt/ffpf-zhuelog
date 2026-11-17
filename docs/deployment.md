@@ -1,51 +1,14 @@
-# Go API（`services/api`）のデプロイ手順
+# 本番への反映（Vercel）
 
-Go API を、Vercel へデプロイするための準備と手順です。Web（Next.js）とは **別の Vercel プロジェクト** として、同じリポジトリの `services/api` をデプロイします。仕様は `docs/superpowers/specs/2026-10-20-go-mobile-api-design.md` と `docs/superpowers/specs/2026-10-21-go-api-on-vercel-design.md` にあります（どちらも、いまの姿ではなく、歴史です）。
+Web（Next.js）を Vercel の 1 つのプロジェクトで動かします。main にマージすると本番のビルドが走り、未適用の Prisma のマイグレーションを当ててからビルドします（`scripts/vercel-build.sh`）。Web の本番は、Ready になったあと `vercel promote` で切り替えます。
 
-**段階 11b から、Go API が返すのは `/health`・`/healthz`・`/ping` だけです。** ログインも Web が受け持ち、Go は Web からも呼ばれません。Go が読む環境変数は `PORT`（Vercel が設定）と `DATABASE_URL` だけです。段階 12 で、`services/api`・`GO_API_URL`・`API_WEB_PROXY_SECRET`・`API_JWT_SECRET`・`ApiRefreshToken`・`docs-site/` を消し、Go の Vercel プロジェクトも消します。以下の 1〜5 は、プロジェクトが残っているあいだの記録です。
+以前の名前は `docs/api-deployment.md` です（段階 12 で改名）。Go の API のプロジェクトは段階 12 で消しました。
 
-Vercel の Go の Framework Preset は、`services/api` の `go.mod` と `main.go` を見つけて、普通の `net/http` サーバーとして動かします（Fluid compute）。設定は `services/api/vercel.json`（`"framework": "go"`）にあります。Go の実行は Vercel では Beta です。
+## 1. 本番の DB とマイグレーション
 
-Go の Vercel プロジェクトへのデプロイは、Vercel CLI で、main から手で行います（Git の自動デプロイは切っています）。
+スキーマは Prisma のマイグレーションで管理します。ログインのセッションは `Session`、ログインの試行回数は `SignInThrottle` です。`ApiRefreshToken` は段階 12b で消します（末尾の「移行の記録」の「段階12（後片付け）のマージの前と後」）。マイグレーションは、Web の **本番ビルド** が自動で適用します。`vercel.json` の `buildCommand` が `scripts/vercel-build.sh` を動かし、`VERCEL_ENV=production` のときだけ `prisma migrate deploy` を実行してから `next build` します（Preview のビルドは自分の Neon ブランチを使い、マイグレーションは当てません）。そのため、Web の Production には `DATABASE_URL` が必要です。無い・つながらない・DDL が失敗すると、本番の Web のデプロイが失敗します（失敗したビルドの本番は、前のバージョンのままです）。
 
-## 1. モバイル用 GitHub OAuth App
-
-段階 11b から、Go は GitHub ログインを受けません。モバイル用の OAuth App（`GITHUB_MOBILE_*`）は、もう使いません。すでに作ってあるものは、消してよいです（Web 用の OAuth App は消さないでください。Web の GitHub ログインが使います）。
-
-## 2. Vercel プロジェクトを作る
-
-1. Vercel のダッシュボードで **Add New… → Project** を選び、このリポジトリ（`Sparklingstadt/ffpf-zhuelog`）を Import します。Web のプロジェクトとは別に、新しいプロジェクト（本番は `ffpf-zhuelog-api`）を作ります。
-2. **Root Directory** に `services/api` を指定します。
-3. **Framework Preset** が `Go` になっていることを確かめます（`services/api/vercel.json` でも指定しています）。
-4. **Settings → Deployment Protection** で **Vercel Authentication** を外します。新しいプロジェクトには最初から付いていて、付いたままだと `/health` を外から確かめられません（Go に認証はありません。返すのは health だけです）。
-5. **Settings → Build and Deployment → Root Directory** の **Skip deployments when there are no changes to the root directory or its dependencies** をオンにし、`services/api/` に変更が無いときはデプロイを飛ばします。Vercel のビルド環境には `.git` が無いので、`git diff` を使う Ignored Build Step は動きません（エラーになります）。
-
-## 3. 環境変数
-
-**Settings → Environment Variables** に設定します。`PORT` は Vercel が設定するので不要です。
-
-ビルドのために `GOFLAGS` に `-buildvcs=false` を入れます（Production と Preview）。Vercel のビルド環境には `.git` が無く、`go build` がコミットの情報を埋め込めずに失敗するためです。
-
-段階 11b から、Go が読むのは次の 1 つだけです。
-
-| 名前           | 内容                                                                                                |
-| -------------- | --------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL` | Neon の pooled 接続文字列（ホスト名に `-pooler` を含むもの）。`?schema=` は付けない（下の注を参照） |
-
-そのほか（`API_JWT_SECRET`・`API_WEB_PROXY_SECRET`・`AUTH_ALLOWED_GITHUB_IDS`・`GITHUB_MOBILE_*`・`GITHUB_WEB_*`・`FFPF_ID_*`・`DEMO_LOGIN_ID`）は、段階 11b で Go から外しました。Go の Vercel プロジェクトからも消してよいです（手順は「段階11（ログイン）のマージの前と後」の「11b のマージの前と後」）。LINE と OpenAI の値は、段階 10b で外しています。
-
-- `DATABASE_URL` は、手で入れなくても、チームの **Storage** タブで Web が使っている Neon のストアを開き、**Connect Project** から Go API のプロジェクトをつなぐと入ります（pooled の接続文字列です。`channel_binding=require` が付いていても Go API はそのまま使えます）。
-- Go は、`DATABASE_URL` を `/health` の DB の確認（`200` なら接続できている）にだけ使います。
-
-**Production と Preview で値を分けてください。** PR ごとのプレビューのデプロイが本番の DB を書き換えないよう、Preview の `DATABASE_URL` には本番の接続文字列を入れず、Neon のブランチなど別の DB を指定します。Preview に `DATABASE_URL` を入れない場合、プレビューのデプロイは起動時に止まります（必須の値が無いため）。
-
-DB への接続は、TLS で証明書まで検証します。ホストが `localhost`・`127.0.0.1`・`::1` 以外のとき（または `sslmode` が `prefer`・`require`・`verify-ca` のとき）、Go API は `sslmode` を `verify-full` に置き換えます。Neon の接続文字列の `sslmode=require` はそのままで構いません。`?schema=public` は無視しますが、それ以外のスキーマは `search_path` の起動パラメータになり、プーラーに拒否されることがあるので付けないでください。
-
-## 4. 本番の DB の確認
-
-スキーマは Prisma のマイグレーションで管理します。ログインのセッションは `Session`（段階 11a で足し、11b から Web が使います）、ログインの試行回数は `SignInThrottle` です。`ApiRefreshToken`（Go の refresh token）は、段階 11b から誰も読み書きしません（段階 12 で消します）。マイグレーションは、Web の **本番ビルド** が自動で適用します。`vercel.json` の `buildCommand` が `scripts/vercel-build.sh` を動かし、`VERCEL_ENV=production` のときだけ `prisma migrate deploy` を実行してから `next build` します（Preview のビルドは自分の Neon ブランチを使い、マイグレーションは当てません）。そのため、Web の Production には `DATABASE_URL` が必要です。無い・つながらない・DDL が失敗すると、本番の Web のデプロイが失敗します（失敗したビルドの本番は、前のバージョンのままです）。
-
-**マイグレーションの制約**: Web のデプロイで自動的に当たる一方、Go API は別のプロジェクトで、あとから手で（main をマージした後に）デプロイします。この間、DB のスキーマは新しく、動いている Go API は古いままです。そのため、マイグレーションは今動いている Go API とそのまま両立する形にします。足してよいのは、表の追加と、null を許す列（または既定値のある列）の追加だけです。列・表の削除や名前の変更、型の変更、NOT NULL の追加のような壊す変更は、2 段階に分けます（1 回目で新しい形を足して Go API を切り替え、2 回目のリリースで古い形を削除します）。
+**マイグレーションの制約**: 本番のビルドがマイグレーションを当ててから `vercel promote` で切り替えるまでは、前のデプロイの Web が新しいスキーマの上で動きます。そのため、マイグレーションは前のデプロイのコードとそのまま両立する形にします。足してよいのは、表の追加と、null を許す列（または既定値のある列）の追加だけです。列・表の削除や名前の変更、型の変更、NOT NULL の追加のような壊す変更は、2 回のリリースに分けます（1 回目で新しい形を足してコードを切り替え、2 回目のリリースで古い形を削除します）。
 
 マイグレーションが当たったことの確認と、自動で当たらなかったときの手動の適用は、次のとおりです。`migrate status` で未適用が無いこと（「Database schema is up to date!」）を確かめます。
 
@@ -62,19 +25,9 @@ rm .env.production.local
 SELECT 1 FROM pg_collation WHERE collname = 'ja-x-icu';
 ```
 
-## 5. デプロイと確認
+## 2. Web の設定
 
-main にマージすると本番にデプロイされます（`services/api/` に変更がある場合）。初回や変更が無いときは、ダッシュボードの **Deployments → Redeploy** で実行します。
-
-```bash
-curl -i https://<プロジェクト>.vercel.app/health
-```
-
-`200` が返れば、DB への接続まで確認できています（失敗時は `503`）。`/ping` は DB にアクセスせずに `200` を返します。ログインのルート（`/v1/auth/*`・`/v1/me`）は、段階 11b の Go を出し直したあとは `404` です。
-
-## 6. Web の設定
-
-Web（Next.js）は、ログインも学習ノートの読み書きも自分で行います（Go API は呼びません）。ログイン中の人は、Cookie `zl_session` のトークンの SHA-256 で DB の `Session` の行を引いて決め、DB の `PasswordAccount`・`FfpfAccount` を Prisma（`src/infrastructure/prisma/`）で読みます。ログインとログアウトは、段階 11b から Web が行います（GitHub・ID とパスワード・FFPF ID・ゲスト・デモ）。会員の管理とパスワードの変更は `PasswordAccount`・`SignInThrottle` に書き、パスワードの変更と管理者の再設定は、そのアカウントの `Session` も同じトランザクションで消します。設計は `docs/superpowers/specs/2026-11-16-deprecate-go-backend-design.md` にあります。
+Web（Next.js）は、ログインも学習ノートの読み書きも自分で行います。ログイン中の人は、Cookie `zl_session` のトークンの SHA-256 で DB の `Session` の行を引いて決め、DB の `PasswordAccount`・`FfpfAccount` を Prisma（`src/infrastructure/prisma/`）で読みます。ログインとログアウトも Web が行います（GitHub・ID とパスワード・FFPF ID・ゲスト・デモ）。会員の管理とパスワードの変更は `PasswordAccount`・`SignInThrottle` に書き、パスワードの変更と管理者の再設定は、そのアカウントの `Session` も同じトランザクションで消します。設計は `docs/superpowers/specs/2026-11-16-deprecate-go-backend-design.md` にあります。
 
 Web の Vercel プロジェクトの Production に入れる、ログインの値は次のとおりです。
 
@@ -82,13 +35,10 @@ Web の Vercel プロジェクトの Production に入れる、ログインの�
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `AUTH_URL`                 | Web の公開されている origin（例: `https://ffpf-zhuelog.sparklingstadt.com`）。GitHub と FFPF ID の `redirect_uri` を決める |
 | `AUTH_GITHUB_ID`           | Web 用 GitHub OAuth App の Client ID                                                                                       |
-| `GITHUB_WEB_CLIENT_SECRET` | Web 用 GitHub OAuth App の Client Secret。以前 Go に入れていた値と同じ（読み戻せないときは、新しく作る）                   |
-| `FFPF_ID_ISSUER`           | FFPF ID（portal）の issuer。以前 Go に入れていた値と同じ                                                                   |
-| `FFPF_ID_CLIENT_ID`        | portal に登録した zhuelog のクライアント ID。以前 Go に入れていた値と同じ                                                  |
-| `FFPF_ID_CLIENT_SECRET`    | portal の `pnpm run oidc:client zhuelog` で作ったシークレット。以前 Go に入れていた値と同じ                                |
-| `GO_API_URL`               | **段階 11b から読まない**（段階 12 で消す）。入れていても害は無い                                                          |
-| `API_WEB_PROXY_SECRET`     | **段階 11b から読まない**（段階 12 で消す）                                                                                |
-| `API_JWT_SECRET`           | **段階 11b から読まない**（段階 12 で消す）                                                                                |
+| `GITHUB_WEB_CLIENT_SECRET` | Web 用 GitHub OAuth App の Client Secret（段階 11 までは Go に入れていた値。読み戻せないときは、新しく作る）               |
+| `FFPF_ID_ISSUER`           | FFPF ID（portal）の issuer（段階 11 までは Go に入れていた値）                                                             |
+| `FFPF_ID_CLIENT_ID`        | portal に登録した zhuelog のクライアント ID（段階 11 までは Go に入れていた値）                                            |
+| `FFPF_ID_CLIENT_SECRET`    | portal の `pnpm run oidc:client zhuelog` で作ったシークレット（段階 11 までは Go に入れていた値）                          |
 
 注意:
 
@@ -101,7 +51,7 @@ Web の Vercel プロジェクトの Production に入れる、ログインの�
   - `AUTH_URL` が違う（または無くて、リクエストの origin と登録した URL が合わない）と、GitHub と FFPF ID が `redirect_uri` を登録した URL と合わないと判断して、ログインできません。ログイン画面に戻り、エラーが出ます。
 - パスワード・ゲスト・デモのログインは、上の値が無くても使えます（`DATABASE_URL` は要ります）。
 - Preview には、`GITHUB_WEB_CLIENT_SECRET` と `FFPF_ID_CLIENT_SECRET` を **入れません**。プレビューの URL は、GitHub と FFPF ID に登録した URL と合わないためです（下の「Web のプレビュー（Preview）」）。
-- `AUTH_SECRET`・`AUTH_GITHUB_SECRET` は、Web では使いません。`DATABASE_URL` は、Web の実行時にも、**本番のビルド**の `prisma migrate deploy` にも使います（「4. 本番の DB の確認」）。消すと、ログイン中の人を決められず、本番の Web のデプロイも失敗します。
+- `AUTH_SECRET`・`AUTH_GITHUB_SECRET` は、Web では使いません。`DATABASE_URL` は、Web の実行時にも、**本番のビルド**の `prisma migrate deploy` にも使います（「1. 本番の DB とマイグレーション」）。消すと、ログイン中の人を決められず、本番の Web のデプロイも失敗します。
 
 LINE 連携を使うときは、Web の Vercel プロジェクトに、もう 1 つ次の値を入れます（無くても Web は動きます）。
 
@@ -112,7 +62,7 @@ LINE 連携を使うときは、Web の Vercel プロジェクトに、もう 1 
 
 `LINE_ADD_FRIEND_URL` が無い・`https://` で始まらないときは、「LINE 連携」画面（`/account/line`）に友だち追加のリンクを出しません（連携コードの発行と解除はできます）。
 
-FFPF ID でのログインを使うときは、上の表の `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID`・`FFPF_ID_CLIENT_SECRET` の 3 つを入れます（「9. FFPF ID でのログイン」）。3 つがそろっていないときは、ログイン画面に「FFPF IDでログイン」を出しません。
+FFPF ID でのログインを使うときは、上の表の `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID`・`FFPF_ID_CLIENT_SECRET` の 3 つを入れます（「5. FFPF ID でのログイン」）。3 つがそろっていないときは、ログイン画面に「FFPF IDでログイン」を出しません。
 
 ### Web が実行時に使う DB と秘密
 
@@ -123,10 +73,10 @@ Web は実行時に、次の値を使います。Web の Vercel プロジェク�
 | `DATABASE_URL`              | Neon の接続文字列。実行時の読み取りに使う。pooled の URL か **確かめる**（下の注を参照）                                                                                          |
 | `AUTH_ALLOWED_GITHUB_IDS`   | 管理者にする GitHub ユーザーの数字の ID（カンマ区切り。空なら管理者は誰も通らない）。Web がモジュールを読み込むときに 1 度だけ読むので、変えたら再デプロイが要る                  |
 | `DEMO_LOGIN_ID`             | デモアカウントのログイン ID。Web がデモのログインとリセット（`/api/cron/demo-reset`）に使い、空ならデモのボタンは出ず、リセットのルートは `404`。デモを使わないなら入れなくてよい |
-| `OPENAI_API_KEY`            | 単語帳の「AI で下書き」に使う OpenAI の API キー。Go API と同じ値でよい。無いと下書きは「今は使えません」になる                                                                   |
-| `OPENAI_LEARNING_MODEL`     | 単語帳の下書きと LINE の添削・翻訳のモデル（任意。無ければ `gpt-5-mini`。Go に入れていれば同じ値）                                                                                |
-| `LINE_CHANNEL_SECRET`       | LINE の Messaging API のチャネルシークレット。以前 Go に入れていたのと **同じチャネルの値**。**Production だけ**（下の注を参照）                                                  |
-| `LINE_CHANNEL_ACCESS_TOKEN` | LINE の長期のチャネルアクセストークン。以前 Go に入れていたのと **同じチャネルの値**。**Production だけ**                                                                         |
+| `OPENAI_API_KEY`            | 単語帳の「AI で下書き」に使う OpenAI の API キー。無いと下書きは「今は使えません」になる                                                                                          |
+| `OPENAI_LEARNING_MODEL`     | 単語帳の下書きと LINE の添削・翻訳のモデル（任意。無ければ `gpt-5-mini`）                                                                                                         |
+| `LINE_CHANNEL_SECRET`       | LINE の Messaging API のチャネルシークレット。**Production だけ**（下の注を参照）                                                                                                 |
+| `LINE_CHANNEL_ACCESS_TOKEN` | LINE の長期のチャネルアクセストークン。**Production だけ**                                                                                                                        |
 | `CRON_SECRET`               | `/api/cron/line-drain` と `/api/cron/demo-reset` の認証用の秘密。**Production だけ**。Vercel が Cron の呼び出しに `Authorization: Bearer <値>` を付ける                           |
 | `LINE_API_BASE_URL`         | テスト専用。LINE の API の接続先の差し替え（ループバックの URL だけ。本番には設定しない）                                                                                         |
 | `OPENAI_CHAT_MODEL`         | クイック質問と ChatGPT と話すのモデル（任意。無ければ `gpt-6.1-sol`）                                                                                                             |
@@ -135,16 +85,155 @@ Web は実行時に、次の値を使います。Web の Vercel プロジェク�
 
 - ログインの値（`AUTH_URL` など）は、上の「Web の設定」の表のとおりです。
 - `DATABASE_URL` が pooled か、マージの前に確かめます（ホスト名に `-pooler` が付くのが pooled です）。マイグレーション（`prisma migrate deploy`）は direct の URL を使うのが本来の形です。今の Production の値が **direct** のときは、実行時用に pooled の値を別の変数で足します。ただし、今の Web のコード（`src/infrastructure/prisma/prisma-client.ts`）が読むのは `DATABASE_URL` だけです。その場合は、実行時用の変数を読むコードの変更を先に入れてから、値を設定します。
-- 単語帳（一覧・保存・削除）は、Web が Prisma で DB を読み書きします。「AI で下書き」も Web が OpenAI を直接呼び、使った量を、操作している人の `AiUsage` に記録します。コードの上では、Go API に `/v1/vocabulary*` のルートはもうありません（本番の Go は、下の手順で再デプロイするまで古いままです）。そのため、**マージの前に** Web の Production に `OPENAI_API_KEY` を入れます（Go API と同じ値でよい）。Go API には `OPENAI_API_KEY` は要りません（段階 10b で Go から OpenAI を外しました）。
+- 単語帳（一覧・保存・削除）は、Web が Prisma で DB を読み書きします。「AI で下書き」も Web が OpenAI を直接呼び、使った量を、操作している人の `AiUsage` に記録します。AI の機能を使うには、Web の Production に `OPENAI_API_KEY` を入れます。
 - `OPENAI_API_BASE_URL` はテスト専用です。`127.0.0.1` などのループバックの URL だけを受け付けます。**Production と Preview には設定しません。**
-- LINE の `LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`CRON_SECRET` は、**Production だけ** に入れ、Preview には入れません。入れると、プレビューのデプロイが本物の LINE のチャネルに返事をしてしまうためです（Webhook は本番の URL にだけ届きますが、プレビューから push を送れてしまいます）。LINE を使うには、LINE の 2 つと `OPENAI_API_KEY` がそろっている必要があります。LINE の 2 つのどちらか、または `OPENAI_API_KEY` が無い（`LINE_API_BASE_URL` がループバックでないときも同じ）Web は、`POST /api/line/webhook` と `GET /api/cron/line-drain` が `404`、`/account/line` が「LINE 連携は今は使えません。」になります（Go のように起動時には止まりません）。`CRON_SECRET` だけが無いときは、拾い直しとデモのリセットが常に `401` です。LINE の 2 つは、LINE Developers の値です。`CRON_SECRET` は `openssl rand -hex 32` で作ります。
+- LINE の `LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`CRON_SECRET` は、**Production だけ** に入れ、Preview には入れません。入れると、プレビューのデプロイが本物の LINE のチャネルに返事をしてしまうためです（Webhook は本番の URL にだけ届きますが、プレビューから push を送れてしまいます）。LINE を使うには、LINE の 2 つと `OPENAI_API_KEY` がそろっている必要があります。LINE の 2 つのどちらか、または `OPENAI_API_KEY` が無い（`LINE_API_BASE_URL` がループバックでないときも同じ）Web は、`POST /api/line/webhook` と `GET /api/cron/line-drain` が `404`、`/account/line` が「LINE 連携は今は使えません。」になります（起動時には止まりません）。`CRON_SECRET` だけが無いときは、拾い直しとデモのリセットが常に `401` です。LINE の 2 つは、LINE Developers の値です。`CRON_SECRET` は `openssl rand -hex 32` で作ります。
 - `LINE_API_BASE_URL` はテスト専用です。`OPENAI_API_BASE_URL` と同じく、**Production と Preview には設定しません。**
 - 秘密の値は、このリポジトリのファイルやログに書きません。
 - `AUTH_ALLOWED_GITHUB_IDS`（数字の ID）・`DEMO_LOGIN_ID`・`DATABASE_URL` は、**マージ（本番のデプロイ）の前に** Web の Production に入れておきます。Vercel の環境変数は、変えたあとに再デプロイしないと効きません。
 - 足りない・値が違うときの症状：`DATABASE_URL` が無いと、ログインもできず、会員向けのページがエラーになります。`AUTH_ALLOWED_GITHUB_IDS` が空だと、GitHub でログインしても、管理者として断られます。
-- Web に Auth.js の時代の `AUTH_ALLOWED_GITHUB_IDS` が残っていないか確かめます（下の「段階3のマージの前に行うこと」で残すとしている値です）。数字でない項目（ログイン名など）は捨てられ、管理者が権限を失います。数字の ID に直します。
+- Web に Auth.js の時代の `AUTH_ALLOWED_GITHUB_IDS` が残っていないか確かめます（末尾の「移行の記録」の「段階3のマージの前に行うこと」で残すとしていた値です）。数字でない項目（ログイン名など）は捨てられ、管理者が権限を失います。数字の ID に直します。
 
-#### 段階1のマージの前と後
+### Web のプレビュー（Preview）
+
+PR ごとの Web のプレビューも、ログインとデータの読み書きを Web が行います。Web の Vercel プロジェクトの **Preview** の環境変数には、次を入れます。
+
+| 名前                      | Preview に入れる値                                                                             |
+| ------------------------- | ---------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`            | **本番と別の Neon ブランチ**の pooled の URL                                                   |
+| `AUTH_ALLOWED_GITHUB_IDS` | 管理者にする GitHub の数字の ID（任意。GitHub ログインはプレビューで使えないので、空でもよい） |
+| `DEMO_LOGIN_ID`           | デモを試すときだけ                                                                             |
+
+注意:
+
+- `GITHUB_WEB_CLIENT_SECRET` と `FFPF_ID_CLIENT_SECRET` は、Preview に **入れません**。プレビューの URL はデプロイごとに変わり、GitHub と FFPF ID に登録した URL と合わないので、どちらのログインも使えないためです（GitHub のボタンは押せず、「FFPF IDでログイン」は出ません）。パスワード・ゲスト・デモのログインは使えます。
+- 同じ DB や秘密を本番と使うと、プレビューが本番のデータを書き換えかねません。必ず別の Neon ブランチにします。
+- プレビューのビルドはマイグレーションを当てません（`scripts/vercel-build.sh`）。そのため、Preview 用の Neon ブランチのスキーマは、手で合わせます。次のどちらかです。
+  - 本番から Neon のブランチを作り直す（スキーマも本番と同じになる）。
+  - そのブランチの direct の URL に向けて、手元で `DATABASE_URL=<そのブランチの direct の URL> pnpm exec prisma migrate deploy` を実行する。
+- プレビューのログインのセッションは、Preview の Neon ブランチの `Session` に入ります。本番の `Session` とは別です。
+
+### 戻す手順
+
+Web を戻すときは、Vercel の **Instant Rollback** で前のデプロイに戻します。マイグレーションは戻りません（DB は新しいスキーマのまま）。上の「1. 本番の DB とマイグレーション」の制約を守っていれば、前のデプロイは新しいスキーマでも動きます。11b より前のデプロイ（ログインを Go が行っていたころ）には、もう戻せません（Go のプロジェクトを消したため。末尾の「移行の記録」の「段階12（後片付け）のマージの前と後」）。
+
+### e2e
+
+`pnpm run test:e2e` は、Docker の Postgres と Web（本番モードでビルド）と、外部サービスのスタブだけで動きます。テストの側が `Session` の行を DB に書き、そのトークンを Cookie `zl_session` に入れてログインした状態を作ります。パスワードとゲストのログインは、画面から実際に行います。FFPF ID は、`e2e/fixtures/ffpf-oidc-stub.ts` の小さな OIDC スタブ（`127.0.0.1:3110`）を issuer にして、Web に `FFPF_ID_*` を渡します。スタブは実行ごとに P-256 の鍵を作り、`/oauth/authorize` は画面を出さずにすぐ `redirect_uri?code=stub&state=…` へ戻し、`/oauth/token` は ES256 の ID トークンを、`/oauth/jwks` はその公開鍵を返します。本物の portal には接続しません。
+
+## 3. LINE 連携
+
+LINE に送った文を OpenAI で添削・翻訳し、送った人の学習ノートに追加する機能です。会員と管理者が、Web の「LINE 連携」画面（`/account/line`）で連携コードを出し、それを LINE に送ると、その LINE とアカウントが結びつきます。ゲストは使えません。仕様は `docs/superpowers/specs/2026-10-23-line-via-go-api-design.md` にあります。
+
+以前は Go の API が受けていましたが、段階 10 で Web に移しました（手順は末尾の「移行の記録」の「段階10（LINE とデモのリセットの cron）のマージの前と後」）。連携の画面と Server Actions（コードを出す・解除する・お知らせの入り切り）は、Web が Prisma で `LineLink`・`LineLinkCode`・`LineMessage` を読み書きします。
+
+Web の次の 2 つの Route Handler で動きます。LINE の設定（上の「Web が実行時に使う DB と秘密」）が足りないときは、どちらも `404` です。
+
+| メソッド | パス                   | 認証                                  | 内容                                                                                                   |
+| -------- | ---------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| POST     | `/api/line/webhook`    | LINE の署名（`X-Line-Signature`）     | LINE からの通知を受け取り、添削・翻訳して返信する（`src/app/api/line/webhook/route.ts`）               |
+| GET      | `/api/cron/line-drain` | `Authorization: Bearer <CRON_SECRET>` | 結果が出ないまま残ったメッセージの拾い直しと、復習のお知らせ（`src/app/api/cron/line-drain/route.ts`） |
+
+- 送った文は、webhook のリクエストの中で処理します（保存 → OpenAI → 学習ノートに保存 → reply）。reply は無料です。添削・翻訳の結果は、バッチ名 `LINE` のノートとして保存します。1 回の通知の処理は、リクエストの開始から 45 秒までで、残りが 30 秒を切った文は、保存だけして OpenAI は呼ばず、「時間がかかっています」と返します（翌朝の拾い直しが処理します）。イベントは 55 秒を過ぎると新しく始めません。
+- 拾い直しは、5 分以上 `pending` のまま残ったメッセージを 1 回だけ試し直し、できたら push で、できなければ失敗を push で知らせます。1 回の実行は 50 秒で止まり、残りが 30 秒を切ったら、新しい生成は始めず次の実行に回します（試す回数を使い切った行は、生成せずに失敗にします）。push は、LINE の無料プランでは月 200 通の枠を使います。同じ実行が、希望した人へ復習のお知らせも送ります（「LINE 連携」画面で入り切りします）。お知らせは今月の残りから 30 通を拾い直しのために残し、その範囲だけ送ります。
+- **Cron は Web の `vercel.json` に登録しています**：`/api/cron/line-drain` は `0 21 * * *`（UTC。06:00 JST）です。Vercel が `Authorization: Bearer <CRON_SECRET>` を付けて呼ぶので、Web の Production に `CRON_SECRET` が要ります。Hobby の Cron は時刻が 1 時間単位で、06:00 から最大 59 分遅れることがあります。Hobby の Cron は 1 つのプロジェクトに 100 個まで、どれも 1 日 1 回までなので、この拾い直しとデモのリセットの 2 つ（どちらも 1 日 1 回）は収まります。手で呼ぶときは、`Authorization: Bearer $CRON_SECRET` を付けて `GET` します。
+- `maxDuration` は、route の中で決めています（拾い直しは 60 秒、デモのリセットは 30 秒）。Web のプロジェクトにはすでに 90 秒の route（クイック質問・チャット）があるので、プロジェクトの設定を変える必要はありません。
+- ログには、イベント ID・メッセージの ID・コードだけを出し、本文・生成結果・鍵・LINE のユーザー ID・連携コード・reply token は出しません。
+- 使う表は `LineLink`・`LineLinkCode`・`LineMessage` の 3 つで、Prisma のマイグレーション `20261023090000_add_line_link` で作ります（本番にはすでにあります）。
+- OpenAI の利用量は、操作している人ではなく LINE を結びつけた人の `AiUsage` に、機能名 `line` で記録します。
+- e2e は、偽の LINE API（`e2e/line-stub.ts`）に `LINE_API_BASE_URL` を向けて確かめます。
+
+### 切り替えの手順
+
+LINE Developers で設定するのは、**Webhook URL** を `https://ffpf-zhuelog.sparklingstadt.com/api/line/webhook` にすることと、「Webhook の利用」をオンのまま、「**応答メッセージ**」をオフのままにすることです（オンだと、LINE の自動応答とこちらの返信が二重に届きます）。
+
+LINE の連携を最初から作り直すとき（以前のチャネルが無いとき）は、LINE Developers で Messaging API のチャネルを用意し、Web の Production に `LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`OPENAI_API_KEY`・`CRON_SECRET` と、任意で `LINE_ADD_FRIEND_URL` を入れてデプロイしてから、Webhook URL を設定して「検証」を押します（成功は `200`）。
+
+## 4. ChatGPT と話す（会話ノート）
+
+会員と管理者が Web の `/chat` で ChatGPT と中国語で話し、会話を会話ノート（`/conversations`）で見返すための設定です。Web の `POST /api/chat`（Route Handler が OpenAI を直接呼ぶ）で動き、会話ノートは Web が Prisma で読み書きします。
+
+- Web の Production に `OPENAI_API_KEY` があれば話せます。無いときは Web の `/chat` に「ChatGPT が設定されていません」と出ます（会話ノートは読めて、消せます）。
+- モデルは Web の `OPENAI_CHAT_MODEL`（無ければ `gpt-6.1-sol`）です。クイック質問と同じ変数です。
+- 使えるのは会員と管理者です。デモは会話ノートを読む・消すことはできますが、チャットで新しく聞くことはできません。ゲストには入口が出ません。
+- 履歴：テーブル `ChatConversation` は、以前の Go の API のころに作ったものです（マイグレーション `20261024090000_add_chat_conversations`）。いまは新しい手順は要りません。Web へ移したときの手順は、末尾の「移行の記録」の「段階7（チャット）のマージの前と後」にあります。
+
+## 5. FFPF ID でのログイン
+
+FFPF ID（ffpf-portal が提供する OpenID Connect のプロバイダー）のアカウントで、会員（`member`）としてログインする機能です。ログイン画面の「FFPF IDでログイン」から使います。仕様は ffpf-portal の `docs/superpowers/specs/2026-10-27-ffpf-id-design.md` の「4. zhuelog」にあります。
+
+- 流れ：Web が PKCE・`state`・`nonce` を作って `zl_oauth` Cookie に入れ、portal の `/oauth/authorize` へ送ります。戻り先 `/api/auth/callback/ffpf` で `state` を確かめてから、Web が portal の `/oauth/token` で `code` を交換し（client_secret_basic。`FFPF_ID_CLIENT_SECRET` を使う）、ID トークンを `/oauth/jwks` で検証します（ES256・`iss`・`aud`・`exp`・`nonce`・`email_verified`）。discovery は使わず、エンドポイントは `FFPF_ID_ISSUER` から組み立てます。検証が通ったら、`FfpfAccount` を更新して `Session` の行を作り、`zl_session` を発行します。`redirect_uri` は `AUTH_URL` の origin に `/api/auth/callback/ffpf` を付けた値です。
+- 持ち主の ID は `ffpf:<sub>` です。`FfpfAccount` にメールアドレスと表示名を保存し、ログインのたびに最新の値で更新します。メールアドレスは表示用で、認可には使いません。許可リストは無く、メールアドレスを確認済みの FFPF ID なら誰でも会員になれます。
+- FFPF ID の会員は、パスワード会員と同じく学習ノート・共有・フォロー・タイムライン・LINE 連携を使えます。メンバー一覧にも出ます。パスワードはこのサービスに無いので、`/account/password` には portal のマイページ（`<FFPF_ID_ISSUER>/id`）へのリンクだけを出します（パスワードを変えるフォームは出しません）。
+- 誤りの扱い：`state` の不一致、`code` の交換と ID トークンの検証の失敗、portal に届かない・5xx・JWKS が取れないときは、どれも固定のコードだけをログに出し（秘密や `code` は出さない）、「認証サービスからの結果を確認できませんでした。」と出してログイン画面に戻します。
+- 使う表は `FfpfAccount` で、Prisma のマイグレーション `20261027120000_add_ffpf_accounts` で作ります。
+
+### 設定の手順
+
+1. ffpf-portal で `pnpm run oidc:client zhuelog` を実行し、シークレット（`secret=…`）とクライアントの JSON を作ります。JSON の `redirectUris` に `https://<Web のホスト>/api/auth/callback/ffpf` を入れて portal の `FFPF_OIDC_CLIENTS` に足し、portal を再デプロイします（詳しくは ffpf-portal の README）。
+2. マイグレーション `20261027120000_add_ffpf_accounts`（`FfpfAccount` の追加）は、main へのマージで Web の本番ビルドが自動で当てます（「1. 本番の DB とマイグレーション」）。
+3. Web の Vercel プロジェクトの Production に `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID`・`FFPF_ID_CLIENT_SECRET` を入れます。`redirect_uri`（`<AUTH_URL の origin>/api/auth/callback/ffpf`）は、portal に登録した redirect URI と **1 文字も違わず** 合わせます。Preview には入れません。
+4. 本番の Web で、FFPF ID のログイン・ログアウトを試します。
+
+## 6. デモアカウント
+
+採用担当など、アカウントを持たない人が会員向けの画面（学習ノート・今日の復習・単語帳・会話ノート・練習の記録）を試せるようにする機能です。ログイン画面の「デモで試す」から入ります。
+
+- アカウント：`DEMO_LOGIN_ID` の ID の、普通のパスワード会員です。パスワードのハッシュは使えない値なので、ID とパスワードではログインできません。「デモで試す」は、Web が `Session` の行を作り（会員として、30 日）、`zl_session` を発行します。アカウントは下のリセットが作ります（手で作る必要はありません）。ログインの試行回数は、`SignInThrottle` で、1 つのクライアントから 15 分に 20 回まで（キーは `demo:<IP>`）に制限します。
+- データ：デモを試す全員で 1 つのアカウントを共有します。毎晩 04:00（日本時間）ごろに、Web の `vercel.json` の Cron（`0 19 * * *`、UTC）が `GET /api/cron/demo-reset` を呼び、1 つのトランザクションで、デモの持ち物（学習ノートとヒント、CSV の取り込みの記録、復習の項目と記録、単語帳、会話ノート、クイック質問、練習の記録（介詞・補語）、フォロー（デモがしたものと、デモをフォローしているもの）、LINE の連携・連携コード・受け取った文）を消してから、`src/domain/demo/demo-fixture.json` の内容を、Web の FSRS で復習の項目にして入れ直します（例のデータは、以前の Go が最後に作った内容と同じであることを `tests/fixtures/demo-seed-golden.json` で確かめています）。消さないものは、AI の利用量（`AiUsage`。管理者が費用を見る記録）とログインのセッション（`Session`）です。日付は「リセットの何日前か」で書いてあるので、いつ見ても直近 7 日の記録に見えます。ログイン中のセッションは消しません（デモに入っている人は、リセットのあとも `zl_session` のまま続けて使えます）。
+- 使えないもの：OpenAI を呼ぶルート（Web の `POST /api/chat` と `POST /api/quick-question`）は、デモには `403`（「デモでは使えません。」）です。Web の LINE 連携の画面（`/account/line`）は `/` に戻します。パスワードの変更も、デモには使えません。断るのは Web です。フォロー・会員の一覧・タイムライン・共有（ほかの会員に届くため）は、Web が断ります（`/follow` は `/` に戻し、フォローや共有を直接送ると画面には「ログインし直してください。」と出ます）。管理者がデモとして操作しているときや、ほかの会員には当てはまりません。Web の AI のルート（単語帳の下書き・クイック質問・ChatGPT と話す）は、Web が自分でデモかどうかを確かめて断ります。Web は、自分の DB の確認（`passwordHash` が使えない値で、ログイン ID が `DEMO_LOGIN_ID` と同じ）でデモかどうかを決め、すべてのページに「デモアカウントです。…」を出し、メニューから使えない機能を外します。
+- リセットは Web が行います（`DEMO_LOGIN_ID` が空なら、Web のルートは `404` です）。Hobby の Cron は時刻が 1 時間単位なので、04:00 から最大 59 分遅れることがあります。Vercel が `Authorization: Bearer <CRON_SECRET>` を付けて呼ぶので、Web の Production に `CRON_SECRET` が要ります。`maxDuration` は route に 30 秒と書いてあります。すぐ戻したいときは、下の `curl` で手でリセットします。
+- 手でリセットする：`curl -i -X POST https://ffpf-zhuelog.sparklingstadt.com/api/cron/demo-reset -H "Authorization: Bearer $CRON_SECRET"` が `204` を返します（`GET` でも同じです）。`CRON_SECRET` を知っている人だけが呼べます。`$CRON_SECRET` は Web の Production の値です。
+- マイグレーションは要りません（既存の表だけを使います）。Vercel Hobby の Cron は 1 つのプロジェクトに 100 個まで、どれも 1 日 1 回までなので、LINE の拾い直しとこのリセットの 2 つ（どちらも 1 日 1 回）は収まります（どちらも Web の `vercel.json` にあります）。
+
+### 切り替えの手順
+
+1. Web の Vercel プロジェクトの Production に、`DEMO_LOGIN_ID`（例: `demo`）と `CRON_SECRET` を入れます。
+2. Web を main からデプロイします。
+3. 上の `curl` でリセットを 1 回呼び、デモアカウントとデータを作ります（呼ぶまではアカウントが無く、「デモで試す」を押すと「デモは今は利用できません。」になります）。
+4. 本番の Web の `/signin` に「デモで試す」が出ること、押すと学習ノートと「デモアカウントです。」が出ることを確かめます。
+
+やめるときは、Web から `DEMO_LOGIN_ID` を消して再デプロイします。ボタンが消え、Web のリセットのルートも `404` になります。デモの `Session` の行が残っていても、`DEMO_LOGIN_ID` が無いと、そのアカウントはデモと見分けられません（普通の会員として扱われるので、パスワードの無いアカウントのまま残ります）。気になるときは、`DELETE FROM "Session" WHERE "ownerId" = 'password:<デモのアカウントの id>'` で消します。アカウントとデータは残ります。
+
+## 7. 運用上の注意
+
+### ログインのセッション
+
+- **長さ**：会員と管理者は 30 日、ゲストは 24 時間です。作ったときに期限を決め、使っても延ばしません。切れたら、ログインし直します。
+- **期限切れの行の掃除**：ログインのたびに、期限の切れた行を最大 100 行まで消します。別のジョブはありません。ログインが少ないと、期限切れの行が残りますが、読まれません（期限を確かめます）。
+- **ログアウト**：そのブラウザーの `Session` の行を消し、`zl_session` を消します。DB が失敗しても、Cookie は消します。
+- **パスワードの変更と管理者の再設定**：そのアカウントの `Session` の行を、同じトランザクションですべて消します。ほかの端末もログインし直しです。
+- **全員をログアウトさせたいとき**：Neon の SQL Editor で `DELETE FROM "Session";` を実行します（全員が次のリクエストでログイン画面に戻ります）。秘密が漏れたかもしれないときも、これを使います。
+- **管理者を外すとき**：`AUTH_ALLOWED_GITHUB_IDS` から ID を消して、再デプロイします。許可リストは、Web がモジュールを読み込むときに 1 度だけ読むので、環境変数を変えただけでは効きません。再デプロイすると、外れた管理者は次のリクエストから `revoked` になります。
+- **見る**：`SELECT "role", count(*) FROM "Session" GROUP BY 1;` で、役割ごとの行数が分かります。
+
+### レート制限とクライアントの IP
+
+ログインには、次の制限があります。どれも DB の `SignInThrottle` で数えるので、インスタンスが増えても合計で数えます。
+
+- **ログイン全体**：1 つのクライアントから、1 分に 10 回まで（ID とパスワード・ゲスト・GitHub・FFPF ID・デモの入り口で共有）。パスワードの変更も、同じ鍵（`route:auth:<IP>`）の枠に入ります。
+- **パスワードログインの試行回数**：15 分の枠で、1 つのクライアントからは 20 回まで、同じクライアントから同じ loginId へは 5 回まで（成功すると 0 に戻ります）。超えると、正しいパスワードでもログインできません（画面には、IDの有無を区別しない同じ文が出ます）。
+- **デモ**：1 つのクライアントから 15 分に 20 回まで（キーは `demo:<IP>`）。
+
+クライアントのアドレスは、Web が `x-real-ip` / `x-forwarded-for` から決めます。Vercel はこのヘッダーをクライアントの IP で上書きし、クライアントが送った値は渡さないので、偽装されません。**Vercel の前に別のプロキシ（CDN など）を置かないでください。** 置くと、すべてのクライアントがそのプロキシの 1 つのアドレスとして数えられます。
+
+### DB の接続数とパスワードの計算
+
+Web は Prisma で DB につなぎます。Vercel がインスタンスを増やすと接続数も増えるので、実行時の `DATABASE_URL` には Neon の pooled 接続文字列を使ってください（「2. Web の設定」）。
+
+パスワードのハッシュ（作成・再設定・変更）と検証は、Web が `crypto.scrypt`（N=2^15・r=8）で計算します（1 回ごとに 32 MiB を使います）。専用の上限は付けていませんが、Node の threadpool（既定は 4 本）が上限になり、同時に動くのは 4 件まで、残りは待ちます。この threadpool はファイルや DNS の処理と共有です。ログインのときは、ID が無い場合でも同じ時間がかかるよう、ダミーのハッシュで同じ計算をします（ログイン画面を開いたときに、先に温めておきます）。
+
+### 公開範囲
+
+外から呼べる API は、Web の Route Handler だけです。LINE の webhook（`/api/line/webhook`）は LINE の署名を、2 つの cron（`/api/cron/*`）は `CRON_SECRET` を確かめます。チャットとクイック質問（`/api/chat`・`/api/quick-question`）は、ログイン中の `Session` を確かめます。CORS は設定していません。
+
+## 移行の記録（段階 1〜12）
+
+Go API を Next.js へ移したときの、各段階の本番への反映の手順です。もう使わない手順ですが、何をいつ変えたかの記録として残します（設計：`docs/superpowers/specs/2026-11-16-deprecate-go-backend-design.md`）。
+
+この記録は、改名する前のこの文書（`docs/api-deployment.md`）から中身を変えずに移しました。そのころの 1.〜5. は Go のプロジェクトの節（段階 12 で消しました）、6.〜10. は今の 2.〜6. です。記録の中の「4. 本番の DB の確認」は、今の「1. 本番の DB とマイグレーション」に直してあります。
+
+### 段階1のマージの前と後
 
 単語帳を Web に移した変更（段階1）を本番に出す順番です。
 
@@ -162,7 +251,7 @@ Web は実行時に、次の値を使います。Web の Vercel プロジェク�
 
 - Go を再デプロイしたあとで Web だけを戻すと、単語帳が壊れます（古い Web が `/v1/vocabulary*` を呼び、`404` になります）。Web と Go を **いっしょに** 戻します。
 
-#### 段階2のマージの前と後
+### 段階2のマージの前と後
 
 学習ノート（一覧・検索・カレンダー・日ごとの表示・ゴミ箱・共有）を Web に移した変更（段階2）を本番に出す順番です。
 
@@ -182,7 +271,7 @@ Web は実行時に、次の値を使います。Web の Vercel プロジェク�
 - 逆に、Go を再デプロイしたあとで Web だけを戻すと、古い Web が呼ぶルートが新しい Go にないため、学習ノートの画面が `404` で壊れます。Web を戻すなら Go も戻します（Go を再デプロイする前なら Web だけで足ります）。
 - いっしょに戻すのがいちばん安全です。
 
-#### 段階3（CSV の取り込み）のマージの前と後
+### 段階3（CSV の取り込み）のマージの前と後
 
 学習ノートの CSV の取り込みを Web に移した変更（段階3）を本番に出す順番です。Web が CSV を自分で検証・解析し、1 つのトランザクションで DB に保存します。Go の `POST /v1/imports/csv` はなくなりました（LINE とデモのリセットが使う書き込みは Go に残ります）。下の「段階3のマージの前に行うこと」（Go API を入れたときの段階）とは別のものです。
 
@@ -202,7 +291,7 @@ Web は実行時に、次の値を使います。Web の Vercel プロジェク�
 - Go を再デプロイしたあとで Web だけを戻すと、古い Web が `/v1/imports/csv` を呼んで `404` になり、CSV の取り込みが一般的な文言で失敗します。Web を戻すなら Go も戻します（Go を再デプロイする前なら Web だけで足ります）。
 - いっしょに戻すのがいちばん安全です。
 
-#### 段階4（復習）のマージの前と後
+### 段階4（復習）のマージの前と後
 
 復習（今日の復習の一覧・件数・回答、ノートを復習に入れる・出す）を Web に移した変更（段階4）を本番に出す順番です。Web が `ReviewItem` と `ReviewLog` を Prisma で直接読み書きし、FSRS も Web（`src/domain/review/fsrs.ts`）で計算します。Go の `/v1/reviews*` と `/v1/entries/{id}/review` はなくなりました。Go に残るのは、LINE の復習のお知らせの件数とデモのリセットです（練習の間違いを列に入れる処理は段階5で Web に移りました）。
 
@@ -226,7 +315,7 @@ Web は実行時に、次の値を使います。Web の Vercel プロジェク�
 - Go を再デプロイしたあとで Web だけを戻すと、古い Web が `/v1/reviews/*` を呼んで `404` になります。今日の復習は失敗の表示になり、ホームの復習のカードとバッジは消え、答えると「この問題は復習の一覧にありません。」になります。ノートのページの「復習に入れる」と、ホームのノートごとのボタンも使えなくなります（`/v1/entries/{id}/review` の呼び出しが `404` になるためです）。Web を戻すなら Go も戻します。
 - いっしょに戻すのがいちばん安全です。
 
-#### 段階5（練習の記録）のマージの前と後
+### 段階5（練習の記録）のマージの前と後
 
 介詞と補語の練習の記録（保存・一覧・1 件の表示）と、間違えた問題を復習の列に入れる処理を Web に移した変更（段階5）を本番に出す順番です。Web が問題の中身を確かめ、記録の保存と復習の列への登録を 1 つのトランザクションで Prisma に書きます。Go の `/v1/complement-records*` と `/v1/preposition-records*` はなくなりました。Go に残るのは、デモのリセットが使う型と挿入と、Go の学習ログと LINE の通知がこれらのテーブルを今も読む処理です。
 
@@ -250,7 +339,7 @@ Web は実行時に、次の値を使います。Web の Vercel プロジェク�
 - Go を再デプロイしたあとで Web だけを戻すと、古い Web が `/v1/*-records` を呼んで `404` になります。練習を終えると「処理できませんでした。時間をおいてもう一度お試しください。」と出て、記録も復習も残りません。`/practice` のカードから前回の記録が消え、記録の一覧のページはエラーの表示、1 件のページは `404` になります。Web を戻すなら Go も戻します。
 - いっしょに戻すのがいちばん安全です。
 
-#### 段階6（質問）のマージの前と後
+### 段階6（質問）のマージの前と後
 
 クイック質問（OpenAI の答えを NDJSON でブラウザへ流す）と質問ノート（保存した質問の一覧・保存）を Web に移した変更（段階6）を本番に出す順番です。Web の Route Handler が OpenAI を直接呼んで答えを流し、使った量を `quick_question` として操作している人の `AiUsage` に記録し、質問ノートを Prisma で読み書きします。ブラウザが止めると、Web は OpenAI への要求も中断します。Go の `/v1/questions*` と `/v1/quick-question` はなくなりました。Go に残るのは、LINE、フォローとタイムライン、学習ログ、管理、ログイン、Cron です。
 
@@ -276,7 +365,7 @@ Web は実行時に、次の値を使います。Web の Vercel プロジェク�
 - Go を再デプロイしたあとで Web だけを戻すと、古い Web が `/v1/quick-question` と `/v1/questions*` を呼んで `404` になります。質問すると「見つかりません。」と出て、質問ノートのページはエラーの表示になり、`/quick-question` は「クイック質問を利用できません」になります。Web を戻すなら Go も戻します。
 - いっしょに戻すのがいちばん安全です。
 
-#### 段階7（チャット）のマージの前と後
+### 段階7（チャット）のマージの前と後
 
 ChatGPT と話す（OpenAI の答えを NDJSON でブラウザへ流す）と会話ノート（保存した会話の一覧・読み・削除）を Web に移した変更（段階7）を本番に出す順番です。Web の Route Handler が OpenAI を直接呼んで答えを流し、使った量を `chat` として操作している人の `AiUsage` に記録し、会話ノートを Prisma で読み書きします。ブラウザが止めると、Web は OpenAI への要求も中断します。Go の `/v1/chat` と `/v1/conversations*` はなくなりました。Go に残るのは、LINE、フォローとタイムライン、学習ログ、管理、ログイン、Cron です。
 
@@ -302,7 +391,7 @@ ChatGPT と話す（OpenAI の答えを NDJSON でブラウザへ流す）と会
 - Go を再デプロイしたあとで Web だけを戻すと、古い Web が `/v1/chat` と `/v1/conversations*` を呼んで `404` になります。話すと「見つかりません。」と出ます。`/chat` は「ChatGPT が設定されていません」、`/conversations` は設定されていない表示になり、日付のページは `404`、削除は一般的な文言になります。
 - Web を戻すなら Go も戻します。いっしょに戻すのがいちばん安全です。
 
-#### 段階8（学習ログ・AI の利用量）のマージの前と後
+### 段階8（学習ログ・AI の利用量）のマージの前と後
 
 学習ログ（日本時間の日ごとの、復習・練習・ノート・単語の数）と、管理者の AI の利用量（日本時間の月ごとの集計）を Web に移した変更（段階8）を本番に出す順番です。どちらも読むだけで、Web が Prisma で Go と同じ SQL を流します。Go の `/v1/study-log` と `/v1/admin/ai-usage` はなくなりました。Go に残るのは、LINE（LINE の分の `AiUsage` の記録を含む）、フォローとタイムライン、会員の管理、パスワード変更、ログイン、Cron です。
 
@@ -327,7 +416,7 @@ ChatGPT と話す（OpenAI の答えを NDJSON でブラウザへ流す）と会
 - Go を再デプロイしたあとで Web だけを戻すと、古い Web が `/v1/study-log` と `/v1/admin/ai-usage` を呼んで `404` になります。学習ログは「処理できませんでした。時間をおいてもう一度お試しください。」、AI 利用量は「利用量を読めませんでした。Go API が最新かを確認してください。」と出ます。
 - Web を戻すなら Go も戻します。いっしょに戻すのがいちばん安全です。
 
-#### 段階9a（フォロー・タイムライン・会員の一覧）のマージの前と後
+### 段階9a（フォロー・タイムライン・会員の一覧）のマージの前と後
 
 フォロー（する・外す）、フォロー中の人の共有ノートのタイムライン、会員の一覧を Web に移した変更（段階9a）を本番に出す順番です。Web が Prisma で Go と同じ SQL を流し、フォローは「相手の会員がいるときだけ行を足す」1 つの SQL にしました。Go の `/v1/members`・`/v1/follows/{ownerId}`・`/v1/timeline` はなくなりました。Go に残るのは、LINE、会員の管理、パスワード変更、ログイン、Cron です。
 
@@ -352,7 +441,7 @@ ChatGPT と話す（OpenAI の答えを NDJSON でブラウザへ流す）と会
 - Go を再デプロイしたあとで Web だけを戻すと、古い Web が消えたルートを呼んで `404` になります。`/follow` はエラーの画面になり、フォローのボタンは「見つかりませんでした。画面を更新してください。」と出ます。
 - Web を戻すなら Go も戻します。いっしょに戻すのがいちばん安全です。
 
-#### 段階9b（会員の管理・パスワード変更）のマージの前と後
+### 段階9b（会員の管理・パスワード変更）のマージの前と後
 
 会員の作成・一覧・パスワードの再設定（管理者）と、自分のパスワードの変更を Web に移した変更（段階9b）を本番に出す順番です。Web が scrypt で Go と同じ形のハッシュを書き（`tests/fixtures/scrypt-golden.json` で Go と同じことを確かめています）、ハッシュと `sessionVersion` を 1 つの `UPDATE` で変えます。Go の `/v1/admin/accounts`・`/v1/admin/accounts/{id}/password`・`/v1/account/password` はなくなりました。Go に残るのは、LINE、ログイン（ハッシュの確かめと `sessionVersion` の確かめを含む）、Cron です。
 
@@ -377,7 +466,7 @@ ChatGPT と話す（OpenAI の答えを NDJSON でブラウザへ流す）と会
 - Go を再デプロイしたあとで Web だけを戻すと、古い Web が消えたルートを呼んで `404` になります。管理画面の一覧はエラーの画面に、パスワードの変更は「処理できませんでした。時間をおいてもう一度お試しください。」になります。
 - Web を戻すなら Go も戻します。Web が書いたハッシュは、古い Go でも確かめられます。
 
-#### 段階10（LINE とデモのリセットの cron）のマージの前と後
+### 段階10（LINE とデモのリセットの cron）のマージの前と後
 
 LINE の webhook・連携・拾い直しと、デモのリセットの cron を Web に移す段階（段階10）を本番に出す順番です。1 つの PR には大きいので、3 つの PR（10a・10b・10c）に分けました。
 
@@ -387,7 +476,7 @@ LINE の webhook・連携・拾い直しと、デモのリセットの cron を 
 
 順番は 4 つの手順で、LINE の返信と OpenAI の呼び出しが二重にならないように切り替えます。LINE の Webhook URL は同時に 1 か所にしか向けられないので、「Go が答える」か「Web が答える」かのどちらか一方になります。この途中で、拾い直しが 1 回（1 晩）飛ぶことと、Webhook URL を変える数分のあいだに届いた LINE の文に返事が無いことがあります。この 2 つは、わかったうえで受け入れています。
 
-##### 手順 1（10a のマージの前と後）
+#### 手順 1（10a のマージの前と後）
 
 この PR（10a）が行うのは、Web に LINE の受け口を足すところまでです。LINE の Webhook URL は変えません。マージしても、LINE の文は Go に届き続けます。
 
@@ -427,7 +516,7 @@ curl -s -o /dev/null -w '%{http_code}' https://ffpf-zhuelog.sparklingstadt.com/a
 
 運用の注意：1 つのイベントの処理は、最悪の場合、route の `maxDuration`（60 秒）を超えます（OpenAI に 20 秒、利用量の記録に 5 秒、学習ノートを保存するトランザクション、そのあと reply に 10 秒）。超えると reply は届きませんが、行は `done` か `pending` のまま残るので、データは壊れません（`pending` の行は拾い直しが処理します）。Go にも同じ種類の危険がありました。
 
-##### 手順 2（利用者が行う）
+#### 手順 2（利用者が行う）
 
 マージと確認が済んでから、LINE の Webhook URL を Web に変えます。
 
@@ -436,7 +525,7 @@ curl -s -o /dev/null -w '%{http_code}' https://ffpf-zhuelog.sparklingstadt.com/a
 3. 自分の LINE で、添削・翻訳・コードでの連携を 1 回ずつ試します。結果が Web の学習ノートに入ること、`AiUsage` に機能名 `line` の行が増えること（管理者の `/admin/ai-usage`）を確かめます。
 4. 変えてから数分のあいだに届いた文は、返事が無いことがあります（許容します）。
 
-##### 手順 3（10b のマージの前と後）
+#### 手順 3（10b のマージの前と後）
 
 手順 2 が済んでから、10b をマージします。この PR（10b）は、Go から LINE のルートと 2 つの Cron とデモのリセットを消し、デモのリセットを Web の `GET`/`POST /api/cron/demo-reset` として足します。
 
@@ -470,7 +559,7 @@ curl -s -o /dev/null -w '%{http_code}' https://ffpf-zhuelog.sparklingstadt.com/a
 - Web だけを戻すと、デモのリセットのルートが無くなり、Go にも無いので、リセットは手でもできなくなります（デモのデータは、そのときのまま残ります）。Web を戻すなら、Go も戻します。
 - 症状の見分け方：LINE の文に返事が無く、LINE Developers の Webhook の確認が `404` なら、Webhook が Go に向いたままです（手順 2 をやり直します）。「デモで試す」が「デモは今は利用できません。」になるなら、デモのアカウントが無いので、手順 3 の `curl` でリセットします。リセットの `curl` が `404` なら、Web の `DEMO_LOGIN_ID` がありません。`401` なら、`CRON_SECRET` が違います。リセットの `curl` が `204` を返すのに「デモで試す」が「デモは今は利用できません。」になるなら、Web と Go の `DEMO_LOGIN_ID` が違います（Web がリセットしたのとは別の loginId を、Go のログインが探しています）。2 つが同じ値か確かめます。
 
-##### 手順 4（10c のマージの前と後）
+#### 手順 4（10c のマージの前と後）
 
 手順 3 で Go を出し直したあとで、10c をマージします。この PR（10c）は、Web の `vercel.json` に `crons` を足すだけです（アプリのコードは、コメントのほかは変えません。テストを 1 つ足しました）。これで段階 10 の 4 つの手順はすべて終わり、Go に残るのはログインだけになります。
 
@@ -495,14 +584,14 @@ Cron は Production のデプロイで登録されます。時刻は UTC で、`
 - この PR だけを戻す（Web を戻す）と、Web の Cron が消えるだけで、ほかは動きます。拾い直しとデモのリセットが定期には動かなくなります（手で `curl` すれば呼べます）。Go に Cron は無いので、二重には動きません。
 - Go の Cron を戻したいときは、先にこの PR を戻し、戻した Web を promote して、Web の **Settings → Cron Jobs** の一覧が空になったことを確かめてから、Go を 10b の前に戻します（2 つの Cron を並べない）。
 
-##### 戻すとき（10a）
+#### 戻すとき（10a）
 
 - 手順 2 の前なら、Web だけを戻せば足ります。LINE の Webhook は Go に向いたままで、Go がまだ連携のルートも持っているからです。戻した Web の `/account/line` は、前の Web のとおり Go を呼びます。
 - 手順 2 のあとで Web だけを戻す場合は、**先に** LINE Developers の Webhook URL を Go（`https://ffpf-zhuelog-api.vercel.app/v1/line/webhook`）に戻します。戻さずに Web を戻すと、古い Web には Webhook のルートが無いので、LINE の文は `404` で失われます。
 - Go は、10a では何も変えていないので、戻す必要はありません。
 - ただし、10b を出したあとの Go には Webhook のルートがありません。Webhook URL を Go に戻す前に、Go も 10a の状態に戻します。
 
-#### 段階11（ログイン）のマージの前と後
+### 段階11（ログイン）のマージの前と後
 
 ログインを Go から Web に移す段階（段階11）を本番に出す順番です。2 つの PR（11a・11b）に分けました。
 
@@ -510,7 +599,7 @@ Cron は Production のデプロイで登録されます。時刻は UTC で、`
 - **11b**：ログインの画面とルートを、この部品につなぎます（Go から Web への切り替え）。Go はログインのコードを失い、`/health` だけになります。
 - 11a の PR では、ログインの動きは変わりません。ただし、Preview の Neon ブランチに `Session` の表を足すまでは、Preview でパスワードの変更と管理者による再設定が `500` で失敗します（下の「11a のマージの前と後」）。
 
-##### 11a のマージの前と後
+#### 11a のマージの前と後
 
 マージの前:
 
@@ -522,7 +611,7 @@ Cron は Production のデプロイで登録されます。時刻は UTC で、`
 
 マージのあと:
 
-1. Web の本番のビルドが、`prisma migrate deploy` で `Session` の表を足します（「4. 本番の DB の確認」）。
+1. Web の本番のビルドが、`prisma migrate deploy` で `Session` の表を足します（「1. 本番の DB とマイグレーション」）。
 2. `migrate status` で「Database schema is up to date!」を確かめます。
 3. マージの前に **Preview の Neon ブランチ**へ当てていなければ、ここで同じ手順で当てます。当てるまでは、Preview でパスワードの変更と管理者による再設定が `500` で失敗します。
 4. ログインの動きは変わりません。ログインは Go のままで、`Session` の表は空のままです。
@@ -544,7 +633,7 @@ Preview には入れません。プレビューの URL は、GitHub と FFPF ID 
 - Go だけを戻しても害はありません（11a は Go を変えません）。
 - Web を戻すと、空の `Session` の表が残ります。何も読まないので、そのままで害はありません。
 
-##### 11b のマージの前と後
+#### 11b のマージの前と後
 
 ログインとログアウトを Go から Web に切り替え、Go を `/health` だけにする変更です。Web は、パスワード・ゲスト・デモ・GitHub（管理者）・FFPF ID のログインとログアウトのすべてを、自分で受け持ちます。ログインのセッションは、ランダムなトークンの SHA-256 を `Session` の行にし、トークンは HttpOnly の Cookie `zl_session` に置きます。長さは固定で、30 日（ゲストは 24 時間）です。使っても延びません。期限切れの行は、ログインのたびに 100 行まで消します。パスワードの変更と再設定は、その人の `Session` の行をすべて消します。管理者は `AUTH_ALLOWED_GITHUB_IDS` で確かめ、許可リストは、Web がモジュールを読み込むときに 1 度だけ読むので、変えたら再デプロイが要ります。Go は、`/health`・`/healthz`・`/ping` だけを返し、`PORT` と `DATABASE_URL` だけを読みます。
 
@@ -584,26 +673,6 @@ Preview には入れません。プレビューの URL は、GitHub と FFPF ID 
 - セッションの扱い：戻すと、新しい Web で入った人の `zl_session` は、古い Web が読まないので、ログインし直しです（Go でログインします）。Go の `zl_access`・`zl_refresh` が手元に残っている人は、その Cookie がまだ有効なら、そのまま続けられます。`Session` の表の行は残りますが、誰も読まないので害はありません。
 - **もう一度切り替える前に**、Neon の SQL Editor で `DELETE FROM "Session";` を実行します。最初の切り替えと同じく、全員のログインが切れます。戻した Web は `zl_session` を知らないので、戻しているあいだのログアウトやほかの人のログインでは、`zl_session` の Cookie も `Session` の行も消えません。消さずに切り替えると、前のセッションが生き返ります（たとえば、共用の端末で A がログアウトし、B がログインしたあとに、A のセッションに戻ります）。
 
-### Web のプレビュー（Preview）
-
-PR ごとの Web のプレビューも、ログインとデータの読み書きを Web が行います（Go API は要りません）。Web の Vercel プロジェクトの **Preview** の環境変数には、次を入れます。
-
-| 名前                      | Preview に入れる値                                                                             |
-| ------------------------- | ---------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`            | **本番と別の Neon ブランチ**の pooled の URL                                                   |
-| `AUTH_ALLOWED_GITHUB_IDS` | 管理者にする GitHub の数字の ID（任意。GitHub ログインはプレビューで使えないので、空でもよい） |
-| `DEMO_LOGIN_ID`           | デモを試すときだけ                                                                             |
-
-注意:
-
-- `GITHUB_WEB_CLIENT_SECRET` と `FFPF_ID_CLIENT_SECRET` は、Preview に **入れません**。プレビューの URL はデプロイごとに変わり、GitHub と FFPF ID に登録した URL と合わないので、どちらのログインも使えないためです（GitHub のボタンは押せず、「FFPF IDでログイン」は出ません）。パスワード・ゲスト・デモのログインは使えます。
-- `GO_API_URL`・`API_WEB_PROXY_SECRET`・`API_JWT_SECRET` は、段階 11b から要りません。以前 Preview に入れていた値は、消してよいです。
-- 同じ DB や秘密を本番と使うと、プレビューが本番のデータを書き換えかねません。必ず別の Neon ブランチにします。
-- プレビューのビルドはマイグレーションを当てません（`scripts/vercel-build.sh`）。そのため、Preview 用の Neon ブランチのスキーマは、手で合わせます。次のどちらかです。
-  - 本番から Neon のブランチを作り直す（スキーマも本番と同じになる）。
-  - そのブランチの direct の URL に向けて、手元で `DATABASE_URL=<そのブランチの direct の URL> pnpm exec prisma migrate deploy` を実行する。
-- プレビューのログインのセッションは、Preview の Neon ブランチの `Session` に入ります。本番の `Session` とは別です。
-
 ### 段階3のマージの前に行うこと
 
 段階3（Web のデータを Go API で読み書きする変更）をマージすると、Web から Auth.js と DB への接続が無くなります。Go API が無いと、Web は動きません。そのため、**マージの前に** 次を済ませてください。
@@ -614,118 +683,77 @@ PR ごとの Web のプレビューも、ログインとデータの読み書き
 4. 本番の Web で、GitHub・パスワード・ゲストのログインと、ログアウトができることを確かめます。切り替えると Auth.js の Cookie は使われなくなるので、**全員が一度ログインし直し** になります。
 5. 確かめられたら、段階3をマージします。
 
-`DATABASE_URL`・`AUTH_SECRET`・`AUTH_GITHUB_SECRET`・`AUTH_ALLOWED_GITHUB_IDS` は、段階3が本番で問題なく動くまで Web に残しておきます（下の「戻す手順」で使います）。
+`DATABASE_URL`・`AUTH_SECRET`・`AUTH_GITHUB_SECRET`・`AUTH_ALLOWED_GITHUB_IDS` は、段階3が本番で問題なく動くまで Web に残しておきます（下の「段階3の戻す手順」で使います）。
 
-### 戻す手順
+#### 段階3の戻す手順
 
 段階3のあとは、Auth.js に切り替える設定はありません。戻すときは、段階3のマージを取り消し（revert し）、Web を再デプロイします。取り消した後の Web は、学習ノートを DB から直接読み書きするので、Web に `DATABASE_URL` が要ります。ログインは、`GO_API_URL` があるうちは Go API のままです。Auth.js のログインまで戻すときは、さらに Web から `GO_API_URL` を消して再デプロイします。このとき `AUTH_SECRET`・`AUTH_GITHUB_SECRET`・`AUTH_ALLOWED_GITHUB_IDS` も要り、全員がログインし直しになります。
 
-### e2e
+### 段階12（後片付け）のマージの前と後
 
-`pnpm run test:e2e` は、Go API を起動しません（段階 11b から）。ログインも Web が受け持つので、Docker の Postgres と Web（本番モードでビルド）だけで動きます。テストの側が `Session` の行を DB に書き、そのトークンを Cookie `zl_session` に入れてログインした状態を作ります。パスワードとゲストのログインは、画面から実際に行います。FFPF ID は、`e2e/fixtures/ffpf-oidc-stub.ts` の小さな OIDC スタブ（`127.0.0.1:3110`）を issuer にして、Web に `FFPF_ID_*` を渡します。スタブは実行ごとに P-256 の鍵を作り、`/oauth/authorize` は画面を出さずにすぐ `redirect_uri?code=stub&state=…` へ戻し、`/oauth/token` は ES256 の ID トークンを、`/oauth/jwks` はその公開鍵を返します。本物の portal には接続しません。
+段階 12 は 2 つの PR です。12a は Go のコード・docs-site・Go のクライアントと設定を消します（アプリの動きは変わりません）。12b は `ApiRefreshToken` の表を消すマイグレーションだけです。本番のビルドはマイグレーションを自動で当てるので、12b は Go の Vercel プロジェクトを消したあとにだけマージします。
 
-## 7. LINE 連携
+#### 12a のマージの前と後
 
-LINE に送った文を OpenAI で添削・翻訳し、送った人の学習ノートに追加する機能です。会員と管理者が、Web の「LINE 連携」画面（`/account/line`）で連携コードを出し、それを LINE に送ると、その LINE とアカウントが結びつきます。ゲストは使えません。仕様は `docs/superpowers/specs/2026-10-23-line-via-go-api-design.md` にあります。
+**マージの前に、利用者が行うこと：**
 
-段階 10a で、LINE の受け口と画面は Web に移りました（Go から Web への切り替えは、下の「段階10（LINE とデモのリセットの cron）のマージの前と後」の順番で行います）。Go の `/v1/line/*` の 7 つのルートと、Go の Cron は、段階 10b で消えました（LINE の Webhook URL を Web に変えたあとに出します）。連携の画面と Server Actions（コードを出す・解除する・お知らせの入り切り）は、Go を呼ばず、Web が Prisma で `LineLink`・`LineLinkCode`・`LineMessage` を読み書きします。
+1. 11b が本番にあり（`vercel promote` 済み）、Go を 11b の main から出し直してあること（`/v1/auth/password` が 404、`/health` が 200）。
+2. Go の Vercel プロジェクト（`ffpf-zhuelog-api`）の **Settings → Git** で、リポジトリにつながっていないことを確かめる。つながっていれば **Disconnect** する。12a で `services/api/` が無くなるので、つながったままだと、マージのたびに Go のビルドが Root Directory を見つけられずに失敗します（本番の Go には影響しませんが、失敗の通知が届きます）。Root Directory の設定は、プロジェクトと一緒に消えるので、直さなくてよいです。
+3. マイグレーションは無い。Web の環境変数も、マージの前に変えるものは無い。
 
-Web の次の 2 つの Route Handler で動きます。LINE の設定（上の「Web が実行時に使う DB と秘密」）が足りないときは、どちらも `404` です。
+**マージのあと：**
 
-| メソッド | パス                   | 認証                                  | 内容                                                                                                   |
-| -------- | ---------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| POST     | `/api/line/webhook`    | LINE の署名（`X-Line-Signature`）     | LINE からの通知を受け取り、添削・翻訳して返信する（`src/app/api/line/webhook/route.ts`）               |
-| GET      | `/api/cron/line-drain` | `Authorization: Bearer <CRON_SECRET>` | 結果が出ないまま残ったメッセージの拾い直しと、復習のお知らせ（`src/app/api/cron/line-drain/route.ts`） |
+1. Web の Production のデプロイが Ready になったら、`vercel promote` する。
+2. 確かめる：パスワード・ゲスト・デモ・FFPF ID・GitHub（管理者）でログインでき、学習ノート・単語帳・復習が開ける。Vercel の Web のログに `GoApiError` や `GO_API_URL` が出ない。
+3. Web の Vercel プロジェクトの **Production と Preview** から、`GO_API_URL`・`API_WEB_PROXY_SECRET`・`API_JWT_SECRET` を消す（もう読まれていません。消したあとの再デプロイは要りません）。
+4. GitHub の Dependabot が開いた Go（`gomod`）の PR があれば、閉じる（12a で Dependabot の Go の設定を消したので、新しくは開きません）。
+5. 手元：サンプル用の DB（`127.0.0.1:55440`）を消す。**12a を取り込む前に** `pnpm run api:db:stop -- -v` を実行する。取り込んだあとなら、`docker compose -p zhuelog-api-local down -v`（コンテナ `zhuelog-api-local-api-db-1` と、ボリューム `zhuelog-api-local_zhuelog_api_local_data` が消えます）。そのあと、`.env` の `DATABASE_URL` を `.env.example` の値に戻す（開発用 DB は、12a から `127.0.0.1:55432` です。以前の 5432 から替えました）。`docker compose up -d`・`pnpm run db:deploy`・`pnpm run db:seed:sample` を実行する。
 
-- 送った文は、webhook のリクエストの中で処理します（保存 → OpenAI → 学習ノートに保存 → reply）。reply は無料です。添削・翻訳の結果は、バッチ名 `LINE` のノートとして保存します。1 回の通知の処理は、リクエストの開始から 45 秒までで、残りが 30 秒を切った文は、保存だけして OpenAI は呼ばず、「時間がかかっています」と返します（翌朝の拾い直しが処理します）。イベントは 55 秒を過ぎると新しく始めません。
-- 拾い直しは、5 分以上 `pending` のまま残ったメッセージを 1 回だけ試し直し、できたら push で、できなければ失敗を push で知らせます。1 回の実行は 50 秒で止まり、残りが 30 秒を切ったら、新しい生成は始めず次の実行に回します（試す回数を使い切った行は、生成せずに失敗にします）。push は、LINE の無料プランでは月 200 通の枠を使います。同じ実行が、希望した人へ復習のお知らせも送ります（[LINE 連携のリファレンス](../docs-site/reference/line.md#put-v1-line-review-notify)）。お知らせは今月の残りから 30 通を拾い直しのために残し、その範囲だけ送ります。
-- **Cron は Web の `vercel.json` に登録しています**：`/api/cron/line-drain` は `0 21 * * *`（UTC。06:00 JST）です。Vercel が `Authorization: Bearer <CRON_SECRET>` を付けて呼ぶので、Web の Production に `CRON_SECRET` が要ります。Hobby の Cron は時刻が 1 時間単位で、06:00 から最大 59 分遅れることがあります。Hobby の Cron は 1 つのプロジェクトに 100 個まで、どれも 1 日 1 回までなので、この拾い直しとデモのリセットの 2 つ（どちらも 1 日 1 回）は収まります。手で呼ぶときは、`Authorization: Bearer $CRON_SECRET` を付けて `GET` します。
-- `maxDuration` は、route の中で決めています（拾い直しは 60 秒、デモのリセットは 30 秒）。Web のプロジェクトにはすでに 90 秒の route（クイック質問・チャット）があるので、プロジェクトの設定を変える必要はありません。
-- ログには、イベント ID・メッセージの ID・コードだけを出し、本文・生成結果・鍵・LINE のユーザー ID・連携コード・reply token は出しません。
-- 使う表は `LineLink`・`LineLinkCode`・`LineMessage` の 3 つで、Prisma のマイグレーション `20261023090000_add_line_link` で作ります（本番にはすでにあります）。
-- OpenAI の利用量は、操作している人ではなく LINE を結びつけた人の `AiUsage` に、機能名 `line` で記録します。
-- e2e は、偽の LINE API（`e2e/line-stub.ts`）に `LINE_API_BASE_URL` を向けて確かめます。
+**戻すとき：** Web を 11b のデプロイに戻す（Vercel の **Instant Rollback**）。11b は 3 つの環境変数を読まないので、手順 3 で消したあとでも動きます。
 
-### 切り替えの手順
+#### Go の Vercel プロジェクトを消す（利用者が行う。12a のあと、12b の前）
 
-LINE の Webhook を Go から Web に切り替える順番は、下の「段階10（LINE とデモのリセットの cron）のマージの前と後」にあります。LINE Developers で変えるのは、**Webhook URL** を `https://ffpf-zhuelog.sparklingstadt.com/api/line/webhook` にすることと、「Webhook の利用」をオンのまま、「**応答メッセージ**」をオフのままにすることです（オンだと、LINE の自動応答とこちらの返信が二重に届きます）。
+1. 消してよいかを決める。Go のプロジェクトを消すと、Web を 11b より前（ログインを Go が行っていたころ）に戻すことは、もうできません。11b のあと、ログインに問題が出ていないことを確かめてから消します。
+2. Go のプロジェクトの **Logs** で、`/health`・`/healthz`・`/ping` のほかに呼ばれていないことを確かめる（Web はもう Go を呼びません）。
+3. **Settings → General → Delete Project** で `ffpf-zhuelog-api` を消す。環境変数（`DATABASE_URL`・`GOFLAGS` と、残っていた値）、デプロイ、`ffpf-zhuelog-api.vercel.app` の URL、Neon の **Storage** の Go への接続も一緒に消えます。**Neon のストア（DB）そのものは消しません**（Web が使っています）。
+4. モバイル用の GitHub OAuth App（`GITHUB_MOBILE_*` に入れていたもの）が残っていれば、GitHub の **Settings → Developer settings → OAuth Apps** で消す。Web 用の OAuth App（`AUTH_GITHUB_ID`）は消しません。
 
-LINE の連携を最初から作り直すとき（以前のチャネルが無いとき）は、LINE Developers で Messaging API のチャネルを用意し、Web の Production に `LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`OPENAI_API_KEY`・`CRON_SECRET` と、任意で `LINE_ADD_FRIEND_URL` を入れてデプロイしてから、Webhook URL を設定して「検証」を押します（成功は `200`）。
+#### 12b のマージの前と後
 
-## 8. ChatGPT と話す（会話ノート）
+**マージの前に、利用者が行うこと：**
 
-会員と管理者が Web の `/chat` で ChatGPT と中国語で話し、会話を会話ノート（`/conversations`）で見返すための設定です。Web の `POST /api/chat`（Route Handler が OpenAI を直接呼ぶ）で動き、会話ノートは Web が Prisma で読み書きします。Go API は関わりません。
+1. 上の「Go の Vercel プロジェクトを消す」が終わっていること。
+2. 12a が本番にあること。
+3. 12b の下書き（draft）の PR を「ready」にする。
 
-- Web の Production に `OPENAI_API_KEY` があれば話せます。無いときは Web の `/chat` に「ChatGPT が設定されていません」と出ます（会話ノートは読めて、消せます）。
-- モデルは Web の `OPENAI_CHAT_MODEL`（無ければ `gpt-6.1-sol`）です。クイック質問と同じ変数です。
-- 使えるのは会員と管理者です。デモは会話ノートを読む・消すことはできますが、チャットで新しく聞くことはできません。ゲストには入口が出ません。
-- 履歴：テーブル `ChatConversation` のマイグレーション `20261024090000_add_chat_conversations` は、Go で動かしていた段階で本番に当てたものです。いまは新しい手順は要りません。切り替えの手順は「段階7（チャット）のマージの前と後」にあります。
+**マージのあと：**
 
-## 9. FFPF ID でのログイン
+1. 本番のビルドが `prisma migrate deploy` で `ApiRefreshToken` を消し、そのあと Web をビルドします。ビルドのあいだ動いている 12a の Web は、この表を使わないので、止まりません。
+2. Ready になったら `vercel promote` する。
+3. 確かめる：「1. 本番の DB とマイグレーション」の手順で `migrate status` が up to date。Neon の SQL Editor で `SELECT to_regclass('"ApiRefreshToken"');` が `NULL`。ログインと、デモのリセット（`/api/cron/demo-reset` が次の朝に 200）が動く。
+4. Preview の Neon のブランチは、プレビューのビルドがマイグレーションを当てないので、表が残ります。害はありません。合わせたいときは「Web のプレビュー（Preview）」の手順で `prisma migrate deploy` を当てます。
 
-FFPF ID（ffpf-portal が提供する OpenID Connect のプロバイダー）のアカウントで、会員（`member`）としてログインする機能です。ログイン画面の「FFPF IDでログイン」から使います。仕様は ffpf-portal の `docs/superpowers/specs/2026-10-27-ffpf-id-design.md` の「4. zhuelog」にあります。
+**戻すとき：** Web は 12a のデプロイに戻せます（12a は表を使いません）。表は戻りません。11b より前の Web には戻せません（Go も表も無いため）。
 
-- 流れ：Web が PKCE・`state`・`nonce` を作って `zl_oauth` Cookie に入れ、portal の `/oauth/authorize` へ送ります。戻り先 `/api/auth/callback/ffpf` で `state` を確かめてから、Web が portal の `/oauth/token` で `code` を交換し（client_secret_basic。`FFPF_ID_CLIENT_SECRET` を使う）、ID トークンを `/oauth/jwks` で検証します（ES256・`iss`・`aud`・`exp`・`nonce`・`email_verified`）。discovery は使わず、エンドポイントは `FFPF_ID_ISSUER` から組み立てます。検証が通ったら、`FfpfAccount` を更新して `Session` の行を作り、`zl_session` を発行します。`redirect_uri` は `AUTH_URL` の origin に `/api/auth/callback/ffpf` を付けた値です。
-- 持ち主の ID は `ffpf:<sub>` です。`FfpfAccount` にメールアドレスと表示名を保存し、ログインのたびに最新の値で更新します。メールアドレスは表示用で、認可には使いません。許可リストは無く、メールアドレスを確認済みの FFPF ID なら誰でも会員になれます。
-- FFPF ID の会員は、パスワード会員と同じく学習ノート・共有・フォロー・タイムライン・LINE 連携を使えます。メンバー一覧にも出ます。パスワードはこのサービスに無いので、`/account/password` には portal のマイページ（`<FFPF_ID_ISSUER>/id`）へのリンクだけを出します（パスワードを変えるフォームは出しません）。
-- 誤りの扱い：`state` の不一致、`code` の交換と ID トークンの検証の失敗、portal に届かない・5xx・JWKS が取れないときは、どれも固定のコードだけをログに出し（秘密や `code` は出さない）、「認証サービスからの結果を確認できませんでした。」と出してログイン画面に戻します。
-- 使う表は `FfpfAccount` で、Prisma のマイグレーション `20261027120000_add_ffpf_accounts` で作ります。
+#### 利用者が行うことの順番（段階 12）
 
-### 設定の手順
+1. 11b を本番に出し、Go を 11b の main から出し直す（済んでいれば飛ばす）。
+2. Go の Vercel プロジェクトが Git につながっていれば、**Disconnect** する。
+3. 12a をマージし、Web の Production が Ready になったら `vercel promote` して、ログインと主な画面を確かめる。
+4. Web の Production と Preview から `GO_API_URL`・`API_WEB_PROXY_SECRET`・`API_JWT_SECRET` を消す。Dependabot の Go の PR があれば閉じる。
+5. 手元のサンプル用 DB（55440）のコンテナとボリュームを消し、`.env` の `DATABASE_URL` を `.env.example` の値に戻す。
+6. Go のプロジェクトの Logs を見てから、**Delete Project** で消す（Neon のストアは消さない）。これで、Web を 11b より前に戻すことはできなくなる。モバイル用の GitHub OAuth App が残っていれば消す。
+7. ここまで済んでから、12b を「ready」にしてマージし、`vercel promote` する。`migrate status` と、`to_regclass('"ApiRefreshToken"')` が `NULL` であることを確かめる。
 
-1. ffpf-portal で `pnpm run oidc:client zhuelog` を実行し、シークレット（`secret=…`）とクライアントの JSON を作ります。JSON の `redirectUris` に `https://<Web のホスト>/api/auth/callback/ffpf` を入れて portal の `FFPF_OIDC_CLIENTS` に足し、portal を再デプロイします（詳しくは ffpf-portal の README）。
-2. マイグレーション `20261027120000_add_ffpf_accounts`（`FfpfAccount` の追加）は、main へのマージで Web の本番ビルドが自動で当てます（「4. 本番の DB の確認」）。
-3. Web の Vercel プロジェクトの Production に `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID`・`FFPF_ID_CLIENT_SECRET` を入れます。`redirect_uri`（`<AUTH_URL の origin>/api/auth/callback/ffpf`）は、portal に登録した redirect URI と **1 文字も違わず** 合わせます。Preview には入れません。
-4. 本番の Web で、FFPF ID のログイン・ログアウトを試します。
+12a は手順 1・2 のあと、いつマージしてもよい。12b は手順 6 のあとだけ。
 
-## 10. デモアカウント
+### 移行全体のまとめ
 
-採用担当など、アカウントを持たない人が会員向けの画面（学習ノート・今日の復習・単語帳・会話ノート・練習の記録）を試せるようにする機能です。ログイン画面の「デモで試す」から入ります。
+**何が変わったか（段階 0〜12）**
 
-- アカウント：`DEMO_LOGIN_ID` の ID の、普通のパスワード会員です。パスワードのハッシュは使えない値なので、ID とパスワードではログインできません。「デモで試す」は、Web が `Session` の行を作り（会員として、30 日）、`zl_session` を発行します。アカウントは下のリセットが作ります（手で作る必要はありません）。ログインの試行回数は、`SignInThrottle` で、1 つのクライアントから 15 分に 20 回まで（キーは `demo:<IP>`）に制限します。
-- データ：デモを試す全員で 1 つのアカウントを共有します。毎晩 04:00（日本時間）ごろに、Web の `vercel.json` の Cron（`0 19 * * *`、UTC）が `GET /api/cron/demo-reset` を呼び、1 つのトランザクションで、デモの持ち物（学習ノートとヒント、CSV の取り込みの記録、復習の項目と記録、単語帳、会話ノート、クイック質問、練習の記録（介詞・補語）、フォロー（デモがしたものと、デモをフォローしているもの）、LINE の連携・連携コード・受け取った文）を消してから、`src/domain/demo/demo-fixture.json` の内容を、Web の FSRS で復習の項目にして入れ直します（例のデータは、Go が最後に作った内容と同じであることを `tests/fixtures/demo-seed-golden.json` で確かめています）。消さないものは、AI の利用量（`AiUsage`。管理者が費用を見る記録）とログインのセッション（`Session`）です。日付は「リセットの何日前か」で書いてあるので、いつ見ても直近 7 日の記録に見えます。ログイン中のセッションは消しません（デモに入っている人は、リセットのあとも `zl_session` のまま続けて使えます）。
-- 使えないもの：OpenAI を呼ぶルート（Web の `POST /api/chat` と `POST /api/quick-question`）は、デモには `403`（「デモでは使えません。」）です。Web の LINE 連携の画面（`/account/line`）は `/` に戻します。パスワードの変更も、デモには使えません。断るのは Web です。フォロー・会員の一覧・タイムライン・共有（ほかの会員に届くため）は、Web が断ります（`/follow` は `/` に戻し、フォローや共有を直接送ると画面には「ログインし直してください。」と出ます）。管理者がデモとして操作しているときや、ほかの会員には当てはまりません。Web の AI のルート（単語帳の下書き・クイック質問・ChatGPT と話す）は、Web が自分でデモかどうかを確かめて断ります。Web は、自分の DB の確認（`passwordHash` が使えない値で、ログイン ID が `DEMO_LOGIN_ID` と同じ）でデモかどうかを決め、すべてのページに「デモアカウントです。…」を出し、メニューから使えない機能を外します。
-- リセットは Web が行います（段階 10b で Go から移しました。`DEMO_LOGIN_ID` が空なら、Web のルートは `404` です）。Hobby の Cron は時刻が 1 時間単位なので、04:00 から最大 59 分遅れることがあります。Vercel が `Authorization: Bearer <CRON_SECRET>` を付けて呼ぶので、Web の Production に `CRON_SECRET` が要ります。`maxDuration` は route に 30 秒と書いてあります。すぐ戻したいときは、下の `curl` で手でリセットします。
-- 手でリセットする：`curl -i -X POST https://ffpf-zhuelog.sparklingstadt.com/api/cron/demo-reset -H "Authorization: Bearer $CRON_SECRET"` が `204` を返します（`GET` でも同じです）。`CRON_SECRET` を知っている人だけが呼べます。`$CRON_SECRET` は Web の Production の値です。
-- マイグレーションは要りません（既存の表だけを使います）。Vercel Hobby の Cron は 1 つのプロジェクトに 100 個まで、どれも 1 日 1 回までなので、LINE の拾い直しとこのリセットの 2 つ（どちらも 1 日 1 回）は収まります（どちらも Web の `vercel.json` にあります。Go の `services/api/vercel.json` に Cron は無くなりました）。
+- 以前：Web（Next.js）は画面だけで、データの読み書き・ログイン・チャット・LINE・AI の利用量・cron は、すべて Go の API（`services/api`、約 1.3 万行、API 約 70 本）が持っていた。Web は `src/infrastructure/go-api/` の約 20 個のアダプタで Go を呼び、ログインは Go の JWT と refresh token（`zl_access`・`zl_refresh`）だった。
+- いま：アプリは Next.js 1 つ。DB は Prisma で Web が直接読み書きする。ログインは Web のセッション（Cookie `zl_session` のトークンの SHA-256 を `Session` に置く。30 日、ゲストは 24 時間）。LINE の webhook と 2 つの cron（LINE の拾い直し、デモのリセット）も Web の Route Handler と Vercel Cron。Vercel のプロジェクトは 1 つ。
+- 変わらないもの：画面の動き、エラーの文言、OAuth のコールバックの URL、DB のデータ（スキーマは `Session` を足し、`ApiRefreshToken` を消しただけ）。e2e（322 件）は、移す前と同じ確かめを Go なしで通している。
+- なくしたもの：ネイティブアプリ向けの `/v1/...` の JSON API と JWT（利用者の決定）、Go の CI・フック・Dependabot、API のドキュメントのサイト（docs-site）、`GO_API_URL`・`API_WEB_PROXY_SECRET`・`API_JWT_SECRET`、手元の 2 つめの DB。
 
-### 切り替えの手順
-
-1. Web の Vercel プロジェクトの Production に、`DEMO_LOGIN_ID`（例: `demo`）と `CRON_SECRET` を入れます。
-2. Web を main からデプロイします。
-3. 上の `curl` でリセットを 1 回呼び、デモアカウントとデータを作ります（呼ぶまではアカウントが無く、「デモで試す」を押すと「デモは今は利用できません。」になります）。
-4. 本番の Web の `/signin` に「デモで試す」が出ること、押すと学習ノートと「デモアカウントです。」が出ることを確かめます。
-
-やめるときは、Web から `DEMO_LOGIN_ID` を消して再デプロイします。ボタンが消え、Web のリセットのルートも `404` になります。デモの `Session` の行が残っていても、`DEMO_LOGIN_ID` が無いと、そのアカウントはデモと見分けられません（普通の会員として扱われるので、パスワードの無いアカウントのまま残ります）。気になるときは、`DELETE FROM "Session" WHERE "ownerId" = 'password:<デモのアカウントの id>'` で消します。アカウントとデータは残ります。
-
-## 運用上の注意
-
-### ログインのセッション
-
-- **長さ**：会員と管理者は 30 日、ゲストは 24 時間です。作ったときに期限を決め、使っても延ばしません（Go の refresh のようには延びません）。切れたら、ログインし直します。
-- **期限切れの行の掃除**：ログインのたびに、期限の切れた行を最大 100 行まで消します。別のジョブはありません。ログインが少ないと、期限切れの行が残りますが、読まれません（期限を確かめます）。
-- **ログアウト**：そのブラウザーの `Session` の行を消し、`zl_session` を消します。DB が失敗しても、Cookie は消します。
-- **パスワードの変更と管理者の再設定**：そのアカウントの `Session` の行を、同じトランザクションですべて消します。ほかの端末もログインし直しです。
-- **全員をログアウトさせたいとき**：Neon の SQL Editor で `DELETE FROM "Session";` を実行します（全員が次のリクエストでログイン画面に戻ります）。秘密が漏れたかもしれないときも、これを使います。
-- **管理者を外すとき**：`AUTH_ALLOWED_GITHUB_IDS` から ID を消して、再デプロイします。許可リストは、Web がモジュールを読み込むときに 1 度だけ読むので、環境変数を変えただけでは効きません。再デプロイすると、外れた管理者は次のリクエストから `revoked` になります。
-- **見る**：`SELECT "role", count(*) FROM "Session" GROUP BY 1;` で、役割ごとの行数が分かります。
-
-### レート制限とクライアントの IP
-
-ログインには、次の制限があります。どれも DB の `SignInThrottle` で数えるので、インスタンスが増えても合計で数えます。
-
-- **ログイン全体**：1 つのクライアントから、1 分に 10 回まで（ID とパスワード・ゲスト・GitHub・FFPF ID・デモの入り口で共有）。パスワードの変更も、同じ鍵（`route:auth:<IP>`）の枠に入ります。
-- **パスワードログインの試行回数**：15 分の枠で、1 つのクライアントからは 20 回まで、同じクライアントから同じ loginId へは 5 回まで（成功すると 0 に戻ります）。超えると、正しいパスワードでもログインできません（画面には、IDの有無を区別しない同じ文が出ます）。
-- **デモ**：1 つのクライアントから 15 分に 20 回まで（キーは `demo:<IP>`）。
-
-クライアントのアドレスは、Web が `x-real-ip` / `x-forwarded-for` から決めます。Vercel はこのヘッダーをクライアントの IP で上書きし、クライアントが送った値は渡さないので、偽装されません。**Vercel の前に別のプロキシ（CDN など）を置かないでください。** 置くと、すべてのクライアントがそのプロキシの 1 つのアドレスとして数えられます。
-
-### DB の接続数とパスワードの計算
-
-Go API は 1 つのインスタンスあたり最大 3 本の DB 接続を持ちます（`/health` の確認だけに使います）。Vercel がインスタンスを増やすと接続数も増えるので、Neon の pooled 接続文字列を使ってください。
-
-パスワードのハッシュ（作成・再設定・変更）と検証は、Web が `crypto.scrypt`（N=2^15・r=8）で計算します（1 回ごとに 32 MiB を使います）。専用の上限は付けていませんが、Node の threadpool（既定は 4 本）が上限になり、同時に動くのは 4 件まで、残りは待ちます。この threadpool はファイルや DNS の処理と共有です。ログインのときは、ID が無い場合でも同じ時間がかかるよう、ダミーのハッシュで同じ計算をします（ログイン画面を開いたときに、先に温めておきます）。
-
-### 公開範囲
-
-Go API のエンドポイントはインターネットに公開します。返すのは `/health`・`/healthz`・`/ping` だけで、認証はありません（段階 12 で消します）。CORS は設定していません。
+**どこを読めば何が分かるか**は、[architecture.md](architecture.md) の「2. Go API をやめて Next.js 1 つにした理由」の表にあります。
