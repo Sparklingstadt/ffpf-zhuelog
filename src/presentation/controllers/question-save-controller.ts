@@ -12,7 +12,7 @@ import {
   type AppRole,
 } from "@/domain/identity/entities/authenticated-user";
 import {
-  attemptGo,
+  attemptCall,
   type ActionResult,
 } from "@/presentation/controllers/action-state";
 import { accountForbiddenMessage } from "@/presentation/presenters/account-action-errors";
@@ -52,7 +52,7 @@ export async function handleQuestionSave(
     return { ok: false, message: accountForbiddenMessage };
   const parsed = inputSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: invalidNoteMessage };
-  const attempt = await attemptGo("QUESTION_SAVE_FAILED", () =>
+  const attempt = await attemptCall("QUESTION_SAVE_FAILED", () =>
     deps.save(parsed.data),
   );
   if (!attempt.ok) return attempt;

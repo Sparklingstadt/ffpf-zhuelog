@@ -2,15 +2,8 @@ import { normalizeLoginId } from "@/domain/identity/password-account";
 import { goTrimSpace } from "@/domain/line/go-text";
 import { normalizeLineOfficialAccountId } from "@/domain/line/official-account";
 
-// Base URL of the Go API, without surrounding spaces or a trailing slash.
-export function goApiUrl(): string | undefined {
-  const url = process.env.GO_API_URL?.trim().replace(/\/+$/, "");
-  return url ? url : undefined;
-}
-
-// Tokens and secrets travel to these URLs (GO_API_URL, the FFPF ID issuer),
-// so they must be HTTPS unless they are this machine (local development and
-// e2e).
+// Secrets travel to these URLs (the FFPF ID issuer), so they must be HTTPS
+// unless they are this machine (local development and e2e).
 export function isHttpsOrLoopbackUrl(raw: string): boolean {
   let url: URL;
   try {

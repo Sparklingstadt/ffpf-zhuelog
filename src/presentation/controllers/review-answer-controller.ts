@@ -6,7 +6,7 @@ import {
 } from "@/domain/identity/entities/authenticated-user";
 import { REVIEW_LOG_ID, type ReviewRating } from "@/domain/review/review-item";
 import {
-  attemptGo,
+  attemptCall,
   type ActionResult,
 } from "@/presentation/controllers/action-state";
 import { accountForbiddenMessage } from "@/presentation/presenters/account-action-errors";
@@ -40,7 +40,7 @@ export async function handleReviewAnswer(
   const parsed = answerInput.safeParse(input);
   if (!parsed.success)
     return { ok: false, message: "復習の回答の形式が不正です。" };
-  const attempt = await attemptGo("REVIEW_ANSWER_FAILED", () =>
+  const attempt = await attemptCall("REVIEW_ANSWER_FAILED", () =>
     dependencies.answer(parsed.data),
   );
   if (!attempt.ok) return attempt;

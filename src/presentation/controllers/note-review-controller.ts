@@ -7,7 +7,7 @@ import {
 import {
   actionSuccess,
   actionUnauthorized,
-  attemptGoAction,
+  attemptAction,
   noteIdSchema,
   type ActionState,
 } from "@/presentation/controllers/action-state";
@@ -34,7 +34,7 @@ export async function handleNoteReview(
   const id = noteIdSchema.safeParse(formData.get("id"));
   const inReview = inReviewSchema.safeParse(formData.get("inReview"));
   if (!id.success || !inReview.success) return notFound;
-  return attemptGoAction("NOTE_REVIEW_FAILED", async () =>
+  return attemptAction("NOTE_REVIEW_FAILED", async () =>
     (await dependencies.run(id.data, inReview.data === "true"))
       ? actionSuccess
       : notFound,

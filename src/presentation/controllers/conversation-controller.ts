@@ -12,8 +12,8 @@ import {
 import {
   actionSuccess,
   actionUnauthorized,
-  attemptGo,
-  attemptGoAction,
+  attemptCall,
+  attemptAction,
   type ActionResult,
   type ActionState,
 } from "@/presentation/controllers/action-state";
@@ -60,7 +60,7 @@ export async function handleConversationSave(
     return { ok: false, message: accountForbiddenMessage };
   const parsed = conversationInput.safeParse(input);
   if (!parsed.success) return { ok: false, message: invalidConversation };
-  const attempt = await attemptGo("CONVERSATION_SAVE_FAILED", () =>
+  const attempt = await attemptCall("CONVERSATION_SAVE_FAILED", () =>
     deps.save(parsed.data),
   );
   if (!attempt.ok) return attempt;
@@ -89,7 +89,7 @@ export async function handleConversationDelete(
   if (!(await canChat(deps.getViewer))) return actionUnauthorized;
   const id = z.string().regex(CONVERSATION_ID).safeParse(formData.get("id"));
   if (!id.success) return { status: "error", message: invalidConversation };
-  return attemptGoAction("CONVERSATION_DELETE_FAILED", async () => {
+  return attemptAction("CONVERSATION_DELETE_FAILED", async () => {
     if (await deps.remove(id.data)) return actionSuccess;
     console.error("CONVERSATION_DELETE_FAILED", "not-found");
     return { status: "error", message: genericErrorMessage };

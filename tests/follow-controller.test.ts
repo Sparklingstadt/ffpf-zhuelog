@@ -6,7 +6,6 @@ import { redirect } from "next/navigation";
 import { LearningForbiddenError } from "../src/application/learning/learning-notes";
 import { SocialForbiddenError } from "../src/application/social/social-network";
 import type { FollowResult } from "../src/domain/social/follow";
-import { GoApiError } from "../src/infrastructure/go-api/client";
 import {
   handleFollow,
   handleShare,
@@ -175,9 +174,9 @@ test("follow and share without a session ask to sign in again", async () => {
   assert.deepEqual(share.calls, []);
 });
 
-test("a failing follow logs only FOLLOW_FAILED with Go's status and code", async (t) => {
+test("a failing follow logs only FOLLOW_FAILED and the error's name", async (t) => {
   const logged = silenceConsoleError(t);
-  const { run } = recorder<FollowResult>(new GoApiError(0, "unavailable"));
+  const { run } = recorder<FollowResult>(new Error("down"));
   assert.deepEqual(
     await handleFollow(form({ followeeId: "password:ckb1" }), {
       getMember: member,
@@ -186,16 +185,12 @@ test("a failing follow logs only FOLLOW_FAILED with Go's status and code", async
     failed,
   );
   assert.equal(logged.mock.callCount(), 1);
-  assert.deepEqual(logged.mock.calls[0].arguments, [
-    "FOLLOW_FAILED",
-    0,
-    "unavailable",
-  ]);
+  assert.deepEqual(logged.mock.calls[0].arguments, ["FOLLOW_FAILED", "Error"]);
 });
 
-test("a failing unfollow logs only FOLLOW_FAILED with Go's status and code", async (t) => {
+test("a failing unfollow logs only FOLLOW_FAILED and the error's name", async (t) => {
   const logged = silenceConsoleError(t);
-  const { run } = recorder<void>(new GoApiError(503, "unavailable"));
+  const { run } = recorder<void>(new Error("down"));
   assert.deepEqual(
     await handleUnfollow(form({ followeeId: "password:ckb1" }), {
       getMember: member,
@@ -203,15 +198,11 @@ test("a failing unfollow logs only FOLLOW_FAILED with Go's status and code", asy
     }),
     failed,
   );
-  assert.deepEqual(logged.mock.calls[0].arguments, [
-    "FOLLOW_FAILED",
-    503,
-    "unavailable",
-  ]);
+  assert.deepEqual(logged.mock.calls[0].arguments, ["FOLLOW_FAILED", "Error"]);
 });
 
-test("follow and unfollow treat Go's 403 as not allowed and let Next's redirect through", async () => {
-  const forbidden = new GoApiError(403, "forbidden");
+test("follow and unfollow treat SocialForbiddenError as not allowed and let Next's redirect through", async () => {
+  const forbidden = new SocialForbiddenError();
   assert.deepEqual(
     await handleFollow(form({ followeeId: "password:ckb1" }), {
       getMember: member,
@@ -328,7 +319,7 @@ test("share of a missing note is not found; a failure logs only SHARE_FAILED", a
   );
 
   const logged = silenceConsoleError(t);
-  const { run } = recorder<boolean>(new GoApiError(500, "internal"));
+  const { run } = recorder<boolean>(new Error("down"));
   assert.deepEqual(
     await handleShare(form({ id: "cmabc123", shared: "true" }), {
       getMember: member,
@@ -337,16 +328,11 @@ test("share of a missing note is not found; a failure logs only SHARE_FAILED", a
     failed,
   );
   assert.equal(logged.mock.callCount(), 1);
-  assert.deepEqual(logged.mock.calls[0].arguments, [
-    "SHARE_FAILED",
-    500,
-    "internal",
-  ]);
+  assert.deepEqual(logged.mock.calls[0].arguments, ["SHARE_FAILED", "Error"]);
 });
 
-test("share treats Go's 403 and LearningForbiddenError as not allowed and lets Next's redirect through", async () => {
+test("share treats LearningForbiddenError as not allowed and lets Next's redirect through", async () => {
   for (const error of [
-    new GoApiError(403, "forbidden", "メンバーだけが共有できます。"),
     // learningNotes refuses the demo account.
     new LearningForbiddenError(),
   ]) {
