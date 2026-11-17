@@ -55,6 +55,8 @@ export async function asAdmin(context: BrowserContext) {
   const db = new Client({ connectionString: databaseUrl });
   await db.connect();
   try {
+    // As the db fixture: NOW() in the session's expiry must be UTC.
+    await db.query("SET TIME ZONE 'UTC'");
     await addAdminSession(context, db, {
       githubId: adminOwnerId,
       login: "e2e-admin",

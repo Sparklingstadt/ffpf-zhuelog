@@ -38,7 +38,7 @@ flowchart LR
   Web -->|ログインの code の交換| FFPF
 ```
 
-- ブラウザーが話す相手は Web だけです。Web は Go API を呼びません。Go API は `/health` と `/ping` を返すだけで、段階 12 で消します。
+- ブラウザーが話す相手は Web だけです。Web は Go API を呼びません。Go API は `/health`・`/healthz`・`/ping` を返すだけで、段階 12 で消します。
 - Web は、ログイン中の人を決めるために、実行時に `Session` の行と DB のアカウント（`PasswordAccount`・`FfpfAccount`）を Prisma（`src/infrastructure/prisma/`）で読みます。単語帳（一覧・保存・削除）と学習ノート（一覧・検索・カレンダー・日ごとの表示・ゴミ箱・共有・CSV の取り込み）と練習の記録（介詞・補語）も Prisma で読み書きし（CSV は Web が自分で検証・解析し、1 つのトランザクションで保存します）、「AI で下書き」・クイック質問・ChatGPT と話すは Web が OpenAI を直接呼んで、使った量を `AiUsage` に記録し、質問ノートと会話ノートも Prisma で読み書きし、フォロー（会員の一覧・タイムライン・フォローする／外す）も Prisma で読み書きし、会員の管理（作成・一覧・パスワードの再設定）と自分のパスワードの変更も Prisma で書き（ハッシュは Web が scrypt で作り、確かめます）、学習ログ（カレンダー）と AI の利用量の月ごとの集計は Prisma で読むだけです。LINE も Web が受け、webhook の署名を確かめ、添削・翻訳の OpenAI を直接呼んで reply し、連携とメッセージ（`LineLink`・`LineLinkCode`・`LineMessage`）を Prisma で読み書きします。デモのリセットも Web が 1 つのトランザクションで行います。ログイン（GitHub・ID とパスワード・FFPF ID・ゲスト・デモ）とログアウトも Web が行い、`Session` を読み書きします（段階 11）。機能は、設計書（[2026-11-16-deprecate-go-backend-design.md](superpowers/specs/2026-11-16-deprecate-go-backend-design.md)）の段階ごとに、Go から Web へ移してきました。残りの Go（`services/api`）は、段階 12 で、`GO_API_URL`・`API_WEB_PROXY_SECRET`・`API_JWT_SECRET`・`ApiRefreshToken`・`docs-site/` と一緒に消します。
 - LINE は Web の `POST /api/line/webhook` に Webhook を送ります。Web が署名を確かめ、OpenAI で添削・翻訳し、結果を reply で返します。拾い直しと朝のお知らせは Web の `GET /api/cron/line-drain` で、Web の `vercel.json` の Cron が毎日 06:00 JST ごろに呼びます。Go API には LINE のコードも Cron もありません。
 
@@ -54,7 +54,7 @@ flowchart LR
 
 スキーマとマイグレーションは Prisma に残しました。Go は pgx で SQL を書きます。
 
-**その後**：段階 1 から 11 で、Web のデータの読み書きとログインを、順に Web（Prisma）へ戻しました。いまの Go は `/health` と `/ping` だけです。
+**その後**：段階 1 から 11 で、Web のデータの読み書きとログインを、順に Web（Prisma）へ戻しました。いまの Go は `/health`・`/healthz`・`/ping` だけです。
 
 **守っている決まり**：Prisma を import してよいのは `src/infrastructure/prisma/` だけで、pg と next-auth は import できません。これを `tests/architecture.test.ts` が検査します。
 
@@ -106,10 +106,10 @@ GitHub と FFPF ID が code を交換するときの `redirect_uri` は、`AUTH_
 - 期限切れの行は、ログインのたびに最大 100 行まで消します。別のジョブは要りません。
 - ログアウトは、自分の行を消し、Cookie を消します。DB が失敗しても、Cookie は消します。
 
-**毎回の確かめ**：リクエストのたびに、Cookie のトークンから `Session` の行を引き、次を確かめます。許可リストなどを変えたら、すぐ効きます。
+**毎回の確かめ**：リクエストのたびに、Cookie のトークンから `Session` の行を引き、次を確かめます。アカウントの `sessionVersion` や `zl_act_as` を変えたら、次のリクエストから効きます。許可リスト（`AUTH_ALLOWED_GITHUB_IDS`）とデモの `DEMO_LOGIN_ID` は、モジュールを読み込むときに 1 度だけ読むので、変えたら再デプロイのあとに効きます。
 
 - 行が無い・期限切れ・形が違うときは、未ログインです。
-- 管理者は、`AUTH_ALLOWED_GITHUB_IDS` に載っているときだけ管理者です。外れていると `revoked` で、どのページも使えません。この許可リストは、モジュールを読み込むときに 1 度だけ読むので、値を変えたら再デプロイが要ります。
+- 管理者は、`AUTH_ALLOWED_GITHUB_IDS` に載っているときだけ管理者です。外れていると `revoked` で、どのページも使えません（外したのが効くのは、再デプロイのあとです）。
 - 会員は、アカウントがあり、`sessionVersion` が行に書いた値と同じときだけ通ります。デモのアカウントには、デモの印を付けます。
 - ゲストは、DB のアカウントを読みません。
 
@@ -118,7 +118,7 @@ GitHub と FFPF ID が code を交換するときの `redirect_uri` は、`AUTH_
 **失効**
 
 - 会員がパスワードを変えると、またはパスワードを管理者が再設定すると、Web が 1 つの `UPDATE` でハッシュと `sessionVersion` を変え、その人の `Session` の行をすべて消します。ほかの端末も、次のリクエストでログインし直しになります。
-- 管理者は、許可リストから外れた時点で `revoked` になります（行は期限まで残ります）。
+- 管理者は、許可リストから外して再デプロイしたあと、`revoked` になります（行は期限まで残ります）。
 - 全員をログアウトさせたいときは、`DELETE FROM "Session"` を実行します（[api-deployment.md](api-deployment.md) の「運用上の注意」）。
 
 **試行回数**
@@ -214,13 +214,13 @@ sequenceDiagram
 
 ## 10. デプロイ
 
-- **2 つのプロジェクト**：Vercel に Web と Go API の 2 つのプロジェクトがあります。Go API は Vercel の Go ランタイム（Fluid compute）で動き、`/health` と `/ping` だけを返します。段階 12 で Go API のプロジェクトごと消します。
+- **2 つのプロジェクト**：Vercel に Web と Go API の 2 つのプロジェクトがあります。Go API は Vercel の Go ランタイム（Fluid compute）で動き、`/health`・`/healthz`・`/ping` だけを返します。段階 12 で Go API のプロジェクトごと消します。
 - **マイグレーション**：本番のマイグレーションは、Web の本番ビルド（`scripts/vercel-build.sh`）が `prisma migrate deploy` で当てます。Go API は別にデプロイするので、マイグレーションは今動いている Go API と両立する形（表の追加、null を許す列の追加）にします。表や列の削除は 2 回のリリースに分けます。
 - **DB**：Neon のプール接続を使い、ローカル以外では TLS の検証（`verify-full`）を強制します。
 
 ## 11. いまの課題
 
-- **Go が残っている**：Go（`services/api`）は `/health` と `/ping` だけで、使っていません。段階 12 で、`services/api`・`GO_API_URL`・`API_WEB_PROXY_SECRET`・`API_JWT_SECRET`・`ApiRefreshToken`・`docs-site/` を消します。それまでは、本番の Go API のプロジェクトが残ります。
+- **Go が残っている**：Go（`services/api`）は `/health`・`/healthz`・`/ping` だけで、使っていません。段階 12 で、`services/api`・`GO_API_URL`・`API_WEB_PROXY_SECRET`・`API_JWT_SECRET`・`ApiRefreshToken`・`docs-site/` を消します。それまでは、本番の Go API のプロジェクトが残ります。
 - **セッションは延びない**：Web のセッションは、30 日（ゲストは 24 時間）で必ず切れます。使っていても延ばしません。長く使う人は、月に 1 回ログインし直します。
 - **外部キーがない**：管理者は DB に行を持たないので、`ownerId` に外部キーがありません。持ち主の整合性はコードで守っています（フォローは、相手のアカウントがあるときだけ行を足す 1 つの SQL）。
 - **CI がない**：GitHub Actions の CI は外しました。確認は lefthook のローカルの検査だけで、`pnpm audit` と `pnpm run build` は自動では走りません。

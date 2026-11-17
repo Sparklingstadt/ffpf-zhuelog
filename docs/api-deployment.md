@@ -552,7 +552,7 @@ Preview には入れません。プレビューの URL は、GitHub と FFPF ID 
 
 1. 11a が本番にあり、`migrate status` が `Database schema is up to date!` になっていることを確かめます（`Session` の表があること）。
 2. Web の Production に、`GITHUB_WEB_CLIENT_SECRET` と `FFPF_ID_CLIENT_SECRET` があることを確かめます（11a で入れていなければ、ここで入れます）。
-   - 値は、Go に入れているものと同じです。GitHub の値を Vercel から読み戻せないときは、GitHub の OAuth App の画面で新しい Client Secret を作って入れます。古い Secret は、手順 4 のあとの手順 6 まで消しません（Go が使っているあいだは、古い値が要ります）。
+   - 値は、Go に入れているものと同じです。GitHub の値を Vercel から読み戻せないときは、GitHub の OAuth App の画面で新しい Client Secret を作って入れます。古い Secret は、マージのあとの手順 6 まで消しません（Go が使っているあいだは、古い値が要ります）。
    - **Preview には入れません。**
 3. Web の Production の `AUTH_URL` が `https://ffpf-zhuelog.sparklingstadt.com` であることを確かめます。GitHub と FFPF ID の `redirect_uri` は、`AUTH_URL` の origin から決まります。Go の `GITHUB_WEB_REDIRECT_URI`・`FFPF_ID_REDIRECT_URI` と、**1 文字も違わない** 値になることを確かめてください（GitHub は `https://ffpf-zhuelog.sparklingstadt.com/api/auth/callback/github/go`、FFPF ID は `https://ffpf-zhuelog.sparklingstadt.com/api/auth/callback/ffpf`）。
 4. GitHub の OAuth App の callback URL は変えません（`/api/auth/callback/github/go` は、登録済みの `/api/auth/callback/github` の下です）。FFPF ID の portal に登録した redirect URI（`/api/auth/callback/ffpf`）も変えません。
@@ -579,7 +579,10 @@ Preview には入れません。プレビューの URL は、GitHub と FFPF ID 
 - Web だけを戻すと、ログインは Go に戻ります。手順 4（Go の再デプロイ）の前なら、そのまま動きます。
 - 手順 4 のあとは、戻した Web が呼ぶ `/v1/auth/*` が、いまの Go では `404` です。そのため、Web を戻すなら、Go も前のデプロイに戻します（Vercel の **Instant Rollback**）。2 つを **いっしょに** 戻します。
 - 手順 6 で Go の環境変数を消したあとに戻すときは、戻す前に値を戻します（`API_JWT_SECRET`・`API_WEB_PROXY_SECRET`・`AUTH_ALLOWED_GITHUB_IDS`・`GITHUB_*`・`FFPF_ID_*`・`DEMO_LOGIN_ID`）。
-- セッションの扱い：戻すと、新しい Web で入った人の `zl_session` は、古い Web が読まないので、ログインし直しです（Go でログインします）。Go の `zl_access`・`zl_refresh` が手元に残っている人は、その Cookie がまだ有効なら、そのまま続けられます。`Session` の表の行は残りますが、誰も読まないので害はありません。もう一度切り替えるときは、期限が切れていない行は、そのまま使われます。
+  - `AUTH_ALLOWED_GITHUB_IDS` は、消す前の値ではなく、**いまの Web の値** にします。古い値に戻すと、そのあと外した管理者が、また管理者になります。
+  - 手順 6 で GitHub の古い Client Secret を消したときは、Go の `GITHUB_WEB_CLIENT_SECRET` も、**いまの Web の値** にします（古い Secret は、もう GitHub で使えません）。
+- セッションの扱い：戻すと、新しい Web で入った人の `zl_session` は、古い Web が読まないので、ログインし直しです（Go でログインします）。Go の `zl_access`・`zl_refresh` が手元に残っている人は、その Cookie がまだ有効なら、そのまま続けられます。`Session` の表の行は残りますが、誰も読まないので害はありません。
+- **もう一度切り替える前に**、Neon の SQL Editor で `DELETE FROM "Session";` を実行します。最初の切り替えと同じく、全員のログインが切れます。戻した Web は `zl_session` を知らないので、戻しているあいだのログアウトやほかの人のログインでは、`zl_session` の Cookie も `Session` の行も消えません。消さずに切り替えると、前のセッションが生き返ります（たとえば、共用の端末で A がログアウトし、B がログインしたあとに、A のセッションに戻ります）。
 
 ### Web のプレビュー（Preview）
 

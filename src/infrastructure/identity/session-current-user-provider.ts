@@ -40,9 +40,11 @@ export const ACT_AS_PATTERN = /^password:[a-z0-9]{1,64}$/;
 // account tables, following the Go API's Authenticate and Me
 // (services/api/auth). findSession answers null for an unknown, expired,
 // deleted or malformed session. Every rule below runs on every request, so a
-// change to the allowlist or an account's sessionVersion applies at once. The
-// caller wraps this in React's cache() so a request resolves the user at most
-// once.
+// change to an account's sessionVersion or to zl_act_as applies at once. The
+// allowlist and the demo login id come in through config, which the caller
+// reads once when its module loads, so a change to them applies after a
+// redeploy. The caller wraps this in React's cache() so a request resolves the
+// user at most once.
 export class SessionCurrentUserProvider implements CurrentUserProvider {
   constructor(
     private readonly readSessionToken: () => Promise<string | undefined>,
