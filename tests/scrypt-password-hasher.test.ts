@@ -9,8 +9,8 @@ import {
   ScryptPasswordHasher,
 } from "../src/infrastructure/security/scrypt-password-hasher";
 
-// Written by Go (services/api/auth/password_golden_test.go), which verifies
-// the web's hashes at sign-in.
+// The golden file Go wrote before its auth package was removed (stage 11b;
+// services/api/auth/password_golden_test.go); it is now a fixed file.
 type Golden = {
   params: typeof SCRYPT_PARAMS;
   hashes: { name: string; password: string; salt: string; hash: string }[];
@@ -52,6 +52,17 @@ test("verify treats malformed hashes as a mismatch without throwing", async () =
   ]) {
     assert.equal(await hasher.verify("anything", bad), false, bad);
   }
+});
+
+test("a scrypt failure is false, as in Go", async () => {
+  // A hash parse() accepts cannot make the real scrypt fail (N, r and p are
+  // capped), so the computation is swapped for one that fails.
+  const stored = await hasher.hash("correct horse battery");
+  const failing = new ScryptPasswordHasher(async () => {
+    throw new RangeError("scrypt failed");
+  });
+  assert.equal(await failing.verify("correct horse battery", stored), false);
+  assert.equal(await failing.verify("anything", "scrypt:1:2"), false);
 });
 
 test("verify refuses stored parameters that would exhaust memory", async () => {

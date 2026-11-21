@@ -4,7 +4,7 @@
 このページは `docs/api-local.md` を元にしています。手順が変わったときは、そちらと合わせて直してください。
 :::
 
-ネイティブアプリ向けの Go API を、手元の Mac の上だけで動かして試すための手順です。本番の Neon や Vercel には一切つながりません。
+Go API を、手元の Mac の上だけで動かして試すための手順です。本番の Neon や Vercel には一切つながりません。段階 11 からは、Go に残るのは health のルート（`/health`・`/healthz`・`/ping`）だけです。
 
 必要なもの: Docker、Go（`services/api/go.mod` の版）、pnpm（`pnpm install` 済み）、`curl` と `jq`。
 
@@ -32,18 +32,11 @@ API を起動したまま、別のターミナルで実行します。
 pnpm run api:smoke
 ```
 
-ログイン、リフレッシュ、ログアウトを順に呼び、想定と違うステータスが返ったところで止まります。
+`GET /health` と `GET /ping` が `200`、`POST /v1/auth/password` が `404`（ログインは段階 11 で Web に移りました）であることを確かめ、想定と違うステータスが返ったところで止まります。
 
-## サンプルのアカウント
+## サンプルのデータ
 
-`scripts/api-local-seed.ts` が作る、ローカル専用のテスト用アカウントです。
-
-| loginId  | パスワード            | 内容                                |
-| -------- | --------------------- | ----------------------------------- |
-| `demo`   | `demo-password-123`   | 試すときに使う会員                  |
-| `friend` | `friend-password-123` | 共有済みのエントリーを 2 件持つ会員 |
-
-GitHub ログイン（`POST /v1/auth/github`）は本物の OAuth App が必要なので、ローカルでは使えません。パスワードログインで試してください。
+`scripts/api-local-seed.ts` は、ローカル専用のテスト用の会員と共有済みのエントリーを作ります。Web のログイン画面の「ID とパスワード」でも使えます（`.env` の `DATABASE_URL` をこの DB にしたとき。Go は要りません）。Go のログインのためのものでしたが、段階 11 から Go は使いません。Go は health だけです。
 
 LINE とデモのリセットは Web（段階 10）が受け持ち、Go にはもうありません。LINE 連携はローカルでは使えません（本物の LINE のチャネルと OpenAI の API キーが要るため）。Web に LINE の環境変数が無いと、「LINE 連携」画面（`/account/line`）には「LINE 連携は今は使えません。」と出ます。e2e は偽の LINE API（`e2e/line-stub.ts`）で確かめます。
 
@@ -51,14 +44,8 @@ LINE とデモのリセットは Web（段階 10）が受け持ち、Go には�
 
 ```bash
 source scripts/api-local-env.sh
-TOKEN=$(curl -s -X POST "$API_LOCAL_URL/v1/auth/password" \
-  -H 'Content-Type: application/json' \
-  -d '{"loginId":"demo","password":"demo-password-123"}' | jq -r .accessToken)
-
-curl -s "$API_LOCAL_URL/v1/me" -H "Authorization: Bearer $TOKEN" | jq
+curl -s "$API_LOCAL_URL/health" | jq
 ```
-
-アクセストークンの有効期限は 15 分です。切れたら `POST /v1/auth/refresh` か、もう一度ログインしてください。`/v1/auth/*` には IP ごとに 1 分 10 回の[制限](../guide/auth.md#レート制限)があります。パスワードログインはさらに、15 分のあいだに同じ IP から 20 回まで、同じ IP から同じ loginId へは 5 回まで（成功すると 0 に戻ります）で、超えると `429` が返ります。止まったときは 15 分待ってください。
 
 ## 片付け
 

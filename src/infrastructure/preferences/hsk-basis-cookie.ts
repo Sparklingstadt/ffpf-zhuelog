@@ -1,7 +1,7 @@
 import { cookies, headers } from "next/headers";
 
 import { parseHskBasis, type HskBasis } from "@/domain/practice/hsk-level";
-import { isSecureRequest } from "@/infrastructure/go-api/go-api-session";
+import { isSecureRequest } from "@/infrastructure/auth/secure-request";
 
 // How the practices decide HSK levels, chosen by the learner and kept in a
 // cookie (the server builds the quiz, so it has to know). Not personal data.

@@ -6,7 +6,7 @@ import {
   test,
   upload,
 } from "./fixtures";
-import { baseURL, cookieName } from "./environment";
+import { baseURL, sessionCookieName } from "./environment";
 
 test("nonce CSP is active, rotates, blocks injected scripts and retains working hydration", async ({
   page,
@@ -37,7 +37,7 @@ test("nonce CSP is active, rotates, blocks injected scripts and retains working 
   await expect(page.getByText("ゲスト", { exact: true })).toBeVisible();
 });
 
-test("revoked admin JWT cannot access pages or import actions", async ({
+test("a de-listed admin's session cannot access pages or import actions", async ({
   context,
   page,
   db,
@@ -45,8 +45,8 @@ test("revoked admin JWT cannot access pages or import actions", async ({
   await asAdmin(context);
   await page.goto("/import");
   await page.waitForLoadState("networkidle");
-  // Validly signed, but for an admin who is not on the allowlist.
-  await addAdminSession(context, { githubId: "removed", login: "removed" });
+  // A valid session, but for an admin who is not on the allowlist.
+  await addAdminSession(context, db, { githubId: "removed", login: "removed" });
   await upload(page, "原文,添削,pinyin");
   await expect(
     page.getByText(
@@ -91,7 +91,7 @@ test("encoded external callback is rejected and guest session cookie is HttpOnly
   await asGuest(page, "/%5cevil.example");
   await expect(page).toHaveURL(`${baseURL}/`);
   const cookie = (await context.cookies()).find(
-    (entry) => entry.name === cookieName,
+    (entry) => entry.name === sessionCookieName,
   );
   expect(cookie?.httpOnly).toBe(true);
   expect(cookie?.sameSite).toBe("Lax");

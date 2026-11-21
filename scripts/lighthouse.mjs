@@ -101,7 +101,7 @@ async function clearCache(context) {
 }
 
 async function signedInToDemo(context) {
-  return (await context.cookies(base)).some((c) => c.name === "zl_access");
+  return (await context.cookies(base)).some((c) => c.name === "zl_session");
 }
 
 async function enterDemo(context) {

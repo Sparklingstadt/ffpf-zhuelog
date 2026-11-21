@@ -1,47 +1,63 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import type {
+  IssuedSession,
+  SignInResult,
+} from "@/application/identity/sign-in";
+import { newSessionCookies, signIn } from "@/composition/sign-in-container";
 import { clientAddress } from "@/infrastructure/auth/client-address";
-import { loginFFPF, type GoTokens } from "@/infrastructure/go-api/client";
 import {
   ffpfRedirectUri,
   parseFfpfOAuthCookie,
-} from "@/infrastructure/go-api/ffpf-oauth";
+} from "@/infrastructure/auth/ffpf-oauth";
 import {
   isSameState,
   publicOrigin,
   requestOrigin,
-} from "@/infrastructure/go-api/github-oauth";
-import { isSecureRequest } from "@/infrastructure/go-api/go-api-session";
+} from "@/infrastructure/auth/github-oauth";
+import { isSecureRequest } from "@/infrastructure/auth/secure-request";
 import {
+  cookieWrite,
   OAUTH_COOKIE,
-  sessionCookie,
-  clearedActAsCookie,
-  sessionCookieOptions,
-  type SessionCookie,
-} from "@/infrastructure/go-api/session-cookies";
+  SESSION_COOKIE,
+  type CookieWrite,
+} from "@/infrastructure/auth/session-cookies";
+import {
+  errorName,
+  oauthFailurePath,
+} from "@/presentation/controllers/sign-in-controller";
 import { getSafeCallbackPath } from "@/presentation/http/safe-callback-path";
 
 export type FfpfCallbackDeps = {
-  login: (
-    code: string,
-    codeVerifier: string,
-    redirectUri: string,
-    nonce: string,
-    clientIp: string,
-  ) => Promise<GoTokens>;
+  signIn: (
+    input: {
+      code: string;
+      verifier: string;
+      redirectUri: string;
+      nonce: string;
+    },
+    client: string,
+  ) => Promise<SignInResult>;
+  sessionCookies: (
+    previousToken: string | undefined,
+    session: IssuedSession,
+    secure: boolean,
+  ) => Promise<CookieWrite[]>;
 };
 
 const defaultDeps: FfpfCallbackDeps = {
-  login: loginFFPF,
+  signIn: (input, client) => signIn.withFfpf(input, client),
+  sessionCookies: newSessionCookies,
 };
 
-const failurePath = "/signin?error=OAuthCallbackError";
+// Every FFPF ID failure, and any error, shows the one callback message.
+const failurePath = oauthFailurePath("error");
 
 // GET /api/auth/callback/ffpf. The same flow as github-callback.ts: the
-// state must match the zl_oauth cookie of an FFPF start before Go is asked,
-// and Go checks the ID token's nonce against the cookie's. The code, state
-// and tokens never go into a redirect URL or a log, and zl_oauth is cleared
-// on every outcome. Every failure is OAuthCallbackError.
+// state must match the zl_oauth cookie of an FFPF start before anything is
+// signed in, and the ID token's nonce must be the cookie's. The code, state,
+// nonce and tokens never go into a redirect URL or a log, and zl_oauth is
+// cleared on every outcome.
 export async function handleFfpfCallback(
   request: NextRequest,
   deps: FfpfCallbackDeps = defaultDeps,
@@ -55,7 +71,7 @@ export async function handleFfpfCallback(
   const saved = parseFfpfOAuthCookie(request.cookies.get(OAUTH_COOKIE)?.value);
 
   let target = failurePath;
-  const cookies: SessionCookie[] = [sessionCookie(OAUTH_COOKIE, "", 0, secure)];
+  const cookies: CookieWrite[] = [cookieWrite(OAUTH_COOKIE, "", 0, secure)];
   if (
     !params.has("error") &&
     saved &&
@@ -64,21 +80,29 @@ export async function handleFfpfCallback(
     isSameState(state, saved.state)
   ) {
     try {
-      const tokens = await deps.login(
-        code,
-        saved.verifier,
-        ffpfRedirectUri(origin),
-        saved.nonce,
+      const result = await deps.signIn(
+        {
+          code,
+          verifier: saved.verifier,
+          redirectUri: ffpfRedirectUri(origin),
+          nonce: saved.nonce,
+        },
         clientAddress(request.headers),
       );
-      cookies.push(
-        ...sessionCookieOptions(tokens, secure),
-        clearedActAsCookie(secure),
-      );
-      target = getSafeCallbackPath(saved.callbackPath);
-    } catch {
-      // 401 (bad code or token), 502 (portal unreachable), 503 (disabled)
-      // and network errors all show the same message.
+      if (result.ok) {
+        cookies.push(
+          ...(await deps.sessionCookies(
+            request.cookies.get(SESSION_COOKIE)?.value || undefined,
+            result.session,
+            secure,
+          )),
+        );
+        target = getSafeCallbackPath(saved.callbackPath);
+      } else {
+        console.warn("SIGN_IN_FFPF_REFUSED", result.reason);
+      }
+    } catch (error) {
+      console.error("SIGN_IN_FFPF_FAILED", errorName(error));
     }
   }
 

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 import { NextRequest, NextResponse } from "next/server";
-import { goProxy } from "../src/infrastructure/go-api/go-proxy";
+import { sessionGate } from "../src/presentation/http/session-gate";
 
 const config = JSON.parse(readFileSync("vercel.json", "utf8")) as {
   buildCommand?: string;
@@ -17,7 +17,7 @@ test("the crons are Go's schedules on the web's routes", () => {
   assert.equal(config.buildCommand, "bash scripts/vercel-build.sh");
 });
 
-test("every cron path is a public GET route with a maximum duration", async () => {
+test("every cron path is a public GET route with a maximum duration", () => {
   assert.ok((config.crons ?? []).length > 0);
   for (const { path } of config.crons ?? []) {
     const file = `src/app${path}/route.ts`;
@@ -27,17 +27,13 @@ test("every cron path is a public GET route with a maximum duration", async () =
     assert.match(source, /export const maxDuration = \d+;/);
     assert.match(source, /export const dynamic = "force-dynamic";/);
 
-    const response = await goProxy(
+    // No zl_session: the gate still passes the cron route through.
+    const response = sessionGate(
       new NextRequest(`https://zhuelog.test${path}`, { method: "GET" }),
-      {
-        refreshTokens: async () => {
-          throw new Error("refresh must not be called");
-        },
-        next: (_request: NextRequest, headers: Headers) => {
-          const next = NextResponse.next({ request: { headers } });
-          next.headers.set("x-test-next", "1");
-          return next;
-        },
+      () => {
+        const next = NextResponse.next();
+        next.headers.set("x-test-next", "1");
+        return next;
       },
     );
     assert.equal(response.headers.get("x-test-next"), "1", path);

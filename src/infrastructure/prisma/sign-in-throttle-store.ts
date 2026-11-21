@@ -1,7 +1,7 @@
 // Attempt counts in SignInThrottle, with the two statements Go's
 // ConsumeThrottle runs (services/api/store/throttle.go; stage 9 reference §8).
-// Go's sign-in and route limits use the same table and keys until they move,
-// so the statements must count exactly as Go's do.
+// The web's sign-in and route limits took over Go's table and keys in stage 11,
+// so the statements count exactly as Go's did.
 import { Prisma, type PrismaClient } from "../../generated/prisma/client";
 import type { ThrottleRule } from "../../domain/identity/sign-in-throttle";
 

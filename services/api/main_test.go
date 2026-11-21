@@ -1,63 +1,22 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"errors"
 	"io"
 	"log/slog"
 	"net"
 	"net/http"
-	"net/http/httptest"
-	"net/url"
 	"os"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/jackc/pgx/v5"
 )
-
-func TestNewGitHubHTTPClientRefusesRedirects(t *testing.T) {
-	var targetHits atomic.Int32
-	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		targetHits.Add(1)
-	}))
-	defer target.Close()
-	redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, target.URL, http.StatusTemporaryRedirect)
-	}))
-	defer redirector.Close()
-
-	client := newGitHubHTTPClient()
-	if client.Timeout != 10*time.Second {
-		t.Errorf("Timeout = %v, want 10s", client.Timeout)
-	}
-	resp, err := client.Post(redirector.URL, "application/json", strings.NewReader(`{"client_secret":"x"}`))
-	if err != nil {
-		t.Fatalf("post: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusTemporaryRedirect {
-		t.Errorf("status = %d, want 307 returned as is", resp.StatusCode)
-	}
-	if n := targetHits.Load(); n != 0 {
-		t.Errorf("redirect target was contacted %d times", n)
-	}
-}
 
 func TestRunStartupFailureDoesNotLeakDatabaseURL(t *testing.T) {
 	const secret = "s3cret-password"
 	cfg := Config{
-		Port:               "0",
-		DatabaseURL:        "postgres://user:" + secret + "@127.0.0.1:1/db?sslmode=disable&connect_timeout=1",
-		JWTSecret:          bytes.Repeat([]byte("k"), 32),
-		GitHubClientID:     "id",
-		GitHubClientSecret: "secret",
-		GitHubRedirectURI:  "app://callback",
-		AllowedGitHubIDs:   "1",
+		Port:        "0",
+		DatabaseURL: "postgres://user:" + secret + "@127.0.0.1:1/db?sslmode=disable&connect_timeout=1",
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -70,156 +29,14 @@ func TestRunStartupFailureDoesNotLeakDatabaseURL(t *testing.T) {
 	}
 }
 
-type apiClient struct {
-	t    *testing.T
-	base string
-}
-
-// do sends a request and decodes a JSON response into out (when non-nil).
-func (c apiClient) do(method, path, token string, body any, out any) int {
-	c.t.Helper()
-	var rd io.Reader
-	if body != nil {
-		b, err := json.Marshal(body)
-		if err != nil {
-			c.t.Fatalf("marshal: %v", err)
-		}
-		rd = bytes.NewReader(b)
-	}
-	req, err := http.NewRequest(method, c.base+path, rd)
-	if err != nil {
-		c.t.Fatalf("new request: %v", err)
-	}
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		c.t.Fatalf("%s %s: %v", method, path, err)
-	}
-	defer resp.Body.Close()
-	raw, _ := io.ReadAll(resp.Body)
-	if out != nil && len(raw) > 0 {
-		if err := json.Unmarshal(raw, out); err != nil {
-			c.t.Fatalf("%s %s: decode %q: %v", method, path, raw, err)
-		}
-	}
-	return resp.StatusCode
-}
-
-type tokens struct {
-	AccessToken  string `json:"accessToken"`
-	RefreshToken string `json:"refreshToken"`
-	ExpiresIn    int    `json:"expiresIn"`
-}
-
-// directConn opens a plain pgx connection for fixtures (Prisma's ?schema=
-// parameter is not accepted by pgx).
-func directConn(t *testing.T, rawURL string) *pgx.Conn {
-	t.Helper()
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		t.Fatalf("parse test database url: %v", err)
-	}
-	q := u.Query()
-	q.Del("schema")
-	u.RawQuery = q.Encode()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	conn, err := pgx.Connect(ctx, u.String())
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(func() { _ = conn.Close(context.Background()) })
-	return conn
-}
-
+// TestRunEndToEnd starts the server against the test database and checks
+// that only the health routes are left.
 func TestRunEndToEnd(t *testing.T) {
 	dbURL := os.Getenv("API_TEST_DATABASE_URL")
 	if dbURL == "" {
 		t.Skip("API_TEST_DATABASE_URL is not set")
 	}
-	hashBytes, err := os.ReadFile("auth/testdata/node_scrypt_hash.txt")
-	if err != nil {
-		t.Fatalf("read hash: %v", err)
-	}
-	hash := strings.TrimSpace(string(hashBytes))
-
-	// Fixture: a member account that can sign in with the Task 5 test hash.
-	conn := directConn(t, dbURL)
-	accountID := "ce2e" + strings.ToLower(strings.ReplaceAll(time.Now().Format("150405.000000"), ".", ""))
-	loginID := "e2e-" + accountID
-	owner := "password:" + accountID
-	setup := context.Background()
-	if _, err := conn.Exec(setup,
-		`INSERT INTO "PasswordAccount" ("id", "loginId", "displayName", "passwordHash", "updatedAt")
-		 VALUES ($1, $2, $3, $4, now())`, accountID, loginID, "E2E", hash); err != nil {
-		t.Fatalf("insert account: %v", err)
-	}
-	t.Cleanup(func() {
-		ctx := context.Background()
-		_, _ = conn.Exec(ctx,
-			`DELETE FROM "ImportBatch" WHERE id IN (SELECT "batchId" FROM "LearningEntry" WHERE "ownerId" = $1)`, owner)
-		_, _ = conn.Exec(ctx, `DELETE FROM "ApiRefreshToken" WHERE "ownerId" = $1`, owner)
-		_, _ = conn.Exec(ctx, `DELETE FROM "PasswordAccount" WHERE id = $1`, accountID)
-	})
-
-	// Another member, whose wrong password the throttle counts.
-	type member struct{ accountID, loginID, owner string }
-	newMember := func(suffix string) member {
-		m := member{accountID: accountID + suffix}
-		m.loginID, m.owner = "e2e-"+m.accountID, "password:"+m.accountID
-		if _, err := conn.Exec(setup,
-			`INSERT INTO "PasswordAccount" ("id", "loginId", "displayName", "passwordHash", "updatedAt")
-			 VALUES ($1, $2, $3, $4, now())`, m.accountID, m.loginID, "E2E-"+suffix, hash); err != nil {
-			t.Fatalf("insert account %s: %v", suffix, err)
-		}
-		t.Cleanup(func() {
-			ctx := context.Background()
-			_, _ = conn.Exec(ctx, `DELETE FROM "ApiRefreshToken" WHERE "ownerId" = $1`, m.owner)
-			_, _ = conn.Exec(ctx, `DELETE FROM "PasswordAccount" WHERE id = $1`, m.accountID)
-		})
-		return m
-	}
-	memberC := newMember("c")
-
-	// Every sign-in below comes from 127.0.0.1, whose per-client count lives
-	// in the shared DB; start each run from zero so reruns within the
-	// 15-minute window are not throttled.
-	clearThrottle := func() {
-		_, _ = conn.Exec(context.Background(),
-			`DELETE FROM "SignInThrottle" WHERE "key" = 'client:127.0.0.1' OR "key" LIKE 'login:127.0.0.1:e2e-%'`)
-	}
-	clearThrottle()
-	t.Cleanup(clearThrottle)
-	throttleCount := func(key string) int {
-		t.Helper()
-		var n int
-		err := conn.QueryRow(context.Background(), `SELECT "count" FROM "SignInThrottle" WHERE "key" = $1`, key).Scan(&n)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return 0
-		}
-		if err != nil {
-			t.Fatalf("read throttle %s: %v", key, err)
-		}
-		return n
-	}
-	t.Cleanup(func() {
-		_, _ = conn.Exec(context.Background(), `DELETE FROM "Follow" WHERE "followerId" = $1 OR "followeeId" = $1`, owner)
-	})
-
-	cfg := Config{
-		Port:               "0",
-		DatabaseURL:        dbURL,
-		JWTSecret:          bytes.Repeat([]byte("e2e-secret-"), 4),
-		GitHubClientID:     "dummy-client-id",
-		GitHubClientSecret: "dummy-client-secret",
-		GitHubRedirectURI:  "zhuelog://oauth/callback",
-		AllowedGitHubIDs:   "1",
-	}
+	cfg := Config{Port: "0", DatabaseURL: dbURL}
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -239,57 +56,28 @@ func TestRunEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bad ready address %q: %v", addr, err)
 	}
-	c := apiClient{t: t, base: "http://" + net.JoinHostPort("127.0.0.1", port)}
+	base := "http://" + net.JoinHostPort("127.0.0.1", port)
 
-	for _, path := range []string{"/health", "/healthz"} {
-		if code := c.do("GET", path, "", nil, nil); code != http.StatusOK {
-			t.Fatalf("%s = %d", path, code)
+	for _, tc := range []struct {
+		method, path string
+		want         int
+	}{
+		{http.MethodGet, "/ping", http.StatusOK},
+		{http.MethodGet, "/health", http.StatusOK},
+		{http.MethodPost, "/v1/auth/password", http.StatusNotFound},
+	} {
+		req, err := http.NewRequest(tc.method, base+tc.path, strings.NewReader(`{}`))
+		if err != nil {
+			t.Fatalf("new request: %v", err)
 		}
-	}
-
-	var first tokens
-	if code := c.do("POST", "/v1/auth/password", "",
-		map[string]string{"loginId": loginID, "password": "correct horse battery"}, &first); code != http.StatusOK {
-		t.Fatalf("password login = %d", code)
-	}
-	if first.AccessToken == "" || first.RefreshToken == "" {
-		t.Fatalf("empty tokens: %+v", first)
-	}
-
-	// Throttle keys shared with the web: a wrong password counts per client
-	// and per loginId; a success resets only the loginId count.
-	if code := c.do("POST", "/v1/auth/password", "",
-		map[string]string{"loginId": memberC.loginID, "password": "wrong password"}, nil); code != http.StatusUnauthorized {
-		t.Fatalf("wrong password = %d, want 401", code)
-	}
-	if n := throttleCount("login:127.0.0.1:" + memberC.loginID); n != 1 {
-		t.Fatalf("login throttle count = %d, want 1", n)
-	}
-	if n := throttleCount("login:127.0.0.1:" + loginID); n != 0 {
-		t.Fatalf("login throttle count after success = %d, want 0", n)
-	}
-	if n := throttleCount("client:127.0.0.1"); n != 2 {
-		t.Fatalf("client throttle count = %d, want 2", n)
-	}
-
-	var second tokens
-	if code := c.do("POST", "/v1/auth/refresh", "",
-		map[string]string{"refreshToken": first.RefreshToken}, &second); code != http.StatusOK {
-		t.Fatalf("refresh = %d", code)
-	}
-	if second.AccessToken == "" || second.RefreshToken == "" || second.RefreshToken == first.RefreshToken {
-		t.Errorf("refresh did not return a new pair: %+v", second)
-	}
-
-	// The refreshed access token works.
-	var me struct {
-		OwnerID string `json:"ownerId"`
-	}
-	if code := c.do("GET", "/v1/me", second.AccessToken, nil, &me); code != http.StatusOK {
-		t.Fatalf("me = %d", code)
-	}
-	if me.OwnerID != owner {
-		t.Fatalf("me.ownerId = %q, want %q", me.OwnerID, owner)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("%s %s: %v", tc.method, tc.path, err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != tc.want {
+			t.Errorf("%s %s = %d, want %d", tc.method, tc.path, resp.StatusCode, tc.want)
+		}
 	}
 
 	cancel()

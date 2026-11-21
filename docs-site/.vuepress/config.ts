@@ -12,7 +12,6 @@ export default defineUserConfig({
   theme: defaultTheme({
     navbar: [
       { text: "概要", link: "/" },
-      { text: "認証", link: "/guide/auth.md" },
       { text: "リファレンス", link: "/reference/" },
       { text: "エラー", link: "/errors.md" },
       {
@@ -22,11 +21,10 @@ export default defineUserConfig({
     ],
     sidebar: [
       { text: "概要", link: "/" },
-      { text: "認証", link: "/guide/auth.md" },
       {
         text: "エンドポイント",
         link: "/reference/",
-        children: ["/reference/auth.md", "/reference/health.md"],
+        children: ["/reference/health.md"],
       },
       { text: "エラー", link: "/errors.md" },
       {

@@ -1,30 +1,4 @@
-import { goApiUrl, isSafeGoApiUrl } from "../config/environment";
-
-export type GoTokens = {
-  accessToken: string;
-  refreshToken: string;
-  expiresIn: number;
-  // The refresh token's lifetime in seconds (30 days, or 24 hours for guests).
-  refreshExpiresIn?: number;
-};
-
-export type GoMe = {
-  ownerId: string;
-  role: "admin" | "member" | "guest";
-  login: string;
-  displayName?: string;
-  accountId?: string;
-  // Only while an admin acts as a member (X-Zhuelog-Act-As).
-  actingAs?: GoActingAs;
-  // Only for the demo account, which anyone may enter from /signin.
-  demo?: boolean;
-};
-
-export type GoActingAs = {
-  ownerId: string;
-  loginId: string;
-  displayName: string;
-};
+import { goApiUrl, isHttpsOrLoopbackUrl } from "../config/environment";
 
 // status 0 with code "unavailable" means the API was unreachable or timed out.
 // Error.message never carries tokens, passwords or the proxy secret. The Go
@@ -90,7 +64,8 @@ async function send<T>(
   // Tokens and the proxy secret only ever go to an HTTPS URL, or to this
   // machine over HTTP; any other GO_API_URL is treated as unreachable.
   const base = goApiUrl();
-  if (!base || !isSafeGoApiUrl(base)) throw new GoApiError(0, "unavailable");
+  if (!base || !isHttpsOrLoopbackUrl(base))
+    throw new GoApiError(0, "unavailable");
 
   const signal = AbortSignal.timeout(request.timeoutMs);
   let response: Response;
@@ -143,90 +118,4 @@ function errorBody(text: string): { code: string; message: string } {
   } catch {
     return { code: "unknown", message: "" };
   }
-}
-
-export function loginPassword(
-  loginId: string,
-  password: string,
-  clientIp: string,
-) {
-  return goApi<GoTokens>("/v1/auth/password", {
-    method: "POST",
-    body: { loginId, password },
-    clientIp,
-  });
-}
-
-export function loginGuest(clientIp: string) {
-  return goApi<GoTokens>("/v1/auth/guest", {
-    method: "POST",
-    body: {},
-    clientIp,
-  });
-}
-
-// The demo account: a member session without a password, for anyone.
-export function loginDemo(clientIp: string) {
-  return goApi<GoTokens>("/v1/auth/demo", {
-    method: "POST",
-    body: {},
-    clientIp,
-  });
-}
-
-// Whether the Go API has a demo account to offer. Any failure means no.
-export async function isDemoAvailable(): Promise<boolean> {
-  try {
-    await goApi<void>("/v1/auth/demo", { method: "GET" });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export function loginGitHub(
-  code: string,
-  codeVerifier: string,
-  redirectUri: string,
-  clientIp: string,
-) {
-  return goApi<GoTokens>("/v1/auth/github", {
-    method: "POST",
-    body: { code, codeVerifier, redirectUri },
-    clientIp,
-  });
-}
-
-export function loginFFPF(
-  code: string,
-  codeVerifier: string,
-  redirectUri: string,
-  nonce: string,
-  clientIp: string,
-) {
-  return goApi<GoTokens>("/v1/auth/ffpf", {
-    method: "POST",
-    body: { code, codeVerifier, redirectUri, nonce },
-    clientIp,
-  });
-}
-
-export function refreshTokens(refreshToken: string, clientIp: string) {
-  return goApi<GoTokens>("/v1/auth/refresh", {
-    method: "POST",
-    body: { refreshToken },
-    clientIp,
-  });
-}
-
-export function logout(refreshToken: string, clientIp: string) {
-  return goApi<void>("/v1/auth/logout", {
-    method: "POST",
-    body: { refreshToken },
-    clientIp,
-  });
-}
-
-export function fetchMe(accessToken: string, actAs?: string) {
-  return goApi<GoMe>("/v1/me", { method: "GET", accessToken, actAs });
 }

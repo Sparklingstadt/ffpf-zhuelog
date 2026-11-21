@@ -4,7 +4,6 @@ import (
 	"context"
 	"net"
 	neturl "net/url"
-	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -12,21 +11,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 )
-
-func TestNewIDFormat(t *testing.T) {
-	re := regexp.MustCompile(`^c[a-z0-9]{24}$`)
-	seen := make(map[string]struct{}, 1000)
-	for i := 0; i < 1000; i++ {
-		id := newID()
-		if !re.MatchString(id) {
-			t.Fatalf("newID() = %q, want match %s", id, re)
-		}
-		if _, dup := seen[id]; dup {
-			t.Fatalf("newID() returned duplicate %q", id)
-		}
-		seen[id] = struct{}{}
-	}
-}
 
 func TestOpenAndPing(t *testing.T) {
 	s := testStore(t)

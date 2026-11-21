@@ -5,11 +5,14 @@
 export API_LOCAL_DATABASE_URL="postgresql://zhuelog_api:local-api-only@127.0.0.1:55440/zhuelog_api"
 export API_LOCAL_URL="http://127.0.0.1:8081"
 
-# Values the API requires at startup. GitHub login is not usable locally
-# (it needs a real OAuth App), so the GitHub values are placeholders. GitHub
-# user IDs start at 1, so the allowlist "0" matches nobody.
+# The only values the API reads at startup.
 export DATABASE_URL="$API_LOCAL_DATABASE_URL"
 export PORT=8081
+
+# Values for Go's sign-in, unused since stage 11 (stage 12 removes them).
+# GitHub login is not usable locally (it needs a real OAuth App), so the
+# GitHub values are placeholders. GitHub user IDs start at 1, so the
+# allowlist "0" matches nobody.
 export API_JWT_SECRET="local-only-jwt-secret-not-for-production-0123456789"
 export GITHUB_MOBILE_CLIENT_ID="local-placeholder"
 export GITHUB_MOBILE_CLIENT_SECRET="local-placeholder"

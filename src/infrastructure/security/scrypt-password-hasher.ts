@@ -1,6 +1,8 @@
-// The password hash format Go verifies at sign-in
-// (services/api/auth/password.go). The web writes every hash: admin accounts,
-// own password changes, the e2e fixtures and the local seed.
+// The password hash format Go verified at sign-in
+// (services/api/auth/password.go). The web writes and verifies every hash:
+// admin accounts, own password changes, sign-in, the e2e fixtures and the
+// local seed. tests/fixtures/scrypt-golden.json is the golden file Go wrote
+// before its auth package was removed (stage 11b); it is now a fixed file.
 
 import {
   randomBytes,
@@ -9,7 +11,7 @@ import {
   type ScryptOptions,
 } from "node:crypto";
 
-// The parameters Go writes and the web writes (services/api/auth/password.go).
+// The parameters Go wrote and the web writes (services/api/auth/password.go).
 export const SCRYPT_PARAMS = {
   n: 32768,
   r: 8,
@@ -87,21 +89,37 @@ export function generatePassword() {
   return randomBytes(SCRYPT_PARAMS.generatedBytes).toString("base64url");
 }
 
+// The key derivation verify runs; swappable only so tests can make it fail.
+export type DeriveKey = (
+  password: string,
+  salt: Buffer,
+  keyLength: number,
+  options: ScryptOptions,
+) => Promise<Buffer>;
+
 export class ScryptPasswordHasher {
   private dummyHash: Promise<string> | undefined;
+
+  constructor(private readonly derive: DeriveKey = deriveKey) {}
 
   hash(password: string) {
     return hashWithSalt(password, randomBytes(SALT_BYTES));
   }
 
+  // false for a wrong password, a hash it cannot read, or a failure of the
+  // computation itself, as Go's Verify (services/api/auth/password.go): a
+  // failure must look like a mismatch, or verify and simulate would answer
+  // differently and tell whether an account exists.
   async verify(password: string, passwordHash: string) {
     const parsed = parse(passwordHash);
     if (!parsed) return false;
     try {
-      const actual = await deriveKey(password, parsed.salt, parsed.key.length, {
-        ...parsed.params,
-        maxmem: MAX_MEMORY,
-      });
+      const actual = await this.derive(
+        password,
+        parsed.salt,
+        parsed.key.length,
+        { ...parsed.params, maxmem: MAX_MEMORY },
+      );
       return (
         actual.length === parsed.key.length &&
         timingSafeEqual(actual, parsed.key)
@@ -123,7 +141,7 @@ export class ScryptPasswordHasher {
 
   // Builds the dummy hash now, so the first simulate costs one verify like
   // the rest (Go: Warm at startup). Never throws; a failure is retried by
-  // simulate. Not called at import: the sign-in wiring calls it.
+  // simulate. Not called at import: the sign-in page calls it (warmSignIn).
   async warm() {
     try {
       await this.dummy();

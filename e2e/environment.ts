@@ -5,11 +5,8 @@ export const databaseUrl =
   "postgresql://zhuelog_e2e:local-e2e-only@127.0.0.1:55439/zhuelog_e2e";
 export const baseURL = "http://127.0.0.1:3107";
 
-// The web signs in through the Go API (services/api), which e2e/server.ts
-// starts next to it.
-export const goApiURL = "http://127.0.0.1:3108";
-export const cookieName = "zl_access";
-// e2e/openai-stub.ts, which the web and the Go API call instead of OpenAI.
+export const sessionCookieName = "zl_session";
+// e2e/openai-stub.ts, which the web calls instead of OpenAI.
 export const openAiStubURL = "http://127.0.0.1:3109";
 // e2e/fixtures/ffpf-oidc-stub.ts, the FFPF ID issuer for the e2e run.
 export const ffpfIssuerURL = "http://127.0.0.1:3110";
@@ -23,15 +20,8 @@ function runSecret() {
   return process.env.ZHUELOG_E2E_SECRET;
 }
 
-// Go API secrets for this run, derived from the run's random secret so the
+// The secrets below are derived from the run's random secret so the
 // Playwright process and e2e/server.ts agree without passing more variables.
-export function goJwtSecret() {
-  return deriveSecret("api-jwt");
-}
-
-export function goProxySecret() {
-  return deriveSecret("api-web-proxy");
-}
 
 // Guards the web's cron routes.
 export function cronSecret() {
