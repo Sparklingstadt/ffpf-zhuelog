@@ -68,7 +68,9 @@ test("missed practice questions come back on the review page and an answer resch
   const missed = (
     round.questions as { id: string; noun: string; misses: string[] }[]
   ).filter((q) => q.misses.length > 0);
-  test.skip(missed.length === 0, "the round happened to have no misses");
+  // Picking in order misses whenever the right choice is not the first, so
+  // a round of 25 without a miss does not happen.
+  expect(missed.length).toBeGreaterThan(0);
 
   const { rows: items } = await db.query(
     `SELECT "kind", "targetId", "language", "state" FROM "ReviewItem" WHERE "ownerId" = $1 ORDER BY "targetId"`,
@@ -154,7 +156,9 @@ test("missed verb-mode complement questions come back on the review page like pr
   const missed = (
     round.questions as { id: string; noun: string; misses: string[] }[]
   ).filter((q) => q.misses.length > 0);
-  test.skip(missed.length === 0, "the round happened to have no misses");
+  // Picking in order misses whenever the right choice is not the first, so
+  // a round of 25 without a miss does not happen.
+  expect(missed.length).toBeGreaterThan(0);
 
   const { rows: items } = await db.query(
     `SELECT "kind", "targetId" FROM "ReviewItem" WHERE "ownerId" = $1 ORDER BY "targetId"`,
