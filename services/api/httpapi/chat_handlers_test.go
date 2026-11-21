@@ -41,6 +41,7 @@ func (f *fakeChat) Stream(ctx context.Context, msgs []chat.Message, emit func(st
 type fakeConversations struct {
 	list      []store.ConversationSummary
 	saved     map[string]store.Conversation
+	listOwner string
 	putOwner  string
 	putNow    time.Time
 	deleteErr error
@@ -50,6 +51,7 @@ func (f *fakeConversations) ListConversations(_ context.Context, ownerID string,
 	if limit != 100 {
 		return nil, errUnexpectedCall{"ListConversations limit"}
 	}
+	f.listOwner = ownerID
 	return f.list, nil
 }
 

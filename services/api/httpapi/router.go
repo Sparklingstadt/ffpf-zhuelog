@@ -92,17 +92,14 @@ type Deps struct {
 	Line              LineService
 	LineChannelSecret []byte
 	CronSecret        []byte
-	// Conversations and Questions keep the saved conversations and question
-	// notes; with them alone the notes can be read (and conversations
-	// deleted). Chat and QuickChat call OpenAI and are nil when it is not
-	// configured, which leaves out sending a message, asking a question and
-	// saving either. ChatModel is the model name the lists report ("" without
+	// Conversations keeps the saved conversations; with it alone they can be
+	// read and deleted. Chat calls OpenAI and is nil when it is not
+	// configured, which leaves out sending a message and saving a
+	// conversation. ChatModel is the model name the list reports ("" without
 	// OpenAI, which the web reads as "the chat is off").
 	Chat          ChatStreamer
 	Conversations Conversations
 	ChatModel     string
-	QuickChat     ChatStreamer
-	Questions     Questions
 	// StudyLog counts what owners did each day.
 	StudyLog StudyLog
 	// AIUsage records the tokens of every OpenAI call and sums them up for
@@ -165,7 +162,6 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	r.studyLogRoutes()
 	r.lineRoutes()
 	r.conversationRoutes()
-	r.questionRoutes()
 	return r.mux, r.routes
 }
 
@@ -351,22 +347,6 @@ func (r *registrar) conversationRoutes() {
 	r.notForDemo("POST /v1/chat", r.trackAI(aiusage.FeatureChat, streamChat(r.d.Chat)))
 	if cs := r.d.Conversations; cs != nil {
 		r.private("PUT /v1/conversations/{id}", putConversation(cs, r.d.Now))
-	}
-}
-
-// questionRoutes are quick questions and the question notes they leave, like
-// conversationRoutes: the notes stay readable without OpenAI; asking and
-// saving exist only with it.
-func (r *registrar) questionRoutes() {
-	qs := r.d.Questions
-	if qs == nil {
-		return
-	}
-	r.private("GET /v1/questions", listQuestions(qs, r.d.ChatModel))
-	r.private("GET /v1/questions/{id}", getQuestion(qs))
-	if r.d.QuickChat != nil {
-		r.notForDemo("POST /v1/quick-question", r.trackAI(aiusage.FeatureQuickQuestion, streamMessages(r.d.QuickChat, true)))
-		r.private("PUT /v1/questions/{id}", putQuestion(qs, r.d.ChatModel, r.d.Now))
 	}
 }
 

@@ -1,3 +1,4 @@
+import { BodyTooLarge, readLimitedBody } from "../http/limited-body";
 import { isSameOriginRequest } from "../http/same-origin";
 
 // Go checks the same limit; reading it here keeps a large body off the wire.
@@ -9,7 +10,6 @@ export type ChatRelayDeps = {
   // Calls the Go API at path; the route passes request.signal along so a
   // stopped answer stops Go and OpenAI too.
   fetchGo: (path: string, init: RequestInit) => Promise<Response>;
-  upstreamPath?: "/v1/chat" | "/v1/quick-question";
 };
 
 const json = (error: string, status: number) =>
@@ -17,38 +17,6 @@ const json = (error: string, status: number) =>
     { error },
     { status, headers: { "Cache-Control": "no-store" } },
   );
-
-class BodyTooLarge extends Error {}
-
-// Reads the body, giving up as soon as it passes maxBytes.
-async function readLimitedBody(
-  request: Request,
-  maxBytes: number,
-): Promise<Uint8Array> {
-  if (Number(request.headers.get("content-length")) > maxBytes)
-    throw new BodyTooLarge();
-  const reader = request.body?.getReader();
-  if (!reader) return new Uint8Array();
-  const chunks: Uint8Array[] = [];
-  let length = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    length += value.byteLength;
-    if (length > maxBytes) {
-      await reader.cancel();
-      throw new BodyTooLarge();
-    }
-    chunks.push(value);
-  }
-  const body = new Uint8Array(length);
-  let offset = 0;
-  for (const chunk of chunks) {
-    body.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return body;
-}
 
 // POST /api/chat: hands the conversation to Go's POST /v1/chat as the
 // signed-in user and streams Go's answer (NDJSON, or a JSON error) back as is.
@@ -76,7 +44,7 @@ export async function handleChatRelay(
 
   let upstream: Response;
   try {
-    upstream = await deps.fetchGo(deps.upstreamPath ?? "/v1/chat", {
+    upstream = await deps.fetchGo("/v1/chat", {
       method: "POST",
       headers: {
         authorization: `Bearer ${deps.accessToken}`,

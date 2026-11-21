@@ -168,10 +168,9 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 
 		StudyLog: db,
 		AIUsage:  db,
-		// Saved conversations and question notes stay readable without
-		// OpenAI; only the routes that call it need the streamers below.
+		// Saved conversations stay readable without OpenAI; only the
+		// routes that call it need the streamer below.
 		Conversations:  db,
-		Questions:      db,
 		WebProxySecret: cfg.WebProxySecret,
 		Throttle:       db,
 		// The cron secret guards the LINE drain and the demo reset.
@@ -194,10 +193,6 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 			BaseURL: cfg.OpenAIBaseURL,
 			APIKey:  cfg.OpenAIAPIKey,
 			Model:   cfg.OpenAIChatModel,
-		}
-		deps.QuickChat = &chat.Streamer{
-			HTTP: newNoRedirectHTTPClient(65 * time.Second), BaseURL: cfg.OpenAIBaseURL,
-			APIKey: cfg.OpenAIAPIKey, Model: cfg.OpenAIChatModel, Instructions: chat.QuickQuestionPrompt, RequireComplete: true,
 		}
 		deps.ChatModel = cfg.OpenAIChatModel
 	}

@@ -174,13 +174,21 @@ export function QuickQuestionInterface({ chatModel }: { chatModel: string }) {
                 Enterで質問 · Shift + Enterで改行 · 質問は
                 OpenAI（ChatGPT）に送られます
               </p>
+              {/* Distinct keys: reusing one <button> would turn the clicked
+                  stop button into a submit button before the click's default
+                  action runs, sending the stopped question again. */}
               {status === "asking" ? (
-                <Button type="button" variant="outline" onClick={stop}>
+                <Button
+                  key="stop"
+                  type="button"
+                  variant="outline"
+                  onClick={stop}
+                >
                   <Square />
                   停止
                 </Button>
               ) : (
-                <Button type="submit" disabled={!input.trim()}>
+                <Button key="submit" type="submit" disabled={!input.trim()}>
                   <Send />
                   質問する
                 </Button>

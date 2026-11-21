@@ -2,8 +2,7 @@ import { ArrowLeft, CircleHelp, Plus } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { questionNotes } from "@/composition/question-container";
-import type { QuestionSummary } from "@/domain/chat/question";
-import { ChatUnavailableError } from "@/domain/chat/chat-unavailable";
+import { QUESTION_ID, type QuestionSummary } from "@/domain/chat/question";
 import { AiRecentList } from "@/presentation/components/chat/ai-recent-list";
 import { AiSideNav } from "@/presentation/components/chat/ai-side-nav";
 import { requireChatUser } from "@/presentation/guards/chat-guard";
@@ -19,12 +18,7 @@ export const dynamic = "force-dynamic";
 const RECENT_COUNT = 8;
 
 async function loadRecent(): Promise<QuestionSummary[]> {
-  try {
-    return (await questionNotes.list()).questions.slice(0, RECENT_COUNT);
-  } catch (error) {
-    if (!(error instanceof ChatUnavailableError)) throw error;
-    return [];
-  }
+  return (await questionNotes.list()).questions.slice(0, RECENT_COUNT);
 }
 
 export default async function QuestionPage({
@@ -34,10 +28,7 @@ export default async function QuestionPage({
 }) {
   const user = await requireChatUser("/signin?callbackUrl=/questions");
   const { id } = await params;
-  if (
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)
-  )
-    notFound();
+  if (!QUESTION_ID.test(id)) notFound();
   const [q, recent] = await Promise.all([questionNotes.get(id), loadRecent()]);
   if (!q) notFound();
   return (

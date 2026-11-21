@@ -29,12 +29,10 @@ type Error = openai.Error
 // set by main; nil uses a default client. BaseURL defaults to
 // https://api.openai.com and may end with a slash.
 type Streamer struct {
-	HTTP            *http.Client
-	BaseURL         string
-	APIKey          string
-	Model           string
-	Instructions    string
-	RequireComplete bool
+	HTTP    *http.Client
+	BaseURL string
+	APIKey  string
+	Model   string
 	// timeout replaces requestTimeout in tests.
 	timeout time.Duration
 }
@@ -55,15 +53,11 @@ func (s *Streamer) Stream(ctx context.Context, msgs []Message, emit func(text st
 	for i, m := range msgs {
 		input[i] = map[string]string{"role": m.Role, "content": m.Text}
 	}
-	instructions := s.Instructions
-	if instructions == "" {
-		instructions = SystemPrompt
-	}
 	resp, err := openai.Request{
 		HTTP: s.HTTP, BaseURL: s.BaseURL, APIKey: s.APIKey, Accept: "text/event-stream",
 	}.Post(ctx, map[string]any{
 		"model":             s.Model,
-		"instructions":      instructions,
+		"instructions":      SystemPrompt,
 		"input":             input,
 		"stream":            true,
 		"store":             false,
@@ -98,14 +92,8 @@ func (s *Streamer) Stream(ctx context.Context, msgs []Message, emit func(text st
 			if err := emit(ev.Delta); err != nil {
 				return err
 			}
-		case "response.completed":
+		case "response.completed", "response.incomplete":
 			s.reportUsage(ctx, ev.Response)
-			return nil
-		case "response.incomplete":
-			s.reportUsage(ctx, ev.Response)
-			if s.RequireComplete {
-				return openai.Fail(openai.CodeIncompleteResponse)
-			}
 			return nil
 		case "response.failed", "error":
 			s.reportUsage(ctx, ev.Response)

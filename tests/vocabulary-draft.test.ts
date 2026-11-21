@@ -76,6 +76,7 @@ const saved = {
   key: process.env.OPENAI_API_KEY,
   base: process.env.OPENAI_API_BASE_URL,
   model: process.env.OPENAI_LEARNING_MODEL,
+  chatModel: process.env.OPENAI_CHAT_MODEL,
 };
 
 function restore(key: string, value: string | undefined) {
@@ -87,6 +88,7 @@ afterEach(() => {
   restore("OPENAI_API_KEY", saved.key);
   restore("OPENAI_API_BASE_URL", saved.base);
   restore("OPENAI_LEARNING_MODEL", saved.model);
+  restore("OPENAI_CHAT_MODEL", saved.chatModel);
 });
 
 test("openAiConfig is undefined without a key", () => {
@@ -98,11 +100,22 @@ test("openAiConfig defaults the model and base URL", () => {
   process.env.OPENAI_API_KEY = "sk-x";
   delete process.env.OPENAI_API_BASE_URL;
   delete process.env.OPENAI_LEARNING_MODEL;
+  delete process.env.OPENAI_CHAT_MODEL;
   assert.deepEqual(openAiConfig(), {
     apiKey: "sk-x",
     baseUrl: "https://api.openai.com",
     learningModel: "gpt-5-mini",
+    chatModel: "gpt-6.1-sol",
   });
+});
+
+test("openAiConfig reads the chat model as Go did", () => {
+  process.env.OPENAI_API_KEY = "sk-x";
+  delete process.env.OPENAI_API_BASE_URL;
+  process.env.OPENAI_CHAT_MODEL = " gpt-chat-test ";
+  assert.equal(openAiConfig()?.chatModel, "gpt-chat-test");
+  process.env.OPENAI_CHAT_MODEL = "  ";
+  assert.equal(openAiConfig()?.chatModel, "gpt-6.1-sol");
 });
 
 test("openAiConfig refuses a non-loopback base URL and accepts loopback", () => {

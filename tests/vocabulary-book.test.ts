@@ -211,6 +211,17 @@ test("a usage write failure does not change the draft", async () => {
   ]);
 });
 
+test("a usage write that never finishes does not hold the draft", async () => {
+  const { book, logged } = setup(member, {
+    recordUsage: () => new Promise<void>(() => {}),
+    recordTimeoutMs: 5,
+  });
+  assert.deepEqual(await book.draft("学习", ""), { ok: true, draft: drafted });
+  assert.deepEqual(logged, [
+    ["AI_USAGE_NOT_RECORDED", "vocabulary_draft", "TimeoutError"],
+  ]);
+});
+
 test("store errors propagate", async () => {
   const boom = new Error("db down");
   const { book } = setup(member, {

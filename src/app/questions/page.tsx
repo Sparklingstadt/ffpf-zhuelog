@@ -1,8 +1,6 @@
 import { BookOpen, ChevronRight, CircleHelp, Plus } from "lucide-react";
 import Link from "next/link";
 import { questionNotes } from "@/composition/question-container";
-import { ChatUnavailableError } from "@/domain/chat/chat-unavailable";
-import type { QuestionSummary } from "@/domain/chat/question";
 import { requireChatUser } from "@/presentation/guards/chat-guard";
 import { formatTokyoDateTime } from "@/presentation/presenters/log-date-presenter";
 import { AiSideNav } from "@/presentation/components/chat/ai-side-nav";
@@ -15,12 +13,7 @@ export const dynamic = "force-dynamic";
 
 export default async function QuestionsPage() {
   const user = await requireChatUser("/signin?callbackUrl=/questions");
-  let questions: QuestionSummary[] | null = null;
-  try {
-    questions = (await questionNotes.list()).questions;
-  } catch (error) {
-    if (!(error instanceof ChatUnavailableError)) throw error;
-  }
+  const { questions } = await questionNotes.list();
   return (
     <PageShell user={user} width="6xl">
       <PageHeader
@@ -50,13 +43,7 @@ export default async function QuestionsPage() {
           }
         />
         <div className="min-w-0">
-          {!questions ? (
-            <EmptyState
-              icon={CircleHelp}
-              title="質問ノートを利用できません"
-              description="質問サービスの設定後に利用できます。"
-            />
-          ) : !questions.length ? (
+          {!questions.length ? (
             <EmptyState
               icon={BookOpen}
               title="まだ質問ノートがありません"

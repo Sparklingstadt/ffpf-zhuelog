@@ -11,6 +11,7 @@ const config = {
   apiKey: "sk-test",
   baseUrl: "http://127.0.0.1:3109/",
   learningModel: "gpt-5-mini",
+  chatModel: "gpt-6.1-sol",
 };
 const request = {
   instructions: "do it",

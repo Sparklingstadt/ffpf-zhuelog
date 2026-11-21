@@ -1,3 +1,4 @@
+import { RECORD_TIMEOUT_MS, recordWithin } from "../ai-usage/record-within";
 import {
   isMemberRole,
   type AuthenticatedUser,
@@ -38,6 +39,8 @@ export type VocabularyBookDeps = {
     inputTokens: number;
     outputTokens: number;
   }) => Promise<void>;
+  // How long a usage write may take; RECORD_TIMEOUT_MS when unset.
+  recordTimeoutMs?: number;
   // Logging belongs to the outer layers; callers pass only fixed codes and
   // error names, never the word, the sentence or an error's message.
   logError: (code: string, ...details: string[]) => void;
@@ -70,20 +73,22 @@ export function createVocabularyBook(deps: VocabularyBookDeps) {
     return found.ownerId;
   }
 
-  // Records the tokens a draft spent. A failed write is only logged, so it
-  // never changes what the user gets.
+  // Records the tokens a draft spent, waiting at most recordTimeoutMs. A
+  // failed or late write is only logged, so it never changes what the user
+  // gets.
   async function record(actorId: string, usage: OpenAiUsage): Promise<void> {
-    try {
-      await deps.recordUsage({
-        ownerId: actorId,
-        feature: DRAFT_FEATURE,
-        model: usage.model,
-        inputTokens: usage.inputTokens,
-        outputTokens: usage.outputTokens,
-      });
-    } catch (error) {
-      deps.logError("AI_USAGE_NOT_RECORDED", DRAFT_FEATURE, errorName(error));
-    }
+    await recordWithin(
+      () =>
+        deps.recordUsage({
+          ownerId: actorId,
+          feature: DRAFT_FEATURE,
+          model: usage.model,
+          inputTokens: usage.inputTokens,
+          outputTokens: usage.outputTokens,
+        }),
+      deps.recordTimeoutMs ?? RECORD_TIMEOUT_MS,
+      (code, name) => deps.logError(code, DRAFT_FEATURE, name),
+    );
   }
 
   return {
