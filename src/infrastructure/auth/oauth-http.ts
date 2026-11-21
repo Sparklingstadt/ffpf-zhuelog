@@ -1,6 +1,4 @@
-// HTTP helpers shared by the OAuth clients (GitHub, FFPF ID), as Go's
-// services/api/httpclient.NoRedirect and the clients' `do` helpers
-// (auth/github.go, auth/ffpf.go): no redirects, 10 s, 1 MiB.
+// HTTP helpers shared by the OAuth clients (GitHub, Sparklingstadt ID): no redirects, 10 s, 1 MiB.
 
 export const OAUTH_TIMEOUT_MS = 10_000;
 export const OAUTH_MAX_BODY_BYTES = 1_048_576;

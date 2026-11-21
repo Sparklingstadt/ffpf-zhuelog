@@ -40,7 +40,7 @@ export function aiUsageMonthSql(from: Date, to: Date): Prisma.Sql {
   FROM "AiUsage" u
   LEFT JOIN (SELECT 'password:' || p."id" AS "ownerId", p."displayName" FROM "PasswordAccount" p
              UNION ALL
-             SELECT 'ffpf:' || f."id", f."displayName" FROM "FfpfAccount" f) m
+             SELECT 'sid:' || f."id", f."displayName" FROM "SidAccount" f) m
          ON m."ownerId" = u."ownerId"
   WHERE u."createdAt" >= ${from} AND u."createdAt" < ${to}
   GROUP BY u."ownerId", m."displayName", u."feature", u."model"

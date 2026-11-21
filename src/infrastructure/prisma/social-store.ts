@@ -45,7 +45,7 @@ export type TimelineRow = {
 };
 
 // Pure: Go's ListMembers statement (go-reference section 1, statement 1). Everyone with a
-// password or FFPF account but the viewer; no login id.
+// password or Sparklingstadt ID account but the viewer; no login id.
 export function memberDirectorySql(viewerId: string): Prisma.Sql {
   return Prisma.sql`
     SELECT a."ownerId" AS "ownerId", a."displayName" AS "displayName",
@@ -53,7 +53,7 @@ export function memberDirectorySql(viewerId: string): Prisma.Sql {
            EXISTS (SELECT 1 FROM "Follow" f WHERE f."followerId" = a."ownerId" AND f."followeeId" = ${viewerId}) AS "followsMe"
       FROM (SELECT 'password:' || p."id" AS "ownerId", p."displayName", p."createdAt" FROM "PasswordAccount" p
             UNION ALL
-            SELECT 'ffpf:' || f."id", f."displayName", f."createdAt" FROM "FfpfAccount" f) a
+            SELECT 'sid:' || f."id", f."displayName", f."createdAt" FROM "SidAccount" f) a
      WHERE a."ownerId" <> ${viewerId}
      ORDER BY a."displayName" COLLATE "ja-x-icu", a."createdAt", a."ownerId"`;
 }
@@ -92,7 +92,7 @@ export function timelineSql(viewerId: string, limit: number): Prisma.Sql {
       JOIN "Follow" f ON f."followeeId" = e."ownerId" AND f."followerId" = ${viewerId}
       JOIN (SELECT 'password:' || p."id" AS "ownerId", p."displayName" FROM "PasswordAccount" p
             UNION ALL
-            SELECT 'ffpf:' || ff."id", ff."displayName" FROM "FfpfAccount" ff) a ON a."ownerId" = e."ownerId"
+            SELECT 'sid:' || ff."id", ff."displayName" FROM "SidAccount" ff) a ON a."ownerId" = e."ownerId"
      WHERE e."sharedAt" IS NOT NULL AND e."deletedAt" IS NULL
      ORDER BY e."createdAt" DESC, e."id" DESC
      LIMIT ${limit}`;
@@ -100,9 +100,9 @@ export function timelineSql(viewerId: string, limit: number): Prisma.Sql {
 
 // The account table of each member owner id prefix, as fixed fragments.
 const PASSWORD_ACCOUNT = Prisma.sql`"PasswordAccount"`;
-const FFPF_ACCOUNT = Prisma.sql`"FfpfAccount"`;
+const SID_ACCOUNT = Prisma.sql`"SidAccount"`;
 const PASSWORD_PREFIX = "password:";
-const FFPF_PREFIX = "ffpf:";
+const SID_PREFIX = "sid:";
 
 // Pure: one statement that adds the follow only when followeeId is an
 // existing member, and reads whether it is. RangeError for an id that is
@@ -120,7 +120,7 @@ export function followSql(
   }
   const [table, id] = followeeId.startsWith(PASSWORD_PREFIX)
     ? [PASSWORD_ACCOUNT, followeeId.slice(PASSWORD_PREFIX.length)]
-    : [FFPF_ACCOUNT, followeeId.slice(FFPF_PREFIX.length)];
+    : [SID_ACCOUNT, followeeId.slice(SID_PREFIX.length)];
   return Prisma.sql`
     WITH "target" AS (SELECT 1 FROM ${table} WHERE "id" = ${id}),
          "added" AS (

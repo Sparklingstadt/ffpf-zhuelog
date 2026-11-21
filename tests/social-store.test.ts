@@ -19,7 +19,7 @@ test("memberDirectorySql lists the members as Go did", () => {
   const text = flat(sql);
   for (const part of [
     `'password:' || p."id"`,
-    `'ffpf:' || f."id"`,
+    `'sid:' || f."id"`,
     "UNION ALL",
     `f."followerId" = $1 AND f."followeeId" = a."ownerId"`,
     `f."followerId" = a."ownerId" AND f."followeeId" = $2`,
@@ -52,7 +52,7 @@ test("directoryFromRows counts as Go did", () => {
       following: true,
       followsMe: false,
     },
-    { ownerId: "ffpf:c", displayName: "C", following: false, followsMe: true },
+    { ownerId: "sid:c", displayName: "C", following: false, followsMe: true },
   ];
   assert.deepEqual(directoryFromRows(rows, BigInt(3)), {
     members: [
@@ -69,7 +69,7 @@ test("directoryFromRows counts as Go did", () => {
         followsMe: false,
       },
       {
-        ownerId: "ffpf:c",
+        ownerId: "sid:c",
         displayName: "C",
         following: false,
         followsMe: true,
@@ -96,7 +96,7 @@ test("timelineSql reads the shared notes as Go did", () => {
     "LIMIT $2",
     `AS "ownerName"`,
     `'password:'`,
-    `'ffpf:'`,
+    `'sid:'`,
     "UNION ALL",
   ]) {
     assert.ok(text.includes(part), `${part}\n${text}`);
@@ -118,13 +118,13 @@ test("followSql adds a row only for an existing member", () => {
   ]) {
     assert.ok(text.includes(part), `${part}\n${text}`);
   }
-  assert.ok(!text.includes(`"FfpfAccount"`), text);
+  assert.ok(!text.includes(`"SidAccount"`), text);
   assert.deepEqual(password.values, ["abc", "10001", "password:abc", now]);
 
-  const ffpf = followSql("password:me", "ffpf:cabc", now);
-  assert.ok(flat(ffpf).includes(`FROM "FfpfAccount" WHERE "id" = $1`));
-  assert.ok(!flat(ffpf).includes(`"PasswordAccount"`));
-  assert.deepEqual(ffpf.values, ["cabc", "password:me", "ffpf:cabc", now]);
+  const sid = followSql("password:me", "sid:cabc", now);
+  assert.ok(flat(sid).includes(`FROM "SidAccount" WHERE "id" = $1`));
+  assert.ok(!flat(sid).includes(`"PasswordAccount"`));
+  assert.deepEqual(sid.values, ["cabc", "password:me", "sid:cabc", now]);
 
   assert.throws(() => followSql("password:me", "github:1", now), RangeError);
   assert.throws(() => followSql("password:me", "password:", now), RangeError);

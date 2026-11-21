@@ -22,10 +22,10 @@ pnpm run dev
 `.env` では、次のようにそろえます。
 
 - `DATABASE_URL`: `.env.example` の値（`docker compose up -d` の開発用 DB）のまま。サンプルの会員は `pnpm run db:seed:sample` で、この DB に入ります。開発用 DB は `127.0.0.1:55432` で動きます（ほかの Postgres がよく使う 5432 とぶつからないように）。ポートは `ZHUELOG_DB_PORT` で替えられ、替えたら `DATABASE_URL` のポートも合わせます。「address already in use」や Prisma の `P1010` が出たら、ほかの Postgres がそのポートを使っています。
-- `AUTH_URL`: `http://localhost:3000`。GitHub と FFPF ID の `redirect_uri` を決めます。
+- `AUTH_URL`: `http://localhost:3000`。GitHub と Sparklingstadt ID の `redirect_uri` を決めます。
 - `AUTH_ALLOWED_GITHUB_IDS`・`DEMO_LOGIN_ID`: ローカルでは `0` と `demo`。
 - `GITHUB_WEB_CLIENT_SECRET`（`AUTH_GITHUB_ID` と一緒）: GitHub のボタンを使うときだけ。無いと GitHub のボタンは押せません。
-- `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID`・`FFPF_ID_CLIENT_SECRET`: 手元で FFPF ID を試すときだけ。3 つそろわないと、FFPF ID のボタンは出ません。
+- `SID_ISSUER`・`SID_CLIENT_ID`・`SID_CLIENT_SECRET`: 手元で Sparklingstadt ID を試すときだけ。3 つそろわないと、Sparklingstadt ID のボタンは出ません。手元の ID サーバー（下の「Sparklingstadt ID でのログイン」）を使うなら、`SID_ISSUER` は `http://localhost:<ID サーバーのポート>` です（issuer は `https://` が必要ですが、`localhost` と `127.0.0.1` だけは `http://` で使えます）。
 
 Prisma のマイグレーションと seed は、同じ `DATABASE_URL` を使います。
 
@@ -46,7 +46,7 @@ LINE 連携は手元では使えません。本物の LINE のチャネルと Op
 
 ## 認証・認可の設定
 
-ログインは Web が行います。Web の Vercel プロジェクトに入れる値は `AUTH_URL`・`AUTH_GITHUB_ID`・`GITHUB_WEB_CLIENT_SECRET`・`AUTH_ALLOWED_GITHUB_IDS`・`DEMO_LOGIN_ID`・`DATABASE_URL` です（FFPF ID を使うときは、下の「FFPF ID でのログイン」の 3 つも）。手順は [docs/deployment.md](deployment.md) の「2. Web の設定」にあります。
+ログインは Web が行います。Web の Vercel プロジェクトに入れる値は `AUTH_URL`・`AUTH_GITHUB_ID`・`GITHUB_WEB_CLIENT_SECRET`・`AUTH_ALLOWED_GITHUB_IDS`・`DEMO_LOGIN_ID`・`DATABASE_URL` です（Sparklingstadt ID を使うときは、下の「Sparklingstadt ID でのログイン」の 3 つも）。手順は [docs/deployment.md](deployment.md) の「2. Web の設定」にあります。
 
 GitHubの **Settings → Developer settings → OAuth Apps** で、Web 用のOAuth Appを作成します。
 
@@ -57,32 +57,33 @@ Client ID は Web の `AUTH_GITHUB_ID` に、Client Secret は Web の `GITHUB_W
 
 管理者の許可リストは、Web の `AUTH_ALLOWED_GITHUB_IDS` です。Web がモジュールを読み込むときに 1 度だけ読むので、値を変えたら再デプロイします。GitHubユーザーの **数字のID** をカンマ区切りで並べます。IDは `https://api.github.com/users/<ログイン名>` の `id` で確認できます。ログイン名は使いません。ログイン名は変更でき、空いた名前を別人が取得できるためです。空の場合は安全側に倒し、すべてのGitHubユーザーを拒否します。
 
-### FFPF ID でのログイン
+### Sparklingstadt ID でのログイン
 
-ログイン画面の「FFPF IDでログイン」から、FFPF ID（ffpf-portal の OpenID Connect）のアカウントでメンバーとしてログインできます。任意の機能です。Web の `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID`・`FFPF_ID_CLIENT_SECRET` の 3 つがそろっていないと、ボタンは出ません。
+ログイン画面の「Sparklingstadt ID でログイン」から、Sparklingstadt ID（[sparklingstadt-id](https://github.com/Sparklingstadt/sparklingstadt-id) の OpenID Connect）のアカウントでメンバーとしてログインできます。任意の機能です。Web の `SID_ISSUER`・`SID_CLIENT_ID`・`SID_CLIENT_SECRET` の 3 つがそろっていないと、ボタンは出ません。
 
-- portal で `pnpm run oidc:client zhuelog` を実行してクライアントを登録します（redirect URI は `https://本番ドメイン/api/auth/callback/ffpf`。手順は ffpf-portal の README）。
-- Web に `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID`・`FFPF_ID_CLIENT_SECRET` を入れます。`redirect_uri` は、`AUTH_URL` の origin に `/api/auth/callback/ffpf` を付けた値で、portal に登録した値と 1 文字も違わない必要があります。
-- 本番 DB にマイグレーション `20261027120000_add_ffpf_accounts`（`FfpfAccount` の追加）が必要です。main へのマージで Web の本番ビルドが自動で当てます（下の「マイグレーションの適用」）。
-- 詳しい手順は [docs/deployment.md](deployment.md) の「5. FFPF ID でのログイン」にあります。
+- sparklingstadt-id のリポジトリで `pnpm run oidc:client zhuelog` を実行してクライアントを登録します（redirect URI は `https://本番ドメイン/api/auth/callback/sid`、`postLogoutRedirectUris` は `https://本番ドメイン/signin`。手順は sparklingstadt-id の README）。
+- Web に `SID_ISSUER`・`SID_CLIENT_ID`・`SID_CLIENT_SECRET` を入れます。`redirect_uri` は、`AUTH_URL` の origin に `/api/auth/callback/sid` を付けた値で、ID サーバーに登録した値と 1 文字も違わない必要があります。
+- 本番 DB にマイグレーション `20261122090000_replace_ffpf_accounts_with_sid_accounts`（`SidAccount` の追加）が必要です。main へのマージで Web の本番ビルドが自動で当てます（下の「マイグレーションの適用」）。
+- 詳しい手順は [docs/deployment.md](deployment.md) の「5. Sparklingstadt ID でのログイン」にあります。
+- 手元で試すとき：sparklingstadt-id の README の「開発」では、`ID_ISSUER=http://localhost:3000` で `pnpm run dev` を動かします。この Web の `AUTH_URL` も `http://localhost:3000` なので、同じ手元では動きません。どちらかのポートを替えます（Web なら `pnpm exec next dev -p 3001` と `AUTH_URL=http://localhost:3001`。ID サーバーなら、`ID_ISSUER` のポートと `SID_ISSUER` を合わせます）。クライアントの `redirectUris` は `http://localhost:<Web のポート>/api/auth/callback/sid`、`postLogoutRedirectUris` は `http://localhost:<Web のポート>/signin` にします。
 
 ### ロールとID・パスワードのアカウント
 
 ロールは4種類です。
 
 - **admin（管理者）**: GitHub認証で許可リストに載っているユーザー。自分の学習ノート、CSVインポートとアカウント管理を使えます。メンバーの学習ノートは、切り替え欄から閲覧のみで見られます。
-- **member（メンバー）**: ID・パスワードでログインするアカウント、または FFPF ID でログインした人。自分の学習ノートとCSVインポートを使えます。CSVインポートは自分の学習ノートに追加されます。ほかのユーザーの記録は見られません。アカウント管理は使えません。
+- **member（メンバー）**: ID・パスワードでログインするアカウント、または Sparklingstadt ID でログインした人。自分の学習ノートとCSVインポートを使えます。CSVインポートは自分の学習ノートに追加されます。ほかのユーザーの記録は見られません。アカウント管理は使えません。
 - **guest（ゲスト）**: ログイン画面の「ゲストとして使う」。学習ノートはなく、`/` には案内だけが出ます。`/logs` と `/follow` は `/` に戻されます。
 - **revoked**: 許可リストから外れた管理者や、再設定・変更でセッションが失効したメンバー。どのページも使えず、ログイン画面に戻されます。
 
-ID・パスワードのmemberのアカウントは、GitHub管理者が `/admin/accounts` で作ります。セルフ登録はありません（FFPF ID のメンバーは、初めてログインしたときに作られます）。最初のアカウントも、まずGitHubで管理者としてログインして作成してください。
+ID・パスワードのmemberのアカウントは、GitHub管理者が `/admin/accounts` で作ります。セルフ登録はありません（Sparklingstadt ID のメンバーは、初めてログインしたときに作られます）。最初のアカウントも、まずGitHubで管理者としてログインして作成してください。
 
 - **作成・再設定**: ログインID（英小文字・数字・`.` `_` `-` の3〜32文字）と表示名を入力します。パスワードは12〜128文字で、空欄にすると自動生成します。パスワードは作成・再設定の直後に一度だけ画面に表示され、あとから確認できません。管理者から本人に別の経路で伝えてください。
-- **パスワード変更**: memberは、メニューの「パスワード変更」（`/account/password`）から自分で変更できます。変更するとログアウトされ、新しいパスワードでログインし直します。FFPF ID のメンバーには、この画面に FFPF ID のマイページへのリンクを出します（パスワードは portal で変えます）。
+- **パスワード変更**: memberは、メニューの「パスワード変更」（`/account/password`）から自分で変更できます。変更するとログアウトされ、新しいパスワードでログインし直します。Sparklingstadt ID のメンバーには、この画面に Sparklingstadt ID のアカウントページへのリンクを出します（パスワードは ID サーバーで変えます）。
 - **試行回数の制限**: 接続元（IPアドレス。IPv6は /64 単位）ごとに数えます。同じ接続元から同じログインIDへ15分間に5回まで、ログインID全体で15分間に20回までです。超えると、その接続元からは15分間、正しいパスワードでもログインできません。アカウント単位ではロックしないので、ほかの場所からの失敗で本人が締め出されることはありません。接続元は Vercel が設定する `x-real-ip` / `x-forwarded-for` で、Web が判定します。回数は Web が DB のテーブル（`SignInThrottle`）で数えます。ログイン画面には、IDの有無や制限の状態を区別せず「IDまたはパスワードが違うか、一時的にロックされています。」とだけ表示します。パスワード変更画面の現在のパスワードも、アカウントごとに15分間5回までです。
 - **セッションの失効**: パスワードを再設定・変更すると、そのアカウントの既存のセッションは、すべて使えなくなります。ログインのセッションは Web が DB の `Session` に持ち、会員の `sessionVersion` と管理者の許可リストは、リクエストのたびに確認します。パスワードを変えると、そのアカウントの `Session` の行はすべて消えます。
 - **パスワードの保存**: scrypt（N=2^15, r=8, p=1）でハッシュ化したものだけを保存します。平文はDBにもログにも残しません。
-- **記録の持ち主**: memberの学習ノートは、所有者 `password:<アカウントID>`（FFPF ID のメンバーは `ffpf:<sub>`）に紐づきます。本人と管理者が見られます（詳細は「学習ノートの公開範囲」）。
+- **記録の持ち主**: memberの学習ノートは、所有者 `password:<アカウントID>`（Sparklingstadt ID のメンバーは `sid:<sub>`）に紐づきます。本人と管理者が見られます（詳細は「学習ノートの公開範囲」）。
 
 **マイグレーションの適用**: 本番へのDBマイグレーションは、mainへのマージで走るWebの本番ビルドが自動で当てます。`vercel.json` の `buildCommand` が `scripts/vercel-build.sh` を動かし、`VERCEL_ENV=production` のときだけ `prisma migrate deploy` を実行してから `next build` します。Previewは自分のNeonブランチを使い、マイグレーションは当てません（[docs/deployment.md](deployment.md) の「2. Web の設定」の「Web のプレビュー（Preview）」を参照）。このためWebのProductionには `DATABASE_URL` が必要です（無い・つながらない・DDLが失敗すると、本番のWebのデプロイが失敗します）。ビルドのあいだは前のデプロイが動いているので、**マイグレーションは前のデプロイのコードと両立する形（表の追加、null許可の列の追加）にします**。列や表の削除のような壊す変更は、2回のリリースに分けます。以下の `migrate deploy` / `migrate status` の手順は、自動で当たらなかったときの手動の適用と、適用済みの確認に使います。詳しくは [docs/deployment.md](deployment.md) の「1. 本番の DB とマイグレーション」を参照してください。以下の各節にある「マージの前に適用」という記述は、自動化の前の手順なので、手動の適用として読んでください。
 
@@ -151,10 +152,11 @@ rm .env.production.local
 ## データ構造
 
 - `ImportBatch`: インポートしたファイル名・件数・日時
-- `LearningEntry`: 最初の文・添削後の文・ピンイン・所有者（GitHubの数字のID、`password:<アカウントID>`、または `ffpf:<sub>`）
+- `LearningEntry`: 最初の文・添削後の文・ピンイン・所有者（GitHubの数字のID、`password:<アカウントID>`、または `sid:<sub>`）
 - `Hint`: 学習文に属する可変個数のヒントと表示順
 - `PasswordAccount`: ID・パスワードのアカウント（ログインID・表示名・パスワードのハッシュ・`sessionVersion`）。`failedAttempts`・`lockedUntil` は旧ロック用で、今は使っていません
-- `FfpfAccount`: FFPF ID でログインしたメンバー（`sub`・メールアドレス・表示名・`sessionVersion`・最終ログイン日時）。ログインのたびに最新の値で更新します
+- `SidAccount`: Sparklingstadt ID でログインしたメンバー（`sub`・メールアドレス・表示名・`sessionVersion`・最終ログイン日時）。ログインのたびに最新の値で更新します
+- `FfpfAccount`: 以前の FFPF ID のログインの表。今は使わず、中身は空です。前のデプロイを動かし続けるために 1 回のリリースだけ残し、次のマイグレーションで落とします
 - `SignInThrottle`: ログイン試行回数の制限用のカウンター（キー・回数・期限）。Web が使います
 - `Session`: Web のログインのセッション（トークンの SHA-256 ハッシュ・所有者・役割・期限）。会員と管理者は 30 日、ゲストは 24 時間で、使っても延びません。期限切れの行は、ログインのたびに 100 行まで消します
 

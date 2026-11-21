@@ -7,9 +7,9 @@ import type {
 import { newSessionCookies, signIn } from "@/composition/sign-in-container";
 import { clientAddress } from "@/infrastructure/auth/client-address";
 import {
-  ffpfRedirectUri,
-  parseFfpfOAuthCookie,
-} from "@/infrastructure/auth/ffpf-oauth";
+  sidRedirectUri,
+  parseSidOAuthCookie,
+} from "@/infrastructure/auth/sid-oauth";
 import {
   isSameState,
   publicOrigin,
@@ -28,7 +28,7 @@ import {
 } from "@/presentation/controllers/sign-in-controller";
 import { getSafeCallbackPath } from "@/presentation/http/safe-callback-path";
 
-export type FfpfCallbackDeps = {
+export type SidCallbackDeps = {
   signIn: (
     input: {
       code: string;
@@ -45,22 +45,22 @@ export type FfpfCallbackDeps = {
   ) => Promise<CookieWrite[]>;
 };
 
-const defaultDeps: FfpfCallbackDeps = {
-  signIn: (input, client) => signIn.withFfpf(input, client),
+const defaultDeps: SidCallbackDeps = {
+  signIn: (input, client) => signIn.withSid(input, client),
   sessionCookies: newSessionCookies,
 };
 
-// Every FFPF ID failure, and any error, shows the one callback message.
+// Every Sparklingstadt ID failure, and any error, shows the one callback message.
 const failurePath = oauthFailurePath("error");
 
-// GET /api/auth/callback/ffpf. The same flow as github-callback.ts: the
-// state must match the zl_oauth cookie of an FFPF start before anything is
+// GET /api/auth/callback/sid. The same flow as github-callback.ts: the
+// state must match the zl_oauth cookie of a Sparklingstadt ID start before anything is
 // signed in, and the ID token's nonce must be the cookie's. The code, state,
 // nonce and tokens never go into a redirect URL or a log, and zl_oauth is
 // cleared on every outcome.
-export async function handleFfpfCallback(
+export async function handleSidCallback(
   request: NextRequest,
-  deps: FfpfCallbackDeps = defaultDeps,
+  deps: SidCallbackDeps = defaultDeps,
 ): Promise<Response> {
   const origin = publicOrigin(requestOrigin(request.headers));
   const secure =
@@ -68,7 +68,7 @@ export async function handleFfpfCallback(
   const params = request.nextUrl.searchParams;
   const code = params.get("code");
   const state = params.get("state");
-  const saved = parseFfpfOAuthCookie(request.cookies.get(OAUTH_COOKIE)?.value);
+  const saved = parseSidOAuthCookie(request.cookies.get(OAUTH_COOKIE)?.value);
 
   let target = failurePath;
   const cookies: CookieWrite[] = [cookieWrite(OAUTH_COOKIE, "", 0, secure)];
@@ -84,7 +84,7 @@ export async function handleFfpfCallback(
         {
           code,
           verifier: saved.verifier,
-          redirectUri: ffpfRedirectUri(origin),
+          redirectUri: sidRedirectUri(origin),
           nonce: saved.nonce,
         },
         clientAddress(request.headers),
@@ -99,10 +99,10 @@ export async function handleFfpfCallback(
         );
         target = getSafeCallbackPath(saved.callbackPath);
       } else {
-        console.warn("SIGN_IN_FFPF_REFUSED", result.reason);
+        console.warn("SIGN_IN_SID_REFUSED", result.reason);
       }
     } catch (error) {
-      console.error("SIGN_IN_FFPF_FAILED", errorName(error));
+      console.error("SIGN_IN_SID_FAILED", errorName(error));
     }
   }
 

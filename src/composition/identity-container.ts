@@ -15,11 +15,12 @@ import {
 import type { AuthenticatedUser } from "@/domain/identity/entities/authenticated-user";
 import type { CurrentUserProvider } from "@/application/identity/ports/current-user-provider";
 import { clientAddress } from "@/infrastructure/auth/client-address";
+import { resolveSignOutTarget } from "@/infrastructure/auth/sid-logout";
 import {
-  createFfpfOAuthStart,
-  ffpfAuthorizeUrl,
-  ffpfRedirectUri,
-} from "@/infrastructure/auth/ffpf-oauth";
+  createSidOAuthStart,
+  sidAuthorizeUrl,
+  sidRedirectUri,
+} from "@/infrastructure/auth/sid-oauth";
 import {
   createOAuthStart,
   githubAuthorizeUrl,
@@ -43,7 +44,7 @@ import {
 } from "@/infrastructure/auth/web-session";
 import {
   demoLoginId,
-  ffpfIdConfig,
+  sidConfig,
   githubOAuthConfig,
 } from "@/infrastructure/config/environment";
 import { ACT_AS_PATTERN } from "@/infrastructure/identity/session-current-user-provider";
@@ -186,14 +187,14 @@ export async function signInWithGitHub(redirectTo: string) {
   );
 }
 
-// Starts FFPF ID sign-in the same way: PKCE, state and nonce go into
-// zl_oauth (provider "ffpf"), and the browser goes to the portal's authorize
-// endpoint. /api/auth/callback/ffpf finishes it.
-export async function signInWithFfpf(redirectTo: string) {
-  const config = ffpfIdConfig();
+// Starts Sparklingstadt ID sign-in the same way: PKCE, state and nonce go into
+// zl_oauth (provider "sid"), and the browser goes to the Sparklingstadt ID server's authorize
+// endpoint. /api/auth/callback/sid finishes it.
+export async function signInWithSid(redirectTo: string) {
+  const config = sidConfig();
   if (!config) redirect("/signin?error=Configuration");
   const requestHeaders = await headers();
-  const start = createFfpfOAuthStart(redirectTo);
+  const start = createSidOAuthStart(redirectTo);
   await writeCookies([
     cookieWrite(
       OAUTH_COOKIE,
@@ -203,10 +204,10 @@ export async function signInWithFfpf(redirectTo: string) {
     ),
   ]);
   redirect(
-    ffpfAuthorizeUrl({
+    sidAuthorizeUrl({
       issuer: config.issuer,
       clientId: config.clientId,
-      redirectUri: ffpfRedirectUri(publicOrigin(requestOrigin(requestHeaders))),
+      redirectUri: sidRedirectUri(publicOrigin(requestOrigin(requestHeaders))),
       state: start.state,
       challenge: start.challenge,
       nonce: start.nonce,
@@ -220,8 +221,23 @@ export function demoAvailable() {
   return Promise.resolve(Boolean(demoLoginId()));
 }
 
+// A Sparklingstadt ID member also leaves the ID server (RP-Initiated Logout),
+// which returns to /signin. The owner is read before the session is ended, and
+// an admin acting as a member is judged by the admin's own id, so an admin is
+// never sent there. The origin is the sign-in callback's (publicOrigin).
 export async function signOutCurrentUser() {
-  await signOutTo("/signin");
+  const target = await resolveSignOutTarget({
+    currentOwnerId: async () => {
+      const user = await getCachedCurrentUser();
+      if (user?.actingAs) return user.actorId ?? null;
+      return user?.githubId ?? null;
+    },
+    config: () => sidConfig() ?? null,
+    origin: async () => publicOrigin(requestOrigin(await headers())),
+    onError: (error) =>
+      console.error("SID_LOGOUT_URL_FAILED", errorName(error)),
+  });
+  await signOutTo(target);
 }
 
 // Signs out even when the database cannot be reached: the cookies are

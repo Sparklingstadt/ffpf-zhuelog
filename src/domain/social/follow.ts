@@ -29,9 +29,9 @@ export type FollowResult = "followed" | "self" | "not-found";
 // ?limit=100 and the web never asked for a second page.
 export const FOLLOW_TIMELINE_LIMIT = 100;
 
-const MEMBER_OWNER_ID = /^(password|ffpf):[a-z0-9]{1,64}$/;
+const MEMBER_OWNER_ID = /^(password|sid):[a-z0-9]{1,64}$/;
 
-// A member's owner id, password or FFPF ID. Go: memberOwnerIDPattern.
+// A member's owner id, password or Sparklingstadt ID. Go: memberOwnerIDPattern.
 export function isMemberOwnerId(value: string): boolean {
   return MEMBER_OWNER_ID.test(value);
 }

@@ -3,7 +3,7 @@
 import {
   signInAsDemo,
   signInAsGuest,
-  signInWithFfpf,
+  signInWithSid,
   signInWithGitHub,
   signInWithPassword,
   signOutCurrentUser,
@@ -14,8 +14,8 @@ export async function signInWithGitHubAction(callbackPath: string) {
   await signInWithGitHub(getSafeCallbackPath(callbackPath));
 }
 
-export async function signInWithFfpfAction(callbackPath: string) {
-  await signInWithFfpf(getSafeCallbackPath(callbackPath));
+export async function signInWithSidAction(callbackPath: string) {
+  await signInWithSid(getSafeCallbackPath(callbackPath));
 }
 
 export async function signInAsGuestAction(callbackPath: string) {

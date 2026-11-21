@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { SessionPrincipal } from "../src/domain/identity/session";
 import {
-  type FfpfIdentityAccount,
+  type SidIdentityAccount,
   type IdentityAccount,
   type IdentityAccounts,
   SessionCurrentUserProvider,
@@ -16,7 +16,7 @@ const password: IdentityAccount = {
   passwordHash: "hash",
   sessionVersion: 3,
 };
-const ffpf: FfpfIdentityAccount = {
+const sid: SidIdentityAccount = {
   id: "sub1",
   email: "a@example.com",
   displayName: "花子",
@@ -25,12 +25,12 @@ const ffpf: FfpfIdentityAccount = {
 
 function accounts(
   passwords: IdentityAccount[] = [password],
-  ffpfs: FfpfIdentityAccount[] = [ffpf],
+  sids: SidIdentityAccount[] = [sid],
 ): IdentityAccounts {
   return {
     findPasswordAccount: async (id) =>
       passwords.find((a) => a.id === id) ?? null,
-    findFfpfAccount: async (id) => ffpfs.find((a) => a.id === id) ?? null,
+    findSidAccount: async (id) => sids.find((a) => a.id === id) ?? null,
   };
 }
 
@@ -115,10 +115,10 @@ test("a password member gets the profile and account id", async () => {
   });
 });
 
-test("an FFPF ID member is shown by email", async () => {
-  assert.deepEqual(await provider(member("ffpf:sub1", 2)).getCurrentUser(), {
+test("a Sparklingstadt ID member is shown by email", async () => {
+  assert.deepEqual(await provider(member("sid:sub1", 2)).getCurrentUser(), {
     githubLogin: "a@example.com",
-    githubId: "ffpf:sub1",
+    githubId: "sid:sub1",
     role: "member",
     displayName: "花子",
   });
@@ -129,7 +129,7 @@ test("a member whose sessionVersion moved on is signed out", async () => {
     await provider(member("password:abc", 2)).getCurrentUser(),
     null,
   );
-  assert.equal(await provider(member("ffpf:sub1", 9)).getCurrentUser(), null);
+  assert.equal(await provider(member("sid:sub1", 9)).getCurrentUser(), null);
 });
 
 test("a member whose account is gone is signed out", async () => {
@@ -137,13 +137,13 @@ test("a member whose account is gone is signed out", async () => {
     await provider(member("password:zzz", 3)).getCurrentUser(),
     null,
   );
-  assert.equal(await provider(member("ffpf:zzz", 2)).getCurrentUser(), null);
+  assert.equal(await provider(member("sid:zzz", 2)).getCurrentUser(), null);
 });
 
 test("a member owner id with neither prefix is signed out", async () => {
   assert.equal(await provider(member("12345", 1)).getCurrentUser(), null);
   assert.equal(await provider(member("password:", 3)).getCurrentUser(), null);
-  assert.equal(await provider(member("ffpf:", 2)).getCurrentUser(), null);
+  assert.equal(await provider(member("sid:", 2)).getCurrentUser(), null);
 });
 
 test("the demo account is flagged", async () => {
@@ -190,12 +190,7 @@ test("an admin acts as an existing member", async () => {
 });
 
 test("act-as a malformed or missing member is ignored", async () => {
-  for (const actAs of [
-    "password:ABC",
-    "ffpf:x",
-    "password:nope",
-    "password:",
-  ]) {
+  for (const actAs of ["password:ABC", "sid:x", "password:nope", "password:"]) {
     const user = await provider(admin, { actAs }).getCurrentUser();
     assert.deepEqual(
       user,
@@ -236,7 +231,7 @@ test("lookup errors propagate instead of signing out", async () => {
     findPasswordAccount: async () => {
       throw boom;
     },
-    findFfpfAccount: async () => {
+    findSidAccount: async () => {
       throw boom;
     },
   };
@@ -245,7 +240,7 @@ test("lookup errors propagate instead of signing out", async () => {
     boom,
   );
   await assert.rejects(
-    provider(member("ffpf:sub1", 2), { accounts: failing }).getCurrentUser(),
+    provider(member("sid:sub1", 2), { accounts: failing }).getCurrentUser(),
     boom,
   );
   await assert.rejects(

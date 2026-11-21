@@ -64,9 +64,23 @@ model PasswordAccount {
   updatedAt      DateTime  @updatedAt
 }
 
-// A member who signs in with FFPF ID (issued by ffpf-portal). id is the
-// portal's sub; the ownerId is "ffpf:" + id. email is for display only and is
+// A member who signs in with Sparklingstadt ID (issued by sparklingstadt-id). id is the
+// Sparklingstadt ID server's sub; the ownerId is "sid:" + id. email is for display only and is
 // never used for authorization.
+model SidAccount {
+  id             String   @id
+  email          String
+  displayName    String
+  sessionVersion Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  lastLoginAt    DateTime
+}
+
+// Unused. The former FFPF ID sign-in table; the app no longer reads or writes
+// it. Emptied by the migration that added SidAccount and kept for one release so
+// the previous deployment (and an Instant Rollback) still runs; drop it in a
+// later migration. No application code may use this model.
 model FfpfAccount {
   id             String   @id
   email          String
