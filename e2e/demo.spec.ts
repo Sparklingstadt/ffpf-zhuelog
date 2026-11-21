@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { anyWidth, expect, test } from "./fixtures";
 import { goApiURL, goCronSecret } from "./environment";
 
 // Puts the demo account back to its fixture, as the nightly cron does. The
@@ -11,7 +11,7 @@ async function resetDemo() {
   expect(response.status).toBe(204);
 }
 
-test("the demo reset needs the cron secret", async () => {
+test("the demo reset needs the cron secret", anyWidth, async () => {
   const response = await fetch(`${goApiURL}/v1/cron/demo-reset`, {
     method: "POST",
     headers: { authorization: "Bearer wrong" },

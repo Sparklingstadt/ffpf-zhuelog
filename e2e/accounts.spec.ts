@@ -1,5 +1,6 @@
 import { type Page } from "@playwright/test";
 import {
+  anyWidth,
   asAdmin,
   asMember,
   createMember,
@@ -71,92 +72,94 @@ test("member cannot open account management", async ({ page, db }) => {
   ).toHaveCount(0);
 });
 
-test("wrong password shows one generic error", async ({ page, db }) => {
-  await createMember(db, "taro", "太郎", "member-password-1");
+test(
+  "wrong password shows one generic error",
+  anyWidth,
+  async ({ page, db }) => {
+    await createMember(db, "taro", "太郎", "member-password-1");
 
-  await signInWithPassword(page, "taro", "wrong-password-1");
-  await expect(page).toHaveURL(/error=CredentialsSignin/);
-  await expect(page.getByText(lockMessage)).toBeVisible();
+    await signInWithPassword(page, "taro", "wrong-password-1");
+    await expect(page).toHaveURL(/error=CredentialsSignin/);
+    await expect(page.getByText(lockMessage)).toBeVisible();
 
-  // An unknown ID gets exactly the same message.
-  await signInWithPassword(page, "nobody", "wrong-password-1");
-  await expect(page).toHaveURL(/error=CredentialsSignin/);
-  await expect(page.getByText(lockMessage)).toBeVisible();
-});
+    // An unknown ID gets exactly the same message.
+    await signInWithPassword(page, "nobody", "wrong-password-1");
+    await expect(page).toHaveURL(/error=CredentialsSignin/);
+    await expect(page.getByText(lockMessage)).toBeVisible();
+  },
+);
 
-test("five failures pause that login ID for that client only", async ({
-  browser,
-  baseURL,
-  db,
-}) => {
-  await createMember(db, "taro", "太郎", "member-password-1");
-  // The app reads the client address from x-real-ip, which Vercel sets.
-  const attacker = await browser.newContext({
-    baseURL,
-    extraHTTPHeaders: { "x-real-ip": "203.0.113.7" },
-  });
-  const owner = await browser.newContext({
-    baseURL,
-    extraHTTPHeaders: { "x-real-ip": "198.51.100.9" },
-  });
-  try {
-    const attackerPage = await attacker.newPage();
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-      await signInWithPassword(
-        attackerPage,
-        "taro",
-        `wrong-password-${attempt}`,
-      );
+test(
+  "five failures pause that login ID for that client only",
+  anyWidth,
+  async ({ browser, baseURL, db }) => {
+    await createMember(db, "taro", "太郎", "member-password-1");
+    // The app reads the client address from x-real-ip, which Vercel sets.
+    const attacker = await browser.newContext({
+      baseURL,
+      extraHTTPHeaders: { "x-real-ip": "203.0.113.7" },
+    });
+    const owner = await browser.newContext({
+      baseURL,
+      extraHTTPHeaders: { "x-real-ip": "198.51.100.9" },
+    });
+    try {
+      const attackerPage = await attacker.newPage();
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        await signInWithPassword(
+          attackerPage,
+          "taro",
+          `wrong-password-${attempt}`,
+        );
+        await expect(attackerPage.getByText(lockMessage)).toBeVisible();
+      }
+
+      // Even the correct password is refused from that client for now.
+      await signInWithPassword(attackerPage, "taro", "member-password-1");
       await expect(attackerPage.getByText(lockMessage)).toBeVisible();
+      await expect(attackerPage).toHaveURL(/\/signin/);
+
+      // The failures elsewhere never lock the member out of their own client.
+      await asMember(await owner.newPage(), "taro", "member-password-1");
+    } finally {
+      await attacker.close();
+      await owner.close();
     }
+  },
+);
 
-    // Even the correct password is refused from that client for now.
-    await signInWithPassword(attackerPage, "taro", "member-password-1");
-    await expect(attackerPage.getByText(lockMessage)).toBeVisible();
-    await expect(attackerPage).toHaveURL(/\/signin/);
+test(
+  "reset revokes existing member sessions",
+  anyWidth,
+  async ({ page, context, browser, baseURL, db }) => {
+    await createMember(db, "taro", "太郎", "member-password-1");
+    const memberContext = await browser.newContext({ baseURL });
+    try {
+      const memberPage = await memberContext.newPage();
+      await asMember(memberPage, "taro", "member-password-1", "/logs");
+      await expect(
+        memberPage.getByRole("heading", { name: "日付別の学習ノート" }),
+      ).toBeVisible();
 
-    // The failures elsewhere never lock the member out of their own client.
-    await asMember(await owner.newPage(), "taro", "member-password-1");
-  } finally {
-    await attacker.close();
-    await owner.close();
-  }
-});
+      await asAdmin(context);
+      await page.goto("/admin/accounts");
+      page.once("dialog", (dialog) => dialog.accept());
+      await page.getByRole("button", { name: "パスワードを再設定" }).click();
+      const newPassword = await readOutputPassword(page);
+      expect(newPassword).not.toBe("member-password-1");
 
-test("reset revokes existing member sessions", async ({
-  page,
-  context,
-  browser,
-  baseURL,
-  db,
-}) => {
-  await createMember(db, "taro", "太郎", "member-password-1");
-  const memberContext = await browser.newContext({ baseURL });
-  try {
-    const memberPage = await memberContext.newPage();
-    await asMember(memberPage, "taro", "member-password-1", "/logs");
-    await expect(
-      memberPage.getByRole("heading", { name: "日付別の学習ノート" }),
-    ).toBeVisible();
+      await memberPage.goto("/logs");
+      await expect(memberPage).toHaveURL(/\/signin/);
 
-    await asAdmin(context);
-    await page.goto("/admin/accounts");
-    page.once("dialog", (dialog) => dialog.accept());
-    await page.getByRole("button", { name: "パスワードを再設定" }).click();
-    const newPassword = await readOutputPassword(page);
-    expect(newPassword).not.toBe("member-password-1");
-
-    await memberPage.goto("/logs");
-    await expect(memberPage).toHaveURL(/\/signin/);
-
-    // The old password no longer works; the reissued one does.
-    await signInWithPassword(memberPage, "taro", "member-password-1");
-    await expect(memberPage.getByText(lockMessage)).toBeVisible();
-    await asMember(memberPage, "taro", newPassword, "/logs");
-  } finally {
-    await memberContext.close();
-  }
-});
+      // The old password no longer works; the reissued one does.
+      await signInWithPassword(memberPage, "taro", "member-password-1");
+      await expect(memberPage.getByText(lockMessage)).toBeVisible();
+      await asMember(memberPage, "taro", newPassword, "/logs");
+    } finally {
+      await memberContext.close();
+    }
+  },
+);
 
 test("member changes own password", async ({ page, db }) => {
   await createMember(db, "taro", "太郎", "member-password-1");

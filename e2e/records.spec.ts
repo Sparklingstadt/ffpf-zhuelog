@@ -1,5 +1,6 @@
 import type { Browser, Page } from "@playwright/test";
 import {
+  anyWidth,
   adminOwnerId,
   asAdmin,
   asMember,
@@ -195,47 +196,47 @@ test("admin views a member's notes read-only and keeps the choice while navigati
   await expect(page.getByText("太郎の記録1")).toHaveCount(0);
 });
 
-test("a member cannot view others' records", async ({
-  browser,
-  baseURL,
-  db,
-}) => {
-  const id = await createMember(db, "taro", "太郎", "member-password-1");
-  await seedNotes(db, memberOwnerId(id), [{ text: "太郎の記録" }]);
-  await seedNotes(db, adminOwnerId, [{ text: "管理者の記録" }]);
-  const member = await openAs(browser, baseURL, "taro", "member-password-1");
-  try {
-    const { page } = member;
-    const other = encodeURIComponent(adminOwnerId);
+test(
+  "a member cannot view others' records",
+  anyWidth,
+  async ({ browser, baseURL, db }) => {
+    const id = await createMember(db, "taro", "太郎", "member-password-1");
+    await seedNotes(db, memberOwnerId(id), [{ text: "太郎の記録" }]);
+    await seedNotes(db, adminOwnerId, [{ text: "管理者の記録" }]);
+    const member = await openAs(browser, baseURL, "taro", "member-password-1");
+    try {
+      const { page } = member;
+      const other = encodeURIComponent(adminOwnerId);
 
-    await page.goto(`/?user=${other}`);
-    await expect(page).toHaveURL(
-      (url) => url.pathname === "/" && url.search === "",
-    );
-    await expect(
-      page.getByText("太郎の記録", { exact: true }).first(),
-    ).toBeVisible();
-    await expect(page.getByText("管理者の記録")).toHaveCount(0);
-    // Members get neither the switcher nor the viewing banner.
-    await expect(page.getByLabel("表示するユーザー")).toHaveCount(0);
+      await page.goto(`/?user=${other}`);
+      await expect(page).toHaveURL(
+        (url) => url.pathname === "/" && url.search === "",
+      );
+      await expect(
+        page.getByText("太郎の記録", { exact: true }).first(),
+      ).toBeVisible();
+      await expect(page.getByText("管理者の記録")).toHaveCount(0);
+      // Members get neither the switcher nor the viewing banner.
+      await expect(page.getByLabel("表示するユーザー")).toHaveCount(0);
 
-    await page.goto(`/logs?user=${other}`);
-    await expect(page).toHaveURL(
-      (url) => url.pathname === "/logs" && url.search === "",
-    );
-    await page.goto(`/logs/2026/9/20?user=${other}`);
-    await expect(page).toHaveURL(
-      (url) => url.pathname === "/logs/2026/9/20" && url.search === "",
-    );
-    // Not even an unknown owner changes the answer.
-    await page.goto("/?user=password%3Anobody");
-    await expect(page).toHaveURL(
-      (url) => url.pathname === "/" && url.search === "",
-    );
-  } finally {
-    await member.context.close();
-  }
-});
+      await page.goto(`/logs?user=${other}`);
+      await expect(page).toHaveURL(
+        (url) => url.pathname === "/logs" && url.search === "",
+      );
+      await page.goto(`/logs/2026/9/20?user=${other}`);
+      await expect(page).toHaveURL(
+        (url) => url.pathname === "/logs/2026/9/20" && url.search === "",
+      );
+      // Not even an unknown owner changes the answer.
+      await page.goto("/?user=password%3Anobody");
+      await expect(page).toHaveURL(
+        (url) => url.pathname === "/" && url.search === "",
+      );
+    } finally {
+      await member.context.close();
+    }
+  },
+);
 
 test("an admin with a malformed ?user= sees their own notes, and a raw owner ID shows as is", async ({
   context,

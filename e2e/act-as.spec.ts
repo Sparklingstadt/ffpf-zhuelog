@@ -1,4 +1,5 @@
 import {
+  anyWidth,
   adminOwnerId,
   asAdmin,
   createMember,
@@ -58,32 +59,32 @@ test("an admin acting as a member saves the conversation as the member's", async
   expect(rows[0].n).toBe(0);
 });
 
-test("acting as a member is refused for a member who does not exist", async ({
-  page,
-  context,
-  db,
-}) => {
-  const accountId = await createMember(
-    db,
-    "test02",
-    "テスト二郎",
-    "member-password-1",
-  );
-  await asAdmin(context);
-  await page.goto("/admin/accounts");
-  await db.query(`DELETE FROM "PasswordAccount" WHERE id = $1`, [accountId]);
-  await page.getByRole("button", { name: "この会員として操作" }).click();
-  await expect(page).toHaveURL(
-    (url) =>
-      url.pathname === "/admin/accounts" &&
-      url.searchParams.get("actAs") === "failed",
-  );
-  await expect(
-    page
-      .getByRole("alert")
-      .filter({ hasText: "この会員として操作できませんでした" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("status").filter({ hasText: "として操作中" }),
-  ).toHaveCount(0);
-});
+test(
+  "acting as a member is refused for a member who does not exist",
+  anyWidth,
+  async ({ page, context, db }) => {
+    const accountId = await createMember(
+      db,
+      "test02",
+      "テスト二郎",
+      "member-password-1",
+    );
+    await asAdmin(context);
+    await page.goto("/admin/accounts");
+    await db.query(`DELETE FROM "PasswordAccount" WHERE id = $1`, [accountId]);
+    await page.getByRole("button", { name: "この会員として操作" }).click();
+    await expect(page).toHaveURL(
+      (url) =>
+        url.pathname === "/admin/accounts" &&
+        url.searchParams.get("actAs") === "failed",
+    );
+    await expect(
+      page
+        .getByRole("alert")
+        .filter({ hasText: "この会員として操作できませんでした" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("status").filter({ hasText: "として操作中" }),
+    ).toHaveCount(0);
+  },
+);

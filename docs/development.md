@@ -170,7 +170,7 @@ pnpm run test:e2e:ui
 pnpm run test:e2e:stop
 ```
 
-Desktop Chromiumとモバイル幅（Pixel 7 / Chromium）の両方で検証します。
+Desktop Chromiumとモバイル幅（Pixel 7 / Chromium）の両方で検証します。リダイレクト、入力の検査、権限、HTTPヘッダーのように画面幅で結果が変わらないテストには `anyWidth`（`e2e/fixtures.ts`）を付け、Desktop Chromiumだけで実行します。
 テスト起動時に専用PostgreSQLを起動し、既存マイグレーションを適用してTurbopackでビルド、`127.0.0.1:3107`に本番モードのサーバーを起動します。Go API（`services/api`）もビルドして `127.0.0.1:3108` で起動し、Web はこれを通してログインとデータの読み書きを行います。
 既存サーバーは再利用しません。通常の開発サーバーは停止してから実行してください（ビルド先の`.next`を共有します）。
 
