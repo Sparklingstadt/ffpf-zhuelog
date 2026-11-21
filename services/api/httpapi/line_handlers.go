@@ -49,7 +49,7 @@ const (
 )
 
 // extendLineDeadlines gives one request longer read and write deadlines than
-// the server's, like extendCSVDeadlines. It runs after the caller's credential
+// the server's. It runs after the caller's credential
 // has been checked, so unauthenticated requests keep the server's deadlines.
 // Writers that cannot set deadlines (http.ErrNotSupported, as in
 // httptest.ResponseRecorder) are left alone.

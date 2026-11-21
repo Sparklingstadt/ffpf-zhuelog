@@ -9,6 +9,12 @@ import {
 import type { AuthenticatedUser } from "../src/domain/identity/entities/authenticated-user";
 import type { LearningEntry } from "../src/domain/learning/entities/learning-entry";
 import type { EntrySearch } from "../src/domain/learning/entry-search";
+import type { LearningCsvDraft } from "../src/domain/learning/learning-csv";
+import {
+  checkCsvFile,
+  importFileName,
+  parseLearningCsv,
+} from "../src/infrastructure/csv/learning-csv";
 
 const member: AuthenticatedUser = {
   githubLogin: "taro",
@@ -71,6 +77,19 @@ function setup(user: AuthenticatedUser | null) {
       purge: record("purge", true),
       emptyTrash: record("emptyTrash", 2),
       setShared: record("setShared", true),
+    },
+    csvImport: {
+      checkFile: checkCsvFile,
+      parse: parseLearningCsv,
+      fileName: importFileName,
+      importBatch: async (
+        ownerId: string,
+        fileName: string,
+        drafts: LearningCsvDraft[],
+      ) => {
+        calls.push(["importBatch", ownerId, fileName, drafts]);
+        return drafts.length;
+      },
     },
   };
   return { notes: createLearningNotes(deps), calls, deps };
@@ -197,4 +216,101 @@ test("only plain members may share", async () => {
       );
     assert.deepEqual(calls, []);
   }
+});
+
+const csv = (text: string, name = "notes.csv") => new File([text], name);
+const twoRows =
+  "最初の文,添削後の文,ピン音\n我好,我很好,wo hen hao,提示\n去,去了,qu le";
+const twoDrafts: LearningCsvDraft[] = [
+  {
+    originalText: "我好",
+    correctedText: "我很好",
+    pinyin: "wo hen hao",
+    hints: ["提示"],
+  },
+  { originalText: "去", correctedText: "去了", pinyin: "qu le", hints: [] },
+];
+
+test("imports into the signed-in owner only", async () => {
+  for (const [user, ownerId] of [
+    [member, "password:abc"],
+    [actingAdmin, "password:abc"],
+    [demo, "password:abc"],
+  ] as const) {
+    const { notes, calls } = setup(user);
+    assert.deepEqual(await notes.importCsv(csv(twoRows)), {
+      ok: true,
+      count: 2,
+    });
+    assert.deepEqual(calls, [["importBatch", ownerId, "notes.csv", twoDrafts]]);
+  }
+
+  for (const user of [null, guest, revoked, noGithubId]) {
+    const { notes, calls } = setup(user);
+    await assert.rejects(
+      notes.importCsv(csv(twoRows)),
+      LearningForbiddenError,
+      String(user?.role),
+    );
+    assert.deepEqual(calls, []);
+  }
+});
+
+test("returns the CSV's problem without writing", async () => {
+  const { notes, calls } = setup(member);
+  assert.deepEqual(await notes.importCsv(csv("我好,我很好")), {
+    ok: false,
+    message: "1行目は3列未満です。",
+  });
+  assert.deepEqual(await notes.importCsv(csv(twoRows, "a.txt")), {
+    ok: false,
+    message: "拡張子が.csvのファイルを選択してください。",
+  });
+  assert.deepEqual(await notes.importCsv(csv("")), {
+    ok: false,
+    message: "CSVファイルを選択してください。",
+  });
+  // Too large: the file is never read.
+  const big = {
+    name: "big.txt",
+    size: 4 * 1024 * 1024 + 1,
+    text: () => assert.fail("read a file that is too large"),
+  };
+  assert.deepEqual(await notes.importCsv(big), {
+    ok: false,
+    message: "ファイルは4MB以下にしてください。",
+  });
+  // The file name is checked after the contents.
+  assert.deepEqual(await notes.importCsv(csv("我好,我很好", "a\0.csv")), {
+    ok: false,
+    message: "1行目は3列未満です。",
+  });
+  assert.deepEqual(await notes.importCsv(csv(twoRows, "a\0.csv")), {
+    ok: false,
+    message:
+      "CSVの形式を確認してください。引用符が閉じていないか、1行が長すぎる可能性があります。",
+  });
+  assert.deepEqual(calls, []);
+});
+
+test("passes the cut file name and the drafts", async () => {
+  const { notes, calls } = setup(member);
+  const name = "a".repeat(296) + ".csv";
+  assert.equal(name.length, 300);
+  assert.deepEqual(await notes.importCsv(csv(twoRows, name)), {
+    ok: true,
+    count: 2,
+  });
+  assert.deepEqual(calls, [
+    ["importBatch", "password:abc", name.slice(0, 255), twoDrafts],
+  ]);
+});
+
+test("lets a failed write through", async () => {
+  const { notes, deps } = setup(member);
+  const failure = new Error("db down");
+  deps.csvImport.importBatch = async () => {
+    throw failure;
+  };
+  await assert.rejects(notes.importCsv(csv(twoRows)), (e) => e === failure);
 });

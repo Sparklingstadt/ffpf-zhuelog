@@ -17,7 +17,7 @@ flowchart LR
   end
   subgraph API[Go API on Vercel]
     AUTH[auth]
-    DATA[復習・フォロー・練習・CSV]
+    DATA[復習・フォロー・練習]
     LINEBOT[linebot]
     AI[OpenAI の呼び出しと利用量の記録]
   end
@@ -30,7 +30,7 @@ flowchart LR
   UI -->|HttpOnly Cookie| Web
   Web -->|Bearer JWT<br/>サーバー間| API
   API --> DB
-  Web -->|Prisma: アカウントの確認・単語帳・学習ノート| DB
+  Web -->|Prisma: アカウントの確認・単語帳・学習ノート・CSV の取り込み| DB
   Web -->|単語帳の下書き| OpenAI
   AI --> OpenAI
   LINE -->|Webhook| LINEBOT
@@ -40,7 +40,7 @@ flowchart LR
 ```
 
 - ブラウザーが話す相手は Web だけです。Go API を直接は呼びません。
-- Web は、ログイン中の人を決めるために、実行時に DB のアカウント（`PasswordAccount`・`FfpfAccount`）を Prisma（`src/infrastructure/prisma/`）で読みます。アクセストークンも Web が自分で確かめます。単語帳（一覧・保存・削除）と学習ノート（一覧・検索・カレンダー・日ごとの表示・ゴミ箱・共有）も Prisma で読み書きし、「AI で下書き」は Web が OpenAI を直接呼んで、使った量を `AiUsage` に記録します。ほかの読み書き、ログイン、AI は今も Go API を通します。機能は、設計書（[2026-11-16-deprecate-go-backend-design.md](superpowers/specs/2026-11-16-deprecate-go-backend-design.md)）の段階ごとに、Go から Web へ移していきます。
+- Web は、ログイン中の人を決めるために、実行時に DB のアカウント（`PasswordAccount`・`FfpfAccount`）を Prisma（`src/infrastructure/prisma/`）で読みます。アクセストークンも Web が自分で確かめます。単語帳（一覧・保存・削除）と学習ノート（一覧・検索・カレンダー・日ごとの表示・ゴミ箱・共有・CSV の取り込み）も Prisma で読み書きし（CSV は Web が自分で検証・解析し、1 つのトランザクションで保存します）、「AI で下書き」は Web が OpenAI を直接呼んで、使った量を `AiUsage` に記録します。ほかの読み書き、ログイン、AI は今も Go API を通します。機能は、設計書（[2026-11-16-deprecate-go-backend-design.md](superpowers/specs/2026-11-16-deprecate-go-backend-design.md)）の段階ごとに、Go から Web へ移していきます。
 - LINE は Go API に Webhook を送ります。添削の結果は Go API が LINE に push で返します。
 
 ## 2. Web と Go API を分けた理由
@@ -187,11 +187,11 @@ sequenceDiagram
 | 種類       | 数                    | 中身                                                                                          |
 | ---------- | --------------------- | --------------------------------------------------------------------------------------------- |
 | 単体（TS） | 378 件                | ドメインの規則、表示の変換、層の検査、Go API の呼び方                                         |
-| Go         | テストファイル 81 本  | ハンドラー、認証、FSRS、CSV のパース。`store` は本物の Postgres に対して走る                  |
+| Go         | テストファイル 81 本  | ハンドラー、認証、FSRS。`store` は本物の Postgres に対して走る                                |
 | E2E        | 206 件（PC とスマホ） | Playwright。Docker の Postgres、Go API、Web、OpenAI と FFPF ID のスタブを立ち上げて画面を通す |
 
 - **E2E の土台**：`e2e/server.ts` が、マイグレーション、`next build`、スタブ、Go のビルドと起動を行います。テストのたびに表を空にします。
-- **CSV のパースの移植**：Web から Go に移したとき、前の Web の出力を `testdata/expected.json`（約 45 件の CSV）に固定しました。Go の結果が同じことを確かめています。
+- **CSV のパースの検証**：CSV の取り込みを Web に戻したので、約 45 件の CSV の見本は `tests/fixtures/learning-csv/` にあり、TS のパーサー（csv-parse）がその見本と同じ結果を返すことを確かめています。
 - **lefthook**：commit の前に format・lint・型チェック、push の前に単体と E2E を走らせます。GitHub Actions の CI は置いていないので、このローカルの確認が関門です。
 
 ## 10. デプロイ

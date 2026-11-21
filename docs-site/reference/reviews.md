@@ -13,7 +13,7 @@
 | `preposition` | 介詞の用法の `id` と名詞を `:` でつないだもの             | `P001:学校`                 |
 | `complement`  | 補語の問題の `id`（動詞から選ぶは `verb:<行 ID>:<動詞>`） | `result-01`、`verb:C005:看` |
 | `vocabulary`  | 単語帳の単語の `id`                                       | UUID                        |
-| `entry`       | 復習に入れた[学習ノート](./entries.md)の `id`             | cuid                        |
+| `entry`       | 復習に入れた[学習ノート](./README.md#ノートの形)の `id`   | cuid                        |
 
 次の期日は FSRS（[go-fsrs](https://github.com/open-spaced-repetition/go-fsrs)）の既定のパラメータで決めます。定着率は 90%、学習ステップは 1 分と 10 分です。
 

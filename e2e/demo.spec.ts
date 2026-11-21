@@ -1,5 +1,5 @@
-import { expect, test } from "./fixtures";
-import { goApiURL, goCronSecret } from "./environment";
+import { expect, memberOwnerId, test, upload } from "./fixtures";
+import { demoLoginId, goApiURL, goCronSecret } from "./environment";
 
 // Puts the demo account back to its fixture, as the nightly cron does. The
 // db fixture empties the accounts before every test, so it runs each time.
@@ -122,4 +122,23 @@ test("the demo account cannot share", async ({ page, db }) => {
     `SELECT count(*)::int AS n FROM "LearningEntry" WHERE "sharedAt" IS NOT NULL`,
   );
   expect(shared.rows[0].n).toBe(0);
+});
+
+test("the demo account can import CSV", async ({ page, db }) => {
+  await resetDemo();
+  await page.goto("/signin");
+  await page.getByRole("button", { name: "デモで試す" }).click();
+  await expect(page).toHaveURL(/\/$/);
+
+  await upload(page, "デモの原文,デモの添削,demo pinyin");
+  await expect(page.getByText("1件の学習文を登録しました。")).toBeVisible();
+
+  const account = await db.query(
+    `SELECT id FROM "PasswordAccount" WHERE "loginId" = $1`,
+    [demoLoginId],
+  );
+  const { rows } = await db.query(
+    `SELECT "ownerId" FROM "LearningEntry" WHERE "originalText" = 'デモの原文'`,
+  );
+  expect(rows).toEqual([{ ownerId: memberOwnerId(account.rows[0].id) }]);
 });

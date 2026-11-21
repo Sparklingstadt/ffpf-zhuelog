@@ -13,7 +13,6 @@ import (
 
 var (
 	_ Auth    = (*auth.Service)(nil)
-	_ Entries = (*store.Store)(nil)
 	_ Follows = (*store.Store)(nil)
 	_ Pinger  = (*store.Store)(nil)
 
@@ -38,12 +37,6 @@ type Auth interface {
 	DemoEnabled() bool
 	LoginDemo(ctx context.Context, client string) (auth.TokenPair, error)
 	IsDemo(ctx context.Context, p auth.Principal) (bool, error)
-}
-
-// Entries is what the handlers need from *store.Store for the notes: the
-// web reads and writes them itself, and the API only imports CSV files.
-type Entries interface {
-	CreateImportBatch(ctx context.Context, ownerID, fileName string, drafts []store.EntryDraft, now time.Time) (store.Batch, []store.Entry, error)
 }
 
 // Follows is what the handlers need from *store.Store for the member
@@ -80,7 +73,6 @@ type Pinger interface {
 // nil Now means time.Now.
 type Deps struct {
 	Auth    Auth
-	Entries Entries
 	Follows Follows
 	// Accounts and Hasher serve the admin routes.
 	Accounts Accounts
@@ -173,7 +165,6 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	r.authRoutes()
 	r.demoRoutes()
 	r.meRoute()
-	r.entryRoutes()
 	r.memberRoutes()
 	r.accountRoutes()
 	r.adminRoutes()
@@ -293,13 +284,6 @@ func (r *registrar) demoRoutes() {
 func (r *registrar) meRoute() {
 	r.handle(route{pattern: "GET /v1/me", authed: true, allowGuest: true},
 		requireAuth(r.d.Auth, true, rejectUserParam(me(r.d.Auth))))
-}
-
-// entryRoutes is CSV import into the caller's own notes (admin and member).
-// Its body limit is 4 MiB + 256 KiB instead of 1 MiB; see limitBody. The web
-// reads, trashes and shares the notes itself.
-func (r *registrar) entryRoutes() {
-	r.private("POST "+csvImportPath, importCSV(r.d.Entries, r.d.Now))
 }
 
 // memberRoutes are the member directory, follows and the timeline. They reach

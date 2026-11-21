@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { confirmedActAs } from "./act-as";
-import { GoApiError, goApi, goUpload, type GoApiInit } from "./client";
+import { GoApiError, goApi, type GoApiInit } from "./client";
 import { CURRENT_PATH_HEADER, signInPathFor } from "./current-path";
 import { readAccessToken } from "./go-api-session";
 
@@ -11,9 +11,6 @@ export type GoApiCall = <T>(
   path: string,
   init: Omit<GoApiInit, "accessToken">,
 ) => Promise<T>;
-
-// How a gateway uploads a multipart form: goUploadAuthed in the app.
-export type GoUploadCall = <T>(path: string, form: FormData) => Promise<T>;
 
 // Go API calls as the signed-in user, for Server Components and Server
 // Actions only (they read the zl_access cookie). While an admin acts as a
@@ -28,16 +25,6 @@ export function goApiAuthed<T>(
 ): Promise<T> {
   return asSignedInUser((accessToken, actAs) =>
     goApi<T>(path, { ...init, accessToken, actAs }),
-  );
-}
-
-export function goUploadAuthed<T>(
-  path: string,
-  form: FormData,
-  init: { clientIp?: string } = {},
-): Promise<T> {
-  return asSignedInUser((accessToken, actAs) =>
-    goUpload<T>(path, form, { ...init, accessToken, actAs }),
   );
 }
 
