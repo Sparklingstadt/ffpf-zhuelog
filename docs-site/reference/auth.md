@@ -1,6 +1,6 @@
 # 認証とアカウント
 
-仕組みの説明は [認証](../guide/auth.md) にあります。このページの `/v1/auth/*`（`POST /v1/auth/refresh` を除く）と `POST /v1/account/password` には、IP ごとに 1 分 10 回の [レート制限](../guide/auth.md#レート制限) があり（同じ枠を共有）、超えると `429 rate_limited` です。`POST /v1/auth/refresh` だけは別の枠で、IP ごとに 1 分 60 回です。`GET /v1/me` に制限はありません。
+仕組みの説明は [認証](../guide/auth.md) にあります。このページの `/v1/auth/*`（`POST /v1/auth/refresh` を除く）には、IP ごとに 1 分 10 回の [レート制限](../guide/auth.md#レート制限) があり、超えると `429 rate_limited` です。`POST /v1/auth/refresh` だけは別の枠で、IP ごとに 1 分 60 回です。`GET /v1/me` に制限はありません。
 
 ## POST /v1/auth/github
 
@@ -183,51 +183,6 @@ API に `API_WEB_PROXY_SECRET` を設定したときは、`X-Zhuelog-Proxy-Secre
 | ---- | ----------------- | ----------- |
 | 400  | `invalid_request` | JSON が不正 |
 | 429  | `rate_limited`    | レート制限  |
-
-## POST /v1/account/password
-
-会員が自分のパスワードを変えます。Web の `ChangeOwnPassword` と同じ順に確かめます。
-
-- 権限：パスワードの会員（admin と FFPF ID の会員は `403`）
-- `?user=`：不可（付けると `400`）
-
-**リクエスト**
-
-```json
-{
-  "currentPassword": "demo-password-123",
-  "newPassword": "new-password-456",
-  "confirmPassword": "new-password-456"
-}
-```
-
-| フィールド        | 型     | 必須 | 内容                                                           |
-| ----------------- | ------ | ---- | -------------------------------------------------------------- |
-| `currentPassword` | string | ○    | 今のパスワード（1〜128 文字）                                  |
-| `newPassword`     | string | ○    | 新しいパスワード。UTF-16 の単位で 12〜128 文字（空白も数える） |
-| `confirmPassword` | string | ○    | `newPassword` と同じ値                                         |
-
-確かめる順番：
-
-1. パスワードの会員であること（admin・FFPF ID の会員は `403 forbidden`「この操作は会員だけが利用できます。」）
-2. `newPassword` が UTF-16 の単位で 12〜128 文字であること（違えば `400 invalid_request`）
-3. `newPassword` と `confirmPassword` が一致すること（違えば `400 password_mismatch`）
-4. 試行を 1 回数えてから（アカウントごとに 15 分で 5 回まで）、`currentPassword` を確かめる。アカウントが無い・形式違い・試行が多すぎる・違うパスワードは、どれも `400 invalid_current_password`
-
-1〜3 で失敗したときは、試行を数えません。
-
-**レスポンス** `204`（本文なし）。新しいハッシュを保存し、`sessionVersion` を 1 上げ、試行の回数を戻します。**この端末を含め、Web と API の既存のログインはすべて無効になる** ので、アプリはログインし直します。
-
-**エラー**
-
-| HTTP | code                       | message                                                               |
-| ---- | -------------------------- | --------------------------------------------------------------------- |
-| 400  | `invalid_request`          | 「パスワードは12〜128文字にしてください。」／JSON が不正              |
-| 400  | `password_mismatch`        | 「確認用のパスワードが一致しません。」                                |
-| 400  | `invalid_current_password` | 「現在のパスワードが違うか、一時的にロックされています。」            |
-| 401  | `unauthorized`             | トークンが無い・無効・失効                                            |
-| 403  | `forbidden`                | 「この操作は会員だけが利用できます。」：admin・FFPF ID の会員が呼んだ |
-| 429  | `rate_limited`             | レート制限（認証より前に数える）                                      |
 
 ## GET /v1/me
 

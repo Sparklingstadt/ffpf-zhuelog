@@ -14,6 +14,13 @@ import (
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
 )
 
+const (
+	testOwner  = "password:owner1"
+	otherOwner = "password:abcdefghij0123456789"
+)
+
+var authHeader = map[string]string{"Authorization": "Bearer tok"}
+
 // fakeAuth implements Auth with per-method hooks; an unset hook fails the test
 // by returning a sentinel error that maps to 500.
 type fakeAuth struct {
@@ -23,7 +30,6 @@ type fakeAuth struct {
 	refresh      func(ctx context.Context, token string) (auth.TokenPair, error)
 	logout       func(ctx context.Context, token string) error
 	authenticate func(ctx context.Context, accessToken string) (auth.Principal, error)
-	changePass   func(ctx context.Context, p auth.Principal, current, next, confirm string) error
 	guest        func(ctx context.Context) (auth.TokenPair, error)
 	me           func(ctx context.Context, p auth.Principal) (auth.Me, error)
 	actAs        func(ctx context.Context, p auth.Principal, ownerID string) (auth.Principal, error)
@@ -77,13 +83,6 @@ func (f *fakeAuth) Authenticate(ctx context.Context, accessToken string) (auth.P
 		return auth.Principal{}, errUnexpectedCall{"Authenticate"}
 	}
 	return f.authenticate(ctx, accessToken)
-}
-
-func (f *fakeAuth) ChangePassword(ctx context.Context, p auth.Principal, current, next, confirm string) error {
-	if f.changePass == nil {
-		return errUnexpectedCall{"ChangePassword"}
-	}
-	return f.changePass(ctx, p, current, next, confirm)
 }
 
 func (f *fakeAuth) LoginGuest(ctx context.Context) (auth.TokenPair, error) {

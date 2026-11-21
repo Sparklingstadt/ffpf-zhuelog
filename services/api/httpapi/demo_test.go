@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
-	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
 
 type fakeDemoReset struct {
@@ -40,7 +39,7 @@ func demoAuth(demo bool) *fakeAuth {
 // allRoutesDeps registers every route, the demo's included.
 func allRoutesDeps(a Auth) Deps {
 	return Deps{
-		Auth: a, Follows: &fakeFollows{},
+		Auth: a,
 		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret, DemoReset: &fakeDemoReset{},
 		Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
 	}.withDefaults()
@@ -56,11 +55,6 @@ func TestDemoIsRefusedExactlyTheClosedRoutes(t *testing.T) {
 		"DELETE /v1/line/link",
 		"PUT /v1/line/review-notify",
 		"DELETE /v1/line/review-notify",
-		"POST /v1/account/password",
-		"GET /v1/members",
-		"PUT /v1/follows/{ownerId}",
-		"DELETE /v1/follows/{ownerId}",
-		"GET /v1/timeline",
 	}
 	paths := strings.NewReplacer("{id}", "abc", "{itemId}", "abc", "{ownerId}", otherOwner)
 
@@ -92,34 +86,11 @@ func TestDemoIsRefusedExactlyTheClosedRoutes(t *testing.T) {
 	}
 }
 
-// The member directory is closed to the demo and open to a normal member.
-func TestDemoIsRefusedTheMemberDirectory(t *testing.T) {
-	follows := &fakeFollows{listMembers: func(_ context.Context, viewer string) (store.MemberDirectory, error) {
-		return store.MemberDirectory{Members: []store.Member{}}, nil
-	}}
-	d := Deps{Follows: follows}
-
-	d.Auth = demoAuth(true)
-	h, _, _ := routerWith(t, auth.RoleMember, d)
-	w := do(h, http.MethodGet, "/v1/members", "", authHeader)
-	wantError(t, w, http.StatusForbidden, "forbidden")
-	if msg := decodeError(t, w).Error.Message; msg != "デモでは使えません。" {
-		t.Fatalf("message = %q", msg)
-	}
-
-	// A normal member still gets the member directory.
-	d.Auth = demoAuth(false)
-	h, _, _ = routerWith(t, auth.RoleMember, d)
-	if w := do(h, http.MethodGet, "/v1/members", "", authHeader); w.Code != http.StatusOK {
-		t.Fatalf("member directory: %d %s", w.Code, w.Body.String())
-	}
-}
-
 func TestDemoCheckErrorIsNotAPass(t *testing.T) {
 	a := tokenAuth(auth.RoleMember)
 	a.isDemo = func(context.Context, auth.Principal) (bool, error) { return false, errors.New("db down") }
-	h, _, _ := routerWith(t, auth.RoleMember, Deps{Auth: a, Follows: &fakeFollows{}})
-	wantError(t, do(h, http.MethodGet, "/v1/members", "", authHeader), http.StatusInternalServerError, "internal")
+	h, _, _ := routerWith(t, auth.RoleMember, Deps{Auth: a, Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret})
+	wantError(t, do(h, http.MethodGet, "/v1/line/link", "", authHeader), http.StatusInternalServerError, "internal")
 }
 
 func TestDemoStatus(t *testing.T) {

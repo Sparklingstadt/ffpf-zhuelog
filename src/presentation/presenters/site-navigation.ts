@@ -159,7 +159,7 @@ const PRACTICE: MenuSection = {
 // The menu's sections for a role. The notes and the review are left out:
 // they are always one tap away in the tabs or the header. Practice and the
 // vocabulary are in it, since phones have no tab for them. The demo account (a member)
-// gets no AI features, follows, LINE or password change: Go refuses them, so
+// gets no AI features, follows, LINE or password change: the app refuses them, so
 // the menu leaves them out and keeps only the saved conversations.
 export function menuSections(
   role: AppRole,

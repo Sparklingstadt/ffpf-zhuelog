@@ -1,5 +1,5 @@
 import type { AppRole } from "@/domain/identity/entities/authenticated-user";
-import type { FollowResult } from "@/infrastructure/go-api/social-gateway";
+import type { FollowResult } from "@/domain/social/follow";
 import { z } from "zod";
 
 import {

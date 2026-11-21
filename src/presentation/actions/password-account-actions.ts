@@ -3,17 +3,19 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 
+import { memberAccounts, ownPassword } from "@/composition/account-container";
 import {
   getCurrentAdminUser,
   getCurrentMemberUser,
-  memberAccounts,
 } from "@/composition/identity-container";
 import { clientAddress } from "@/infrastructure/auth/client-address";
 import { signOutViaGo } from "@/infrastructure/go-api/go-api-session";
 import { attemptGo } from "@/presentation/controllers/action-state";
 import {
   accountForbiddenMessage,
+  accountInputMessage,
   accountNotFoundMessage,
+  changePasswordMessage,
 } from "@/presentation/presenters/account-action-errors";
 
 export type AccountActionState =
@@ -38,8 +40,9 @@ function field(formData: FormData, name: string) {
   return typeof value === "string" ? value : "";
 }
 
-// Turns a failed Go call into the form's error (see attemptGo). Only fixed
-// codes are logged: the form data carries plaintext passwords.
+// Turns a failed account call (the database, a hash, or an admin-only refusal)
+// into the form's error (see attemptGo). Only fixed codes and error names are
+// logged: the form data carries plaintext passwords.
 async function attemptAccountCall<T>(
   code: string,
   run: () => Promise<T>,
@@ -69,15 +72,20 @@ export async function createPasswordAccountAction(
   const result = await attemptAccountCall(
     "PASSWORD_ACCOUNT_CREATE_FAILED",
     () =>
-      memberAccounts.createAccount({
+      memberAccounts.create({
         loginId: field(formData, "loginId"),
         displayName: field(formData, "displayName"),
         password: field(formData, "password"),
       }),
   );
   if (!result.ok) return result.state;
+  if (!result.value.ok)
+    return {
+      status: "error",
+      message: accountInputMessage(result.value.reason),
+    };
   refreshAccountList();
-  return { status: "success", ...result.value };
+  return { status: "success", ...result.value.issued };
 }
 
 export async function resetPasswordAccountPasswordAction(
@@ -91,10 +99,16 @@ export async function resetPasswordAccountPasswordAction(
     memberAccounts.resetPassword(accountId, field(formData, "password")),
   );
   if (!result.ok) return result.state;
-  if (!result.value)
-    return { status: "error", message: accountNotFoundMessage };
+  if (!result.value.ok)
+    return {
+      status: "error",
+      message:
+        result.value.reason === "password"
+          ? accountInputMessage("password")
+          : accountNotFoundMessage,
+    };
   refreshAccountList();
-  return { status: "success", ...result.value };
+  return { status: "success", ...result.value.issued };
 }
 
 export type ChangePasswordState =
@@ -107,20 +121,26 @@ export async function changeOwnPasswordAction(
   const user = await getCurrentMemberUser();
   if (user?.role !== "member") return forbidden;
 
-  const clientIp = clientAddress(await headers());
+  const client = clientAddress(await headers());
   const result = await attemptAccountCall("PASSWORD_CHANGE_FAILED", () =>
-    memberAccounts.changeOwnPassword(
+    ownPassword.change(
       {
         currentPassword: field(formData, "currentPassword"),
         newPassword: field(formData, "newPassword"),
         confirmPassword: field(formData, "confirmPassword"),
       },
-      clientIp,
+      client,
     ),
   );
   if (!result.ok) return result.state;
-  // Go has revoked every session of the member. Runs outside any try/catch:
-  // signOutViaGo ends by throwing NEXT_REDIRECT.
+  const outcome = result.value;
+  if (outcome === "rate-limited") console.error("PASSWORD_CHANGE_RATE_LIMITED");
+  if (outcome !== "changed")
+    return { status: "error", message: changePasswordMessage(outcome) };
+  // The change bumped the account's sessionVersion, which revokes every
+  // session of the member; Go's sign-out also revokes this browser's refresh
+  // token family (until sign-in moves, stage 11). Runs outside any
+  // try/catch: signOutViaGo ends by throwing NEXT_REDIRECT.
   await signOutViaGo("/signin?notice=password-changed");
   return { status: "idle" };
 }

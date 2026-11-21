@@ -1,7 +1,6 @@
 package jsstr
 
 import (
-	"strings"
 	"testing"
 	"unicode/utf8"
 )
@@ -44,26 +43,6 @@ func TestTrim(t *testing.T) {
 	for _, c := range cases {
 		if got := Trim(c.in); got != c.want {
 			t.Errorf("Trim(%q) = %q, want %q", c.in, got, c.want)
-		}
-	}
-}
-
-func TestLen(t *testing.T) {
-	cases := []struct {
-		in   string
-		want int
-	}{
-		{"", 0},
-		{"abc", 3},
-		{"あいう", 3},
-		{"\U0001F600", 2},
-		{strings.Repeat("\U0001F600", 6), 12},
-		{"a\U0001F600b", 4},
-		{"\xff", 1},
-	}
-	for _, c := range cases {
-		if got := Len(c.in); got != c.want {
-			t.Errorf("Len(%q) = %d, want %d", c.in, got, c.want)
 		}
 	}
 }

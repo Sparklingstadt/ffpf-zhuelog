@@ -36,16 +36,6 @@ tokens=$(call POST /v1/auth/password 200 "$login")
 TOKEN=$(jq -r .accessToken <<<"$tokens")
 refresh=$(jq -r .refreshToken <<<"$tokens")
 
-members=$(call GET /v1/members 200)
-# The directory does not expose loginId; find the friend by the display name
-# scripts/api-local-seed.ts gives it.
-friend=$(jq -r '.members[] | select(.displayName == "フレンド") | .ownerId' <<<"$members")
-call PUT "/v1/follows/$friend" 204 >/dev/null
-timeline=$(call GET "/v1/timeline?limit=10" 200)
-echo "     timeline: $(jq '.items | length' <<<"$timeline") item(s) from $API_LOCAL_FRIEND_LOGIN" >&2
-
-call DELETE "/v1/follows/$friend" 204 >/dev/null
-
 TOKEN=""
 renewed=$(call POST /v1/auth/refresh 200 "$(jq -n --arg t "$refresh" '{refreshToken: $t}')")
 call POST /v1/auth/logout 204 "$(jq -n --arg t "$(jq -r .refreshToken <<<"$renewed")" '{refreshToken: $t}')" >/dev/null

@@ -53,9 +53,9 @@ func loginDemo(a Auth, clientKey func(*http.Request) string) http.Handler {
 	})
 }
 
-// notDemo answers 403 to the demo account. The routes it wraps call OpenAI,
-// reach other members (follows, sharing) or change the account (password,
-// LINE); everything else the demo may use like any member.
+// notDemo answers 403 to the demo account. The routes it wraps change the
+// account (password, LINE link); everything else the demo may use like any
+// member.
 func notDemo(a Auth, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		demo, err := a.IsDemo(r.Context(), principalFrom(r.Context()))
