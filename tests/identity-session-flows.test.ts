@@ -1,13 +1,11 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { afterEach, beforeEach, test, type TestContext } from "node:test";
 
 import type { SignInResult } from "../src/application/identity/sign-in";
 import type { AuthenticatedUser } from "../src/domain/identity/entities/authenticated-user";
 import { parseFfpfOAuthCookie } from "../src/infrastructure/auth/ffpf-oauth";
-import {
-  parseOAuthCookie,
-  pkceChallenge,
-} from "../src/infrastructure/auth/github-oauth";
+import { parseOAuthCookie } from "../src/infrastructure/auth/github-oauth";
 import {
   installNextStubs,
   next,
@@ -72,6 +70,21 @@ const clearedCookies = [
   ["zl_access", "", 0],
   ["zl_refresh", "", 0],
 ];
+
+// The PKCE verifier as zl_oauth stores it (base64url JSON), and the S256
+// challenge RFC 7636 makes of it: BASE64URL(SHA256(verifier)), worked out
+// here rather than with the code under test.
+function storedVerifier(cookieValue: string): string {
+  const stored: unknown = JSON.parse(
+    Buffer.from(cookieValue, "base64url").toString("utf8"),
+  );
+  const { verifier } = stored as { verifier?: unknown };
+  assert.equal(typeof verifier, "string");
+  return verifier as string;
+}
+function s256Challenge(verifier: string): string {
+  return createHash("sha256").update(verifier).digest("base64url");
+}
 
 const ENV = [
   "AUTH_URL",
@@ -325,7 +338,9 @@ test("GitHub sign-in keeps state and PKCE in zl_oauth and sends the browser to G
     maxAge: 600,
   });
   const saved = parseOAuthCookie(cookie!.value);
+  const verifier = storedVerifier(cookie!.value);
   assert.equal(saved?.callbackPath, "/logs");
+  assert.equal(saved?.verifier, verifier);
   assert.equal(
     url.origin + url.pathname,
     "https://github.com/login/oauth/authorize",
@@ -336,12 +351,12 @@ test("GitHub sign-in keeps state and PKCE in zl_oauth and sends the browser to G
     redirect_uri: "http://zhuelog.example/api/auth/callback/github/go",
     scope: "read:user",
     state: saved!.state,
-    code_challenge: pkceChallenge(saved!.verifier),
+    code_challenge: s256Challenge(verifier),
     code_challenge_method: "S256",
   });
   // The secret and the verifier stay on the server.
   assert.doesNotMatch(url.href, /github-secret/);
-  assert.ok(!url.href.includes(saved!.verifier));
+  assert.ok(!url.href.includes(verifier));
 
   // AUTH_URL names the public origin and makes the cookie Secure.
   process.env.AUTH_URL = "https://zhuelog.app/ignored";
@@ -373,7 +388,9 @@ test("FFPF ID sign-in keeps state, PKCE and the nonce in zl_oauth and sends the 
     [["zl_oauth", 600]],
   );
   const saved = parseFfpfOAuthCookie(next.written[0]!.value);
+  const verifier = storedVerifier(next.written[0]!.value);
   assert.equal(saved?.callbackPath, "/logs");
+  assert.equal(saved?.verifier, verifier);
   // A GitHub callback never finishes an FFPF start.
   assert.equal(parseOAuthCookie(next.written[0]!.value), null);
   assert.equal(url.origin, "https://id.ffpf.example");
@@ -384,12 +401,9 @@ test("FFPF ID sign-in keeps state, PKCE and the nonce in zl_oauth and sends the 
   );
   assert.equal(url.searchParams.get("state"), saved!.state);
   assert.equal(url.searchParams.get("nonce"), saved!.nonce);
-  assert.equal(
-    url.searchParams.get("code_challenge"),
-    pkceChallenge(saved!.verifier),
-  );
+  assert.equal(url.searchParams.get("code_challenge"), s256Challenge(verifier));
   assert.doesNotMatch(url.href, /ffpf-secret/);
-  assert.ok(!url.href.includes(saved!.verifier));
+  assert.ok(!url.href.includes(verifier));
 });
 
 test("signing out ends the session row and clears every session cookie", async () => {
