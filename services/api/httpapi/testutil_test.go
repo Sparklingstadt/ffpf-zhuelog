@@ -35,8 +35,6 @@ type fakeAuth struct {
 	actAs        func(ctx context.Context, p auth.Principal, ownerID string) (auth.Principal, error)
 	demoEnabled  bool
 	loginDemo    func(ctx context.Context, client string) (auth.TokenPair, error)
-	// isDemo is optional: unset, nobody is the demo account.
-	isDemo func(ctx context.Context, p auth.Principal) (bool, error)
 }
 
 type errUnexpectedCall struct{ name string }
@@ -113,13 +111,6 @@ func (f *fakeAuth) LoginDemo(ctx context.Context, client string) (auth.TokenPair
 		return auth.TokenPair{}, errUnexpectedCall{"LoginDemo"}
 	}
 	return f.loginDemo(ctx, client)
-}
-
-func (f *fakeAuth) IsDemo(ctx context.Context, p auth.Principal) (bool, error) {
-	if f.isDemo == nil {
-		return false, nil
-	}
-	return f.isDemo(ctx, p)
 }
 
 type fakePinger struct{ err error }
@@ -228,5 +219,3 @@ func wantError(t *testing.T, w *httptest.ResponseRecorder, status int, code stri
 		t.Fatalf("Cache-Control = %q, want no-store", got)
 	}
 }
-
-var jsonAuth = map[string]string{"Authorization": "Bearer tok", "Content-Type": "application/json"}

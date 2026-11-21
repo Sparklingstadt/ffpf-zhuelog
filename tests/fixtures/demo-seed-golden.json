@@ -1,0 +1,1536 @@
+{
+  "cases": [
+    {
+      "now": "2026-11-10T19:00:00.000Z",
+      "seed": {
+        "displayName": "デモ",
+        "notes": [
+          {
+            "kind": "correction",
+            "originalText": "我昨天去了图书馆看书三个小时。",
+            "correctedText": "我昨天在图书馆看了三个小时书。",
+            "pinyin": "Wǒ zuótiān zài túshūguǎn kàn le sān gè xiǎoshí shū.",
+            "hints": [
+              "「場所で何かをする」は「在＋場所＋動詞」の順にする",
+              "時間の長さは動詞の後ろ、目的語の前に置く（看了三个小时书）"
+            ],
+            "createdAt": "2026-11-04T00:15:00.000Z",
+            "review": {
+              "card": {
+                "due": "2026-11-10T18:00:00.000Z",
+                "stability": 2.3065,
+                "difficulty": 2.118103970459015,
+                "scheduledDays": 0,
+                "reps": 1,
+                "lapses": 0,
+                "state": 1,
+                "remainingSteps": 1,
+                "lastReview": "2026-11-05T23:00:00.000Z"
+              },
+              "answers": [
+                {
+                  "rating": 3,
+                  "at": "2026-11-05T23:00:00.000Z",
+                  "before": {
+                    "due": "2026-11-04T00:15:00.000Z",
+                    "stability": 0,
+                    "difficulty": 0,
+                    "scheduledDays": 0,
+                    "reps": 0,
+                    "lapses": 0,
+                    "state": 0,
+                    "remainingSteps": 0,
+                    "lastReview": null
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "kind": "correction",
+            "originalText": "我买了一个新裤子。",
+            "correctedText": "我买了一条新裤子。",
+            "pinyin": "Wǒ mǎi le yì tiáo xīn kùzi.",
+            "hints": [
+              "ズボンやスカートなど細長いものの量詞は「条」"
+            ],
+            "createdAt": "2026-11-04T12:40:00.000Z",
+            "review": null
+          },
+          {
+            "kind": "correction",
+            "originalText": "我很感兴趣中国文化。",
+            "correctedText": "我对中国文化很感兴趣。",
+            "pinyin": "Wǒ duì Zhōngguó wénhuà hěn gǎn xìngqù.",
+            "hints": [
+              "「〜に興味がある」は「对〜感兴趣」",
+              "「感兴趣」は目的語を直接とらない"
+            ],
+            "createdAt": "2026-11-04T23:30:00.000Z",
+            "review": null
+          },
+          {
+            "kind": "translation",
+            "originalText": "週末は友達と一緒に餃子を作りました。",
+            "correctedText": "周末我和朋友一起包了饺子。",
+            "pinyin": "Zhōumò wǒ hé péngyou yìqǐ bāo le jiǎozi.",
+            "hints": [
+              "餃子を「作る」は「包」",
+              "「和〜一起」で「〜と一緒に」"
+            ],
+            "createdAt": "2026-11-06T03:10:00.000Z",
+            "review": null
+          },
+          {
+            "kind": "correction",
+            "originalText": "他跑得很快比我。",
+            "correctedText": "他跑得比我快。",
+            "pinyin": "Tā pǎo de bǐ wǒ kuài.",
+            "hints": [
+              "比べるときは「動詞＋得＋比B＋形容詞」",
+              "「比」の文では形容詞に「很」を付けない"
+            ],
+            "createdAt": "2026-11-06T13:05:00.000Z",
+            "review": null
+          },
+          {
+            "kind": "correction",
+            "originalText": "我已经吃饭完了。",
+            "correctedText": "我已经吃完饭了。",
+            "pinyin": "Wǒ yǐjīng chī wán fàn le.",
+            "hints": [
+              "結果補語の「完」は動詞のすぐ後ろ。目的語はその後に置く"
+            ],
+            "createdAt": "2026-11-07T10:20:00.000Z",
+            "review": {
+              "card": {
+                "due": "2026-11-10T18:00:00.000Z",
+                "stability": 0,
+                "difficulty": 0,
+                "scheduledDays": 0,
+                "reps": 0,
+                "lapses": 0,
+                "state": 0,
+                "remainingSteps": 0,
+                "lastReview": null
+              },
+              "answers": []
+            }
+          },
+          {
+            "kind": "correction",
+            "originalText": "我每天早上七点钟起床了。",
+            "correctedText": "我每天早上七点起床。",
+            "pinyin": "Wǒ měitiān zǎoshang qī diǎn qǐchuáng.",
+            "hints": [
+              "毎日の習慣には「了」を付けない"
+            ],
+            "createdAt": "2026-11-07T22:50:00.000Z",
+            "review": null
+          },
+          {
+            "kind": "translation",
+            "originalText": "この本は難しすぎて、半分しか分かりませんでした。",
+            "correctedText": "这本书太难了，我只看懂了一半。",
+            "pinyin": "Zhè běn shū tài nán le, wǒ zhǐ kàn dǒng le yíbàn.",
+            "hints": [
+              "「太〜了」で「〜すぎる」",
+              "「看懂」は読んで分かる（結果補語）"
+            ],
+            "createdAt": "2026-11-08T11:30:00.000Z",
+            "review": null
+          },
+          {
+            "kind": "correction",
+            "originalText": "我没有去过上海过。",
+            "correctedText": "我没去过上海。",
+            "pinyin": "Wǒ méi qù guo Shànghǎi.",
+            "hints": [
+              "経験の「过」は動詞のすぐ後ろに一度だけ",
+              "否定は「没（有）＋動詞＋过」"
+            ],
+            "createdAt": "2026-11-08T23:45:00.000Z",
+            "review": {
+              "card": {
+                "due": "2026-11-12T19:00:00.000Z",
+                "stability": 1.2931,
+                "difficulty": 5.112170705601055,
+                "scheduledDays": 0,
+                "reps": 1,
+                "lapses": 0,
+                "state": 1,
+                "remainingSteps": 2,
+                "lastReview": "2026-11-09T22:30:00.000Z"
+              },
+              "answers": [
+                {
+                  "rating": 2,
+                  "at": "2026-11-09T22:30:00.000Z",
+                  "before": {
+                    "due": "2026-11-08T23:45:00.000Z",
+                    "stability": 0,
+                    "difficulty": 0,
+                    "scheduledDays": 0,
+                    "reps": 0,
+                    "lapses": 0,
+                    "state": 0,
+                    "remainingSteps": 0,
+                    "lastReview": null
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "kind": "correction",
+            "originalText": "请你帮我一下拿这个箱子。",
+            "correctedText": "请你帮我拿一下这个箱子。",
+            "pinyin": "Qǐng nǐ bāng wǒ ná yíxià zhège xiāngzi.",
+            "hints": [
+              "「一下」は動詞の後ろに置く（拿一下）"
+            ],
+            "createdAt": "2026-11-09T12:15:00.000Z",
+            "review": null
+          },
+          {
+            "kind": "correction",
+            "originalText": "外面下雨着呢。",
+            "correctedText": "外面下着雨呢。",
+            "pinyin": "Wàimiàn xià zhe yǔ ne.",
+            "hints": [
+              "持続の「着」は動詞のすぐ後ろ",
+              "「下雨」は離合詞なので「下着雨」になる"
+            ],
+            "createdAt": "2026-11-10T03:30:00.000Z",
+            "review": null
+          },
+          {
+            "kind": "translation",
+            "originalText": "明日の会議は午後三時からです。",
+            "correctedText": "明天的会议下午三点开始。",
+            "pinyin": "Míngtiān de huìyì xiàwǔ sān diǎn kāishǐ.",
+            "hints": [
+              "時刻は動詞の前に置く"
+            ],
+            "createdAt": "2026-11-10T13:00:00.000Z",
+            "review": null
+          }
+        ],
+        "words": [
+          {
+            "word": "图书馆",
+            "pinyin": "túshūguǎn",
+            "meaning": "図書館",
+            "sourceNote": 0,
+            "createdAt": "2026-11-04T00:20:00.000Z",
+            "review": {
+              "card": {
+                "due": "2026-11-24T23:00:00.000Z",
+                "stability": 16.177263202654682,
+                "difficulty": 2.1112142357853942,
+                "scheduledDays": 16,
+                "reps": 2,
+                "lapses": 0,
+                "state": 2,
+                "remainingSteps": 0,
+                "lastReview": "2026-11-08T23:00:00.000Z"
+              },
+              "answers": [
+                {
+                  "rating": 3,
+                  "at": "2026-11-04T23:10:00.000Z",
+                  "before": {
+                    "due": "2026-11-04T00:20:00.000Z",
+                    "stability": 0,
+                    "difficulty": 0,
+                    "scheduledDays": 0,
+                    "reps": 0,
+                    "lapses": 0,
+                    "state": 0,
+                    "remainingSteps": 0,
+                    "lastReview": null
+                  }
+                },
+                {
+                  "rating": 3,
+                  "at": "2026-11-08T23:00:00.000Z",
+                  "before": {
+                    "due": "2026-11-04T23:20:00.000Z",
+                    "stability": 2.3065,
+                    "difficulty": 2.118103970459015,
+                    "scheduledDays": 0,
+                    "reps": 1,
+                    "lapses": 0,
+                    "state": 1,
+                    "remainingSteps": 1,
+                    "lastReview": "2026-11-04T23:10:00.000Z"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "word": "裤子",
+            "pinyin": "kùzi",
+            "meaning": "ズボン",
+            "sourceNote": 1,
+            "createdAt": "2026-11-04T12:45:00.000Z",
+            "review": {
+              "card": {
+                "due": "2026-11-10T18:00:00.000Z",
+                "stability": 1.8867876195204154,
+                "difficulty": 6.402115069296838,
+                "scheduledDays": 0,
+                "reps": 2,
+                "lapses": 0,
+                "state": 1,
+                "remainingSteps": 1,
+                "lastReview": "2026-11-05T23:05:00.000Z"
+              },
+              "answers": [
+                {
+                  "rating": 1,
+                  "at": "2026-11-04T23:12:00.000Z",
+                  "before": {
+                    "due": "2026-11-04T12:45:00.000Z",
+                    "stability": 0,
+                    "difficulty": 0,
+                    "scheduledDays": 0,
+                    "reps": 0,
+                    "lapses": 0,
+                    "state": 0,
+                    "remainingSteps": 0,
+                    "lastReview": null
+                  }
+                },
+                {
+                  "rating": 3,
+                  "at": "2026-11-05T23:05:00.000Z",
+                  "before": {
+                    "due": "2026-11-04T23:13:00.000Z",
+                    "stability": 0.212,
+                    "difficulty": 6.4133,
+                    "scheduledDays": 0,
+                    "reps": 1,
+                    "lapses": 0,
+                    "state": 1,
+                    "remainingSteps": 2,
+                    "lastReview": "2026-11-04T23:12:00.000Z"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "word": "感兴趣",
+            "pinyin": "gǎn xìngqù",
+            "meaning": "興味がある（对〜感兴趣）",
+            "sourceNote": 2,
+            "createdAt": "2026-11-04T23:35:00.000Z",
+            "review": {
+              "card": {
+                "due": "2026-11-12T19:00:00.000Z",
+                "stability": 2.3065,
+                "difficulty": 2.118103970459015,
+                "scheduledDays": 0,
+                "reps": 1,
+                "lapses": 0,
+                "state": 1,
+                "remainingSteps": 1,
+                "lastReview": "2026-11-05T23:07:00.000Z"
+              },
+              "answers": [
+                {
+                  "rating": 3,
+                  "at": "2026-11-05T23:07:00.000Z",
+                  "before": {
+                    "due": "2026-11-04T23:35:00.000Z",
+                    "stability": 0,
+                    "difficulty": 0,
+                    "scheduledDays": 0,
+                    "reps": 0,
+                    "lapses": 0,
+                    "state": 0,
+                    "remainingSteps": 0,
+                    "lastReview": null
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "word": "包饺子",
+            "pinyin": "bāo jiǎozi",
+            "meaning": "餃子を作る（皮で包む）",
+            "sourceNote": 3,
+            "createdAt": "2026-11-06T03:15:00.000Z",
+            "review": {
+              "card": {
+                "due": "2026-11-14T22:55:00.000Z",
+                "stability": 8.2956,
+                "difficulty": 1,
+                "scheduledDays": 8,
+                "reps": 1,
+                "lapses": 0,
+                "state": 2,
+                "remainingSteps": 0,
+                "lastReview": "2026-11-06T22:55:00.000Z"
+              },
+              "answers": [
+                {
+                  "rating": 4,
+                  "at": "2026-11-06T22:55:00.000Z",
+                  "before": {
+                    "due": "2026-11-06T03:15:00.000Z",
+                    "stability": 0,
+                    "difficulty": 0,
+                    "scheduledDays": 0,
+                    "reps": 0,
+                    "lapses": 0,
+                    "state": 0,
+                    "remainingSteps": 0,
+                    "lastReview": null
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "word": "比",
+            "pinyin": "bǐ",
+            "meaning": "〜より（比較）",
+            "sourceNote": 4,
+            "createdAt": "2026-11-06T13:10:00.000Z",
+            "review": {
+              "card": {
+                "due": "2026-11-10T18:00:00.000Z",
+                "stability": 1.2931,
+                "difficulty": 5.112170705601055,
+                "scheduledDays": 0,
+                "reps": 1,
+                "lapses": 0,
+                "state": 1,
+                "remainingSteps": 2,
+                "lastReview": "2026-11-06T22:58:00.000Z"
+              },
+              "answers": [
+                {
+                  "rating": 2,
+                  "at": "2026-11-06T22:58:00.000Z",
+                  "before": {
+                    "due": "2026-11-06T13:10:00.000Z",
+                    "stability": 0,
+                    "difficulty": 0,
+                    "scheduledDays": 0,
+                    "reps": 0,
+                    "lapses": 0,
+                    "state": 0,
+                    "remainingSteps": 0,
+                    "lastReview": null
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "word": "已经",
+            "pinyin": "yǐjīng",
+            "meaning": "すでに、もう",
+            "sourceNote": 5,
+            "createdAt": "2026-11-07T10:25:00.000Z",
+            "review": {
+              "card": {
+                "due": "2026-11-07T10:25:00.000Z",
+                "stability": 0,
+                "difficulty": 0,
+                "scheduledDays": 0,
+                "reps": 0,
+                "lapses": 0,
+                "state": 0,
+                "remainingSteps": 0,
+                "lastReview": null
+              },
+              "answers": []
+            }
+          },
+          {
+            "word": "起床",
+            "pinyin": "qǐchuáng",
+            "meaning": "起きる、起床する",
+            "sourceNote": 6,
+            "createdAt": "2026-11-07T22:55:00.000Z",
+            "review": {
+              "card": {
+                "due": "2026-11-12T19:00:00.000Z",
+                "stability": 2.3065,
+                "difficulty": 2.118103970459015,
+                "scheduledDays": 0,
+                "reps": 1,
+                "lapses": 0,
+                "state": 1,
+                "remainingSteps": 1,
+                "lastReview": "2026-11-08T23:03:00.000Z"
+              },
+              "answers": [
+                {
+                  "rating": 3,
+                  "at": "2026-11-08T23:03:00.000Z",
+                  "before": {
+                    "due": "2026-11-07T22:55:00.000Z",
+                    "stability": 0,
+                    "difficulty": 0,
+                    "scheduledDays": 0,
+                    "reps": 0,
+                    "lapses": 0,
+                    "state": 0,
+                    "remainingSteps": 0,
+                    "lastReview": null
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "word": "一半",
+            "pinyin": "yíbàn",
+            "meaning": "半分",
+            "sourceNote": 7,
+            "createdAt": "2026-11-08T11:35:00.000Z",
+            "review": {
+              "card": {
+                "due": "2026-11-08T11:35:00.000Z",
+                "stability": 0,
+                "difficulty": 0,
+                "scheduledDays": 0,
+                "reps": 0,
+                "lapses": 0,
+                "state": 0,
+                "remainingSteps": 0,
+                "lastReview": null
+              },
+              "answers": []
+            }
+          },
+          {
+            "word": "箱子",
+            "pinyin": "xiāngzi",
+            "meaning": "箱、スーツケース",
+            "sourceNote": 9,
+            "createdAt": "2026-11-09T12:20:00.000Z",
+            "review": {
+              "card": {
+                "due": "2026-11-09T12:20:00.000Z",
+                "stability": 0,
+                "difficulty": 0,
+                "scheduledDays": 0,
+                "reps": 0,
+                "lapses": 0,
+                "state": 0,
+                "remainingSteps": 0,
+                "lastReview": null
+              },
+              "answers": []
+            }
+          },
+          {
+            "word": "会议",
+            "pinyin": "huìyì",
+            "meaning": "会議",
+            "sourceNote": 11,
+            "createdAt": "2026-11-10T13:05:00.000Z",
+            "review": {
+              "card": {
+                "due": "2026-11-10T13:05:00.000Z",
+                "stability": 0,
+                "difficulty": 0,
+                "scheduledDays": 0,
+                "reps": 0,
+                "lapses": 0,
+                "state": 0,
+                "remainingSteps": 0,
+                "lastReview": null
+              },
+              "answers": []
+            }
+          }
+        ],
+        "conversations": [
+          {
+            "title": "レストランで注文する",
+            "modelName": "gpt-6.1-sol",
+            "ended": true,
+            "createdAt": "2026-11-08T12:00:00.000Z",
+            "updatedAt": "2026-11-08T12:06:00.000Z",
+            "messages": [
+              {
+                "role": "user",
+                "text": "我想用中文练习在饭店点菜。你当服务员吧。"
+              },
+              {
+                "role": "assistant",
+                "text": "好的！欢迎光临，请问几位？这是菜单。"
+              },
+              {
+                "role": "user",
+                "text": "两位。我们想要一个宫保鸡丁和一碗米饭。"
+              },
+              {
+                "role": "assistant",
+                "text": "好的，一份宫保鸡丁，一碗米饭。要喝点儿什么吗？\n\n料理を注文するときは「一个」より「一份」が自然です。"
+              },
+              {
+                "role": "user",
+                "text": "来两杯茶吧。谢谢！"
+              },
+              {
+                "role": "assistant",
+                "text": "好的，请稍等，菜马上就来！"
+              }
+            ]
+          },
+          {
+            "title": "週末の予定を話す",
+            "modelName": "gpt-6.1-sol",
+            "ended": true,
+            "createdAt": "2026-11-10T11:15:00.000Z",
+            "updatedAt": "2026-11-10T11:21:00.000Z",
+            "messages": [
+              {
+                "role": "user",
+                "text": "这个周末你有什么打算？"
+              },
+              {
+                "role": "assistant",
+                "text": "我打算去公园散步，然后在家看书。你呢？"
+              },
+              {
+                "role": "user",
+                "text": "我要跟朋友去爬山，可是天气预报说会下雨。"
+              },
+              {
+                "role": "assistant",
+                "text": "那太可惜了。如果下雨的话，你们可以去博物馆。\n\n「如果……的话」で「もし〜なら」を表せます。"
+              },
+              {
+                "role": "user",
+                "text": "好主意！如果下雨的话，我们就去博物馆。"
+              },
+              {
+                "role": "assistant",
+                "text": "很好！「如果……的话，就……」の形を正しく使えています。"
+              }
+            ]
+          }
+        ],
+        "prepositionRecords": [
+          {
+            "elapsedMs": 96000,
+            "startedAt": "2026-11-05T11:00:00.000Z",
+            "createdAt": "2026-11-05T11:01:36.000Z",
+            "questions": [
+              {
+                "id": "P001",
+                "answer": "在",
+                "noun": "学校",
+                "prompt": "（　）学校学习",
+                "misses": []
+              },
+              {
+                "id": "P003",
+                "answer": "从",
+                "noun": "车站",
+                "prompt": "（　）车站出发",
+                "misses": [
+                  "在"
+                ]
+              },
+              {
+                "id": "P062",
+                "answer": "对",
+                "noun": "历史",
+                "prompt": "（　）历史感兴趣",
+                "misses": []
+              },
+              {
+                "id": "P078",
+                "answer": "给",
+                "noun": "妈妈",
+                "prompt": "（　）妈妈打电话",
+                "misses": [
+                  "跟",
+                  "对"
+                ]
+              },
+              {
+                "id": "P086",
+                "answer": "比",
+                "noun": "弟弟",
+                "prompt": "（　）弟弟高",
+                "misses": []
+              }
+            ]
+          },
+          {
+            "elapsedMs": 74000,
+            "startedAt": "2026-11-09T10:30:00.000Z",
+            "createdAt": "2026-11-09T10:31:14.000Z",
+            "questions": [
+              {
+                "id": "P070",
+                "answer": "跟",
+                "noun": "朋友",
+                "prompt": "（　）朋友旅行",
+                "misses": []
+              },
+              {
+                "id": "P027",
+                "answer": "离",
+                "noun": "学校",
+                "prompt": "（　）学校很近",
+                "misses": [
+                  "从"
+                ]
+              },
+              {
+                "id": "P041",
+                "answer": "往",
+                "noun": "北",
+                "prompt": "（　）北走",
+                "misses": []
+              },
+              {
+                "id": "P146",
+                "answer": "把",
+                "noun": "门",
+                "prompt": "（　）门关上",
+                "misses": []
+              },
+              {
+                "id": "P148",
+                "answer": "被",
+                "noun": "风",
+                "prompt": "（　）风吹倒",
+                "misses": []
+              }
+            ]
+          }
+        ],
+        "complementRecords": [
+          {
+            "mode": "result",
+            "elapsedMs": 81000,
+            "startedAt": "2026-11-08T13:00:00.000Z",
+            "createdAt": "2026-11-08T13:01:21.000Z",
+            "questions": [
+              {
+                "id": "result-01",
+                "answer": "懂",
+                "noun": "結果補語",
+                "prompt": "我听（　）了老师的解释。",
+                "misses": []
+              },
+              {
+                "id": "result-02",
+                "answer": "到",
+                "noun": "結果補語",
+                "prompt": "我终于找（　）钥匙了。",
+                "misses": [
+                  "完"
+                ]
+              },
+              {
+                "id": "result-03",
+                "answer": "完",
+                "noun": "結果補語",
+                "prompt": "今天的作业已经做（　）了。",
+                "misses": []
+              },
+              {
+                "id": "result-04",
+                "answer": "错",
+                "noun": "結果補語",
+                "prompt": "他把我的名字写（　）了。",
+                "misses": []
+              },
+              {
+                "id": "result-07",
+                "answer": "见",
+                "noun": "結果補語",
+                "prompt": "我在楼下看（　）了小王。",
+                "misses": [
+                  "懂"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "now": "2026-11-10T15:30:00.000Z",
+      "seed": {
+        "displayName": "デモ",
+        "notes": [
+          {
+            "kind": "correction",
+            "originalText": "我昨天去了图书馆看书三个小时。",
+            "correctedText": "我昨天在图书馆看了三个小时书。",
+            "pinyin": "Wǒ zuótiān zài túshūguǎn kàn le sān gè xiǎoshí shū.",
+            "hints": [
+              "「場所で何かをする」は「在＋場所＋動詞」の順にする",
+              "時間の長さは動詞の後ろ、目的語の前に置く（看了三个小时书）"
+            ],
+            "createdAt": "2026-11-04T00:15:00.000Z",
+            "review": {
+              "card": {
+                "due": "2026-11-10T14:30:00.000Z",
+                "stability": 2.3065,
+                "difficulty": 2.118103970459015,
+                "scheduledDays": 0,
+                "reps": 1,
+                "lapses": 0,
+                "state": 1,
+                "remainingSteps": 1,
+                "lastReview": "2026-11-05T23:00:00.000Z"
+              },
+              "answers": [
+                {
+                  "rating": 3,
+                  "at": "2026-11-05T23:00:00.000Z",
+                  "before": {
+                    "due": "2026-11-04T00:15:00.000Z",
+                    "stability": 0,
+                    "difficulty": 0,
+                    "scheduledDays": 0,
+                    "reps": 0,
+                    "lapses": 0,
+                    "state": 0,
+                    "remainingSteps": 0,
+                    "lastReview": null
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "kind": "correction",
+            "originalText": "我买了一个新裤子。",
+            "correctedText": "我买了一条新裤子。",
+            "pinyin": "Wǒ mǎi le yì tiáo xīn kùzi.",
+            "hints": [
+              "ズボンやスカートなど細長いものの量詞は「条」"
+            ],
+            "createdAt": "2026-11-04T12:40:00.000Z",
+            "review": null
+          },
+          {
+            "kind": "correction",
+            "originalText": "我很感兴趣中国文化。",
+            "correctedText": "我对中国文化很感兴趣。",
+            "pinyin": "Wǒ duì Zhōngguó wénhuà hěn gǎn xìngqù.",
+            "hints": [
+              "「〜に興味がある」は「对〜感兴趣」",
+              "「感兴趣」は目的語を直接とらない"
+            ],
+            "createdAt": "2026-11-04T23:30:00.000Z",
+            "review": null
+          },
+          {
+            "kind": "translation",
+            "originalText": "週末は友達と一緒に餃子を作りました。",
+            "correctedText": "周末我和朋友一起包了饺子。",
+            "pinyin": "Zhōumò wǒ hé péngyou yìqǐ bāo le jiǎozi.",
+            "hints": [
+              "餃子を「作る」は「包」",
+              "「和〜一起」で「〜と一緒に」"
+            ],
+            "createdAt": "2026-11-06T03:10:00.000Z",
+            "review": null
+          },
+          {
+            "kind": "correction",
+            "originalText": "他跑得很快比我。",
+            "correctedText": "他跑得比我快。",
+            "pinyin": "Tā pǎo de bǐ wǒ kuài.",
+            "hints": [
+              "比べるときは「動詞＋得＋比B＋形容詞」",
+              "「比」の文では形容詞に「很」を付けない"
+            ],
+            "createdAt": "2026-11-06T13:05:00.000Z",
+            "review": null
+          },
+          {
+            "kind": "correction",
+            "originalText": "我已经吃饭完了。",
+            "correctedText": "我已经吃完饭了。",
+            "pinyin": "Wǒ yǐjīng chī wán fàn le.",
+            "hints": [
+              "結果補語の「完」は動詞のすぐ後ろ。目的語はその後に置く"
+            ],
+            "createdAt": "2026-11-07T10:20:00.000Z",
+            "review": {
+              "card": {
+                "due": "2026-11-10T14:30:00.000Z",
+                "stability": 0,
+                "difficulty": 0,
+                "scheduledDays": 0,
+                "reps": 0,
+                "lapses": 0,
+                "state": 0,
+                "remainingSteps": 0,
+                "lastReview": null
+              },
+              "answers": []
+            }
+          },
+          {
+            "kind": "correction",
+            "originalText": "我每天早上七点钟起床了。",
+            "correctedText": "我每天早上七点起床。",
+            "pinyin": "Wǒ měitiān zǎoshang qī diǎn qǐchuáng.",
+            "hints": [
+              "毎日の習慣には「了」を付けない"
+            ],
+            "createdAt": "2026-11-07T22:50:00.000Z",
+            "review": null
+          },
+          {
+            "kind": "translation",
+            "originalText": "この本は難しすぎて、半分しか分かりませんでした。",
+            "correctedText": "这本书太难了，我只看懂了一半。",
+            "pinyin": "Zhè běn shū tài nán le, wǒ zhǐ kàn dǒng le yíbàn.",
+            "hints": [
+              "「太〜了」で「〜すぎる」",
+              "「看懂」は読んで分かる（結果補語）"
+            ],
+            "createdAt": "2026-11-08T11:30:00.000Z",
+            "review": null
+          },
+          {
+            "kind": "correction",
+            "originalText": "我没有去过上海过。",
+            "correctedText": "我没去过上海。",
+            "pinyin": "Wǒ méi qù guo Shànghǎi.",
+            "hints": [
+              "経験の「过」は動詞のすぐ後ろに一度だけ",
+              "否定は「没（有）＋動詞＋过」"
+            ],
+            "createdAt": "2026-11-08T23:45:00.000Z",
+            "review": {
+              "card": {
+                "due": "2026-11-12T15:30:00.000Z",
+                "stability": 1.2931,
+                "difficulty": 5.112170705601055,
+                "scheduledDays": 0,
+                "reps": 1,
+                "lapses": 0,
+                "state": 1,
+                "remainingSteps": 2,
+                "lastReview": "2026-11-09T22:30:00.000Z"
+              },
+              "answers": [
+                {
+                  "rating": 2,
+                  "at": "2026-11-09T22:30:00.000Z",
+                  "before": {
+                    "due": "2026-11-08T23:45:00.000Z",
+                    "stability": 0,
+                    "difficulty": 0,
+                    "scheduledDays": 0,
+                    "reps": 0,
+                    "lapses": 0,
+                    "state": 0,
+                    "remainingSteps": 0,
+                    "lastReview": null
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "kind": "correction",
+            "originalText": "请你帮我一下拿这个箱子。",
+            "correctedText": "请你帮我拿一下这个箱子。",
+            "pinyin": "Qǐng nǐ bāng wǒ ná yíxià zhège xiāngzi.",
+            "hints": [
+              "「一下」は動詞の後ろに置く（拿一下）"
+            ],
+            "createdAt": "2026-11-09T12:15:00.000Z",
+            "review": null
+          },
+          {
+            "kind": "correction",
+            "originalText": "外面下雨着呢。",
+            "correctedText": "外面下着雨呢。",
+            "pinyin": "Wàimiàn xià zhe yǔ ne.",
+            "hints": [
+              "持続の「着」は動詞のすぐ後ろ",
+              "「下雨」は離合詞なので「下着雨」になる"
+            ],
+            "createdAt": "2026-11-10T03:30:00.000Z",
+            "review": null
+          },
+          {
+            "kind": "translation",
+            "originalText": "明日の会議は午後三時からです。",
+            "correctedText": "明天的会议下午三点开始。",
+            "pinyin": "Míngtiān de huìyì xiàwǔ sān diǎn kāishǐ.",
+            "hints": [
+              "時刻は動詞の前に置く"
+            ],
+            "createdAt": "2026-11-10T13:00:00.000Z",
+            "review": null
+          }
+        ],
+        "words": [
+          {
+            "word": "图书馆",
+            "pinyin": "túshūguǎn",
+            "meaning": "図書館",
+            "sourceNote": 0,
+            "createdAt": "2026-11-04T00:20:00.000Z",
+            "review": {
+              "card": {
+                "due": "2026-11-24T23:00:00.000Z",
+                "stability": 16.177263202654682,
+                "difficulty": 2.1112142357853942,
+                "scheduledDays": 16,
+                "reps": 2,
+                "lapses": 0,
+                "state": 2,
+                "remainingSteps": 0,
+                "lastReview": "2026-11-08T23:00:00.000Z"
+              },
+              "answers": [
+                {
+                  "rating": 3,
+                  "at": "2026-11-04T23:10:00.000Z",
+                  "before": {
+                    "due": "2026-11-04T00:20:00.000Z",
+                    "stability": 0,
+                    "difficulty": 0,
+                    "scheduledDays": 0,
+                    "reps": 0,
+                    "lapses": 0,
+                    "state": 0,
+                    "remainingSteps": 0,
+                    "lastReview": null
+                  }
+                },
+                {
+                  "rating": 3,
+                  "at": "2026-11-08T23:00:00.000Z",
+                  "before": {
+                    "due": "2026-11-04T23:20:00.000Z",
+                    "stability": 2.3065,
+                    "difficulty": 2.118103970459015,
+                    "scheduledDays": 0,
+                    "reps": 1,
+                    "lapses": 0,
+                    "state": 1,
+                    "remainingSteps": 1,
+                    "lastReview": "2026-11-04T23:10:00.000Z"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "word": "裤子",
+            "pinyin": "kùzi",
+            "meaning": "ズボン",
+            "sourceNote": 1,
+            "createdAt": "2026-11-04T12:45:00.000Z",
+            "review": {
+              "card": {
+                "due": "2026-11-10T14:30:00.000Z",
+                "stability": 1.8867876195204154,
+                "difficulty": 6.402115069296838,
+                "scheduledDays": 0,
+                "reps": 2,
+                "lapses": 0,
+                "state": 1,
+                "remainingSteps": 1,
+                "lastReview": "2026-11-05T23:05:00.000Z"
+              },
+              "answers": [
+                {
+                  "rating": 1,
+                  "at": "2026-11-04T23:12:00.000Z",
+                  "before": {
+                    "due": "2026-11-04T12:45:00.000Z",
+                    "stability": 0,
+                    "difficulty": 0,
+                    "scheduledDays": 0,
+                    "reps": 0,
+                    "lapses": 0,
+                    "state": 0,
+                    "remainingSteps": 0,
+                    "lastReview": null
+                  }
+                },
+                {
+                  "rating": 3,
+                  "at": "2026-11-05T23:05:00.000Z",
+                  "before": {
+                    "due": "2026-11-04T23:13:00.000Z",
+                    "stability": 0.212,
+                    "difficulty": 6.4133,
+                    "scheduledDays": 0,
+                    "reps": 1,
+                    "lapses": 0,
+                    "state": 1,
+                    "remainingSteps": 2,
+                    "lastReview": "2026-11-04T23:12:00.000Z"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "word": "感兴趣",
+            "pinyin": "gǎn xìngqù",
+            "meaning": "興味がある（对〜感兴趣）",
+            "sourceNote": 2,
+            "createdAt": "2026-11-04T23:35:00.000Z",
+            "review": {
+              "card": {
+                "due": "2026-11-12T15:30:00.000Z",
+                "stability": 2.3065,
+                "difficulty": 2.118103970459015,
+                "scheduledDays": 0,
+                "reps": 1,
+                "lapses": 0,
+                "state": 1,
+                "remainingSteps": 1,
+                "lastReview": "2026-11-05T23:07:00.000Z"
+              },
+              "answers": [
+                {
+                  "rating": 3,
+                  "at": "2026-11-05T23:07:00.000Z",
+                  "before": {
+                    "due": "2026-11-04T23:35:00.000Z",
+                    "stability": 0,
+                    "difficulty": 0,
+                    "scheduledDays": 0,
+                    "reps": 0,
+                    "lapses": 0,
+                    "state": 0,
+                    "remainingSteps": 0,
+                    "lastReview": null
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "word": "包饺子",
+            "pinyin": "bāo jiǎozi",
+            "meaning": "餃子を作る（皮で包む）",
+            "sourceNote": 3,
+            "createdAt": "2026-11-06T03:15:00.000Z",
+            "review": {
+              "card": {
+                "due": "2026-11-14T22:55:00.000Z",
+                "stability": 8.2956,
+                "difficulty": 1,
+                "scheduledDays": 8,
+                "reps": 1,
+                "lapses": 0,
+                "state": 2,
+                "remainingSteps": 0,
+                "lastReview": "2026-11-06T22:55:00.000Z"
+              },
+              "answers": [
+                {
+                  "rating": 4,
+                  "at": "2026-11-06T22:55:00.000Z",
+                  "before": {
+                    "due": "2026-11-06T03:15:00.000Z",
+                    "stability": 0,
+                    "difficulty": 0,
+                    "scheduledDays": 0,
+                    "reps": 0,
+                    "lapses": 0,
+                    "state": 0,
+                    "remainingSteps": 0,
+                    "lastReview": null
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "word": "比",
+            "pinyin": "bǐ",
+            "meaning": "〜より（比較）",
+            "sourceNote": 4,
+            "createdAt": "2026-11-06T13:10:00.000Z",
+            "review": {
+              "card": {
+                "due": "2026-11-10T14:30:00.000Z",
+                "stability": 1.2931,
+                "difficulty": 5.112170705601055,
+                "scheduledDays": 0,
+                "reps": 1,
+                "lapses": 0,
+                "state": 1,
+                "remainingSteps": 2,
+                "lastReview": "2026-11-06T22:58:00.000Z"
+              },
+              "answers": [
+                {
+                  "rating": 2,
+                  "at": "2026-11-06T22:58:00.000Z",
+                  "before": {
+                    "due": "2026-11-06T13:10:00.000Z",
+                    "stability": 0,
+                    "difficulty": 0,
+                    "scheduledDays": 0,
+                    "reps": 0,
+                    "lapses": 0,
+                    "state": 0,
+                    "remainingSteps": 0,
+                    "lastReview": null
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "word": "已经",
+            "pinyin": "yǐjīng",
+            "meaning": "すでに、もう",
+            "sourceNote": 5,
+            "createdAt": "2026-11-07T10:25:00.000Z",
+            "review": {
+              "card": {
+                "due": "2026-11-07T10:25:00.000Z",
+                "stability": 0,
+                "difficulty": 0,
+                "scheduledDays": 0,
+                "reps": 0,
+                "lapses": 0,
+                "state": 0,
+                "remainingSteps": 0,
+                "lastReview": null
+              },
+              "answers": []
+            }
+          },
+          {
+            "word": "起床",
+            "pinyin": "qǐchuáng",
+            "meaning": "起きる、起床する",
+            "sourceNote": 6,
+            "createdAt": "2026-11-07T22:55:00.000Z",
+            "review": {
+              "card": {
+                "due": "2026-11-12T15:30:00.000Z",
+                "stability": 2.3065,
+                "difficulty": 2.118103970459015,
+                "scheduledDays": 0,
+                "reps": 1,
+                "lapses": 0,
+                "state": 1,
+                "remainingSteps": 1,
+                "lastReview": "2026-11-08T23:03:00.000Z"
+              },
+              "answers": [
+                {
+                  "rating": 3,
+                  "at": "2026-11-08T23:03:00.000Z",
+                  "before": {
+                    "due": "2026-11-07T22:55:00.000Z",
+                    "stability": 0,
+                    "difficulty": 0,
+                    "scheduledDays": 0,
+                    "reps": 0,
+                    "lapses": 0,
+                    "state": 0,
+                    "remainingSteps": 0,
+                    "lastReview": null
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "word": "一半",
+            "pinyin": "yíbàn",
+            "meaning": "半分",
+            "sourceNote": 7,
+            "createdAt": "2026-11-08T11:35:00.000Z",
+            "review": {
+              "card": {
+                "due": "2026-11-08T11:35:00.000Z",
+                "stability": 0,
+                "difficulty": 0,
+                "scheduledDays": 0,
+                "reps": 0,
+                "lapses": 0,
+                "state": 0,
+                "remainingSteps": 0,
+                "lastReview": null
+              },
+              "answers": []
+            }
+          },
+          {
+            "word": "箱子",
+            "pinyin": "xiāngzi",
+            "meaning": "箱、スーツケース",
+            "sourceNote": 9,
+            "createdAt": "2026-11-09T12:20:00.000Z",
+            "review": {
+              "card": {
+                "due": "2026-11-09T12:20:00.000Z",
+                "stability": 0,
+                "difficulty": 0,
+                "scheduledDays": 0,
+                "reps": 0,
+                "lapses": 0,
+                "state": 0,
+                "remainingSteps": 0,
+                "lastReview": null
+              },
+              "answers": []
+            }
+          },
+          {
+            "word": "会议",
+            "pinyin": "huìyì",
+            "meaning": "会議",
+            "sourceNote": 11,
+            "createdAt": "2026-11-10T13:05:00.000Z",
+            "review": {
+              "card": {
+                "due": "2026-11-10T13:05:00.000Z",
+                "stability": 0,
+                "difficulty": 0,
+                "scheduledDays": 0,
+                "reps": 0,
+                "lapses": 0,
+                "state": 0,
+                "remainingSteps": 0,
+                "lastReview": null
+              },
+              "answers": []
+            }
+          }
+        ],
+        "conversations": [
+          {
+            "title": "レストランで注文する",
+            "modelName": "gpt-6.1-sol",
+            "ended": true,
+            "createdAt": "2026-11-08T12:00:00.000Z",
+            "updatedAt": "2026-11-08T12:06:00.000Z",
+            "messages": [
+              {
+                "role": "user",
+                "text": "我想用中文练习在饭店点菜。你当服务员吧。"
+              },
+              {
+                "role": "assistant",
+                "text": "好的！欢迎光临，请问几位？这是菜单。"
+              },
+              {
+                "role": "user",
+                "text": "两位。我们想要一个宫保鸡丁和一碗米饭。"
+              },
+              {
+                "role": "assistant",
+                "text": "好的，一份宫保鸡丁，一碗米饭。要喝点儿什么吗？\n\n料理を注文するときは「一个」より「一份」が自然です。"
+              },
+              {
+                "role": "user",
+                "text": "来两杯茶吧。谢谢！"
+              },
+              {
+                "role": "assistant",
+                "text": "好的，请稍等，菜马上就来！"
+              }
+            ]
+          },
+          {
+            "title": "週末の予定を話す",
+            "modelName": "gpt-6.1-sol",
+            "ended": true,
+            "createdAt": "2026-11-10T11:15:00.000Z",
+            "updatedAt": "2026-11-10T11:21:00.000Z",
+            "messages": [
+              {
+                "role": "user",
+                "text": "这个周末你有什么打算？"
+              },
+              {
+                "role": "assistant",
+                "text": "我打算去公园散步，然后在家看书。你呢？"
+              },
+              {
+                "role": "user",
+                "text": "我要跟朋友去爬山，可是天气预报说会下雨。"
+              },
+              {
+                "role": "assistant",
+                "text": "那太可惜了。如果下雨的话，你们可以去博物馆。\n\n「如果……的话」で「もし〜なら」を表せます。"
+              },
+              {
+                "role": "user",
+                "text": "好主意！如果下雨的话，我们就去博物馆。"
+              },
+              {
+                "role": "assistant",
+                "text": "很好！「如果……的话，就……」の形を正しく使えています。"
+              }
+            ]
+          }
+        ],
+        "prepositionRecords": [
+          {
+            "elapsedMs": 96000,
+            "startedAt": "2026-11-05T11:00:00.000Z",
+            "createdAt": "2026-11-05T11:01:36.000Z",
+            "questions": [
+              {
+                "id": "P001",
+                "answer": "在",
+                "noun": "学校",
+                "prompt": "（　）学校学习",
+                "misses": []
+              },
+              {
+                "id": "P003",
+                "answer": "从",
+                "noun": "车站",
+                "prompt": "（　）车站出发",
+                "misses": [
+                  "在"
+                ]
+              },
+              {
+                "id": "P062",
+                "answer": "对",
+                "noun": "历史",
+                "prompt": "（　）历史感兴趣",
+                "misses": []
+              },
+              {
+                "id": "P078",
+                "answer": "给",
+                "noun": "妈妈",
+                "prompt": "（　）妈妈打电话",
+                "misses": [
+                  "跟",
+                  "对"
+                ]
+              },
+              {
+                "id": "P086",
+                "answer": "比",
+                "noun": "弟弟",
+                "prompt": "（　）弟弟高",
+                "misses": []
+              }
+            ]
+          },
+          {
+            "elapsedMs": 74000,
+            "startedAt": "2026-11-09T10:30:00.000Z",
+            "createdAt": "2026-11-09T10:31:14.000Z",
+            "questions": [
+              {
+                "id": "P070",
+                "answer": "跟",
+                "noun": "朋友",
+                "prompt": "（　）朋友旅行",
+                "misses": []
+              },
+              {
+                "id": "P027",
+                "answer": "离",
+                "noun": "学校",
+                "prompt": "（　）学校很近",
+                "misses": [
+                  "从"
+                ]
+              },
+              {
+                "id": "P041",
+                "answer": "往",
+                "noun": "北",
+                "prompt": "（　）北走",
+                "misses": []
+              },
+              {
+                "id": "P146",
+                "answer": "把",
+                "noun": "门",
+                "prompt": "（　）门关上",
+                "misses": []
+              },
+              {
+                "id": "P148",
+                "answer": "被",
+                "noun": "风",
+                "prompt": "（　）风吹倒",
+                "misses": []
+              }
+            ]
+          }
+        ],
+        "complementRecords": [
+          {
+            "mode": "result",
+            "elapsedMs": 81000,
+            "startedAt": "2026-11-08T13:00:00.000Z",
+            "createdAt": "2026-11-08T13:01:21.000Z",
+            "questions": [
+              {
+                "id": "result-01",
+                "answer": "懂",
+                "noun": "結果補語",
+                "prompt": "我听（　）了老师的解释。",
+                "misses": []
+              },
+              {
+                "id": "result-02",
+                "answer": "到",
+                "noun": "結果補語",
+                "prompt": "我终于找（　）钥匙了。",
+                "misses": [
+                  "完"
+                ]
+              },
+              {
+                "id": "result-03",
+                "answer": "完",
+                "noun": "結果補語",
+                "prompt": "今天的作业已经做（　）了。",
+                "misses": []
+              },
+              {
+                "id": "result-04",
+                "answer": "错",
+                "noun": "結果補語",
+                "prompt": "他把我的名字写（　）了。",
+                "misses": []
+              },
+              {
+                "id": "result-07",
+                "answer": "见",
+                "noun": "結果補語",
+                "prompt": "我在楼下看（　）了小王。",
+                "misses": [
+                  "懂"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -41,7 +41,7 @@ pnpm run api:smoke
 
 GitHub ログイン（`POST /v1/auth/github`）は本物の OAuth App が必要なので、ローカルでは使えません。パスワードログインで試してください。
 
-LINE 連携も、ローカルでは使えません。本物の LINE のチャネルと OpenAI の API キーが要るためです。e2e は偽の LINE API（`e2e/line-stub.ts`）で確かめます。`scripts/api-local-env.sh` は LINE の環境変数を設定しないので、Go の `/v1/line/*` のルート（段階 10b まで残ります）は `404` になります。LINE の受け口と「LINE 連携」画面（`/account/line`）は Web が受け持つので（段階 10a）、Web に LINE の環境変数が無いと、画面には「LINE 連携は今は使えません。」と出ます。
+LINE 連携も、ローカルでは使えません。本物の LINE のチャネルと OpenAI の API キーが要るためです。e2e は偽の LINE API（`e2e/line-stub.ts`）で確かめます。LINE の受け口と「LINE 連携」画面（`/account/line`）は Web が受け持ち（段階 10a）、Go には LINE のルートはありません（段階 10b で消しました）。Web に LINE の環境変数が無いと、画面には「LINE 連携は今は使えません。」と出ます。
 
 ダミーの LINE 設定でコード発行画面を確認する場合は、Web の `.env.local` に `LINE_LINK_PREVIEW_MODE="true"` を設定してください。本番ボットへ送る QR とボタンを隠し、表示確認用であることを明示します。ローカル DB で発行したコードは本番の LINE ボットには登録されないため、本番での連携には本番画面で発行したコードを使います。
 

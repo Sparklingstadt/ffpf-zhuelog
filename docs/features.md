@@ -4,16 +4,16 @@
 
 ## AI の利用量
 
-OpenAI を呼ぶ 4 つの機能（LINE の添削・翻訳、ChatGPT と話す、クイック質問、単語帳の下書き）は、呼ぶたびに入出力のトークン数を `AiUsage` に記録します（4 つとも Web が記録します。LINE の分は、LINE の webhook を Web に切り替えたあとに Web が書きます）。管理者はメニューの「AI 利用量」（`/admin/ai-usage`）で、日本時間の月ごとに、人・機能・モデル別の回数とトークン数を見られます。入力した文や答えは記録しません。admin が会員として操作しているときの分は admin に数えます。AI の費用を測るための記録です。集計は Web が DB から直接読みます。測った数字の使い道は [就職までのロードマップ](job-hunting-roadmap.md) の J5 にあります。
+OpenAI を呼ぶ 4 つの機能（LINE の添削・翻訳、ChatGPT と話す、クイック質問、単語帳の下書き）は、呼ぶたびに入出力のトークン数を `AiUsage` に記録します（4 つとも Web が記録します）。管理者はメニューの「AI 利用量」（`/admin/ai-usage`）で、日本時間の月ごとに、人・機能・モデル別の回数とトークン数を見られます。入力した文や答えは記録しません。admin が会員として操作しているときの分は admin に数えます。AI の費用を測るための記録です。集計は Web が DB から直接読みます。測った数字の使い道は [就職までのロードマップ](job-hunting-roadmap.md) の J5 にあります。
 
 ## デモアカウント
 
 アカウントを持たない人（採用担当など）が、会員向けの画面を試せます。ログイン画面の「デモで試す」から入ると、学習ノート・今日の復習・単語帳・会話ノート・練習の記録に、直近 7 日分の例のデータが入っています。
 
-- **共有と毎晩のリセット**: デモは試す人全員で 1 つのアカウントを使います。書いたものはほかの人にも見え、毎晩 04:00（日本時間）に例のデータへ戻ります（リセットは段階 10b まで Go が受け持ちます）。例のデータは `services/api/demo/seed.json` です。
+- **共有と毎晩のリセット**: デモは試す人全員で 1 つのアカウントを使います。書いたものはほかの人にも見え、毎晩 04:00（日本時間）に例のデータへ戻ります（リセットは Web が行います。Cron の登録は段階 10c までなく、それまでは手でリセットします）。例のデータは `src/domain/demo/demo-fixture.json` です。
 - **使えないもの**: AI（ChatGPT と話す、クイック質問、単語帳の下書き）、LINE 連携、フォローと共有、パスワード変更は、断られます。ChatGPT と話す・クイック質問の API、Web のパスワード変更は「デモでは使えません。」と答えます。LINE 連携の画面（`/account/line`）は `/` に戻ります。単語帳の下書きは「この操作を行う権限がありません。再度ログインしてください。」、フォローと共有を直接送ったときは「ログインし直してください。」と出ます。デモが `/follow` を開くと `/` に戻ります。メニューにも出ません。すべてのページの上に「デモアカウントです。」と出ます。
-- **設定**: Go API の環境変数 `DEMO_LOGIN_ID`（例: `demo`）で有効になります。空のときはデモが無く、ボタンも出ません。リセットは `CRON_SECRET` で守られた `GET`/`POST /v1/cron/demo-reset` で、`services/api/vercel.json` の Cron が毎晩呼びます。
-- **本番で有効にする**: Go API の Vercel プロジェクトに `DEMO_LOGIN_ID` を入れてデプロイし、`curl -X POST https://ffpf-zhuelog-api.vercel.app/v1/cron/demo-reset -H "Authorization: Bearer $CRON_SECRET"` を 1 回呼んでアカウントとデータを作ります。詳しくは [docs/api-deployment.md](api-deployment.md) の「10. デモアカウント」にあります。
+- **設定**: 環境変数 `DEMO_LOGIN_ID`（例: `demo`）で有効になります。Web（リセット）と Go API（ログイン）の両方に同じ値を入れます。空のときはデモが無く、ボタンも出ません（Web のリセットのルートは 404）。リセットは `CRON_SECRET` で守られた Web の `GET`/`POST /api/cron/demo-reset` で、1 つのトランザクションで作り直します。
+- **本番で有効にする**: Web と Go API の Vercel プロジェクトに `DEMO_LOGIN_ID` を入れてデプロイし、`curl -X POST https://ffpf-zhuelog.sparklingstadt.com/api/cron/demo-reset -H "Authorization: Bearer $CRON_SECRET"` を 1 回呼んでアカウントとデータを作ります。詳しくは [docs/api-deployment.md](api-deployment.md) の「10. デモアカウント」にあります。
 
 ## 画面の移動
 
@@ -78,13 +78,13 @@ DBマイグレーション `20261010000353_add_follows_and_shared_notes`（`Foll
 
 ## LINE 連携
 
-LINE に中国語や日本語の文を送ると、OpenAI（ChatGPT）で添削・翻訳し、送った人の学習ノートに追加します。会員と管理者が、それぞれ自分の LINE を結びつけて使います（ゲストは使えません）。Webhook は Web の `POST /api/line/webhook`、連携の画面は Web の `/account/line` で動きます（段階 10a で Go から Web に移りました。Go の `/v1/line/*` は段階 10b まで残ります）。
+LINE に中国語や日本語の文を送ると、OpenAI（ChatGPT）で添削・翻訳し、送った人の学習ノートに追加します。会員と管理者が、それぞれ自分の LINE を結びつけて使います（ゲストは使えません）。Webhook は Web の `POST /api/line/webhook`、連携の画面は Web の `/account/line` で動きます（段階 10a で Go から Web に移り、Go の LINE のコードは段階 10b で消えました）。
 
 - **結びつけ**: Web の `/account/line`（メニューの「LINE 連携」）で「連携コードを出す」を押し、出た 8 文字のコード（10 分で切れます）を LINE の公式アカウントに送ります。同じ画面から連携を解除できます。デモと、会員として操作している管理者の画面は `/` に戻ります。
 - **添削と翻訳**: 漢字だけの文は添削、ひらがなやカタカナを含む文は中国語への翻訳です。結果は LINE に返信され、学習ノートに保存されます（翻訳は `kind=translation`）。500 文字までです。
 - **結びついていない LINE**: 送った文は学習ノートにも OpenAI にも届きません。
-- **復習のお知らせ**: `/account/line` で「お知らせを受け取る」を押すと、「今日の復習」に答える問題がある朝（06:00 JST の Cron）に、LINE へ 1 日 1 回お知らせします。初めは止まっています。LINE の月の送信数の残りから 30 通を拾い直しのために残し、その範囲だけ送ります。
-- **失敗したとき**: 時間切れなどで結果が出なかった文は、1 日 1 回の拾い直し（毎日 06:00 JST）が 1 回だけ試し直し、できた結果か失敗を LINE に送ります。拾い直しは Web の `GET /api/cron/line-drain` にも入りましたが、Cron の登録は段階 10c です。それまでは Go の Cron が `/v1/line/drain` で動かします。
+- **復習のお知らせ**: `/account/line` で「お知らせを受け取る」を押すと、「今日の復習」に答える問題がある朝（06:00 JST の Cron。Cron の登録は段階 10c からです）に、LINE へ 1 日 1 回お知らせします。初めは止まっています。LINE の月の送信数の残りから 30 通を拾い直しのために残し、その範囲だけ送ります。
+- **失敗したとき**: 時間切れなどで結果が出なかった文は、1 日 1 回の拾い直し（毎日 06:00 JST）が 1 回だけ試し直し、できた結果か失敗を LINE に送ります。拾い直しは Web の `GET /api/cron/line-drain` です。Cron の登録は段階 10c で、それまでは定期には動きません（Go の Cron は段階 10b で消しました）。
 - **設定**: Web に `LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`（と `OPENAI_API_KEY`）を入れ、拾い直しとお知らせの Cron のために `CRON_SECRET` を入れます。友だち追加のリンクは Web の `LINE_ADD_FRIEND_URL`（無くても動きます）です。LINE の 2 つが空のときは LINE 連携は使えず、画面には「LINE 連携は今は使えません。」と出ます。ローカルでは本物の LINE のチャネルが要るので使えません。e2e は偽の LINE API（`e2e/line-stub.ts`）で確かめます。
 - **本番への反映**: マイグレーションは要りません（`LineLink`・`LineLinkCode`・`LineMessage` は `20261023090000_add_line_link` で、すでに本番にあります）。環境変数を入れる順番、LINE の Webhook URL を Go から Web に変える手順、戻し方は [docs/api-deployment.md](api-deployment.md) の「段階10（LINE とデモのリセットの cron）のマージの前と後」にあります。
 

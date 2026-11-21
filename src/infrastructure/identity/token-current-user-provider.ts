@@ -1,4 +1,5 @@
 import type { CurrentUserProvider } from "@/application/identity/ports/current-user-provider";
+import { DEMO_PASSWORD_HASH } from "@/domain/identity/demo-account";
 import type { AuthenticatedUser } from "@/domain/identity/entities/authenticated-user";
 import type { AccessClaims } from "./access-token";
 
@@ -31,7 +32,6 @@ export type TokenIdentityConfig = {
 
 const PASSWORD_PREFIX = "password:";
 const FFPF_PREFIX = "ffpf:";
-const DEMO_PASSWORD_HASH = "demo:no-password";
 const ACT_AS_PATTERN = /^password:[a-z0-9]{1,64}$/;
 
 // Decides who is signed in from the access token and the account tables,
