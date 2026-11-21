@@ -3,6 +3,9 @@
 -- "sid:<sub>". Accounts and data are not carried over: every row owned by an
 -- "ffpf:" owner is deleted, and people sign in again with Sparklingstadt ID.
 -- No table has a foreign key to an owner id, so each is deleted by hand.
+-- "FfpfAccount" is emptied, not dropped: the previous deployment still reads it
+-- until the new one is promoted (and after an Instant Rollback). The table is
+-- dropped in a later migration.
 
 -- CreateTable
 CREATE TABLE "SidAccount" (
@@ -46,5 +49,5 @@ DELETE FROM "LineMessage" WHERE "ownerId" LIKE 'ffpf:%';
 DELETE FROM "Session" WHERE "ownerId" LIKE 'ffpf:%';
 DELETE FROM "AiUsage" WHERE "ownerId" LIKE 'ffpf:%';
 
--- DropTable
-DROP TABLE "FfpfAccount";
+-- Emptied only; the table stays for one release (see the top of this file).
+DELETE FROM "FfpfAccount";
