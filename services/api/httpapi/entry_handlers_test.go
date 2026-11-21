@@ -43,7 +43,7 @@ type entryView struct {
 	SharedAt  *string `json:"sharedAt"`
 }
 
-// The timeline and the reviews answer notes in this shape.
+// The timeline answers notes in this shape.
 func TestEntryJSON(t *testing.T) {
 	created := time.Date(2026, 10, 1, 9, 0, 0, 0, jst.Location)
 	e := sampleEntry("e0", created)

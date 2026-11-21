@@ -17,7 +17,7 @@ flowchart LR
   end
   subgraph API[Go API on Vercel]
     AUTH[auth]
-    DATA[復習・フォロー・練習]
+    DATA[フォロー・練習・LINE の復習のお知らせ]
     LINEBOT[linebot]
     AI[OpenAI の呼び出しと利用量の記録]
   end
@@ -30,7 +30,7 @@ flowchart LR
   UI -->|HttpOnly Cookie| Web
   Web -->|Bearer JWT<br/>サーバー間| API
   API --> DB
-  Web -->|Prisma: アカウントの確認・単語帳・学習ノート・CSV の取り込み| DB
+  Web -->|Prisma: アカウントの確認・単語帳・学習ノート・CSV の取り込み・復習| DB
   Web -->|単語帳の下書き| OpenAI
   AI --> OpenAI
   LINE -->|Webhook| LINEBOT
@@ -118,7 +118,7 @@ Web から Go API への呼び出しは `src/infrastructure/go-api/` にまと�
 
 ## 5. 復習
 
-- **計算**：[go-fsrs](https://github.com/open-spaced-repetition/go-fsrs)（FSRS v4）で次の期日を決めます。定着率 90%、学習中のステップは 1 分と 10 分です。評価は「もう一度・難しい・できた・簡単」の 4 段階です。
+- **計算**：FSRS v4 で次の期日を決めます。Web が `src/domain/review/fsrs.ts`（[go-fsrs](https://github.com/open-spaced-repetition/go-fsrs) を手で移した TypeScript）で計算し、`ReviewItem` と `ReviewLog` も Prisma で直接読み書きします。Go の `review` パッケージには同じ計算が残っていて（デモのリセットだけが `review.NewCard` と `review.Next` を使います。練習の間違いの登録が使うのは、新しいカードの状態の定数だけです）、`tests/fixtures/fsrs-golden.json` で両者の結果が同じことをテストで確かめます（golden ファイルは Go の `golden_test.go` が書き、Web のテストが読みます）。定着率 90%、学習中のステップは 1 分と 10 分です。評価は「もう一度・難しい・できた・簡単」の 4 段階です。
 - **1 つの列にまとめる**：学習ノート、介詞と補語の練習の間違い、単語帳の語句を、どれも `ReviewItem`（`kind` と `targetId`）として同じ表に置きます。そのため、「今日の復習」は 1 つの列で済みます。FSRS のカードの状態（stability、difficulty、due など）は列に持ち、`(ownerId, due)` の索引で期日の来たものを引きます。
 - **答えの記録**：答えは `ReviewLog` に残します。あとで FSRS のパラメーターを本人の記録に合わせられるようにするためです。
 - **ゴミ箱との関係**：ゴミ箱に入れた学習ノートは、復習の列から外します。

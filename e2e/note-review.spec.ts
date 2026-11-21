@@ -1,3 +1,5 @@
+import type { Page, Request } from "@playwright/test";
+
 import { adminOwnerId, asAdmin, expect, seedNotes, test } from "./fixtures";
 
 // 2026-10-04 in JST: the note is #1 of that day.
@@ -159,4 +161,103 @@ test("deleting notes for good takes their review cards with them", async ({
   await page.getByRole("button", { name: "ゴミ箱を空にする" }).click();
   await expect(page.getByText("ゴミ箱は空です")).toBeVisible();
   expect(await cards()).toEqual(["第三"]);
+});
+
+// The client makes one logId per card and sends it again on a retry; the
+// answer is applied once however many times it arrives.
+test("a retried answer is applied once", async ({ page, context, db }) => {
+  await seedNotes(db, adminOwnerId, [note]);
+  await asAdmin(context);
+  await page.goto(notePath);
+  await page.getByRole("button", { name: "復習に入れる" }).click();
+  await expect(page.getByText("今日の復習に入っています")).toBeVisible();
+
+  await page.goto("/review");
+  let answer: Request | undefined;
+  page.on("request", (request) => {
+    if (
+      request.method() === "POST" &&
+      new URL(request.url()).pathname === "/review" &&
+      request.headers()["next-action"]
+    )
+      answer = request;
+  });
+  await page.getByRole("button", { name: "めくる" }).click();
+  await page
+    .getByRole("group", { name: "思い出せた度合い" })
+    .getByRole("button", { name: /^できた/ })
+    .click();
+  await expect(page.getByText("1問 復習しました")).toBeVisible();
+  expect(answer).toBeDefined();
+
+  const retry = await page.request.fetch(answer!);
+  expect(retry.status()).toBe(200);
+  // The action answers the retry as it did the first time: saved.
+  expect(await retry.text()).toContain('{"ok":true}');
+
+  const logs = await db.query(
+    `SELECT "state", "rating" FROM "ReviewLog" WHERE "ownerId" = $1`,
+    [adminOwnerId],
+  );
+  expect(logs.rows).toEqual([{ state: 0, rating: 3 }]);
+  const items = await db.query(
+    `SELECT "reps" FROM "ReviewItem" WHERE "ownerId" = $1`,
+    [adminOwnerId],
+  );
+  expect(items.rows).toEqual([{ reps: 1 }]);
+});
+
+// The tab names its count as 「…（N問）」 on every width.
+function reviewTab(page: Page) {
+  const isPhone = (page.viewportSize()?.width ?? 0) < 1280;
+  return isPhone
+    ? page
+        .getByRole("navigation", { name: "メインメニュー" })
+        .getByRole("link", { name: /^復習/ })
+    : page
+        .getByRole("navigation", { name: "主なページ" })
+        .getByRole("link", { name: /^今日の復習/ });
+}
+
+test("the count leaves out trashed notes but still counts cards whose target is gone", async ({
+  page,
+  context,
+  db,
+}) => {
+  await seedNotes(db, adminOwnerId, [
+    { text: "第一", createdAt: "2026-10-04T01:00:00Z" },
+    { text: "第二", createdAt: "2026-10-04T02:00:00Z" },
+  ]);
+  await asAdmin(context);
+  for (const n of [1, 2]) {
+    await page.goto(`/logs/2026/10/4/${n}`);
+    await page.getByRole("button", { name: "復習に入れる" }).click();
+    await expect(page.getByText("今日の復習に入っています")).toBeVisible();
+  }
+  // A card whose note is gone (deleted without its card).
+  await db.query(
+    `INSERT INTO "ReviewItem"
+       ("id", "ownerId", "language", "kind", "targetId", "due", "state", "createdAt", "updatedAt")
+     VALUES ('c' || substr(md5(random()::text), 1, 24), $1, 'zh', 'entry', 'ngone0000000000000',
+             now(), 0, now(), now())`,
+    [adminOwnerId],
+  );
+
+  // Counted, but the review skips the card it cannot show.
+  await page.goto("/");
+  await expect(page.getByTestId("review-due-count")).toHaveText("3");
+  await expect(reviewTab(page)).toHaveAccessibleName(/（3問）$/);
+  await page.goto("/review");
+  await expect(page.getByText("1 / 2")).toBeVisible();
+
+  // A note in the trash is neither counted nor shown.
+  await page.goto("/logs/2026/10/4/1");
+  await page.getByRole("button", { name: "ゴミ箱に入れる" }).click();
+  await expect(page).toHaveURL(/trashed=1/);
+  await page.goto("/");
+  await expect(page.getByTestId("review-due-count")).toHaveText("2");
+  await expect(reviewTab(page)).toHaveAccessibleName(/（2問）$/);
+  await page.goto("/review");
+  await expect(page.getByText("1 / 1")).toBeVisible();
+  await expect(page.getByText("第二")).toHaveCount(1);
 });

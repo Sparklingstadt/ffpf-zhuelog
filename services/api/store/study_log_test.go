@@ -34,10 +34,7 @@ func TestStudyLogCountsEachKindByJapanDay(t *testing.T) {
 		t.Fatal(err)
 	}
 	addWord(t, s, a, word("认真", "まじめに"), nov2)
-	due, _ := s.ListDueReviewItems(ctx, a, nov2, 10)
-	if _, err := s.RecordReview(ctx, a, due[0].ID, newUUID(), review.Good, nov2); err != nil {
-		t.Fatal(err)
-	}
+	answerItem(t, s, a, dueItems(t, s, a, nov2)[0].ID, review.Good, nov2)
 	// Another owner's activity is not counted.
 	createEntries(t, s, b, nov1, 3, 0)
 

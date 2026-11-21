@@ -53,14 +53,15 @@ func TestResetWithTheFixture(t *testing.T) {
 	if words := countRows(t, url, `SELECT count(*) FROM "VocabularyEntry" WHERE "ownerId" = $1`, owner); words != 10 {
 		t.Fatalf("%d words; want 10", words)
 	}
-	due, err := s.ListDueReviewItems(ctx, owner, now, 100)
-	if err != nil || len(due) == 0 {
-		t.Fatalf("%d reviews due, %v; want some", len(due), err)
+	if due := countRows(t, url, `SELECT count(*) FROM "ReviewItem" WHERE "ownerId" = $1 AND "due" <= $2`, owner, now); due == 0 {
+		t.Fatalf("no reviews due; want some")
 	}
-	for _, it := range due {
-		if it.Entry == nil && it.Vocabulary == nil {
-			t.Errorf("due item %s (%s) names nothing", it.ID, it.Kind)
-		}
+	// Every item names a note or a word the seed made.
+	if orphans := countRows(t, url, `SELECT count(*) FROM "ReviewItem" i WHERE i."ownerId" = $1
+	 AND NOT EXISTS (SELECT 1 FROM "LearningEntry" e WHERE i."kind" = 'entry' AND e."id" = i."targetId" AND e."ownerId" = i."ownerId")
+	 AND NOT EXISTS (SELECT 1 FROM "VocabularyEntry" v WHERE i."kind" = 'vocabulary' AND v."id" = i."targetId" AND v."ownerId" = i."ownerId")`,
+		owner); orphans != 0 {
+		t.Errorf("%d review items name nothing", orphans)
 	}
 	logDate := func(t time.Time) store.LogDate {
 		t = t.In(jst.Location)

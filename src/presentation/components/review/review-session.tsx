@@ -55,7 +55,7 @@ export type ReviewCard = (
     }
 ) & {
   // How long each answer, もう一度 to 簡単, puts the item off (「10分後」),
-  // for the rating buttons; absent when Go could not tell.
+  // for the rating buttons; absent when FSRS refuses the card.
   nextIn?: readonly [string, string, string, string] | null;
 };
 
