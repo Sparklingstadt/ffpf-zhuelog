@@ -1,15 +1,33 @@
 import { createServer } from "node:http";
 
-// A stand-in for the OpenAI Responses API. A vocabulary draft (the
-// "vocabulary_card_draft" JSON format) gets a completed JSON answer built from
-// the word; every other POST /v1/responses is streamed: an echo of the last
-// user message, split into three text deltas, then response.completed.
-// Nothing leaves this machine.
+// A stand-in for the OpenAI Responses API. Nothing leaves this machine.
+//
+// - A vocabulary draft (the "vocabulary_card_draft" JSON format) gets a
+//   completed JSON answer built from the word.
+// - Every other POST /v1/responses is streamed: an echo of the last user
+//   message, split into three text deltas, then response.completed with
+//   usage (21 input and 43 output tokens). Markers in the last user message
+//   change that:
+//   - "[incomplete]": one delta ("你好！"), then response.incomplete with
+//     the same usage.
+//   - "[fail]": 500 before any event, so no usage.
+//   - "[hang]": one delta ("你好！"), then nothing until the caller closes
+//     the connection (or 30 s pass, then response.completed). How it ended
+//     is answered by GET /e2e/streams?message=<the last user message>:
+//     {"state": "open" | "closed" | "completed" | "unknown"}.
 export function startOpenAiStub(
   port: number,
 ): Promise<{ close(): Promise<void> }> {
+  const hangs = new Map<string, "open" | "closed" | "completed">();
   const server = createServer((request, response) => {
-    if (request.method !== "POST" || request.url !== "/v1/responses") {
+    const url = new URL(request.url ?? "/", "http://stub");
+    if (request.method === "GET" && url.pathname === "/e2e/streams") {
+      const state = hangs.get(url.searchParams.get("message") ?? "");
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ state: state ?? "unknown" }));
+      return;
+    }
+    if (request.method !== "POST" || url.pathname !== "/v1/responses") {
       response.writeHead(404).end();
       return;
     }
@@ -31,15 +49,51 @@ export function startOpenAiStub(
       }
       const input = parsed.input as { role: string; content: string }[];
       const last = input.findLast((item) => item.role === "user")?.content;
+      if (last?.includes("[fail]")) {
+        response.writeHead(500, { "content-type": "application/json" });
+        response.end(JSON.stringify({ error: { message: "e2e failure" } }));
+        return;
+      }
       response.writeHead(200, { "content-type": "text/event-stream" });
       const send = (payload: object) =>
         response.write(
           `event: ${(payload as { type: string }).type}\ndata: ${JSON.stringify(payload)}\n\n`,
         );
+      const usage = { input_tokens: 21, output_tokens: 43, total_tokens: 64 };
       send({ type: "response.created", response: { status: "in_progress" } });
+      if (last?.includes("[incomplete]")) {
+        send({ type: "response.output_text.delta", delta: "你好！" });
+        send({
+          type: "response.incomplete",
+          response: { status: "incomplete", usage },
+        });
+        response.end();
+        return;
+      }
+      if (last?.includes("[hang]")) {
+        send({ type: "response.output_text.delta", delta: "你好！" });
+        hangs.set(last, "open");
+        const timer = setTimeout(() => {
+          hangs.set(last, "completed");
+          send({
+            type: "response.completed",
+            response: { status: "completed", usage },
+          });
+          response.end();
+        }, 30_000);
+        // "close" before the end: the caller went away mid-answer.
+        response.on("close", () => {
+          clearTimeout(timer);
+          if (!response.writableFinished) hangs.set(last, "closed");
+        });
+        return;
+      }
       for (const delta of ["你好！", `「${last}」`, "ですね。"])
         send({ type: "response.output_text.delta", delta });
-      send({ type: "response.completed", response: { status: "completed" } });
+      send({
+        type: "response.completed",
+        response: { status: "completed", usage },
+      });
       response.end();
     });
   });

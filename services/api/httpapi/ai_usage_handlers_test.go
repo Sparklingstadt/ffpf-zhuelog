@@ -104,17 +104,6 @@ func TestChatRecordsUsageForTheCaller(t *testing.T) {
 	}
 }
 
-func TestQuickQuestionRecordsItsFeature(t *testing.T) {
-	u := &fakeAIUsage{}
-	h, _, _ := routerWith(t, auth.RoleMember, Deps{
-		QuickChat: &fakeChat{pieces: []string{"好"}}, Questions: &fakeQuestions{}, AIUsage: u,
-	})
-	do(h, "POST", "/v1/quick-question", `{"messages":[{"role":"user","text":"你好"}]}`, jsonAuth)
-	if len(u.rows) != 1 || u.rows[0].Feature != aiusage.FeatureQuickQuestion {
-		t.Fatalf("usage = %+v", u.rows)
-	}
-}
-
 func TestActingAdminPaysForTheUsage(t *testing.T) {
 	u := &fakeAIUsage{}
 	a := &fakeAuth{authenticate: func(context.Context, string) (auth.Principal, error) {

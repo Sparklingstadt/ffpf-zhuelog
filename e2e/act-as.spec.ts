@@ -61,6 +61,42 @@ test("an admin acting as a member saves the conversation as the member's", async
   expect(rows[0].n).toBe(0);
 });
 
+// The note is the member's; the OpenAI usage is the admin's, who asked.
+test("an admin acting as a member asks as the member and pays for it", async ({
+  page,
+  context,
+  db,
+}) => {
+  const accountId = await createMember(
+    db,
+    "test05",
+    "テスト五郎",
+    "member-password-1",
+  );
+  const member = memberOwnerId(accountId);
+  await asAdmin(context);
+  await page.goto("/admin/accounts");
+  await page.getByRole("button", { name: "この会員として操作" }).click();
+  await expect(page).toHaveURL((url) => url.pathname === "/");
+  await expect(
+    page.getByRole("status").filter({ hasText: "として操作中" }),
+  ).toContainText("テスト五郎");
+
+  await page.goto("/quick-question");
+  await page.getByLabel("クイック質問の内容").fill("了と过の違いは？");
+  await page.getByRole("button", { name: "質問する", exact: true }).click();
+  await expect(page.getByText("質問ノートに保存しました。")).toBeVisible();
+
+  const { rows: notes } = await db.query(
+    `SELECT "ownerId" FROM "QuickQuestion"`,
+  );
+  expect(notes).toEqual([{ ownerId: member }]);
+  const { rows: usage } = await db.query(
+    `SELECT "ownerId" FROM "AiUsage" WHERE "feature" = 'quick_question'`,
+  );
+  expect(usage).toEqual([{ ownerId: adminOwnerId }]);
+});
+
 test("an admin acting as a member saves a practice round as the member's", async ({
   page,
   context,

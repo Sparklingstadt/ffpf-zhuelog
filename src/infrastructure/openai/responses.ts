@@ -6,7 +6,9 @@ export type OpenAiErrorCode =
   | "OPENAI_AUTH_FAILED"
   | "OPENAI_RATE_LIMITED"
   | "OPENAI_TIMEOUT"
-  | "OPENAI_INVALID_RESPONSE";
+  | "OPENAI_INVALID_RESPONSE"
+  // A streamed answer cut short (the token limit) where a whole one is needed.
+  | "OPENAI_INCOMPLETE_RESPONSE";
 
 // A failed call. The message is only the code, so it never carries the API
 // key, the input or the response body.
@@ -90,7 +92,9 @@ export async function respondJson(
   return out;
 }
 
-function transportError(error: unknown): OpenAiError {
+// A request that could not be sent or read: a timeout or abort is
+// OPENAI_TIMEOUT, anything else OPENAI_REQUEST_FAILED.
+export function transportError(error: unknown): OpenAiError {
   const name = error instanceof Error ? error.name : "";
   return new OpenAiError(
     name === "AbortError" || name === "TimeoutError"

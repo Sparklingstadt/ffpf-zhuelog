@@ -110,10 +110,15 @@ export type OpenAiConfig = {
   apiKey: string;
   baseUrl: string;
   learningModel: string;
+  // The quick questions' (and the chat's) model; also the modelName of a
+  // saved question note.
+  chatModel: string;
 };
 
 const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com";
 const DEFAULT_LEARNING_MODEL = "gpt-5-mini";
+// Go: config.go defaultChatModel.
+const DEFAULT_CHAT_MODEL = "gpt-6.1-sol";
 
 // The API key travels to the base URL, so an override must be an http(s)
 // loopback URL (for tests), as in the Go API. Without a key, or with any
@@ -129,7 +134,8 @@ export function openAiConfig(): OpenAiConfig | undefined {
   }
   const learningModel =
     process.env.OPENAI_LEARNING_MODEL?.trim() || DEFAULT_LEARNING_MODEL;
-  return { apiKey, baseUrl, learningModel };
+  const chatModel = process.env.OPENAI_CHAT_MODEL?.trim() || DEFAULT_CHAT_MODEL;
+  return { apiKey, baseUrl, learningModel, chatModel };
 }
 
 // Whether an OpenAI API key is set at all, to tell "not configured" from a

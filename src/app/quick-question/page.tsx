@@ -1,8 +1,6 @@
 import { BookOpen, CircleHelp } from "lucide-react";
 import Link from "next/link";
 import { questionNotes } from "@/composition/question-container";
-import type { QuestionSummary } from "@/domain/chat/question";
-import { ChatUnavailableError } from "@/domain/chat/chat-unavailable";
 import { requireChatUser } from "@/presentation/guards/chat-guard";
 import { formatTokyoDateTime } from "@/presentation/presenters/log-date-presenter";
 import { AiSideNav } from "@/presentation/components/chat/ai-side-nav";
@@ -18,15 +16,10 @@ const RECENT_COUNT = 8;
 
 export default async function QuickQuestionPage() {
   const user = await requireChatUser("/signin?callbackUrl=/quick-question");
-  let model: string | null = null;
-  let recent: QuestionSummary[] = [];
-  try {
-    const notes = await questionNotes.list();
-    model = notes.chatModel;
-    recent = notes.questions.slice(0, RECENT_COUNT);
-  } catch (error) {
-    if (!(error instanceof ChatUnavailableError)) throw error;
-  }
+  const notes = await questionNotes.list();
+  // "" without OpenAI: the notes are listed, but there is no way to ask.
+  const model = notes.chatModel;
+  const recent = notes.questions.slice(0, RECENT_COUNT);
   return (
     <PageShell user={user} width="6xl">
       <PageHeader

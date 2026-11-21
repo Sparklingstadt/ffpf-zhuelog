@@ -83,7 +83,7 @@ test("anyone can try the members' pages in the demo, without AI", async ({
     await expect(menu.getByRole("menuitem", { name })).toHaveCount(0);
   await page.keyboard.press("Escape");
 
-  // Go refuses the AI routes to the demo, even when called directly.
+  // The web refuses the AI routes to the demo, even when called directly.
   const answer = await page.evaluate(async () => {
     const response = await fetch("/api/quick-question", {
       method: "POST",

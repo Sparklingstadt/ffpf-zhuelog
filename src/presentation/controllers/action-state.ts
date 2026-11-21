@@ -1,6 +1,7 @@
 import { unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 
+import { QuestionForbiddenError } from "@/application/chat/question-notes";
 import { LearningForbiddenError } from "@/application/learning/learning-notes";
 import { PracticeForbiddenError } from "@/application/practice/practice-records";
 import { ReviewForbiddenError } from "@/application/review/review-queue";
@@ -59,9 +60,10 @@ function unexpectedFailureMessage(code: string, error: unknown): string {
 
 // Runs an action that calls the Go API or the database. Next's own errors
 // (the redirect to /signin, notFound) are rethrown. Go's 403,
-// LearningForbiddenError, ReviewForbiddenError and PracticeForbiddenError are
-// treated as not being allowed; other Go failures go through
-// goFailureMessage, anything else gets the generic text.
+// LearningForbiddenError, ReviewForbiddenError, PracticeForbiddenError and
+// QuestionForbiddenError are treated as not being allowed; other Go
+// failures go through goFailureMessage, anything else gets the generic
+// text.
 export async function attemptGoAction(
   code: string,
   run: () => Promise<ActionState>,
@@ -88,10 +90,10 @@ export type GoAttempt<T> =
 
 // Runs an action's Go or database call and keeps its value. Next's own
 // errors are rethrown. Go's 403, LearningForbiddenError,
-// ReviewForbiddenError and PracticeForbiddenError mean not allowed; a Go 404
-// gets `notFound` when the action gives one; other Go failures go through
-// goFailureMessage and anything else gets the generic text, logging codes
-// and error names only.
+// ReviewForbiddenError, PracticeForbiddenError and QuestionForbiddenError
+// mean not allowed; a Go 404 gets `notFound` when the action gives one;
+// other Go failures go through goFailureMessage and anything else gets the
+// generic text, logging codes and error names only.
 export async function attemptGo<T>(
   code: string,
   run: () => Promise<T>,
@@ -126,6 +128,7 @@ function isForbidden(error: unknown): boolean {
     error instanceof LearningForbiddenError ||
     error instanceof ReviewForbiddenError ||
     error instanceof PracticeForbiddenError ||
+    error instanceof QuestionForbiddenError ||
     (error instanceof GoApiError && error.status === 403)
   );
 }
