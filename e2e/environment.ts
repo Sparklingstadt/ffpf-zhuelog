@@ -8,8 +8,8 @@ export const baseURL = "http://127.0.0.1:3107";
 export const sessionCookieName = "zl_session";
 // e2e/openai-stub.ts, which the web calls instead of OpenAI.
 export const openAiStubURL = "http://127.0.0.1:3109";
-// e2e/fixtures/ffpf-oidc-stub.ts, the FFPF ID issuer for the e2e run.
-export const ffpfIssuerURL = "http://127.0.0.1:3110";
+// e2e/fixtures/sid-oidc-stub.ts, the Sparklingstadt ID issuer for the e2e run.
+export const sidIssuerURL = "http://127.0.0.1:3110";
 // e2e/line-stub.ts, which the web calls instead of the LINE Messaging API.
 export const lineStubURL = "http://127.0.0.1:3111";
 

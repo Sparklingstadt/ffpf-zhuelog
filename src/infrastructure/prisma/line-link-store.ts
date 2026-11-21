@@ -66,9 +66,9 @@ export function claimReviewNotifySql(
        AND ("reviewNotifiedOn" IS NULL OR "reviewNotifiedOn" < CAST(${japanDay} AS DATE))`;
 }
 
-// Go: store.MemberOwnerPrefix and store.FfpfOwnerPrefix.
+// The member owner prefixes ("password:" and "sid:").
 const PASSWORD_PREFIX = "password:";
-const FFPF_PREFIX = "ffpf:";
+const SID_PREFIX = "sid:";
 
 // Callers read `now` once and pass it truncated to milliseconds, as Go's
 // dbTime does.
@@ -190,16 +190,16 @@ export function createLineLinkStore(db: () => PrismaClient) {
       return count === 1;
     },
 
-    // Go: store.MemberExists ("password:<id>" or "ffpf:<id>"); any other
+    // A member exists ("password:<id>" or "sid:<id>"); any other
     // owner id is not a member and the database is not read.
     async memberExists(ownerId: string): Promise<boolean> {
       if (ownerId.startsWith(PASSWORD_PREFIX)) {
         const id = ownerId.slice(PASSWORD_PREFIX.length);
         return (await db().passwordAccount.count({ where: { id } })) > 0;
       }
-      if (ownerId.startsWith(FFPF_PREFIX)) {
-        const id = ownerId.slice(FFPF_PREFIX.length);
-        return (await db().ffpfAccount.count({ where: { id } })) > 0;
+      if (ownerId.startsWith(SID_PREFIX)) {
+        const id = ownerId.slice(SID_PREFIX.length);
+        return (await db().sidAccount.count({ where: { id } })) > 0;
       }
       return false;
     },

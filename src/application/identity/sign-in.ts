@@ -1,8 +1,8 @@
 import { DEMO_PASSWORD_HASH } from "../../domain/identity/demo-account";
 import {
-  FFPF_SUB_PATTERN,
-  ffpfDisplayName,
-} from "../../domain/identity/ffpf-account";
+  SID_SUB_PATTERN,
+  sidDisplayName,
+} from "../../domain/identity/sid-account";
 import {
   CURRENT_PASSWORD_MAX_CODE_POINTS,
   firstCodePoints,
@@ -40,7 +40,7 @@ export type SignInResult =
 
 export type GitHubIdentity = { id: number; login: string };
 
-export type FfpfIdentity = { sub: string; email: string; name: string };
+export type SidIdentity = { sub: string; email: string; name: string };
 
 // What an OAuth client answers: the user, or why not ("invalid": the code or
 // token was refused; "unavailable": the provider could not be used).
@@ -61,8 +61,8 @@ export type SignInDeps = {
       sessionVersion: number;
     } | null>;
   };
-  ffpfAccounts: {
-    // Go: UpsertFfpfAccount. Creates with sessionVersion 0 or updates email,
+  sidAccounts: {
+    // Creates with sessionVersion 0 or updates email,
     // displayName and lastLoginAt; returns the stored sessionVersion.
     upsert(
       input: { id: string; email: string; displayName: string },
@@ -81,13 +81,13 @@ export type SignInDeps = {
       redirectUri: string,
     ): Promise<ExchangeOutcome<GitHubIdentity>>;
   } | null;
-  ffpf: {
+  sid: {
     exchange(
       code: string,
       verifier: string,
       redirectUri: string,
       nonce: string,
-    ): Promise<ExchangeOutcome<FfpfIdentity>>;
+    ): Promise<ExchangeOutcome<SidIdentity>>;
   } | null;
   allowedGitHubIds: ReadonlySet<string>;
   demoLoginId: string | undefined;
@@ -95,7 +95,7 @@ export type SignInDeps = {
 };
 
 const PASSWORD_OWNER_PREFIX = "password:";
-const FFPF_OWNER_PREFIX = "ffpf:";
+const SID_OWNER_PREFIX = "sid:";
 
 function failure(reason: SignInFailure): SignInResult {
   return { ok: false, reason };
@@ -237,10 +237,10 @@ export function createSignIn(deps: SignInDeps) {
       return issue({ role: "admin", ownerId, login: outcome.user.login }, now);
     },
 
-    // Go: LoginFFPF. Any verified FFPF ID account may sign in (no
-    // allowlist), as the member ffpf:<sub>; each sign-in records its email
+    // Any verified Sparklingstadt ID account may sign in (no
+    // allowlist), as the member sid:<sub>; each sign-in records its email
     // and display name and reads the account's sessionVersion.
-    async withFfpf(
+    async withSid(
       input: {
         code: string;
         verifier: string;
@@ -251,8 +251,8 @@ export function createSignIn(deps: SignInDeps) {
     ): Promise<SignInResult> {
       const now = deps.now();
       if (!(await withinRouteLimit(client, now))) return failure("throttled");
-      if (deps.ffpf === null) return failure("unavailable");
-      const outcome = await deps.ffpf.exchange(
+      if (deps.sid === null) return failure("unavailable");
+      const outcome = await deps.sid.exchange(
         input.code,
         input.verifier,
         input.redirectUri,
@@ -262,13 +262,13 @@ export function createSignIn(deps: SignInDeps) {
       const { sub, email, name } = outcome.user;
       // The client already checks the sub; checked again so no client can
       // make a malformed owner id.
-      if (!FFPF_SUB_PATTERN.test(sub)) return failure("invalid");
-      const { sessionVersion } = await deps.ffpfAccounts.upsert(
-        { id: sub, email, displayName: ffpfDisplayName(name, email) },
+      if (!SID_SUB_PATTERN.test(sub)) return failure("invalid");
+      const { sessionVersion } = await deps.sidAccounts.upsert(
+        { id: sub, email, displayName: sidDisplayName(name, email) },
         now,
       );
       return issue(
-        { role: "member", ownerId: FFPF_OWNER_PREFIX + sub, sessionVersion },
+        { role: "member", ownerId: SID_OWNER_PREFIX + sub, sessionVersion },
         now,
       );
     },

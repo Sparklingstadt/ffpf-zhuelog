@@ -2,29 +2,29 @@ import { randomBytes } from "node:crypto";
 
 import { pkceChallenge } from "./github-oauth";
 
-// FFPF ID sign-in, the same shape as github-oauth.ts plus an OIDC nonce.
+// Sparklingstadt ID sign-in, the same shape as github-oauth.ts plus an OIDC nonce.
 // The web keeps PKCE, state and nonce in the zl_oauth cookie with provider
-// "ffpf", so a GitHub start never finishes here and an FFPF start never
+// "sid", so a GitHub start never finishes here and a Sparklingstadt ID start never
 // finishes at the GitHub callback. The web exchanges the code and checks the
-// ID token's nonce (ffpf-oidc-client.ts). The redirect URI is built from
-// requestOrigin -> publicOrigin -> ffpfRedirectUri in both steps.
+// ID token's nonce (sid-oidc-client.ts). The redirect URI is built from
+// requestOrigin -> publicOrigin -> sidRedirectUri in both steps.
 
-export const FFPF_CALLBACK_PATH = "/api/auth/callback/ffpf";
+export const SID_CALLBACK_PATH = "/api/auth/callback/sid";
 
-export type FfpfOAuthState = {
+export type SidOAuthState = {
   state: string;
   verifier: string;
   nonce: string;
   callbackPath: string;
-  provider: "ffpf";
+  provider: "sid";
 };
 
-export function ffpfRedirectUri(origin: string): string {
-  return `${origin}${FFPF_CALLBACK_PATH}`;
+export function sidRedirectUri(origin: string): string {
+  return `${origin}${SID_CALLBACK_PATH}`;
 }
 
 // The endpoints are built from the issuer; discovery is not used.
-export function ffpfAuthorizeUrl(input: {
+export function sidAuthorizeUrl(input: {
   issuer: string;
   clientId: string;
   redirectUri: string;
@@ -44,7 +44,7 @@ export function ffpfAuthorizeUrl(input: {
   return url.toString();
 }
 
-export function createFfpfOAuthStart(callbackPath: string): {
+export function createSidOAuthStart(callbackPath: string): {
   state: string;
   verifier: string;
   challenge: string;
@@ -55,22 +55,22 @@ export function createFfpfOAuthStart(callbackPath: string): {
   const verifier = randomBytes(32).toString("base64url");
   const nonce = randomBytes(32).toString("base64url");
   const challenge = pkceChallenge(verifier);
-  const saved: FfpfOAuthState = {
+  const saved: SidOAuthState = {
     state,
     verifier,
     nonce,
     callbackPath,
-    provider: "ffpf",
+    provider: "sid",
   };
   const cookieValue = Buffer.from(JSON.stringify(saved)).toString("base64url");
   return { state, verifier, challenge, nonce, cookieValue };
 }
 
-// Null for anything but an FFPF start, including GitHub's zl_oauth value
+// Null for anything but a Sparklingstadt ID start, including GitHub's zl_oauth value
 // (which carries no provider).
-export function parseFfpfOAuthCookie(
+export function parseSidOAuthCookie(
   value: string | undefined,
-): FfpfOAuthState | null {
+): SidOAuthState | null {
   if (!value) return null;
   try {
     const parsed: unknown = JSON.parse(
@@ -82,7 +82,7 @@ export function parseFfpfOAuthCookie(
       unknown
     >;
     if (
-      provider !== "ffpf" ||
+      provider !== "sid" ||
       typeof state !== "string" ||
       !state ||
       typeof verifier !== "string" ||

@@ -54,7 +54,7 @@ export type OwnPasswordDeps = {
 // A member's own password change, in the order of Go's ChangePassword
 // (services/api/auth/password_change.go). Only a
 // password member who is not the demo may change; an admin, acting or not,
-// and an FFPF ID member may not. Every current-password failure costs
+// and a Sparklingstadt ID member may not. Every current-password failure costs
 // exactly one scrypt (verify, or simulate on at most 128 code points) and
 // gives the same answer. A change bumps the account's sessionVersion, which
 // revokes every session of the member.

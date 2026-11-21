@@ -70,15 +70,15 @@ test("memberExists reads only member prefixes", async () => {
   });
   const db = {
     passwordAccount: counter("password", 1),
-    ffpfAccount: counter("ffpf", 0),
+    sidAccount: counter("sid", 0),
   } as unknown as PrismaClient;
   const store = createLineLinkStore(() => db);
 
   assert.equal(await store.memberExists("password:c1"), true);
-  assert.equal(await store.memberExists("ffpf:s1"), false);
+  assert.equal(await store.memberExists("sid:s1"), false);
   assert.deepEqual(calls, [
     { table: "password", args: { where: { id: "c1" } } },
-    { table: "ffpf", args: { where: { id: "s1" } } },
+    { table: "sid", args: { where: { id: "s1" } } },
   ]);
   assert.equal(await store.memberExists("10001"), false);
   assert.equal(await store.memberExists("guest"), false);

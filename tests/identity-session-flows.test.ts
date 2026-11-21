@@ -4,7 +4,7 @@ import { afterEach, beforeEach, test, type TestContext } from "node:test";
 
 import type { SignInResult } from "../src/application/identity/sign-in";
 import type { AuthenticatedUser } from "../src/domain/identity/entities/authenticated-user";
-import { parseFfpfOAuthCookie } from "../src/infrastructure/auth/ffpf-oauth";
+import { parseSidOAuthCookie } from "../src/infrastructure/auth/sid-oauth";
 import { parseOAuthCookie } from "../src/infrastructure/auth/github-oauth";
 import {
   installNextStubs,
@@ -18,7 +18,7 @@ import {
 // them (composition/identity-container): which cookies are written, where a
 // failure goes, and who may act as someone. The sign-in rules themselves are
 // in session.test.ts and the stores' tests; the OAuth callbacks in
-// github-oauth.test.ts and ffpf-oauth.test.ts.
+// github-oauth.test.ts and sid-oauth.test.ts.
 
 installNextStubs();
 
@@ -90,9 +90,9 @@ const ENV = [
   "AUTH_URL",
   "AUTH_GITHUB_ID",
   "GITHUB_WEB_CLIENT_SECRET",
-  "FFPF_ID_ISSUER",
-  "FFPF_ID_CLIENT_ID",
-  "FFPF_ID_CLIENT_SECRET",
+  "SID_ISSUER",
+  "SID_CLIENT_ID",
+  "SID_CLIENT_SECRET",
 ] as const;
 const savedEnv = new Map(ENV.map((name) => [name, process.env[name]]));
 
@@ -369,40 +369,40 @@ test("GitHub sign-in keeps state and PKCE in zl_oauth and sends the browser to G
   assert.equal(next.written[0]!.options.secure, true);
 });
 
-test("FFPF ID sign-in keeps state, PKCE and the nonce in zl_oauth and sends the browser to the portal", async () => {
-  const { signInWithFfpf } = await identity();
+test("Sparklingstadt ID sign-in keeps state, PKCE and the nonce in zl_oauth and sends the browser to the portal", async () => {
+  const { signInWithSid } = await identity();
 
   assert.equal(
-    (await redirectOf(() => signInWithFfpf("/logs"))).to,
+    (await redirectOf(() => signInWithSid("/logs"))).to,
     "/signin?error=Configuration",
   );
   assert.deepEqual(writtenCookies(), []);
 
-  process.env.FFPF_ID_ISSUER = "https://id.ffpf.example/";
-  process.env.FFPF_ID_CLIENT_ID = "ffpf-client";
-  process.env.FFPF_ID_CLIENT_SECRET = "ffpf-secret";
-  const url = new URL((await redirectOf(() => signInWithFfpf("/logs"))).to);
+  process.env.SID_ISSUER = "https://id.sid.example/";
+  process.env.SID_CLIENT_ID = "sid-client";
+  process.env.SID_CLIENT_SECRET = "sid-secret";
+  const url = new URL((await redirectOf(() => signInWithSid("/logs"))).to);
 
   assert.deepEqual(
     writtenCookies().map(([name, , maxAge]) => [name, maxAge]),
     [["zl_oauth", 600]],
   );
-  const saved = parseFfpfOAuthCookie(next.written[0]!.value);
+  const saved = parseSidOAuthCookie(next.written[0]!.value);
   const verifier = storedVerifier(next.written[0]!.value);
   assert.equal(saved?.callbackPath, "/logs");
   assert.equal(saved?.verifier, verifier);
-  // A GitHub callback never finishes an FFPF start.
+  // A GitHub callback never finishes a Sparklingstadt ID start.
   assert.equal(parseOAuthCookie(next.written[0]!.value), null);
-  assert.equal(url.origin, "https://id.ffpf.example");
-  assert.equal(url.searchParams.get("client_id"), "ffpf-client");
+  assert.equal(url.origin, "https://id.sid.example");
+  assert.equal(url.searchParams.get("client_id"), "sid-client");
   assert.equal(
     url.searchParams.get("redirect_uri"),
-    "http://zhuelog.example/api/auth/callback/ffpf",
+    "http://zhuelog.example/api/auth/callback/sid",
   );
   assert.equal(url.searchParams.get("state"), saved!.state);
   assert.equal(url.searchParams.get("nonce"), saved!.nonce);
   assert.equal(url.searchParams.get("code_challenge"), s256Challenge(verifier));
-  assert.doesNotMatch(url.href, /ffpf-secret/);
+  assert.doesNotMatch(url.href, /sid-secret/);
   assert.ok(!url.href.includes(verifier));
 });
 
@@ -461,7 +461,7 @@ test("only a signed-in admin starts acting, and only as a password member who ex
   // Not a password member's id: the database is not even asked.
   for (const ownerId of [
     "10001",
-    "ffpf:abc",
+    "sid:abc",
     "password:../x",
     "password:UPPER",
     "password:",

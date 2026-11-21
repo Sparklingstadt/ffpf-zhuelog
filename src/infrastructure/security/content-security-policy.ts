@@ -2,7 +2,7 @@ export function contentSecurityPolicy(
   nonce: string,
   development: boolean,
   https: boolean,
-  // Sign-in forms redirect there (e.g. the FFPF ID issuer's origin).
+  // Sign-in forms redirect there (e.g. the Sparklingstadt ID issuer's origin).
   formActionOrigins: string[] = [],
 ) {
   return [

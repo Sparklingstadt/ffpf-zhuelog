@@ -5,7 +5,7 @@ import {
   allowedGitHubIds,
   cronSecret,
   demoLoginId,
-  ffpfIdConfig,
+  sidConfig,
   githubOAuthConfig,
   isHttpsOrLoopbackUrl,
   lineConfig,
@@ -25,6 +25,9 @@ const LINE_KEYS = [
   "CRON_SECRET",
   "AUTH_GITHUB_ID",
   "GITHUB_WEB_CLIENT_SECRET",
+  "SID_ISSUER",
+  "SID_CLIENT_ID",
+  "SID_CLIENT_SECRET",
   "FFPF_ID_ISSUER",
   "FFPF_ID_CLIENT_ID",
   "FFPF_ID_CLIENT_SECRET",
@@ -180,32 +183,32 @@ test("githubOAuthConfig needs both the client id and the secret", () => {
   }
 });
 
-test("ffpfIdConfig needs the issuer, the client id and the secret", () => {
+test("sidConfig needs the issuer, the client id and the secret", () => {
   const complete = {
-    FFPF_ID_ISSUER: " https://ffpf.example/ ",
-    FFPF_ID_CLIENT_ID: " zhuelog ",
-    FFPF_ID_CLIENT_SECRET: " secret ",
+    SID_ISSUER: " https://sid.example/ ",
+    SID_CLIENT_ID: " zhuelog ",
+    SID_CLIENT_SECRET: " secret ",
   };
   setLine(complete);
-  assert.deepEqual(ffpfIdConfig(), {
-    issuer: "https://ffpf.example",
+  assert.deepEqual(sidConfig(), {
+    issuer: "https://sid.example",
     clientId: "zhuelog",
     clientSecret: "secret",
   });
   for (const key of Object.keys(complete) as (keyof typeof complete)[]) {
     setLine({ ...complete, [key]: " " });
-    assert.equal(ffpfIdConfig(), undefined, `${key} blank`);
+    assert.equal(sidConfig(), undefined, `${key} blank`);
   }
   setLine({});
-  assert.equal(ffpfIdConfig(), undefined);
+  assert.equal(sidConfig(), undefined);
 });
 
-test("ffpfIdConfig keeps the https-or-loopback rule for the issuer", () => {
-  const rest = { FFPF_ID_CLIENT_ID: "zhuelog", FFPF_ID_CLIENT_SECRET: "s" };
-  setLine({ ...rest, FFPF_ID_ISSUER: "http://ffpf.example" });
-  assert.equal(ffpfIdConfig(), undefined);
-  setLine({ ...rest, FFPF_ID_ISSUER: "http://127.0.0.1:3110" });
-  assert.equal(ffpfIdConfig()?.issuer, "http://127.0.0.1:3110");
+test("sidConfig keeps the https-or-loopback rule for the issuer", () => {
+  const rest = { SID_CLIENT_ID: "zhuelog", SID_CLIENT_SECRET: "s" };
+  setLine({ ...rest, SID_ISSUER: "http://sid.example" });
+  assert.equal(sidConfig(), undefined);
+  setLine({ ...rest, SID_ISSUER: "http://127.0.0.1:3110" });
+  assert.equal(sidConfig()?.issuer, "http://127.0.0.1:3110");
 });
 
 test("isHttpsOrLoopbackUrl needs HTTPS unless the host is localhost or 127.0.0.1", () => {
@@ -221,4 +224,23 @@ test("isHttpsOrLoopbackUrl needs HTTPS unless the host is localhost or 127.0.0.1
   ];
   for (const [url, want] of cases)
     assert.equal(isHttpsOrLoopbackUrl(url), want, url);
+});
+
+test("sidConfig reads SID_*, and the retired FFPF_ID_* alone give nothing", () => {
+  setLine({
+    SID_ISSUER: "https://id.example/",
+    SID_CLIENT_ID: "zhuelog",
+    SID_CLIENT_SECRET: "secret",
+  });
+  assert.deepEqual(sidConfig(), {
+    issuer: "https://id.example",
+    clientId: "zhuelog",
+    clientSecret: "secret",
+  });
+  setLine({
+    FFPF_ID_ISSUER: "https://id.example",
+    FFPF_ID_CLIENT_ID: "zhuelog",
+    FFPF_ID_CLIENT_SECRET: "secret",
+  });
+  assert.equal(sidConfig(), undefined);
 });
