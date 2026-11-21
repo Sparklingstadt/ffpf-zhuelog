@@ -43,6 +43,9 @@ const files = await testFiles("tests/");
 const passed = await run(process.execPath, [
   "--import",
   "tsx",
+  // Lets the Server Action and page guard tests stand in for next/headers
+  // and the containers (tests/helpers/next-stubs.ts).
+  "--experimental-test-module-mocks",
   "--test",
   "--test-concurrency=4",
   ...files,
