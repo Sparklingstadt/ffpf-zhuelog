@@ -46,6 +46,13 @@ export const test = base.extend<{ db: Client }>({
 });
 export { expect };
 
+// For tests of what the server does (redirects, validation, permissions,
+// headers, what a webhook or a cron writes): the result is the same at any
+// width, so only the desktop project runs them (playwright.config.ts). Tests
+// that go through menus or check that something fits stay untagged and run
+// at both widths.
+export const anyWidth = { tag: "@any-width" } as const;
+
 // The githubId that asAdmin puts in the session, and so the owner of the
 // admin's notes.
 export const adminOwnerId = "10001";

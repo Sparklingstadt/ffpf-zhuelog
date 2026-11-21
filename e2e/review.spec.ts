@@ -1,4 +1,5 @@
 import {
+  anyWidth,
   asGuest,
   asMember,
   createMember,
@@ -227,7 +228,7 @@ test("adding a word from a solved card leaves the session where it was", async (
   ).toHaveCount(0);
 });
 
-test("guests have no review queue", async ({ page }) => {
+test("guests have no review queue", anyWidth, async ({ page }) => {
   await asGuest(page);
   await page.goto("/review");
   await expect(page).toHaveURL((url) => url.pathname === "/");

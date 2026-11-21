@@ -8,14 +8,15 @@ import {
   lineStubURL,
 } from "./environment";
 import {
+  anyWidth,
   asGuest,
   asMember,
   createMember,
   expect,
   memberOwnerId,
+  openSiteMenu,
   seedNotes,
   test,
-  openSiteMenu,
 } from "./fixtures";
 import type { LineSent } from "./line-stub";
 
@@ -210,69 +211,70 @@ test("guest has no LINE link menu and is sent away from the page", async ({
   await expect(page).toHaveURL((url) => url.pathname === "/");
 });
 
-test("a LINE message becomes a learning note and a reply", async ({
-  page,
-  db,
-}) => {
-  const owner = memberOwnerId(
-    await createMember(db, "line-writer", "LINE会員", "member-password-1"),
-  );
-  const lineUser = newLineUser();
-  await linkLine(db, lineUser, owner);
+test(
+  "a LINE message becomes a learning note and a reply",
+  anyWidth,
+  async ({ page, db }) => {
+    const owner = memberOwnerId(
+      await createMember(db, "line-writer", "LINE会員", "member-password-1"),
+    );
+    const lineUser = newLineUser();
+    await linkLine(db, lineUser, owner);
 
-  const event = textEvent(newEventId(), lineUser, "我昨天去图书馆了。");
-  await sendLineEvents([event]);
-  expect(await repliesTo(event)).toEqual([
-    [
-      "【元の文】\n我昨天去图书馆了。\n\n【添削後】\n我昨天去图书馆了。（添削）\n\n【ピンイン】\ne2e pīnyīn\n\n【ヒント】\n・e2e のヒント 1\n・e2e のヒント 2\n\n学習ノートに保存しました",
-    ],
-  ]);
+    const event = textEvent(newEventId(), lineUser, "我昨天去图书馆了。");
+    await sendLineEvents([event]);
+    expect(await repliesTo(event)).toEqual([
+      [
+        "【元の文】\n我昨天去图书馆了。\n\n【添削後】\n我昨天去图书馆了。（添削）\n\n【ピンイン】\ne2e pīnyīn\n\n【ヒント】\n・e2e のヒント 1\n・e2e のヒント 2\n\n学習ノートに保存しました",
+      ],
+    ]);
 
-  const { rows: notes } = await db.query(
-    `SELECT e."kind", e."correctedText", b."fileName",
+    const { rows: notes } = await db.query(
+      `SELECT e."kind", e."correctedText", b."fileName",
             (SELECT count(*)::int FROM "Hint" h WHERE h."learningEntryId" = e."id") AS hints
        FROM "LearningEntry" e JOIN "ImportBatch" b ON b."id" = e."batchId"
       WHERE e."ownerId" = $1`,
-    [owner],
-  );
-  expect(notes).toEqual([
-    {
-      kind: "correction",
-      correctedText: "我昨天去图书馆了。（添削）",
-      fileName: "LINE",
-      hints: 2,
-    },
-  ]);
-  const { rows: messages } = await db.query(
-    `SELECT "status", "text", "attempts" FROM "LineMessage" WHERE "lineUserId" = $1`,
-    [lineUser],
-  );
-  expect(messages).toEqual([{ status: "done", text: null, attempts: 1 }]);
-  await expect
-    .poll(async () => {
-      const { rows } = await db.query(
-        `SELECT "ownerId", "inputTokens", "outputTokens" FROM "AiUsage" WHERE "feature" = 'line'`,
-      );
-      return rows;
-    })
-    .toEqual([{ ownerId: owner, inputTokens: 15, outputTokens: 25 }]);
+      [owner],
+    );
+    expect(notes).toEqual([
+      {
+        kind: "correction",
+        correctedText: "我昨天去图书馆了。（添削）",
+        fileName: "LINE",
+        hints: 2,
+      },
+    ]);
+    const { rows: messages } = await db.query(
+      `SELECT "status", "text", "attempts" FROM "LineMessage" WHERE "lineUserId" = $1`,
+      [lineUser],
+    );
+    expect(messages).toEqual([{ status: "done", text: null, attempts: 1 }]);
+    await expect
+      .poll(async () => {
+        const { rows } = await db.query(
+          `SELECT "ownerId", "inputTokens", "outputTokens" FROM "AiUsage" WHERE "feature" = 'line'`,
+        );
+        return rows;
+      })
+      .toEqual([{ ownerId: owner, inputTokens: 15, outputTokens: 25 }]);
 
-  await asMember(page, "line-writer", "member-password-1");
-  await page.goto("/logs");
-  await page.getByRole("link", { name: /^\d+月\d+日 1件$/ }).click();
-  await expect(page.getByText("我昨天去图书馆了。").first()).toBeVisible();
+    await asMember(page, "line-writer", "member-password-1");
+    await page.goto("/logs");
+    await page.getByRole("link", { name: /^\d+月\d+日 1件$/ }).click();
+    await expect(page.getByText("我昨天去图书馆了。").first()).toBeVisible();
 
-  // LINE delivering the same event again changes nothing.
-  await sendLineEvents([event]);
-  expect(await repliesTo(event)).toHaveLength(1);
-  const { rows: count } = await db.query(
-    `SELECT count(*)::int AS n FROM "LearningEntry" WHERE "ownerId" = $1`,
-    [owner],
-  );
-  expect(count[0].n).toBe(1);
-});
+    // LINE delivering the same event again changes nothing.
+    await sendLineEvents([event]);
+    expect(await repliesTo(event)).toHaveLength(1);
+    const { rows: count } = await db.query(
+      `SELECT count(*)::int AS n FROM "LearningEntry" WHERE "ownerId" = $1`,
+      [owner],
+    );
+    expect(count[0].n).toBe(1);
+  },
+);
 
-test("a Japanese message is translated", async ({ db }) => {
+test("a Japanese message is translated", anyWidth, async ({ db }) => {
   const owner = memberOwnerId(
     await createMember(db, "line-ja", "翻訳会員", "member-password-1"),
   );
@@ -339,131 +341,137 @@ test("a code issued on the web page links through the webhook", async ({
   ]);
 });
 
-test("an unlinked sender, a sticker and a long text get Go's replies", async ({
-  db,
-}) => {
-  const owner = memberOwnerId(
-    await createMember(db, "line-other", "その他会員", "member-password-1"),
-  );
-  const lineUser = newLineUser();
+test(
+  "an unlinked sender, a sticker and a long text get Go's replies",
+  anyWidth,
+  async ({ db }) => {
+    const owner = memberOwnerId(
+      await createMember(db, "line-other", "その他会員", "member-password-1"),
+    );
+    const lineUser = newLineUser();
 
-  const hello = textEvent(newEventId(), lineUser, "你好");
-  await sendLineEvents([hello]);
-  expect(await repliesTo(hello)).toEqual([
-    [
-      "まだ連携していません。Web のアカウント画面（/account/line）で連携コードを出して、このトークに送ってください。",
-    ],
-  ]);
+    const hello = textEvent(newEventId(), lineUser, "你好");
+    await sendLineEvents([hello]);
+    expect(await repliesTo(hello)).toEqual([
+      [
+        "まだ連携していません。Web のアカウント画面（/account/line）で連携コードを出して、このトークに送ってください。",
+      ],
+    ]);
 
-  await linkLine(db, lineUser, owner);
-  const sticker = messageEvent(newEventId(), lineUser, { type: "sticker" });
-  const long = textEvent(newEventId(), lineUser, "漢".repeat(501));
-  await sendLineEvents([sticker, long]);
-  expect(await repliesTo(sticker)).toEqual([
-    [
-      "中国語の文を送ると添削します。日本語の文を送ると中国語に翻訳します。結果は学習ノートに保存されます。",
-    ],
-  ]);
-  expect(await repliesTo(long)).toEqual([
-    ["文が長すぎます。500 文字までにして、もう一度送ってください。"],
-  ]);
-  expect((await db.query('SELECT 1 FROM "LineMessage"')).rowCount).toBe(0);
-});
+    await linkLine(db, lineUser, owner);
+    const sticker = messageEvent(newEventId(), lineUser, { type: "sticker" });
+    const long = textEvent(newEventId(), lineUser, "漢".repeat(501));
+    await sendLineEvents([sticker, long]);
+    expect(await repliesTo(sticker)).toEqual([
+      [
+        "中国語の文を送ると添削します。日本語の文を送ると中国語に翻訳します。結果は学習ノートに保存されます。",
+      ],
+    ]);
+    expect(await repliesTo(long)).toEqual([
+      ["文が長すぎます。500 文字までにして、もう一度送ってください。"],
+    ]);
+    expect((await db.query('SELECT 1 FROM "LineMessage"')).rowCount).toBe(0);
+  },
+);
 
-test("a failed generation stays pending and the drain finishes it", async ({
-  db,
-}) => {
-  const owner = memberOwnerId(
-    await createMember(db, "line-fail", "失敗会員", "member-password-1"),
-  );
-  const lineUser = newLineUser();
-  await linkLine(db, lineUser, owner);
+test(
+  "a failed generation stays pending and the drain finishes it",
+  anyWidth,
+  async ({ db }) => {
+    const owner = memberOwnerId(
+      await createMember(db, "line-fail", "失敗会員", "member-password-1"),
+    );
+    const lineUser = newLineUser();
+    await linkLine(db, lineUser, owner);
 
-  const event = textEvent(newEventId(), lineUser, "[fail]我想去北京。");
-  await sendLineEvents([event]);
-  expect(await repliesTo(event)).toEqual([
-    ["時間がかかっています。結果は翌朝までにこのトークにお送りします。"],
-  ]);
-  const message = () =>
-    db.query(
-      `SELECT "status", "attempts", "text" IS NULL AS cleared FROM "LineMessage" WHERE "lineUserId" = $1`,
+    const event = textEvent(newEventId(), lineUser, "[fail]我想去北京。");
+    await sendLineEvents([event]);
+    expect(await repliesTo(event)).toEqual([
+      ["時間がかかっています。結果は翌朝までにこのトークにお送りします。"],
+    ]);
+    const message = () =>
+      db.query(
+        `SELECT "status", "attempts", "text" IS NULL AS cleared FROM "LineMessage" WHERE "lineUserId" = $1`,
+        [lineUser],
+      );
+    expect((await message()).rows).toEqual([
+      { status: "pending", attempts: 1, cleared: false },
+    ]);
+    await db.query(
+      `UPDATE "LineMessage" SET "createdAt" = NOW() - interval '10 minutes' WHERE "lineUserId" = $1`,
       [lineUser],
     );
-  expect((await message()).rows).toEqual([
-    { status: "pending", attempts: 1, cleared: false },
-  ]);
-  await db.query(
-    `UPDATE "LineMessage" SET "createdAt" = NOW() - interval '10 minutes' WHERE "lineUserId" = $1`,
-    [lineUser],
-  );
 
-  // The route's own refusal, not the proxy's {"error": "認証が必要です。"}.
-  const refused = await runDrain();
-  expect(refused.status).toBe(401);
-  expect(await refused.json()).toEqual({
-    error: { code: "unauthorized", message: "認証が必要です。" },
-  });
-  expect((await sentTo({ to: lineUser })).length).toBe(0);
+    // The route's own refusal, not the proxy's {"error": "認証が必要です。"}.
+    const refused = await runDrain();
+    expect(refused.status).toBe(401);
+    expect(await refused.json()).toEqual({
+      error: { code: "unauthorized", message: "認証が必要です。" },
+    });
+    expect((await sentTo({ to: lineUser })).length).toBe(0);
 
-  const drained = await runDrain(`Bearer ${cronSecret()}`);
-  expect(drained.status).toBe(204);
-  expect(
-    (await sentTo({ to: lineUser })).map((item) => [item.kind, item.texts]),
-  ).toEqual([
-    [
-      "push",
+    const drained = await runDrain(`Bearer ${cronSecret()}`);
+    expect(drained.status).toBe(204);
+    expect(
+      (await sentTo({ to: lineUser })).map((item) => [item.kind, item.texts]),
+    ).toEqual([
       [
-        "添削できませんでした。うまく処理できませんでした。しばらくしてからもう一度送ってください。\n（コード: OPENAI_REQUEST_FAILED）",
+        "push",
+        [
+          "添削できませんでした。うまく処理できませんでした。しばらくしてからもう一度送ってください。\n（コード: OPENAI_REQUEST_FAILED）",
+        ],
       ],
-    ],
-  ]);
-  expect((await message()).rows).toEqual([
-    { status: "failed", attempts: 2, cleared: true },
-  ]);
-});
+    ]);
+    expect((await message()).rows).toEqual([
+      { status: "failed", attempts: 2, cleared: true },
+    ]);
+  },
+);
 
-test("the drain pushes late results and the morning review message once", async ({
-  db,
-}) => {
-  const owner = memberOwnerId(
-    await createMember(db, "line-morning", "朝会員", "member-password-1"),
-  );
-  const lineUser = newLineUser();
-  await linkLine(db, lineUser, owner, true);
-  await db.query(
-    `INSERT INTO "LineMessage" ("id", "webhookEventId", "lineUserId", "ownerId", "kind", "text", "status", "attempts", "createdAt", "updatedAt")
+test(
+  "the drain pushes late results and the morning review message once",
+  anyWidth,
+  async ({ db }) => {
+    const owner = memberOwnerId(
+      await createMember(db, "line-morning", "朝会員", "member-password-1"),
+    );
+    const lineUser = newLineUser();
+    await linkLine(db, lineUser, owner, true);
+    await db.query(
+      `INSERT INTO "LineMessage" ("id", "webhookEventId", "lineUserId", "ownerId", "kind", "text", "status", "attempts", "createdAt", "updatedAt")
      VALUES ($1, $2, $3, $4, 'correction', '我想去北京。', 'pending', 0, NOW() - interval '10 minutes', NOW() - interval '10 minutes')`,
-    [`m${newEventId()}`, newEventId(), lineUser, owner],
-  );
-  await seedNotes(db, owner, [{ text: "我喜欢学习。" }]);
-  await db.query(
-    `INSERT INTO "ReviewItem" ("id", "ownerId", "language", "kind", "targetId", "due", "state", "createdAt", "updatedAt")
+      [`m${newEventId()}`, newEventId(), lineUser, owner],
+    );
+    await seedNotes(db, owner, [{ text: "我喜欢学习。" }]);
+    await db.query(
+      `INSERT INTO "ReviewItem" ("id", "ownerId", "language", "kind", "targetId", "due", "state", "createdAt", "updatedAt")
      SELECT 'c' || substr(md5(random()::text), 1, 24), $1, 'zh', 'entry', e."id",
             NOW() - interval '1 hour', 0, NOW(), NOW()
        FROM "LearningEntry" e WHERE e."ownerId" = $1`,
-    [owner],
-  );
+      [owner],
+    );
 
-  const pushes = async () =>
-    (await sentTo({ to: lineUser })).map((item) => {
-      expect(item.kind).toBe("push");
-      return item.texts;
-    });
-  expect((await runDrain(`Bearer ${cronSecret()}`)).status).toBe(204);
-  const sent = await pushes();
-  expect(sent).toHaveLength(2);
-  expect(sent[0]).toHaveLength(1);
-  expect(sent[0][0]).toContain("【添削後】\n我想去北京。（添削）");
-  expect(sent[1]).toEqual([
-    "今日の復習が 1 問あります。Web の「今日の復習」（/review）で答えましょう。\n\nこのお知らせは、Web のアカウント画面（/account/line）で止められます。",
-  ]);
-  const { rows } = await db.query(
-    `SELECT "reviewNotifiedOn" = (NOW() AT TIME ZONE 'Asia/Tokyo')::date AS today
+    const pushes = async () =>
+      (await sentTo({ to: lineUser })).map((item) => {
+        expect(item.kind).toBe("push");
+        return item.texts;
+      });
+    expect((await runDrain(`Bearer ${cronSecret()}`)).status).toBe(204);
+    const sent = await pushes();
+    expect(sent).toHaveLength(2);
+    expect(sent[0]).toHaveLength(1);
+    expect(sent[0][0]).toContain("【添削後】\n我想去北京。（添削）");
+    expect(sent[1]).toEqual([
+      "今日の復習が 1 問あります。Web の「今日の復習」（/review）で答えましょう。\n\nこのお知らせは、Web のアカウント画面（/account/line）で止められます。",
+    ]);
+    const { rows } = await db.query(
+      `SELECT "reviewNotifiedOn" = (NOW() AT TIME ZONE 'Asia/Tokyo')::date AS today
        FROM "LineLink" WHERE "lineUserId" = $1`,
-    [lineUser],
-  );
-  expect(rows).toEqual([{ today: true }]);
+      [lineUser],
+    );
+    expect(rows).toEqual([{ today: true }]);
 
-  expect((await runDrain(`Bearer ${cronSecret()}`)).status).toBe(204);
-  expect(await pushes()).toHaveLength(2);
-});
+    expect((await runDrain(`Bearer ${cronSecret()}`)).status).toBe(204);
+    expect(await pushes()).toHaveLength(2);
+  },
+);

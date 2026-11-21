@@ -191,7 +191,7 @@ pnpm run test:e2e:ui
 pnpm run test:e2e:stop
 ```
 
-Desktop Chromiumとモバイル幅（Pixel 7 / Chromium）の両方で検証します。
+Desktop Chromiumとモバイル幅（Pixel 7 / Chromium）の両方で検証します。リダイレクト、入力の検査、権限、HTTPヘッダー、webhookやCronがDBに書く内容のように、画面幅で結果が変わらないテストには `anyWidth`（`e2e/fixtures.ts`、`@any-width` タグ）を付け、Desktop Chromiumだけで実行します。メニューを通るテストと、画面に収まるかを見るテストには付けません。
 テスト起動時に専用PostgreSQLを起動し、既存マイグレーションを適用してTurbopackでビルド、`127.0.0.1:3107`に本番モードのサーバーを起動します。
 既存サーバーは再利用しません。通常の開発サーバーは停止してから実行してください（ビルド先の`.next`を共有します）。
 
