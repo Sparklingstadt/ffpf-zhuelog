@@ -188,7 +188,7 @@ export async function signInWithGitHub(redirectTo: string) {
 }
 
 // Starts Sparklingstadt ID sign-in the same way: PKCE, state and nonce go into
-// zl_oauth (provider "sid"), and the browser goes to the portal's authorize
+// zl_oauth (provider "sid"), and the browser goes to the Sparklingstadt ID server's authorize
 // endpoint. /api/auth/callback/sid finishes it.
 export async function signInWithSid(redirectTo: string) {
   const config = sidConfig();

@@ -205,7 +205,7 @@ export function menuSections(
       links: [
         { label: "LINE 連携", href: "/account/line" },
         // Admins sign in with GitHub and have no password here. Sparklingstadt ID
-        // members get a link to the portal on the same page.
+        // members get a link to the Sparklingstadt ID server on the same page.
         ...(role === "member"
           ? [{ label: "パスワード変更", href: "/account/password" }]
           : []),

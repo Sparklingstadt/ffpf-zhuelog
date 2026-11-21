@@ -20,7 +20,7 @@ flowchart LR
   OpenAI[OpenAI API]
   LINE[LINE Messaging API]
   GH[GitHub OAuth]
-  FFPF[FFPF ID<br/>OpenID Connect]
+  SID[Sparklingstadt ID<br/>OpenID Connect]
 
   UI -->|HttpOnly Cookie| Web
   Web -->|Prisma: ログインのセッション（Session）・ログインの試行回数・アカウントの確認・会員の管理・パスワード変更・単語帳・学習ノート・CSV の取り込み・復習・練習の記録・質問ノート・会話ノート・フォロー・タイムライン・学習ログ・AI の利用量の集計・LINE の連携とメッセージ・デモのリセット| DB
@@ -31,11 +31,11 @@ flowchart LR
   CRON --> OpenAI
   CRON -->|デモのリセット| DB
   Web -->|ログインの code の交換| GH
-  Web -->|ログインの code の交換| FFPF
+  Web -->|ログインの code の交換・ログアウト| SID
 ```
 
 - アプリは Next.js 1 つです。ブラウザーが話す相手は Web だけで、Vercel のプロジェクトも 1 つです。
-- Web は、ログイン中の人を決めるために、実行時に `Session` の行と DB のアカウント（`PasswordAccount`・`FfpfAccount`）を Prisma（`src/infrastructure/prisma/`）で読みます。単語帳（一覧・保存・削除）と学習ノート（一覧・検索・カレンダー・日ごとの表示・ゴミ箱・共有・CSV の取り込み）と練習の記録（介詞・補語）も Prisma で読み書きし（CSV は Web が自分で検証・解析し、1 つのトランザクションで保存します）、「AI で下書き」・クイック質問・ChatGPT と話すは Web が OpenAI を直接呼んで、使った量を `AiUsage` に記録し、質問ノートと会話ノートも Prisma で読み書きし、フォロー（会員の一覧・タイムライン・フォローする／外す）も Prisma で読み書きし、会員の管理（作成・一覧・パスワードの再設定）と自分のパスワードの変更も Prisma で書き（ハッシュは Web が scrypt で作り、確かめます）、学習ログ（カレンダー）と AI の利用量の月ごとの集計は Prisma で読むだけです。LINE も Web が受け、webhook の署名を確かめ、添削・翻訳の OpenAI を直接呼んで reply し、連携とメッセージ（`LineLink`・`LineLinkCode`・`LineMessage`）を Prisma で読み書きします。デモのリセットも Web が 1 つのトランザクションで行います。ログイン（GitHub・ID とパスワード・FFPF ID・ゲスト・デモ）とログアウトも Web が行い、`Session` を読み書きします。以前はこれらを Go の API が受け持っていましたが、段階 0〜12 で Web に移し、Go を消しました（下の「2.」）。
+- Web は、ログイン中の人を決めるために、実行時に `Session` の行と DB のアカウント（`PasswordAccount`・`SidAccount`）を Prisma（`src/infrastructure/prisma/`）で読みます。単語帳（一覧・保存・削除）と学習ノート（一覧・検索・カレンダー・日ごとの表示・ゴミ箱・共有・CSV の取り込み）と練習の記録（介詞・補語）も Prisma で読み書きし（CSV は Web が自分で検証・解析し、1 つのトランザクションで保存します）、「AI で下書き」・クイック質問・ChatGPT と話すは Web が OpenAI を直接呼んで、使った量を `AiUsage` に記録し、質問ノートと会話ノートも Prisma で読み書きし、フォロー（会員の一覧・タイムライン・フォローする／外す）も Prisma で読み書きし、会員の管理（作成・一覧・パスワードの再設定）と自分のパスワードの変更も Prisma で書き（ハッシュは Web が scrypt で作り、確かめます）、学習ログ（カレンダー）と AI の利用量の月ごとの集計は Prisma で読むだけです。LINE も Web が受け、webhook の署名を確かめ、添削・翻訳の OpenAI を直接呼んで reply し、連携とメッセージ（`LineLink`・`LineLinkCode`・`LineMessage`）を Prisma で読み書きします。デモのリセットも Web が 1 つのトランザクションで行います。ログイン（GitHub・ID とパスワード・Sparklingstadt ID・ゲスト・デモ）とログアウトも Web が行い、`Session` を読み書きします。以前はこれらを Go の API が受け持っていましたが、段階 0〜12 で Web に移し、Go を消しました（下の「2.」）。
 - LINE は Web の `POST /api/line/webhook` に Webhook を送ります。Web が署名を確かめ、OpenAI で添削・翻訳し、結果を reply で返します。拾い直しと朝のお知らせは Web の `GET /api/cron/line-drain` で、Web の `vercel.json` の Cron が毎日 06:00 JST ごろに呼びます。
 
 ## 2. Go API をやめて Next.js 1 つにした理由
@@ -100,15 +100,15 @@ src/
 
 ログインとログアウトは、すべて Web が行います。
 
-| ログイン        | 中身                                                                                                                                                                                                                       |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GitHub OAuth    | PKCE つき。管理者だけ。管理者は GitHub の数字の ID の許可リスト（`AUTH_ALLOWED_GITHUB_IDS`）で決める。code の交換は Web（`AUTH_GITHUB_ID` と `GITHUB_WEB_CLIENT_SECRET`）                                                  |
-| ID とパスワード | 管理者が発行する会員。パスワードは scrypt（N=2^15, r=8, p=1）で、書き込みも確認も Web（`src/infrastructure/security/scrypt-password-hasher.ts`）。`tests/fixtures/scrypt-golden.json` は、以前の Go が書いた固定のファイル |
-| FFPF ID         | 自作の ID 基盤の OpenID Connect。ES256 の署名、iss・aud・nonce・exp を確かめる。code の交換は Web（`FFPF_ID_CLIENT_SECRET`）                                                                                               |
-| ゲスト          | データを持たない。練習だけ使える                                                                                                                                                                                           |
-| デモ            | `DEMO_LOGIN_ID` のアカウントに、パスワードなしで入る。全員で 1 つのアカウントを使う                                                                                                                                        |
+| ログイン          | 中身                                                                                                                                                                                                                       |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GitHub OAuth      | PKCE つき。管理者だけ。管理者は GitHub の数字の ID の許可リスト（`AUTH_ALLOWED_GITHUB_IDS`）で決める。code の交換は Web（`AUTH_GITHUB_ID` と `GITHUB_WEB_CLIENT_SECRET`）                                                  |
+| ID とパスワード   | 管理者が発行する会員。パスワードは scrypt（N=2^15, r=8, p=1）で、書き込みも確認も Web（`src/infrastructure/security/scrypt-password-hasher.ts`）。`tests/fixtures/scrypt-golden.json` は、以前の Go が書いた固定のファイル |
+| Sparklingstadt ID | 自作の ID サーバー（sparklingstadt-id）の OpenID Connect。ES256 の署名、iss・aud・nonce・exp を確かめる。code の交換は Web（`SID_CLIENT_SECRET`）。ログアウトでは ID サーバーのログインも消す                              |
+| ゲスト            | データを持たない。練習だけ使える                                                                                                                                                                                           |
+| デモ              | `DEMO_LOGIN_ID` のアカウントに、パスワードなしで入る。全員で 1 つのアカウントを使う                                                                                                                                        |
 
-GitHub と FFPF ID が code を交換するときの `redirect_uri` は、`AUTH_URL` の origin から決まります（GitHub は `/api/auth/callback/github/go`、FFPF ID は `/api/auth/callback/ffpf`）。GitHub の OAuth App と FFPF ID の portal に登録した URL と 1 文字でも違うと、ログインできません。
+GitHub と Sparklingstadt ID が code を交換するときの `redirect_uri` は、`AUTH_URL` の origin から決まります（GitHub は `/api/auth/callback/github/go`、Sparklingstadt ID は `/api/auth/callback/sid`）。GitHub の OAuth App と Sparklingstadt ID のサーバーに登録した URL と 1 文字でも違うと、ログインできません。
 
 **セッション（`zl_session`）**
 
@@ -214,10 +214,10 @@ sequenceDiagram
 
 ## 9. テスト
 
-| 種類       | 数                                           | 中身                                                                                           |
-| ---------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| 単体（TS） | 789 件                                       | ドメインの規則、表示の変換、層の検査、ログインとセッション、サーバーアクションとページ用ガード |
-| E2E        | 269 件（PC 164 件、うち 105 件はスマホでも） | Playwright。Docker の Postgres、Web、OpenAI と LINE と FFPF ID のスタブを立ち上げて画面を通す  |
+| 種類       | 数                                           | 中身                                                                                                    |
+| ---------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| 単体（TS） | 799 件                                       | ドメインの規則、表示の変換、層の検査、ログインとセッション、サーバーアクションとページ用ガード          |
+| E2E        | 273 件（PC 166 件、うち 107 件はスマホでも） | Playwright。Docker の Postgres、Web、OpenAI と LINE と Sparklingstadt ID のスタブを立ち上げて画面を通す |
 
 - **E2E の幅**：PC とスマホ（Pixel 7）の 2 つの幅で走らせます。リダイレクト、入力の検査、権限、HTTP ヘッダーのようにサーバーのふるまいだけを見る 59 件は、幅で結果が変わらないので PC だけで走らせます（`e2e/fixtures.ts` の `anyWidth`）。
 - **E2E の土台**：`e2e/server.ts` が、マイグレーション、`next build`、スタブの起動を行います。ログインは Web の `Session` で行い、テストの側が行を書いて `zl_session` を作ります。テストのたびに表を空にします。

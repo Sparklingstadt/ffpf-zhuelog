@@ -20,7 +20,7 @@ export default async function ChangePasswordPage() {
   const user = await getCurrentMemberUser();
   if (user?.role !== "member") redirect("/");
   // Sparklingstadt ID members have no password account here (no accountId); their
-  // password lives in the portal.
+  // password lives on the Sparklingstadt ID server.
   const isSidMember = Boolean(user.githubId?.startsWith(SID_OWNER_PREFIX));
   if (!isSidMember && !user.accountId) redirect("/");
   const sidIssuer = sidConfig()?.issuer;

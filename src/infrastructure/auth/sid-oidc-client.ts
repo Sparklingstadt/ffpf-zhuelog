@@ -212,7 +212,7 @@ function goClaimStrings(values: unknown[]): { value: string[]; bad: boolean } {
   return { value, bad };
 }
 
-// null when Go could not read the claims into the claims.
+// null when the ID token payload is not a JSON object or a claim has the wrong type.
 function decodeClaims(bytes: Buffer): Claims | null {
   const parsed = parseJson(utf8.decode(bytes));
   if (!parsed) return null;

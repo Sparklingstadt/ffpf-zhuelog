@@ -48,7 +48,7 @@
 
 ## 品質
 
-- 単体テスト 789 件（TypeScript）、E2E 269 件（Playwright。PC の幅で 164 件、そのうち画面幅で結果が変わりうる 105 件はスマホの幅でも実行）があります。
+- 単体テスト 799 件（TypeScript）、E2E 273 件（Playwright。PC の幅で 166 件、そのうち画面幅で結果が変わりうる 107 件はスマホの幅でも実行）があります。
 - E2E は、Docker の Postgres、Web、OpenAI と LINE と Sparklingstadt ID のスタブを立ち上げて、本物の画面を通して確かめます。
 - commit の前に format・lint・型チェック、push の前に単体テストと E2E を lefthook が走らせます。
 - 本番の Lighthouse（6 ページとも性能・ベストプラクティス・SEO が 100）とアクセシビリティの記録は [docs/quality.md](docs/quality.md) にあります。

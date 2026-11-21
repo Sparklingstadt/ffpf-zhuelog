@@ -18,7 +18,7 @@ export function isHttpsOrLoopbackUrl(raw: string): boolean {
   );
 }
 
-// Sparklingstadt ID sign-in needs the portal's issuer (the authorize, token and JWKS
+// Sparklingstadt ID sign-in needs the Sparklingstadt ID server's issuer (the authorize, token and JWKS
 // URLs are built from it), this service's client id and its client secret
 // (trimmed of surrounding whitespace). Without all
 // three, the Sparklingstadt ID button is not shown. The issuer must be HTTPS unless it

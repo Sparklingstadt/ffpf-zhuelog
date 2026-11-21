@@ -6,7 +6,7 @@ const GITHUB_OWNER_ID = /^\d+$/;
 const PASSWORD_OWNER_ID = /^password:[a-z0-9]{20,32}$/;
 const SID_OWNER_ID = /^sid:[a-z0-9]{1,64}$/;
 
-// Sparklingstadt ID members change their password in the portal, not here.
+// Sparklingstadt ID members change their password on the Sparklingstadt ID server, not here.
 export const SID_OWNER_PREFIX = "sid:";
 
 export function isOwnerId(value: string): boolean {
