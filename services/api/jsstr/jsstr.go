@@ -1,15 +1,12 @@
 // Package jsstr reproduces the JavaScript string operations the web app's
-// validation relies on (trim, length, slice, toLowerCase), so the API judges
+// validation relies on (trim, length, toLowerCase), so the API judges
 // input exactly as the web does.
 package jsstr
 
-import (
-	"strings"
-	"unicode/utf16"
-)
+import "strings"
 
 // IsSpace reports whether r is ECMAScript WhiteSpace or LineTerminator, the
-// set String.prototype.trim() removes (and csv-parse's trim option skips).
+// set String.prototype.trim() removes.
 // U+0085, U+180E and U+200B are not in it.
 func IsSpace(r rune) bool {
 	switch r {
@@ -34,27 +31,6 @@ func Len(s string) int {
 		}
 	}
 	return n
-}
-
-// Truncate keeps the first n UTF-16 code units of s, like JS s.slice(0, n).
-// A surrogate pair cut in half leaves a lone surrogate in JS, which is stored
-// as U+FFFD, so that is what is returned in its place.
-func Truncate(s string, n int) string {
-	units := 0
-	for i, r := range s {
-		w := utf16.RuneLen(r)
-		if w < 1 {
-			w = 1
-		}
-		if units+w > n {
-			if units < n {
-				return s[:i] + "\uFFFD"
-			}
-			return s[:i]
-		}
-		units += w
-	}
-	return s
 }
 
 // ToLower is String.prototype.toLowerCase for the cases that matter here: it

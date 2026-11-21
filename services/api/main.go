@@ -160,7 +160,6 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 	}
 	deps := httpapi.Deps{
 		Auth:     service,
-		Entries:  db,
 		Follows:  db,
 		Accounts: db,
 		Hasher:   passwords,

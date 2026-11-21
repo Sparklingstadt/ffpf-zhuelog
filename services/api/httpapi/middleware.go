@@ -125,15 +125,10 @@ func noStore(next http.Handler) http.Handler {
 	})
 }
 
-// limitBody caps request bodies at 1 MiB, except the CSV import's at
-// 4 MiB + 256 KiB (below the 4.5 MB body limit of Vercel Functions).
+// limitBody caps request bodies at 1 MiB.
 func limitBody(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		limit := int64(maxBodyBytes)
-		if r.Method == http.MethodPost && r.URL.Path == csvImportPath {
-			limit = maxCSVBodyBytes
-		}
-		r.Body = http.MaxBytesReader(w, r.Body, limit)
+		r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 		next.ServeHTTP(w, r)
 	})
 }

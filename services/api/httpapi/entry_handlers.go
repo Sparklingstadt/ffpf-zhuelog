@@ -53,16 +53,6 @@ func toEntryJSON(e store.Entry) entryJSON {
 	return out
 }
 
-// batchJSON is the batch object in the CSV-import response.
-type batchJSON struct {
-	ID         string `json:"id"`
-	ImportedAt string `json:"importedAt"`
-}
-
-func toBatchJSON(b store.Batch) batchJSON {
-	return batchJSON{ID: b.ID, ImportedAt: formatTime(b.ImportedAt)}
-}
-
 // decimalUpTo parses s as base-10 digits only (leading zeros allowed, so the
 // caller rejects them if it must) and reports false when it is empty,
 // contains anything else, or exceeds max.

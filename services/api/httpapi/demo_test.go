@@ -40,7 +40,7 @@ func demoAuth(demo bool) *fakeAuth {
 // allRoutesDeps registers every route, the demo's included.
 func allRoutesDeps(a Auth) Deps {
 	return Deps{
-		Auth: a, Entries: &fakeEntries{}, Follows: &fakeFollows{},
+		Auth: a, Follows: &fakeFollows{},
 		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret,
 		QuickChat: &fakeChat{}, Questions: &fakeQuestions{}, Chat: &fakeChat{}, Conversations: &fakeConversations{},
 		PrepositionRecords: &fakePrepositionRecords{}, ComplementRecords: &fakeComplementRecords{},

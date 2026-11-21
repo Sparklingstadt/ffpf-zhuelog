@@ -1,18 +1,10 @@
-import {
-  goApiAuthed,
-  goUploadAuthed,
-  type GoApiCall,
-  type GoUploadCall,
-} from "./authed";
+import { goApiAuthed, type GoApiCall } from "./authed";
 import { GoApiError } from "./client";
 
-// The parts of learning notes that still go through Go: the review queue and
-// the CSV import. Reads, the trash and sharing are in
+// The part of learning notes that still goes through Go: the review queue.
+// Reads, the trash, sharing and the CSV import are in
 // src/application/learning/learning-notes.ts.
-export function createLearningGateway(
-  call: GoApiCall = goApiAuthed,
-  upload: GoUploadCall = goUploadAuthed,
-) {
+export function createLearningGateway(call: GoApiCall = goApiAuthed) {
   return {
     // Whether the signed-in user's note is in their review queue; null when
     // the note is not theirs or is in the trash.
@@ -38,15 +30,6 @@ export function createLearningGateway(
           method: inReview ? "PUT" : "DELETE",
         }),
       );
-    },
-
-    // Go checks and stores the CSV in the signed-in user's own notes and
-    // answers how many notes it added.
-    async importCsv(file: File): Promise<number> {
-      const form = new FormData();
-      form.set("csvFile", file, file.name);
-      const json = await upload<{ count: number }>("/v1/imports/csv", form);
-      return json.count;
     },
   };
 }

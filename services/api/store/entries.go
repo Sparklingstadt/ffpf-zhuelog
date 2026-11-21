@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -44,7 +43,7 @@ type Cursor struct {
 	ID        string
 }
 
-// Batch identifies an import batch created by CreateImportBatch.
+// Batch identifies an import batch created by queueImportBatch.
 type Batch struct {
 	ID         string
 	ImportedAt time.Time
@@ -199,21 +198,4 @@ func queueImportBatch(b *pgx.Batch, ownerID, fileName string, drafts []EntryDraf
 		entries[i] = e
 	}
 	return batch, entries
-}
-
-// CreateImportBatch stores drafts as one import batch named fileName in a
-// single transaction; see queueImportBatch for the timestamps.
-func (s *Store) CreateImportBatch(ctx context.Context, ownerID, fileName string, drafts []EntryDraft, now time.Time) (Batch, []Entry, error) {
-	var batch Batch
-	var entries []Entry
-
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		b := &pgx.Batch{}
-		batch, entries = queueImportBatch(b, ownerID, fileName, drafts, now)
-		return execBatch(ctx, tx, b)
-	})
-	if err != nil {
-		return Batch{}, nil, fmt.Errorf("store: create batch: %w", err)
-	}
-	return batch, entries, nil
 }

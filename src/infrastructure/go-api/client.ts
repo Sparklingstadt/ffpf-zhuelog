@@ -42,8 +42,6 @@ export class GoApiError extends Error {
 }
 
 const TIMEOUT_MS = 10_000;
-// CSV imports may take up to 4 minutes 30 seconds.
-const UPLOAD_TIMEOUT_MS = 270_000;
 
 type CallerInit = {
   accessToken?: string;
@@ -64,20 +62,6 @@ export function goApi<T>(path: string, init: GoApiInit): Promise<T> {
     headers: { "content-type": "application/json", ...callerHeaders(init) },
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
     timeoutMs: TIMEOUT_MS,
-  });
-}
-
-// multipart/form-data: fetch sets content-type itself, with the boundary.
-export function goUpload<T>(
-  path: string,
-  form: FormData,
-  init: CallerInit & { method?: string },
-): Promise<T> {
-  return send<T>(path, {
-    method: init.method ?? "POST",
-    headers: callerHeaders(init),
-    body: form,
-    timeoutMs: UPLOAD_TIMEOUT_MS,
   });
 }
 

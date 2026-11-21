@@ -5,6 +5,7 @@ import {
   expect,
   memberOwnerId,
   test,
+  upload,
 } from "./fixtures";
 
 test("an admin acting as a member saves the conversation as the member's", async ({
@@ -56,6 +57,66 @@ test("an admin acting as a member saves the conversation as the member's", async
     [adminOwnerId],
   );
   expect(rows[0].n).toBe(0);
+});
+
+test("an admin acting as a member imports into the member's notes", async ({
+  page,
+  context,
+  db,
+}) => {
+  const accountId = await createMember(
+    db,
+    "test03",
+    "テスト三郎",
+    "member-password-1",
+  );
+  await asAdmin(context);
+  await page.goto("/admin/accounts");
+  await page.getByRole("button", { name: "この会員として操作" }).click();
+  await expect(page).toHaveURL((url) => url.pathname === "/");
+  await expect(
+    page.getByRole("status").filter({ hasText: "として操作中" }),
+  ).toContainText("テスト三郎");
+
+  await upload(
+    page,
+    "原文1,添削1,pinyin 1,ヒントA,ヒントB\n原文2,添削2,pinyin 2",
+    "member-notes.csv",
+  );
+  await expect(page.getByText("2件の学習文を登録しました。")).toBeVisible();
+
+  const entries = await db.query(
+    `SELECT "originalText", "ownerId", "batchId",
+            (extract(epoch FROM "createdAt") * 1000)::bigint::text AS ms
+       FROM "LearningEntry" ORDER BY "originalText"`,
+  );
+  expect(entries.rows.map((row) => [row.originalText, row.ownerId])).toEqual([
+    ["原文1", memberOwnerId(accountId)],
+    ["原文2", memberOwnerId(accountId)],
+  ]);
+  // The first row is the older one, by exactly 1 ms.
+  expect(Number(entries.rows[1].ms) - Number(entries.rows[0].ms)).toBe(1);
+
+  const batches = await db.query(
+    `SELECT id, "fileName", "rowCount" FROM "ImportBatch"`,
+  );
+  expect(batches.rows).toEqual([
+    { id: entries.rows[0].batchId, fileName: "member-notes.csv", rowCount: 2 },
+  ]);
+  expect(entries.rows[1].batchId).toBe(entries.rows[0].batchId);
+
+  const hints = await db.query(
+    `SELECT h.content, h.position FROM "Hint" h
+       JOIN "LearningEntry" e ON e.id = h."learningEntryId"
+      WHERE e."originalText" = '原文1' ORDER BY h.position`,
+  );
+  expect(hints.rows).toEqual([
+    { content: "ヒントA", position: 0 },
+    { content: "ヒントB", position: 1 },
+  ]);
+  expect(
+    (await db.query('SELECT count(*)::int AS n FROM "Hint"')).rows[0].n,
+  ).toBe(2);
 });
 
 test("acting as a member is refused for a member who does not exist", async ({

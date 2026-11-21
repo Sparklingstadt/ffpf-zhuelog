@@ -27,7 +27,6 @@ export const noteIdSchema = z.string().regex(/^[a-z0-9]{1,64}$/);
 // act on.
 const userFacingCodes = new Set([
   "invalid_request",
-  "invalid_csv",
   "password_mismatch",
   "invalid_current_password",
   "login_id_taken",
