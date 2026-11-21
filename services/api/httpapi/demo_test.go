@@ -42,7 +42,6 @@ func allRoutesDeps(a Auth) Deps {
 	return Deps{
 		Auth: a, Follows: &fakeFollows{},
 		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret,
-		Chat: &fakeChat{}, Conversations: &fakeConversations{},
 		StudyLog: &fakeStudyLog{}, AIUsage: &fakeAIUsage{}, DemoReset: &fakeDemoReset{},
 		Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
 	}.withDefaults()
@@ -53,7 +52,6 @@ func allRoutesDeps(a Auth) Deps {
 // a normal member is never refused as the demo.
 func TestDemoIsRefusedExactlyTheClosedRoutes(t *testing.T) {
 	want := []string{
-		"POST /v1/chat",
 		"GET /v1/line/link",
 		"POST /v1/line/link-code",
 		"DELETE /v1/line/link",
@@ -65,7 +63,7 @@ func TestDemoIsRefusedExactlyTheClosedRoutes(t *testing.T) {
 		"DELETE /v1/follows/{ownerId}",
 		"GET /v1/timeline",
 	}
-	paths := strings.NewReplacer("{id}", testConversationID, "{itemId}", testConversationID, "{ownerId}", otherOwner)
+	paths := strings.NewReplacer("{id}", "abc", "{itemId}", "abc", "{ownerId}", otherOwner)
 
 	for _, demo := range []bool{true, false} {
 		d := allRoutesDeps(demoAuth(demo))
@@ -96,18 +94,18 @@ func TestDemoIsRefusedExactlyTheClosedRoutes(t *testing.T) {
 }
 
 func TestDemoKeepsItsOwnRecords(t *testing.T) {
-	conv := &fakeConversations{}
+	sl := &fakeStudyLog{}
 	follows := &fakeFollows{listMembers: func(_ context.Context, viewer string) (store.MemberDirectory, error) {
 		return store.MemberDirectory{Members: []store.Member{}}, nil
 	}}
-	d := Deps{Conversations: conv, Follows: follows}
+	d := Deps{StudyLog: sl, Follows: follows}
 
-	// The demo reads its own saved conversations, and the member directory
-	// is closed to it.
+	// The demo reads its own study log, and the member directory is closed
+	// to it.
 	d.Auth = demoAuth(true)
 	h, _, _ := routerWith(t, auth.RoleMember, d)
-	if w := do(h, http.MethodGet, "/v1/conversations", "", authHeader); w.Code != http.StatusOK || conv.listOwner != testOwner {
-		t.Fatalf("demo conversations: %d for %q", w.Code, conv.listOwner)
+	if w := do(h, http.MethodGet, "/v1/study-log?from=2026-11-01&to=2026-11-30", "", authHeader); w.Code != http.StatusOK || sl.owner != testOwner {
+		t.Fatalf("demo study log: %d for %q", w.Code, sl.owner)
 	}
 	w := do(h, http.MethodGet, "/v1/members", "", authHeader)
 	wantError(t, w, http.StatusForbidden, "forbidden")

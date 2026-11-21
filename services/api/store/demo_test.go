@@ -121,12 +121,11 @@ func TestResetDemoCreatesTheAccountAndSeeds(t *testing.T) {
 	if n := countRows(t, s, `SELECT count(*) FROM "ReviewLog" WHERE "ownerId" = $1`, owner); n != 1 {
 		t.Errorf("%d review logs, want 1", n)
 	}
-	convs, err := s.ListConversations(ctx, owner, 10)
-	if err != nil || len(convs) != 1 {
-		t.Fatalf("conversations = %+v, %v", convs, err)
+	if n := countRows(t, s, `SELECT count(*) FROM "ChatConversation" WHERE "ownerId" = $1`, owner); n != 1 {
+		t.Fatalf("%d conversations, want 1", n)
 	}
-	if c, err := s.GetConversation(ctx, owner, convs[0].ID); err != nil || len(c.Messages) != 2 {
-		t.Fatalf("conversation = %+v, %v", c, err)
+	if n := countRows(t, s, `SELECT jsonb_array_length("messages") FROM "ChatConversation" WHERE "ownerId" = $1`, owner); n != 2 {
+		t.Fatalf("%d conversation messages, want 2", n)
 	}
 	var n, questions, firstTry, misses int
 	if err := s.pool.QueryRow(ctx, `SELECT count(*), max("questionCount"), max("firstTryCount"), max("missCount")

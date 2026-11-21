@@ -4,14 +4,14 @@
 
 ## AI の利用量
 
-OpenAI を呼ぶ 4 つの機能（LINE の添削・翻訳、ChatGPT と話す、クイック質問、単語帳の下書き）は、呼ぶたびに入出力のトークン数を `AiUsage` に記録します（単語帳の下書きとクイック質問は Web、ほかは Go API が記録します）。管理者はメニューの「AI 利用量」（`/admin/ai-usage`）で、日本時間の月ごとに、人・機能・モデル別の回数とトークン数を見られます。入力した文や答えは記録しません。admin が会員として操作しているときの分は admin に数えます。AI の費用を測るための記録です。測った数字の使い道は [就職までのロードマップ](job-hunting-roadmap.md) の J5 にあります。
+OpenAI を呼ぶ 4 つの機能（LINE の添削・翻訳、ChatGPT と話す、クイック質問、単語帳の下書き）は、呼ぶたびに入出力のトークン数を `AiUsage` に記録します（単語帳の下書き・クイック質問・ChatGPT と話すは Web、LINE は Go API が記録します）。管理者はメニューの「AI 利用量」（`/admin/ai-usage`）で、日本時間の月ごとに、人・機能・モデル別の回数とトークン数を見られます。入力した文や答えは記録しません。admin が会員として操作しているときの分は admin に数えます。AI の費用を測るための記録です。測った数字の使い道は [就職までのロードマップ](job-hunting-roadmap.md) の J5 にあります。
 
 ## デモアカウント
 
 アカウントを持たない人（採用担当など）が、会員向けの画面を試せます。ログイン画面の「デモで試す」から入ると、学習ノート・今日の復習・単語帳・会話ノート・練習の記録に、直近 7 日分の例のデータが入っています。
 
 - **共有と毎晩のリセット**: デモは試す人全員で 1 つのアカウントを使います。書いたものはほかの人にも見え、毎晩 04:00（日本時間）に例のデータへ戻ります。例のデータは `services/api/demo/seed.json` です。
-- **使えないもの**: AI（ChatGPT と話す、クイック質問、単語帳の下書き）、LINE 連携、フォローと共有、パスワード変更は、Go API（クイック質問と単語帳の下書きは Web）が「デモでは使えません。」と断ります。メニューにも出ません。すべてのページの上に「デモアカウントです。」と出ます。
+- **使えないもの**: AI（ChatGPT と話す、クイック質問、単語帳の下書き）、LINE 連携、フォローと共有、パスワード変更は、Web（AI）と Go API（LINE 連携・フォローと共有・パスワード変更）が「デモでは使えません。」と断ります。メニューにも出ません。すべてのページの上に「デモアカウントです。」と出ます。
 - **設定**: Go API の環境変数 `DEMO_LOGIN_ID`（例: `demo`）で有効になります。空のときはデモが無く、ボタンも出ません。リセットは `CRON_SECRET` で守られた `GET`/`POST /v1/cron/demo-reset` で、`services/api/vercel.json` の Cron が毎晩呼びます。
 - **本番で有効にする**: Go API の Vercel プロジェクトに `DEMO_LOGIN_ID` を入れてデプロイし、`curl -X POST https://ffpf-zhuelog-api.vercel.app/v1/cron/demo-reset -H "Authorization: Bearer $CRON_SECRET"` を 1 回呼んでアカウントとデータを作ります。詳しくは [docs/api-deployment.md](api-deployment.md) の「10. デモアカウント」にあります。
 
@@ -89,13 +89,13 @@ LINE に中国語や日本語の文を送ると、OpenAI（ChatGPT）で添削�
 
 ## ChatGPT と話す（会話ノート）
 
-会員と管理者は `/chat`（メニューの「ChatGPT と話す」）で ChatGPT と中国語で話せます。ゲストには出ません。Go API（`services/api/`）の `POST /v1/chat` と `/v1/conversations` で動きます。
+会員と管理者は `/chat`（メニューの「ChatGPT と話す」）で ChatGPT と中国語で話せます。ゲストには出ません。Web の `POST /api/chat`（Route Handler が OpenAI を直接呼びます）で動き、会話ノートは Web が Prisma で読み書きします。
 
 - **会話**: 回答は少しずつ表示されます。停止ボタンで止められます。途中で切れた回答は保存せず、その発言は入力欄に戻ります。
 - **会話ノート**: 回答が届くたびに、会話をまるごと保存します。`/conversations` で話した日（日本時間）ごとに見返せ、「続きを話す」で続きから話せます。削除もできます（ゴミ箱はありません）。
 - **上限**: 1 つの会話は 40 発言・合計 4 万字までです。上限に達した会話は読むだけになります。
-- **設定**: Go API に `OPENAI_API_KEY`（と任意で `OPENAI_CHAT_MODEL`）を入れます。空のときは画面に「ChatGPT が設定されていません」と出ます。
-- **本番への反映**: DBマイグレーション `20261024090000_add_chat_conversations`（`ChatConversation` の追加）を、**main へのマージの前に** 本番のNeonへ適用してください。手順は [docs/api-deployment.md](api-deployment.md) の「8. ChatGPT と話す（会話ノート）」にあります。
+- **設定**: Web に `OPENAI_API_KEY`（と任意で `OPENAI_CHAT_MODEL`）を入れます。空のときは画面に「ChatGPT が設定されていません」と出ます。
+- **本番への反映**: `ChatConversation` の表は本番にすでにあり、新しいマイグレーションの手順はありません。Web への切り替えの順番は [docs/api-deployment.md](api-deployment.md) の「段階7（チャット）のマージの前と後」にあります。
 
 ## 介詞の練習
 

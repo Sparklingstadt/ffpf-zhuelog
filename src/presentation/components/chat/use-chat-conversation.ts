@@ -165,8 +165,8 @@ export function useChatConversation({
       { id: crypto.randomUUID(), role: "assistant", text: result.text },
     ];
     setMessages(answered);
-    // The answer that crosses the limits ends the conversation; Go accepts
-    // it because the question was within them.
+    // The answer that crosses the limits ends the conversation; it is still
+    // saved because the question was within them.
     const next = fitsLimits(answered) ? current : { ...current, ended: true };
     if (next.ended) setMeta(next);
     const saved = await save(next, answered);

@@ -12,14 +12,14 @@ flowchart LR
   subgraph Web[Web: Next.js 16 on Vercel]
     RSC[Server Components]
     SA[Server Actions]
-    RH[Route Handlers<br/>チャットの中継・OAuth の callback]
+    RH[Route Handlers<br/>チャット・クイック質問の答え・OAuth の callback]
     PX[proxy.ts<br/>refresh token の更新]
   end
   subgraph API[Go API on Vercel]
     AUTH[auth]
     DATA[フォロー・LINE の復習のお知らせ]
     LINEBOT[linebot]
-    AI[OpenAI の呼び出しと利用量の記録]
+    AI[LINE の添削・翻訳の OpenAI の呼び出しと利用量の記録]
   end
   DB[(PostgreSQL / Neon<br/>スキーマは Prisma)]
   OpenAI[OpenAI API]
@@ -30,8 +30,8 @@ flowchart LR
   UI -->|HttpOnly Cookie| Web
   Web -->|Bearer JWT<br/>サーバー間| API
   API --> DB
-  Web -->|Prisma: アカウントの確認・単語帳・学習ノート・CSV の取り込み・復習・練習の記録| DB
-  Web -->|単語帳の下書き| OpenAI
+  Web -->|Prisma: アカウントの確認・単語帳・学習ノート・CSV の取り込み・復習・練習の記録・質問ノート・会話ノート| DB
+  Web -->|単語帳の下書き・クイック質問・チャット| OpenAI
   AI --> OpenAI
   LINE -->|Webhook| LINEBOT
   LINEBOT -->|push| LINE
@@ -40,7 +40,7 @@ flowchart LR
 ```
 
 - ブラウザーが話す相手は Web だけです。Go API を直接は呼びません。
-- Web は、ログイン中の人を決めるために、実行時に DB のアカウント（`PasswordAccount`・`FfpfAccount`）を Prisma（`src/infrastructure/prisma/`）で読みます。アクセストークンも Web が自分で確かめます。単語帳（一覧・保存・削除）と学習ノート（一覧・検索・カレンダー・日ごとの表示・ゴミ箱・共有・CSV の取り込み）と練習の記録（介詞・補語）も Prisma で読み書きし（CSV は Web が自分で検証・解析し、1 つのトランザクションで保存します）、「AI で下書き」は Web が OpenAI を直接呼んで、使った量を `AiUsage` に記録します。ほかの読み書き、ログイン、AI は今も Go API を通します。機能は、設計書（[2026-11-16-deprecate-go-backend-design.md](superpowers/specs/2026-11-16-deprecate-go-backend-design.md)）の段階ごとに、Go から Web へ移していきます。
+- Web は、ログイン中の人を決めるために、実行時に DB のアカウント（`PasswordAccount`・`FfpfAccount`）を Prisma（`src/infrastructure/prisma/`）で読みます。アクセストークンも Web が自分で確かめます。単語帳（一覧・保存・削除）と学習ノート（一覧・検索・カレンダー・日ごとの表示・ゴミ箱・共有・CSV の取り込み）と練習の記録（介詞・補語）も Prisma で読み書きし（CSV は Web が自分で検証・解析し、1 つのトランザクションで保存します）、「AI で下書き」・クイック質問・ChatGPT と話すは Web が OpenAI を直接呼んで、使った量を `AiUsage` に記録し、質問ノートと会話ノートも Prisma で読み書きします。ほかの読み書きとログイン、LINE の AI（添削・翻訳）は今も Go API を通します。機能は、設計書（[2026-11-16-deprecate-go-backend-design.md](superpowers/specs/2026-11-16-deprecate-go-backend-design.md)）の段階ごとに、Go から Web へ移していきます。
 - LINE は Go API に Webhook を送ります。添削の結果は Go API が LINE に push で返します。
 
 ## 2. Web と Go API を分けた理由
@@ -171,16 +171,16 @@ sequenceDiagram
 
 ## 8. AI と費用
 
-**呼ぶところ**：OpenAI を呼ぶのは次の 4 か所で、単語帳の下書きとクイック質問が Web（`src/infrastructure/openai/`）、ほかは Go API です。どれも Responses API を使います。
+**呼ぶところ**：OpenAI を呼ぶのは次の 4 か所で、LINE の添削・翻訳だけが Go API、ほかは Web（`src/infrastructure/openai/`）です。どれも Responses API を使います。
 
 | 機能              | モデル                           | 返し方                                                    |
 | ----------------- | -------------------------------- | --------------------------------------------------------- |
 | LINE の添削・翻訳 | `gpt-5-mini`                     | JSON スキーマで構造化した出力                             |
 | 単語帳の下書き    | `gpt-5-mini`                     | JSON スキーマで構造化した出力                             |
-| ChatGPT と話す    | 環境変数で変えられる（既定あり） | ストリーミング（NDJSON で中継）                           |
+| ChatGPT と話す    | 環境変数で変えられる（既定あり） | ストリーミング（Web の Route Handler から NDJSON で直接） |
 | クイック質問      | 同上                             | ストリーミング（Web の Route Handler から NDJSON で直接） |
 
-クイック質問は、テキストが出る前の失敗なら 502、出たあとの失敗なら `error` の行で伝えます。途中で切れた答えは保存しません。
+ストリーミングの 2 つは、テキストが出る前の失敗なら 502、出たあとの失敗なら `error` の行で伝えます。ChatGPT と話すは、トークンの上限で切れた答えもそのまま保存します。クイック質問は、途中で切れた答えを保存しません。
 
 **利用量の記録**：呼ぶたびに、機能・モデル・入出力のトークン数を `AiUsage` に記録します。管理者は `/admin/ai-usage` で月ごとに見られます。入力した文や答えは記録しません。
 
@@ -206,7 +206,7 @@ sequenceDiagram
 
 ## 11. いまの課題
 
-- **入力の検証が 2 か所にある**：ログイン ID・パスワード・表示名の規則や、チャットの本文の上限を、Web（zod）と Go の両方で持っています。Go が最後の砦で、Web は早く知らせるためですが、規則を変えるときは 2 か所を直す必要があります。
+- **入力の検証が 2 か所にある**：ログイン ID・パスワード・表示名の規則を、Web（zod）と Go の両方で持っています。Go が最後の砦で、Web は早く知らせるためですが、規則を変えるときは 2 か所を直す必要があります。
 - **外部キーがない**：管理者は DB に行を持たないので、`ownerId` に外部キーがありません。持ち主の整合性は Go API のコードで守っています。
 - **Preview の DB**：Preview の Go API がどの DB を使うかについて、文書の記述が食い違っています（`api-deployment.md` の 62 行目と 80 行目）。どちらかにそろえる必要があります。
 - **CI がない**：GitHub Actions の CI は外しました。確認は lefthook のローカルの検査だけで、`pnpm audit` と `pnpm run build` は自動では走りません。

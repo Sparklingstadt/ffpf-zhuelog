@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
-	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/chat"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/demo"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/httpapi"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/httpclient"
@@ -166,11 +165,8 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 		DB:       db,
 		Logger:   logger,
 
-		StudyLog: db,
-		AIUsage:  db,
-		// Saved conversations stay readable without OpenAI; only the
-		// routes that call it need the streamer below.
-		Conversations:  db,
+		StudyLog:       db,
+		AIUsage:        db,
 		WebProxySecret: cfg.WebProxySecret,
 		Throttle:       db,
 		// The cron secret guards the LINE drain and the demo reset.
@@ -185,16 +181,6 @@ func run(ctx context.Context, cfg Config, logger *slog.Logger, ready chan<- stri
 	if cfg.LineEnabled() {
 		deps.Line = newLineService(cfg, db, allowlist, logger)
 		deps.LineChannelSecret = cfg.LineChannelSecret
-	}
-	if cfg.ChatEnabled() {
-		// The client's limit sits above the streamer's own 60 s one.
-		deps.Chat = &chat.Streamer{
-			HTTP:    newNoRedirectHTTPClient(65 * time.Second),
-			BaseURL: cfg.OpenAIBaseURL,
-			APIKey:  cfg.OpenAIAPIKey,
-			Model:   cfg.OpenAIChatModel,
-		}
-		deps.ChatModel = cfg.OpenAIChatModel
 	}
 	handler := httpapi.NewRouter(deps)
 
