@@ -33,7 +33,7 @@ export function goProxySecret() {
   return deriveSecret("api-web-proxy");
 }
 
-// Guards the cron routes of the web and of the Go API (the same value).
+// Guards the web's cron routes.
 export function cronSecret() {
   return deriveSecret("api-cron");
 }

@@ -18,6 +18,11 @@ func MemberOwnerID(accountID string) string { return MemberOwnerPrefix + account
 // "ffpf:" + the portal's sub. See ffpf_accounts.go.
 const FfpfOwnerPrefix = "ffpf:"
 
+// DemoPasswordHash is the demo account's password hash. It is not a valid
+// scrypt hash, so no password ever signs in to it; people enter the demo
+// with POST /v1/auth/demo instead.
+const DemoPasswordHash = "demo:no-password"
+
 // PasswordAccount is a member account that signs in with loginId and password.
 type PasswordAccount struct {
 	ID             string

@@ -88,8 +88,7 @@ func TestActAsRejections(t *testing.T) {
 	})
 
 	t.Run("member is refused on every authed route", func(t *testing.T) {
-		d := Deps{Auth: actingAuth(auth.RoleMember), Line: &fakeLine{}, LineChannelSecret: testLineSecret,
-			CronSecret: testCronSecret}
+		d := Deps{Auth: actingAuth(auth.RoleMember)}
 		d = d.withDefaults()
 		mux, routes := newMux(d)
 		h := wrap(d, jsonMuxErrors(mux))
@@ -131,23 +130,5 @@ func TestMeWhileActing(t *testing.T) {
 	if got["ownerId"] != actedMember || acting["ownerId"] != actedMember ||
 		acting["loginId"] != "test01" || acting["displayName"] != "テスト" {
 		t.Fatalf("body = %s", w.Body.String())
-	}
-}
-
-func TestLinkRoutesClosedWhileActing(t *testing.T) {
-	f := &fakeLine{}
-	h, _, _ := routerWith(t, "", Deps{Auth: actingAuth(auth.RoleAdmin), Line: f,
-		LineChannelSecret: testLineSecret, CronSecret: testCronSecret})
-	for _, rt := range []struct{ method, path string }{
-		{"GET", "/v1/line/link"}, {"POST", "/v1/line/link-code"}, {"DELETE", "/v1/line/link"},
-	} {
-		w := do(h, rt.method, rt.path, "", actAsHeaders(actedMember))
-		wantError(t, w, 403, "forbidden")
-		if e := decodeError(t, w); e.Error.Message != msgNotWhileActing {
-			t.Errorf("%s %s message = %q", rt.method, rt.path, e.Error.Message)
-		}
-	}
-	if f.linkedFor != "" || f.issuedFor.OwnerID != "" || f.unlinkedFor != "" {
-		t.Fatalf("LINE service was called: %+v", f)
 	}
 }

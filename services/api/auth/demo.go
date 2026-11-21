@@ -9,7 +9,7 @@ import (
 )
 
 // ErrDemoDisabled means there is no demo to enter: Service.DemoLoginID is
-// unset, or its account has not been made yet (the nightly reset makes it).
+// unset, or its account has not been made yet (the web's nightly reset makes it).
 var ErrDemoDisabled = errors.New("auth: the demo account is disabled")
 
 // DemoEnabled reports whether the demo account is configured.
@@ -43,29 +43,6 @@ func (s *Service) LoginDemo(ctx context.Context, client string) (TokenPair, erro
 		Role:           RoleMember,
 		SessionVersion: account.SessionVersion,
 	})
-}
-
-// IsDemo reports whether p is someone using the demo account. It is the one
-// place that decides what the demo may not do: an admin acting as the demo
-// account is not the demo, and neither is any other member. It looks the
-// account up even with the demo turned off, so sessions started before
-// DEMO_LOGIN_ID was removed stay limited.
-func (s *Service) IsDemo(ctx context.Context, p Principal) (bool, error) {
-	if p.Role != RoleMember || p.ActorID != "" {
-		return false, nil
-	}
-	accountID, ok := memberAccountID(p)
-	if !ok {
-		return false, nil
-	}
-	a, err := s.Store.FindPasswordAccountByID(ctx, accountID)
-	if errors.Is(err, store.ErrNotFound) {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("auth: find password account: %w", err)
-	}
-	return s.isDemoAccount(a), nil
 }
 
 // isDemoAccount reports whether a is the demo account: the one DEMO_LOGIN_ID

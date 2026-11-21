@@ -26,11 +26,7 @@ export default defineUserConfig({
       {
         text: "エンドポイント",
         link: "/reference/",
-        children: [
-          "/reference/auth.md",
-          "/reference/line.md",
-          "/reference/health.md",
-        ],
+        children: ["/reference/auth.md", "/reference/health.md"],
       },
       { text: "エラー", link: "/errors.md" },
       {

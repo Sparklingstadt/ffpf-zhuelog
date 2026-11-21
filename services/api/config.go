@@ -7,18 +7,9 @@ import (
 	"strings"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
-	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/learning"
 )
 
 const minJWTSecretBytes = 32
-
-const (
-	defaultOpenAIBaseURL  = "https://api.openai.com"
-	defaultLineAPIBaseURL = "https://api.line.me"
-	// defaultLearningModel is the model of the LINE bot's corrections and
-	// translations unless OPENAI_LEARNING_MODEL names another.
-	defaultLearningModel = learning.DefaultModel
-)
 
 // Config holds the API server settings read from the environment.
 type Config struct {
@@ -42,27 +33,9 @@ type Config struct {
 	// so the API trusts the end-user IP it forwards.
 	WebProxySecret   []byte
 	AllowedGitHubIDs string // comma-separated numeric GitHub user IDs of admins
-	// The LINE bot is optional: the two LINE values are set together with
-	// OpenAIAPIKey, or not at all. OpenAIAPIKey is set with the two LINE values;
-	// alone it does nothing.
-	LineChannelSecret      []byte
-	LineChannelAccessToken string
-	OpenAIAPIKey           string
-	OpenAILearningModel    string
-	// CronSecret is optional: the bearer secret the scheduler presents to the
-	// LINE retry endpoint. Unset means that endpoint always answers 401.
-	CronSecret []byte
 	// DemoLoginID is optional: the loginId of the demo account anyone may
 	// enter from the sign-in page. Unset means there is no demo.
 	DemoLoginID string
-	// Upstream base URLs. Only loopback overrides are accepted (for tests).
-	OpenAIBaseURL  string
-	LineAPIBaseURL string
-}
-
-// LineEnabled reports whether the LINE webhook routes should be registered.
-func (c Config) LineEnabled() bool {
-	return len(c.LineChannelSecret) > 0
 }
 
 // FFPFEnabled reports whether FFPF ID logins are configured.
@@ -151,36 +124,12 @@ func LoadConfig(getenv func(string) string) (Config, error) {
 	if cfg.AllowedGitHubIDs, err = required("AUTH_ALLOWED_GITHUB_IDS"); err != nil {
 		return Config{}, err
 	}
-	lineSecret := get("LINE_CHANNEL_SECRET")
-	cfg.LineChannelAccessToken = get("LINE_CHANNEL_ACCESS_TOKEN")
-	cfg.OpenAIAPIKey = get("OPENAI_API_KEY")
-	// OPENAI_API_KEY alone is allowed (only LINE uses it); either LINE value
-	// needs all three.
-	if (lineSecret != "" || cfg.LineChannelAccessToken != "") &&
-		(lineSecret == "" || cfg.LineChannelAccessToken == "" || cfg.OpenAIAPIKey == "") {
-		return Config{}, errors.New("LINE_CHANNEL_SECRET, LINE_CHANNEL_ACCESS_TOKEN and OPENAI_API_KEY must be set together")
-	}
-	if cfg.OpenAILearningModel = get("OPENAI_LEARNING_MODEL"); cfg.OpenAILearningModel == "" {
-		cfg.OpenAILearningModel = defaultLearningModel
-	}
-	if lineSecret != "" {
-		cfg.LineChannelSecret = []byte(lineSecret)
-	}
-	if cronSecret := get("CRON_SECRET"); cronSecret != "" {
-		cfg.CronSecret = []byte(cronSecret)
-	}
 	if demo := get("DEMO_LOGIN_ID"); demo != "" {
 		id, ok := auth.NormalizeLoginID(demo)
 		if !ok || id != demo {
 			return Config{}, errors.New("DEMO_LOGIN_ID must be a login ID: 3 to 32 of a-z, 0-9, '.', '_' and '-'")
 		}
 		cfg.DemoLoginID = id
-	}
-	if cfg.OpenAIBaseURL, err = baseURL(get, "OPENAI_API_BASE_URL", defaultOpenAIBaseURL); err != nil {
-		return Config{}, err
-	}
-	if cfg.LineAPIBaseURL, err = baseURL(get, "LINE_API_BASE_URL", defaultLineAPIBaseURL); err != nil {
-		return Config{}, err
 	}
 	return cfg, nil
 }
@@ -206,23 +155,4 @@ func validFFPFIssuer(issuer string) bool {
 		return host == "localhost" || host == "127.0.0.1"
 	}
 	return false
-}
-
-// baseURL returns the named override, or def when unset. An override must be a
-// loopback URL so the API cannot be pointed at an arbitrary host. The value is
-// left out of the error message.
-func baseURL(get func(string) string, name, def string) (string, error) {
-	value := get(name)
-	if value == "" {
-		return def, nil
-	}
-	u, err := url.Parse(value)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil {
-		return "", fmt.Errorf("%s must be an http(s) loopback URL", name)
-	}
-	switch u.Hostname() {
-	case "127.0.0.1", "::1", "localhost":
-		return value, nil
-	}
-	return "", fmt.Errorf("%s must be an http(s) loopback URL", name)
 }

@@ -18,7 +18,6 @@ import (
 const (
 	msgUnauthorized      = "認証が必要です。"
 	msgForbidden         = "このアカウントは利用できません。" // allowlist removal, revoked session
-	msgLineNotLinked     = "LINE と連携していません。先に連携してください。"
 	msgBadRequest        = "リクエストが不正です。"
 	msgNotFound          = "見つかりません。"
 	msgMethodNotAllowed  = "このメソッドは使用できません。"
@@ -31,8 +30,6 @@ const (
 	msgWebOnly           = "この操作は Web からだけ利用できます。"
 	msgActAsAdminOnly    = "他の人として操作できるのは管理者だけです。"
 	msgMemberNotFound    = "会員が見つかりません。"
-	msgNotWhileActing    = "会員として操作している間は使えません。"
-	msgDemoRestricted    = "デモでは使えません。"
 	msgDemoDisabled      = "デモは利用できません。"
 )
 

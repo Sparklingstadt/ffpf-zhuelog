@@ -137,18 +137,8 @@ async function startGoApi(): Promise<ChildProcess> {
       FFPF_ID_CLIENT_ID: ffpf.clientId,
       FFPF_ID_CLIENT_SECRET: ffpf.clientSecret,
       FFPF_ID_REDIRECT_URI: ffpf.redirectUri,
-      // Go registers the LINE link routes only when LINE and OpenAI are
-      // configured. Dummy values and loopback base URLs (nothing listens on
-      // port 9; the OpenAI stub runs in this process) make the routes exist
-      // without any call leaving this machine.
-      LINE_CHANNEL_SECRET: "e2e-line-channel-secret",
-      LINE_CHANNEL_ACCESS_TOKEN: "e2e-line-channel-access-token",
-      OPENAI_API_KEY: "e2e-openai-api-key",
-      LINE_API_BASE_URL: "http://127.0.0.1:9",
-      OPENAI_API_BASE_URL: openAiStubURL,
-      // The demo account; e2e/demo.spec.ts resets it with the cron secret.
+      // Go's demo sign-in (stage 11).
       DEMO_LOGIN_ID: demoLoginId,
-      CRON_SECRET: cronSecret(),
     },
     stdio: "inherit",
   });
