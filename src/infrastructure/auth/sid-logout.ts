@@ -17,3 +17,31 @@ export function sidLogoutUrl(input: {
   url.searchParams.set("post_logout_redirect_uri", `${origin}/signin`);
   return url.toString();
 }
+
+// Where sign-out goes after the web's own session is ended: the ID server's
+// logout for a Sparklingstadt ID member, else /signin. Signing out must work
+// even when the user cannot be read (database down), so any failure while
+// deciding is reported and answers /signin. For an admin acting as a member
+// the admin's own id decides (currentOwnerId), so an admin is never sent to
+// the ID server.
+export async function resolveSignOutTarget(deps: {
+  // The id that decides: the admin's own while acting as a member.
+  currentOwnerId(): Promise<string | null>;
+  config(): { issuer: string; clientId: string } | null;
+  origin(): Promise<string>;
+  onError(error: unknown): void;
+}): Promise<string> {
+  try {
+    const ownerId = await deps.currentOwnerId();
+    return (
+      sidLogoutUrl({
+        ownerId,
+        config: deps.config(),
+        origin: await deps.origin(),
+      }) ?? "/signin"
+    );
+  } catch (error) {
+    deps.onError(error);
+    return "/signin";
+  }
+}

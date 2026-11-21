@@ -15,7 +15,7 @@ import {
 import type { AuthenticatedUser } from "@/domain/identity/entities/authenticated-user";
 import type { CurrentUserProvider } from "@/application/identity/ports/current-user-provider";
 import { clientAddress } from "@/infrastructure/auth/client-address";
-import { sidLogoutUrl } from "@/infrastructure/auth/sid-logout";
+import { resolveSignOutTarget } from "@/infrastructure/auth/sid-logout";
 import {
   createSidOAuthStart,
   sidAuthorizeUrl,
@@ -226,17 +226,18 @@ export function demoAvailable() {
 // an admin acting as a member is judged by the admin's own id, so an admin is
 // never sent there. The origin is the sign-in callback's (publicOrigin).
 export async function signOutCurrentUser() {
-  const user = await getCachedCurrentUser();
-  const ownerId = user?.actingAs
-    ? (user.actorId ?? null)
-    : (user?.githubId ?? null);
-  const config = sidConfig();
-  const logoutUrl = sidLogoutUrl({
-    ownerId,
-    config: config ?? null,
-    origin: publicOrigin(requestOrigin(await headers())),
+  const target = await resolveSignOutTarget({
+    currentOwnerId: async () => {
+      const user = await getCachedCurrentUser();
+      if (user?.actingAs) return user.actorId ?? null;
+      return user?.githubId ?? null;
+    },
+    config: () => sidConfig() ?? null,
+    origin: async () => publicOrigin(requestOrigin(await headers())),
+    onError: (error) =>
+      console.error("SID_LOGOUT_URL_FAILED", errorName(error)),
   });
-  await signOutTo(logoutUrl ?? "/signin");
+  await signOutTo(target);
 }
 
 // Signs out even when the database cannot be reached: the cookies are
