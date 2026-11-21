@@ -103,3 +103,34 @@ test("simulate builds the dummy hash again after a failed attempt", async () => 
   await flaky.simulate("x");
   assert.equal(calls, 2);
 });
+
+test("warm then simulate builds the dummy hash once", async () => {
+  const warmed = new ScryptPasswordHasher();
+  const realHash = warmed.hash.bind(warmed);
+  let calls = 0;
+  warmed.hash = async (password: string) => {
+    calls += 1;
+    return realHash(password);
+  };
+  await warmed.warm();
+  assert.equal(calls, 1);
+  await warmed.warm();
+  await warmed.simulate("x");
+  await warmed.simulate("y");
+  assert.equal(calls, 1);
+});
+
+test("a failed warm never throws and simulate builds the hash again", async () => {
+  const flaky = new ScryptPasswordHasher();
+  const realHash = flaky.hash.bind(flaky);
+  let calls = 0;
+  flaky.hash = async (password: string) => {
+    calls += 1;
+    if (calls === 1) throw new Error("scrypt failed");
+    return realHash(password);
+  };
+  assert.equal(await flaky.warm(), undefined);
+  await flaky.simulate("x");
+  await flaky.simulate("x");
+  assert.equal(calls, 2);
+});

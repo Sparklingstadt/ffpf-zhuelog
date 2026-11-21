@@ -42,6 +42,7 @@ export const DEMO_OWNED_TABLES: readonly string[] = [
 // (Go: demoKeptTables in store/review_orphans_test.go).
 export const DEMO_KEPT_TABLES: Readonly<Record<string, string>> = {
   ApiRefreshToken: "the demo's sessions survive the nightly reset",
+  Session: "the demo's sessions survive the nightly reset",
   AiUsage: "the admin's record of OpenAI spend; the demo cannot call OpenAI",
 };
 
