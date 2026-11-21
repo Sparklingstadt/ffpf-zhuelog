@@ -28,7 +28,7 @@ API を起動したまま、別のターミナルで実行します。
 pnpm run api:smoke
 ```
 
-ログイン、エントリーの作成・一覧・詳細・編集、共有と解除、会員一覧、フォロー・タイムライン・解除、ゴミ箱への移動・一覧・復元・完全削除、リフレッシュ、ログアウトを順に呼び、想定と違うステータスが返ったところで止まります。
+ログイン、会員一覧、フォロー・タイムライン・解除、リフレッシュ、ログアウトを順に呼び、想定と違うステータスが返ったところで止まります。
 
 ## サンプルのアカウント
 
@@ -53,7 +53,7 @@ TOKEN=$(curl -s -X POST "$API_LOCAL_URL/v1/auth/password" \
   -H 'Content-Type: application/json' \
   -d '{"loginId":"demo","password":"demo-password-123"}' | jq -r .accessToken)
 
-curl -s "$API_LOCAL_URL/v1/entries?limit=5" -H "Authorization: Bearer $TOKEN" | jq
+curl -s "$API_LOCAL_URL/v1/reviews/count" -H "Authorization: Bearer $TOKEN" | jq
 curl -s "$API_LOCAL_URL/v1/members" -H "Authorization: Bearer $TOKEN" | jq
 ```
 

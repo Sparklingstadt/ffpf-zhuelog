@@ -1,4 +1,11 @@
-import { asAdmin, expect, test, upload } from "./fixtures";
+import {
+  adminOwnerId,
+  asAdmin,
+  expect,
+  seedNotes,
+  test,
+  upload,
+} from "./fixtures";
 
 // The home's search: one row on wide screens; on phones only the words
 // field until 絞り込む opens the filters, and open already while searching.
@@ -38,4 +45,34 @@ test("phones open the search filters with 絞り込む; wide screens show them i
   await page.goto("/");
   await expect(toggle).toBeHidden();
   await expect(kind).toBeVisible();
+});
+
+// % and _ are LIKE wildcards in the database search; the words must match
+// literally, in the note's text and in its hints.
+test("searching for 100% finds only the literal text", async ({
+  page,
+  context,
+  db,
+}) => {
+  await seedNotes(db, adminOwnerId, [
+    { text: "考试得了100%" },
+    { text: "这次满分", hint: "「100%」的努力" },
+    { text: "考试得了100分" },
+    { text: "考试得了1000分" },
+  ]);
+  await asAdmin(context);
+  await page.goto("/");
+  const search = page.getByRole("search", { name: "学習ノートを検索" });
+  // Enter submits on every width (phones hide the button until 絞り込む).
+  await search.getByLabel("語句").fill("100%");
+  await search.getByLabel("語句").press("Enter");
+
+  await expect(page).toHaveURL(/[?&]q=100%25(&|$)/);
+  await expect(
+    page.getByText("条件に合う学習ノートが2件あります。", { exact: false }),
+  ).toBeVisible();
+  await expect(page.getByText("考试得了100%").first()).toBeVisible();
+  await expect(page.getByText("这次满分").first()).toBeVisible();
+  await expect(page.getByText("考试得了100分")).toHaveCount(0);
+  await expect(page.getByText("考试得了1000分")).toHaveCount(0);
 });

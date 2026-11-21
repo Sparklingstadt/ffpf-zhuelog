@@ -36,9 +36,9 @@ export type RecordOwnerView = {
   viewingName: string | null;
 };
 
-// Member list for the switcher. The top page still renders when the Go API
-// fails, so a failure leaves only "自分" instead of breaking the page. Other
-// errors, such as Next's redirect to /signin, pass through.
+// Member list for the switcher. The top page still renders when the load
+// fails, so a failure leaves only "自分" instead of breaking the page. Only
+// Next control flow, such as the redirect to /signin, passes through.
 async function loadOptions(): Promise<RecordOwnerOption[]> {
   return loadOr(
     "RECORD_OWNER_OPTIONS_UNAVAILABLE",

@@ -65,22 +65,23 @@ export async function handleUnfollow(
   });
 }
 
-// Only members can be followed, so only members have notes to share.
+// Only members can be followed, so only members have notes to share. The
+// note is always the signed-in member's own: run (learningNotes) decides the
+// owner and refuses the demo with LearningForbiddenError.
 export async function handleShare(
   formData: FormData,
   dependencies: {
     getMember: Member;
-    run: (ownerId: string, id: string, shared: boolean) => Promise<boolean>;
+    run: (id: string, shared: boolean) => Promise<boolean>;
   },
 ): Promise<ActionState> {
   const user = await dependencies.getMember();
-  if (!user?.githubId || user.role !== "member") return actionUnauthorized;
-  const ownerId = user.githubId;
+  if (user?.role !== "member") return actionUnauthorized;
   const id = noteIdSchema.safeParse(formData.get("id"));
   const shared = sharedSchema.safeParse(formData.get("shared"));
   if (!id.success || !shared.success) return notFound;
   return attemptGoAction("SHARE_FAILED", async () =>
-    (await dependencies.run(ownerId, id.data, shared.data === "true"))
+    (await dependencies.run(id.data, shared.data === "true"))
       ? actionSuccess
       : notFound,
   );

@@ -30,15 +30,23 @@ func draft(n string, hints ...string) EntryDraft {
 	}
 }
 
-// createTied stores drafts as one batch and then gives every entry the same
-// createdAt (CreateBatch spaces them 1 ms apart), for (createdAt, id) tie tests.
-func createTied(t *testing.T, s *Store, owner string, drafts []EntryDraft, at time.Time) []Entry {
+// createBatch stores drafts as one import batch named "test", created from at.
+func createBatch(t *testing.T, s *Store, owner string, drafts []EntryDraft, at time.Time) []Entry {
 	t.Helper()
-	ctx := context.Background()
-	_, created, err := s.CreateBatch(ctx, owner, drafts, at)
+	_, created, err := s.CreateImportBatch(context.Background(), owner, "test", drafts, at)
 	if err != nil {
 		t.Fatal(err)
 	}
+	return created
+}
+
+// createTied stores drafts as one batch and then gives every entry the same
+// createdAt (CreateImportBatch spaces them 1 ms apart), for (createdAt, id)
+// tie tests.
+func createTied(t *testing.T, s *Store, owner string, drafts []EntryDraft, at time.Time) []Entry {
+	t.Helper()
+	ctx := context.Background()
+	created := createBatch(t, s, owner, drafts, at)
 	at = dbTime(at)
 	ids := make([]string, len(created))
 	for i := range created {
@@ -78,4 +86,77 @@ func countRows(t *testing.T, s *Store, query string, args ...any) int {
 		t.Fatal(err)
 	}
 	return n
+}
+
+// The web writes the notes (trash, restore, share) since stage 2 of the Go
+// retirement; these helpers make the same changes for the Go code that still
+// reads the notes (timeline, reviews, LINE, demo reset).
+
+// trashNote moves one of the owner's notes to the trash at at.
+func trashNote(t *testing.T, s *Store, owner, id string, at time.Time) {
+	t.Helper()
+	execOne(t, s, `UPDATE "LearningEntry" SET "deletedAt" = $3
+	 WHERE "id" = $1 AND "ownerId" = $2 AND "deletedAt" IS NULL`, id, owner, dbTime(at))
+}
+
+// restoreNote takes one of the owner's notes out of the trash.
+func restoreNote(t *testing.T, s *Store, owner, id string) {
+	t.Helper()
+	execOne(t, s, `UPDATE "LearningEntry" SET "deletedAt" = NULL
+	 WHERE "id" = $1 AND "ownerId" = $2 AND "deletedAt" IS NOT NULL`, id, owner)
+}
+
+// shareNote shares one of the owner's notes outside the trash at at.
+func shareNote(t *testing.T, s *Store, owner, id string, at time.Time) {
+	t.Helper()
+	execOne(t, s, `UPDATE "LearningEntry" SET "sharedAt" = $3
+	 WHERE "id" = $1 AND "ownerId" = $2 AND "deletedAt" IS NULL`, id, owner, dbTime(at))
+}
+
+// execOne runs an UPDATE that must change exactly one row.
+func execOne(t *testing.T, s *Store, query string, args ...any) {
+	t.Helper()
+	tag, err := s.pool.Exec(context.Background(), query, args...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tag.RowsAffected() != 1 {
+		t.Fatalf("%d rows changed, want 1", tag.RowsAffected())
+	}
+}
+
+// liveNotes returns the owner's notes outside the trash with their hints,
+// newest first, read with the scan the timeline and reviews use.
+func liveNotes(t *testing.T, s *Store, owner string) []Entry {
+	t.Helper()
+	return readNotes(t, s, `SELECT `+entryColumns+` FROM "LearningEntry"
+	 WHERE "ownerId" = $1 AND "deletedAt" IS NULL ORDER BY "createdAt" DESC, "id" DESC`, owner)
+}
+
+// liveNote returns one of the owner's notes outside the trash, or false.
+func liveNote(t *testing.T, s *Store, owner, id string) (Entry, bool) {
+	t.Helper()
+	es := readNotes(t, s, `SELECT `+entryColumns+` FROM "LearningEntry"
+	 WHERE "id" = $2 AND "ownerId" = $1 AND "deletedAt" IS NULL`, owner, id)
+	if len(es) == 0 {
+		return Entry{}, false
+	}
+	return es[0], true
+}
+
+func readNotes(t *testing.T, s *Store, query string, args ...any) []Entry {
+	t.Helper()
+	ctx := context.Background()
+	rows, err := s.pool.Query(ctx, query, args...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	es, err := scanEntries(rows)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := attachHints(ctx, s.pool, entryPtrs(es)); err != nil {
+		t.Fatal(err)
+	}
+	return es
 }

@@ -13,10 +13,10 @@ import (
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
 
-// TestOnlyReadRoutesAcceptUserParam walks every registered route and checks
-// that ?user= is honoured by exactly the five read routes and rejected with
-// 400 by every other authenticated route.
-func TestOnlyReadRoutesAcceptUserParam(t *testing.T) {
+// TestNoRouteAcceptsUserParam walks every registered route and checks that
+// every authenticated route rejects ?user= with 400: the web reads other
+// members' notes itself, so no Go route may look as if it honoured it.
+func TestNoRouteAcceptsUserParam(t *testing.T) {
 	a := &fakeAuth{authenticate: func(context.Context, string) (auth.Principal, error) {
 		return auth.Principal{OwnerID: testOwner, Role: auth.RoleAdmin}, nil
 	}}
@@ -29,19 +29,8 @@ func TestOnlyReadRoutesAcceptUserParam(t *testing.T) {
 	mux, routes := newMux(d)
 	h := wrap(d, jsonMuxErrors(mux))
 
-	want := []string{
-		"GET /v1/entries",
-		"GET /v1/entries/{id}",
-		"GET /v1/log-dates",
-		"GET /v1/log-dates/{date}/entries",
-		"GET /v1/log-dates/{date}/entries/{number}",
-	}
-	var got []string
-	paths := strings.NewReplacer("{id}", "abc", "{ownerId}", "12345", "{date}", "2026-01-01", "{number}", "1")
+	paths := strings.NewReplacer("{id}", "abc", "{ownerId}", "12345")
 	for _, rt := range routes {
-		if rt.allowUser {
-			got = append(got, rt.pattern)
-		}
 		if !rt.authed {
 			continue
 		}
@@ -52,20 +41,9 @@ func TestOnlyReadRoutesAcceptUserParam(t *testing.T) {
 		wantError(t, do(h, method, path, "", nil), http.StatusUnauthorized, "unauthorized")
 
 		w := do(h, method, path+"?user="+otherOwner, "", authHeader)
-		if rt.allowUser {
-			if w.Code == http.StatusBadRequest {
-				t.Errorf("%s: ?user= rejected on a read route (body %q)", rt.pattern, w.Body.String())
-			}
-			continue
-		}
 		t.Run(rt.pattern, func(t *testing.T) {
 			wantError(t, w, http.StatusBadRequest, "invalid_request")
 		})
-	}
-	sort.Strings(got)
-	sort.Strings(want)
-	if strings.Join(got, "\n") != strings.Join(want, "\n") {
-		t.Errorf("routes accepting ?user=\n got: %q\nwant: %q", got, want)
 	}
 }
 
@@ -112,7 +90,7 @@ func TestPublicRouteSetIsExactlyTheKnownRoutes(t *testing.T) {
 		isPublic[p] = true
 	}
 
-	paths := strings.NewReplacer("{id}", "abc", "{ownerId}", "12345", "{date}", "2026-01-01", "{number}", "1")
+	paths := strings.NewReplacer("{id}", "abc", "{ownerId}", "12345")
 	var got []string
 	for _, rt := range routes {
 		if !rt.authed {
@@ -159,7 +137,7 @@ func TestRoutesRejectGuests(t *testing.T) {
 	mux, routes := newMux(d)
 	h := wrap(d, jsonMuxErrors(mux))
 
-	paths := strings.NewReplacer("{id}", "abc", "{ownerId}", "12345", "{date}", "2026-01-01", "{number}", "1")
+	paths := strings.NewReplacer("{id}", "abc", "{ownerId}", "12345")
 	var got []string
 	for _, rt := range routes {
 		if rt.allowGuest {

@@ -25,8 +25,9 @@ export const dynamic = "force-dynamic";
 // How many due items one visit asks for; the rest wait for the next visit.
 const SESSION_SIZE = 20;
 
-// Go being unavailable (or failing) still shows the page with a notice. Any
-// other error, including the redirect to /signin, is rethrown.
+// A failed load still shows the page with a notice (the code and error name
+// are logged). Only Next control flow, such as the redirect to /signin, is
+// rethrown.
 async function loadDue(): Promise<DueReviews | null> {
   return loadOr(
     "REVIEWS_UNAVAILABLE",

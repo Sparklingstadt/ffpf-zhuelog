@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { notFound, redirect } from "next/navigation";
+
+import { LearningForbiddenError } from "../src/application/learning/learning-notes";
 import { GoApiError } from "../src/infrastructure/go-api/client";
 import { loadOr } from "../src/presentation/controllers/load-or";
 
@@ -22,16 +25,46 @@ test("loadOr falls back on a Go failure and logs only its codes", async (t) => {
   assert.deepEqual(logged, [["VOCABULARY_UNAVAILABLE", 503, "unavailable"]]);
 });
 
-test("loadOr rethrows anything else, such as Next's redirect", async () => {
-  const redirect = new Error("NEXT_REDIRECT");
-  await assert.rejects(
-    loadOr(
-      "CODE",
+test("loadOr falls back on any other failure and logs only its name", async (t) => {
+  const logged: unknown[][] = [];
+  t.mock.method(console, "error", (...args: unknown[]) => logged.push(args));
+  const failure = Object.assign(new Error("relation does not exist: secret"), {
+    name: "PrismaClientKnownRequestError",
+  });
+  for (const error of [failure, new LearningForbiddenError(), "odd"]) {
+    const result = await loadOr(
+      "LEARNING_ENTRIES_UNAVAILABLE",
       async () => {
-        throw redirect;
+        throw error;
       },
-      null,
-    ),
-    redirect,
-  );
+      [],
+    );
+    assert.deepEqual(result, []);
+  }
+  assert.deepEqual(logged, [
+    ["LEARNING_ENTRIES_UNAVAILABLE", "PrismaClientKnownRequestError"],
+    ["LEARNING_ENTRIES_UNAVAILABLE", "LearningForbiddenError"],
+    ["LEARNING_ENTRIES_UNAVAILABLE", "string"],
+  ]);
+});
+
+test("loadOr rethrows Next's redirect and notFound", async () => {
+  for (const next of [() => redirect("/signin"), () => notFound()]) {
+    let thrown: unknown;
+    try {
+      next();
+    } catch (error) {
+      thrown = error;
+    }
+    await assert.rejects(
+      loadOr(
+        "CODE",
+        async () => {
+          throw thrown;
+        },
+        null,
+      ),
+      (error) => error === thrown,
+    );
+  }
 });

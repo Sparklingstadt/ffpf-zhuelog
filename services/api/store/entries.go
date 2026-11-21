@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -39,23 +38,13 @@ type EntryDraft struct {
 	Hints         []string
 }
 
-// EntryPatch holds the fields to change; nil fields are left as they are. A
-// non-nil Hints replaces all hints.
-type EntryPatch struct {
-	Kind          *string
-	OriginalText  *string
-	CorrectedText *string
-	Pinyin        *string
-	Hints         *[]string
-}
-
 // Cursor is the position after which a list page continues.
 type Cursor struct {
 	CreatedAt time.Time
 	ID        string
 }
 
-// Batch identifies an import batch created by CreateBatch.
+// Batch identifies an import batch created by CreateImportBatch.
 type Batch struct {
 	ID         string
 	ImportedAt time.Time
@@ -159,137 +148,6 @@ func attachHints(ctx context.Context, q dbtx, entries []*Entry) error {
 	return rows.Err()
 }
 
-// EntryFilter narrows the owner's notes. Every field is optional; the ones
-// set must all match. Query matches the written text, the corrected text,
-// the pinyin or a hint; Hint matches a hint only. Both ignore case.
-type EntryFilter struct {
-	Query string
-	Kind  string // "correction" or "translation"
-	Hint  string
-}
-
-// entryFilterSQL is the WHERE condition for f on the alias-less
-// "LearningEntry", with its placeholders numbered from $first, and the values
-// to bind to them.
-func entryFilterSQL(f EntryFilter, first int) (string, []any) {
-	var conds []string
-	var args []any
-	next := func(v any) string {
-		args = append(args, v)
-		return fmt.Sprintf("$%d", first+len(args)-1)
-	}
-	if f.Kind != "" {
-		conds = append(conds, `"kind" = `+next(f.Kind))
-	}
-	// LIKE rather than strpos, so the trigram indexes on lower(...) can serve
-	// it; the term's %, _ and \ are escaped, so they match literally. The
-	// matching ids come from a UNION rather than an OR with an EXISTS over
-	// "Hint": with the EXISTS in the OR the planner cannot combine the three
-	// LearningEntry trigram indexes (BitmapOr) and can only test the owner's
-	// rows one by one.
-	if f.Query != "" {
-		p := next(likeContains(f.Query))
-		conds = append(conds, `"id" IN (
-		    SELECT "id" FROM "LearningEntry"
-		     WHERE lower("originalText") LIKE lower(`+p+`) ESCAPE '\'
-		        OR lower("correctedText") LIKE lower(`+p+`) ESCAPE '\'
-		        OR lower("pinyin") LIKE lower(`+p+`) ESCAPE '\'
-		    UNION
-		    SELECT "learningEntryId" FROM "Hint"
-		     WHERE lower("content") LIKE lower(`+p+`) ESCAPE '\')`)
-	}
-	if f.Hint != "" {
-		conds = append(conds, `EXISTS (SELECT 1 FROM "Hint" h WHERE h."learningEntryId" = "LearningEntry"."id"
-		  AND lower(h."content") LIKE lower(`+next(likeContains(f.Hint))+`) ESCAPE '\')`)
-	}
-	if len(conds) == 0 {
-		return "TRUE", nil
-	}
-	return strings.Join(conds, " AND "), args
-}
-
-// likeEscaper escapes the LIKE wildcards and the escape character itself.
-var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
-
-// likeContains is the LIKE pattern (with ESCAPE '\') that matches any text
-// containing s literally.
-func likeContains(s string) string {
-	return "%" + likeEscaper.Replace(s) + "%"
-}
-
-// ListEntries returns the owner's notes outside the trash that match f,
-// newest first, after the cursor, at most limit of them.
-func (s *Store) ListEntries(ctx context.Context, ownerID string, f EntryFilter, after *Cursor, limit int) ([]Entry, error) {
-	afterAt, afterID := cursorArgs(after)
-	cond, args := entryFilterSQL(f, 5)
-	rows, err := s.pool.Query(ctx,
-		`SELECT `+entryColumns+` FROM "LearningEntry"
-		 WHERE "ownerId" = $1 AND "deletedAt" IS NULL
-		   AND ($2::timestamp IS NULL OR ("createdAt", "id") < ($2::timestamp, $3::text))
-		   AND `+cond+`
-		 ORDER BY "createdAt" DESC, "id" DESC
-		 LIMIT $4`, append([]any{ownerID, afterAt, afterID, limit}, args...)...)
-	if err != nil {
-		return nil, fmt.Errorf("store: list entries: %w", err)
-	}
-	entries, err := scanEntries(rows)
-	if err != nil {
-		return nil, fmt.Errorf("store: list entries: %w", err)
-	}
-	if err := attachHints(ctx, s.pool, entryPtrs(entries)); err != nil {
-		return nil, fmt.Errorf("store: list entry hints: %w", err)
-	}
-	return entries, nil
-}
-
-// CountEntries returns how many of the owner's entries outside the trash
-// match f.
-func (s *Store) CountEntries(ctx context.Context, ownerID string, f EntryFilter) (int, error) {
-	var n int
-	cond, args := entryFilterSQL(f, 2)
-	err := s.pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM "LearningEntry" WHERE "ownerId" = $1 AND "deletedAt" IS NULL AND `+cond,
-		append([]any{ownerID}, args...)...).Scan(&n)
-	if err != nil {
-		return 0, fmt.Errorf("store: count entries: %w", err)
-	}
-	return n, nil
-}
-
-// GetEntry returns one of the owner's entries that is not in the trash, or
-// ErrNotFound.
-func (s *Store) GetEntry(ctx context.Context, ownerID, id string) (Entry, error) {
-	e, err := getEntry(ctx, s.pool, ownerID, id)
-	if errors.Is(err, ErrNotFound) {
-		return Entry{}, ErrNotFound
-	}
-	if err != nil {
-		return Entry{}, fmt.Errorf("store: get entry: %w", err)
-	}
-	return e, nil
-}
-
-// getEntry returns ErrNotFound or an unwrapped database error.
-func getEntry(ctx context.Context, q dbtx, ownerID, id string) (Entry, error) {
-	rows, err := q.Query(ctx,
-		`SELECT `+entryColumns+` FROM "LearningEntry"
-		 WHERE "id" = $1 AND "ownerId" = $2 AND "deletedAt" IS NULL`, id, ownerID)
-	if err != nil {
-		return Entry{}, err
-	}
-	entries, err := scanEntries(rows)
-	if err != nil {
-		return Entry{}, err
-	}
-	if len(entries) == 0 {
-		return Entry{}, ErrNotFound
-	}
-	if err := attachHints(ctx, q, entryPtrs(entries)); err != nil {
-		return Entry{}, err
-	}
-	return entries[0], nil
-}
-
 // queueHints queues inserts for the hints of an entry, numbered from 0, and
 // returns the hints being inserted.
 func queueHints(b *pgx.Batch, entryID string, contents []string) []Hint {
@@ -312,12 +170,6 @@ func execBatch(ctx context.Context, tx pgx.Tx, b *pgx.Batch) error {
 		}
 	}
 	return res.Close()
-}
-
-// CreateBatch stores drafts as one import batch named "mobile:<now>" in a
-// single transaction; see CreateImportBatch.
-func (s *Store) CreateBatch(ctx context.Context, ownerID string, drafts []EntryDraft, now time.Time) (Batch, []Entry, error) {
-	return s.CreateImportBatch(ctx, ownerID, "mobile:"+dbTime(now).Format(isoMillisLayout), drafts, now)
 }
 
 // queueImportBatch queues the inserts of an import batch named fileName and
@@ -349,8 +201,8 @@ func queueImportBatch(b *pgx.Batch, ownerID, fileName string, drafts []EntryDraf
 	return batch, entries
 }
 
-// CreateImportBatch is CreateBatch with the batch's fileName given; see
-// queueImportBatch for the timestamps.
+// CreateImportBatch stores drafts as one import batch named fileName in a
+// single transaction; see queueImportBatch for the timestamps.
 func (s *Store) CreateImportBatch(ctx context.Context, ownerID, fileName string, drafts []EntryDraft, now time.Time) (Batch, []Entry, error) {
 	var batch Batch
 	var entries []Entry
@@ -364,58 +216,4 @@ func (s *Store) CreateImportBatch(ctx context.Context, ownerID, fileName string,
 		return Batch{}, nil, fmt.Errorf("store: create batch: %w", err)
 	}
 	return batch, entries, nil
-}
-
-// UpdateEntry applies the patch to one of the owner's entries that is not in
-// the trash and returns the result, or ErrNotFound.
-func (s *Store) UpdateEntry(ctx context.Context, ownerID, id string, p EntryPatch) (Entry, error) {
-	var out Entry
-	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx,
-			`UPDATE "LearningEntry" SET
-			   "kind" = COALESCE($3, "kind"),
-			   "originalText" = COALESCE($4, "originalText"),
-			   "correctedText" = COALESCE($5, "correctedText"),
-			   "pinyin" = COALESCE($6, "pinyin")
-			 WHERE "id" = $1 AND "ownerId" = $2 AND "deletedAt" IS NULL`,
-			id, ownerID, p.Kind, p.OriginalText, p.CorrectedText, p.Pinyin)
-		if err != nil {
-			return err
-		}
-		if tag.RowsAffected() == 0 {
-			return ErrNotFound
-		}
-		if p.Hints != nil {
-			b := &pgx.Batch{}
-			b.Queue(`DELETE FROM "Hint" WHERE "learningEntryId" = $1`, id)
-			queueHints(b, id, *p.Hints)
-			if err := execBatch(ctx, tx, b); err != nil {
-				return err
-			}
-		}
-		out, err = getEntry(ctx, tx, ownerID, id)
-		return err
-	})
-	if errors.Is(err, ErrNotFound) {
-		return Entry{}, ErrNotFound
-	}
-	if err != nil {
-		return Entry{}, fmt.Errorf("store: update entry: %w", err)
-	}
-	return out, nil
-}
-
-// TrashEntry moves one of the owner's entries to the trash, or returns
-// ErrNotFound when it does not exist, is not theirs, or is already trashed.
-func (s *Store) TrashEntry(ctx context.Context, ownerID, id string, now time.Time) error {
-	tag, err := s.pool.Exec(ctx,
-		`UPDATE "LearningEntry" SET "deletedAt" = $3
-		 WHERE "id" = $1 AND "ownerId" = $2 AND "deletedAt" IS NULL`, id, ownerID, dbTime(now))
-	if err != nil {
-		return fmt.Errorf("store: trash entry: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
 }

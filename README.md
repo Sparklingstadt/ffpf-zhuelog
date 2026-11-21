@@ -39,7 +39,7 @@
 
 ## 設計の要点
 
-- **Web が DB に触るのは、ログイン中の人を決めるところと、単語帳だけ**：Web はアクセストークンを自分で確かめ、DB のアカウントを Prisma で読みます。単語帳（一覧・保存・削除）も Prisma で読み書きし、「AI で下書き」は Web が OpenAI を直接呼びます。それ以外のデータとログインは、今も Go API を通します（機能は段階ごとに Web へ移します）。Prisma を import してよいのは `src/infrastructure/prisma/` だけで、pg と next-auth は import できません。これをテストで確かめています。
+- **Web が DB に触るのは、ログイン中の人を決めるところと、単語帳と、学習ノートだけ**：Web はアクセストークンを自分で確かめ、DB のアカウントを Prisma で読みます。単語帳（一覧・保存・削除）と学習ノート（一覧・検索・カレンダー・日ごとの表示・ゴミ箱・共有）も Prisma で読み書きし、「AI で下書き」は Web が OpenAI を直接呼びます。それ以外のデータとログインは、今も Go API を通します（機能は段階ごとに Web へ移します）。Prisma を import してよいのは `src/infrastructure/prisma/` だけで、pg と next-auth は import できません。これをテストで確かめています。
 - **層を分ける**：Web のコードは `domain`・`application`・`infrastructure`・`presentation`・`composition` に分け、内側の層が Next.js や React に依存しないことを ESLint とテストで検査します。
 - **復習を 1 つの列にする**：学習ノート、練習の間違い、単語帳の語句を、同じ FSRS のカードとして 1 つの「今日の復習」に並べます。
 - **AI の費用を測ってから考える**：OpenAI を呼ぶ 4 か所のトークン数を記録し、料金や無料枠はその数字を見てから考える順にしました。

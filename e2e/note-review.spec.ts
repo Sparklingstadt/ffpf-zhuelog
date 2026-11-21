@@ -107,3 +107,56 @@ test("space rates a turned card as suggested, and the last card says so", async 
   );
   expect(rows).toEqual([{ rating: 3 }]);
 });
+
+// ReviewItem has no foreign key to the note, so deleting notes for good must
+// delete their cards in the same step; a card left behind would come back as
+// an empty one.
+test("deleting notes for good takes their review cards with them", async ({
+  page,
+  context,
+  db,
+}) => {
+  await seedNotes(db, adminOwnerId, [
+    { text: "第一", createdAt: "2026-10-04T01:00:00Z" },
+    { text: "第二", createdAt: "2026-10-04T02:00:00Z" },
+    { text: "第三", createdAt: "2026-10-04T03:00:00Z" },
+  ]);
+  await asAdmin(context);
+  for (const n of [1, 2, 3]) {
+    await page.goto(`/logs/2026/10/4/${n}`);
+    await page.getByRole("button", { name: "復習に入れる" }).click();
+    await expect(page.getByText("今日の復習に入っています")).toBeVisible();
+  }
+  const cards = async () =>
+    (
+      await db.query(
+        `SELECT e."originalText" AS text FROM "ReviewItem" i
+           LEFT JOIN "LearningEntry" e ON e.id = i."targetId"
+          WHERE i."ownerId" = $1 AND i."kind" = 'entry'`,
+        [adminOwnerId],
+      )
+    ).rows
+      .map((row) => row.text)
+      .sort();
+  expect(await cards()).toEqual(["第一", "第三", "第二"]);
+
+  // One note deleted for good from the trash.
+  await page.goto("/logs/2026/10/4/1");
+  await page.getByRole("button", { name: "ゴミ箱に入れる" }).click();
+  await expect(page).toHaveURL(/trashed=1/);
+  await page.goto("/logs/trash");
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "完全に削除" }).click();
+  await expect(page.getByText("ゴミ箱は空です")).toBeVisible();
+  expect(await cards()).toEqual(["第三", "第二"]);
+
+  // Emptying the trash takes only the cards of the notes that were in it.
+  await page.goto("/logs/2026/10/4/1");
+  await page.getByRole("button", { name: "ゴミ箱に入れる" }).click();
+  await expect(page).toHaveURL(/trashed=1/);
+  await page.goto("/logs/trash");
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "ゴミ箱を空にする" }).click();
+  await expect(page.getByText("ゴミ箱は空です")).toBeVisible();
+  expect(await cards()).toEqual(["第三"]);
+});

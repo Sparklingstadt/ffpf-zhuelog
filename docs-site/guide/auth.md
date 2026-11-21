@@ -75,7 +75,7 @@ Web    ◀─(5) {accessToken, refreshToken, expiresIn} ── API
 admin は、認証つきのリクエストに `X-Zhuelog-Act-As: <会員の ownerId>` を付けると、その会員として操作できます。Web の管理画面の「この会員として操作」はこの仕組みを使います。
 
 - トークンは admin のものをそのまま使い、毎回いつもどおり確かめます（許可リストから外れれば `403`）。
-- 持ち主（`ownerId`）だけが会員になり、`role` は `admin` のままです。ノート・ゴミ箱・共有・フォロー・タイムライン・CSV・会話ノートは、すべてその会員のものとして読み書きします。会話練習や `/v1/admin/*` など admin の機能も、そのまま使えます。
+- 持ち主（`ownerId`）だけが会員になり、`role` は `admin` のままです。復習・フォロー・タイムライン・CSV・会話ノートは、すべてその会員のものとして読み書きします（学習ノートの一覧・ゴミ箱・共有は Web が決めます）。会話練習や `/v1/admin/*` など admin の機能も、そのまま使えます。
 - 確かめる順番：トークンの確認とゲストの判定の後、admin でなければ `403 forbidden`（「他の人として操作できるのは管理者だけです。」）、ヘッダーが 2 つ以上・値が `^password:[a-z0-9]{1,64}$` に合わない（空・admin の ID・`guest` を含む）なら `400 invalid_request`、その会員がいなければ `404 not_found`（「会員が見つかりません。」）。
 - なれるのは会員だけです。admin やゲストにはなれません。
 - `GET /v1/me` は、`ownerId` に会員の `ownerId` を返し、`actingAs: {ownerId, loginId, displayName}` を付けます（[リファレンス](../reference/auth.md#get-v1-me)）。
