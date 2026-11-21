@@ -17,7 +17,7 @@ export function isSessionTokenShape(value: string): boolean {
   return TOKEN_SHAPE.test(value);
 }
 
-// SHA-256 in lowercase hex, as ApiRefreshToken.tokenHash.
+// SHA-256 in lowercase hex, as Go's refresh tokens were stored.
 export function hashSessionToken(token: string): string {
   return createHash("sha256").update(token, "utf8").digest("hex");
 }

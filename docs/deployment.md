@@ -6,7 +6,7 @@ Web（Next.js）を Vercel の 1 つのプロジェクトで動かします。ma
 
 ## 1. 本番の DB とマイグレーション
 
-スキーマは Prisma のマイグレーションで管理します。ログインのセッションは `Session`、ログインの試行回数は `SignInThrottle` です。`ApiRefreshToken` は段階 12b で消します（末尾の「移行の記録」の「段階12（後片付け）のマージの前と後」）。マイグレーションは、Web の **本番ビルド** が自動で適用します。`vercel.json` の `buildCommand` が `scripts/vercel-build.sh` を動かし、`VERCEL_ENV=production` のときだけ `prisma migrate deploy` を実行してから `next build` します（Preview のビルドは自分の Neon ブランチを使い、マイグレーションは当てません）。そのため、Web の Production には `DATABASE_URL` が必要です。無い・つながらない・DDL が失敗すると、本番の Web のデプロイが失敗します（失敗したビルドの本番は、前のバージョンのままです）。
+スキーマは Prisma のマイグレーションで管理します。ログインのセッションは `Session`、ログインの試行回数は `SignInThrottle` です。`ApiRefreshToken` は段階 12b で消しました（末尾の「移行の記録」の「段階12（後片付け）のマージの前と後」）。マイグレーションは、Web の **本番ビルド** が自動で適用します。`vercel.json` の `buildCommand` が `scripts/vercel-build.sh` を動かし、`VERCEL_ENV=production` のときだけ `prisma migrate deploy` を実行してから `next build` します（Preview のビルドは自分の Neon ブランチを使い、マイグレーションは当てません）。そのため、Web の Production には `DATABASE_URL` が必要です。無い・つながらない・DDL が失敗すると、本番の Web のデプロイが失敗します（失敗したビルドの本番は、前のバージョンのままです）。
 
 **マイグレーションの制約**: 本番のビルドがマイグレーションを当ててから `vercel promote` で切り替えるまでは、前のデプロイの Web が新しいスキーマの上で動きます。そのため、マイグレーションは前のデプロイのコードとそのまま両立する形にします。足してよいのは、表の追加と、null を許す列（または既定値のある列）の追加だけです。列・表の削除や名前の変更、型の変更、NOT NULL の追加のような壊す変更は、2 回のリリースに分けます（1 回目で新しい形を足してコードを切り替え、2 回目のリリースで古い形を削除します）。
 
@@ -728,7 +728,7 @@ Preview には入れません。プレビューの URL は、GitHub と FFPF ID 
 
 **マージのあと：**
 
-1. 本番のビルドが `prisma migrate deploy` で `ApiRefreshToken` を消し、そのあと Web をビルドします。ビルドのあいだ動いている 12a の Web は、この表を使わないので、止まりません。
+1. 本番のビルドが `prisma migrate deploy` でマイグレーション `20261118090000_drop_api_refresh_token`（`DROP TABLE "ApiRefreshToken";`）を当てて表を消し、そのあと Web をビルドします。ビルドのあいだ動いている 12a の Web は、この表を使わないので、止まりません。
 2. Ready になったら `vercel promote` する。
 3. 確かめる：「1. 本番の DB とマイグレーション」の手順で `migrate status` が up to date。Neon の SQL Editor で `SELECT to_regclass('"ApiRefreshToken"');` が `NULL`。ログインと、デモのリセット（`/api/cron/demo-reset` が次の朝に 200）が動く。
 4. Preview の Neon のブランチは、プレビューのビルドがマイグレーションを当てないので、表が残ります。害はありません。合わせたいときは「Web のプレビュー（Preview）」の手順で `prisma migrate deploy` を当てます。
