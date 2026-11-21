@@ -30,7 +30,6 @@ export default defineUserConfig({
           "/reference/auth.md",
           "/reference/follows.md",
           "/reference/line.md",
-          "/reference/study-log.md",
           "/reference/admin.md",
           "/reference/health.md",
         ],

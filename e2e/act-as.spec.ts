@@ -283,3 +283,33 @@ test("an admin acting as a member reviews the member's queue", async ({
   );
   expect(own.rows[0].n).toBe(0);
 });
+
+test("an admin acting as a member reads the member's study log", async ({
+  page,
+  context,
+  db,
+}) => {
+  const accountId = await createMember(
+    db,
+    "test01",
+    "テスト一郎",
+    "member-password-1",
+  );
+  await seedNotes(db, memberOwnerId(accountId), [{ text: "我今天学习了。" }]);
+  await asAdmin(context);
+  await page.goto("/admin/accounts");
+  await page.getByRole("button", { name: "この会員として操作" }).click();
+  await expect(page).toHaveURL((url) => url.pathname === "/");
+  const banner = page.getByRole("status").filter({ hasText: "として操作中" });
+  await expect(banner).toContainText("テスト一郎");
+
+  const totals = page.getByLabel("この月の合計");
+  await page.goto("/study-log");
+  await expect(totals).toContainText("ノート1件");
+
+  // Back as the admin, the study log is the admin's own.
+  await banner.getByRole("button", { name: "管理者に戻る" }).click();
+  await expect(page).toHaveURL((url) => url.pathname === "/admin/accounts");
+  await page.goto("/study-log");
+  await expect(totals).toContainText("学習した日0日");
+});

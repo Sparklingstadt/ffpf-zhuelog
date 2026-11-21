@@ -39,7 +39,7 @@ Web 用とは別の OAuth App を新しく作ります。GitHub の **Settings �
 | `GITHUB_MOBILE_CLIENT_ID`     | モバイル用 GitHub OAuth App の Client ID                                                                                           |
 | `GITHUB_MOBILE_CLIENT_SECRET` | モバイル用 GitHub OAuth App の Client Secret                                                                                       |
 | `GITHUB_MOBILE_REDIRECT_URI`  | アプリのカスタム URL スキーム                                                                                                      |
-| `AUTH_ALLOWED_GITHUB_IDS`     | admin の許可リスト。GitHub の数値 ID をカンマ区切りで（Go API だけに設定します）                                                   |
+| `AUTH_ALLOWED_GITHUB_IDS`     | admin の許可リスト。GitHub の数値 ID をカンマ区切りで（Go API と Web の両方に、同じ値を設定します）                                |
 | `GITHUB_WEB_CLIENT_ID`        | Web 用 GitHub OAuth App の Client ID（Web の GitHub ログインに必要。下の注を参照）                                                 |
 | `GITHUB_WEB_CLIENT_SECRET`    | Web 用 GitHub OAuth App の Client Secret                                                                                           |
 | `GITHUB_WEB_REDIRECT_URI`     | `https://<Web のホスト>/api/auth/callback/github/go`                                                                               |
@@ -327,6 +327,31 @@ ChatGPT と話す（OpenAI の答えを NDJSON でブラウザへ流す）と会
 
 - Go だけを戻しても害はありません。
 - Go を再デプロイしたあとで Web だけを戻すと、古い Web が `/v1/chat` と `/v1/conversations*` を呼んで `404` になります。話すと「見つかりません。」と出ます。`/chat` は「ChatGPT が設定されていません」、`/conversations` は設定されていない表示になり、日付のページは `404`、削除は一般的な文言になります。
+- Web を戻すなら Go も戻します。いっしょに戻すのがいちばん安全です。
+
+#### 段階8（学習ログ・AI の利用量）のマージの前と後
+
+学習ログ（日本時間の日ごとの、復習・練習・ノート・単語の数）と、管理者の AI の利用量（日本時間の月ごとの集計）を Web に移した変更（段階8）を本番に出す順番です。どちらも読むだけで、Web が Prisma で Go と同じ SQL を流します。Go の `/v1/study-log` と `/v1/admin/ai-usage` はなくなりました。Go に残るのは、LINE（LINE の分の `AiUsage` の記録を含む）、フォローとタイムライン、会員の管理、パスワード変更、ログイン、Cron です。
+
+マージの前:
+
+- この段階で必須の環境変数も、マイグレーションもありません。表はすべてすでにあります。Web は段階 0 から `DATABASE_URL` で DB を読み、管理者を `AUTH_ALLOWED_GITHUB_IDS` で決めています。
+
+マージのあと:
+
+1. Web の Production のデプロイが Ready になったことを確かめます。
+2. その Web のデプロイを `vercel promote` でカスタムドメインに切り替えます。
+3. main から Go を再デプロイします（Vercel CLI。実行の前に、使う人に確かめます）。これで、削除した `/v1/study-log` と `/v1/admin/ai-usage` が本番の Go から実際に消えます。
+4. 本番で、学習ログ（会員）と「AI 利用量」（管理者）を 1 回ずつ開いて、数が出ることを確かめます。
+
+切り替えのあいだ:
+
+- どちらも読むだけなので、古い Go と新しい Web が同時に動いても、DB は変わりません。LINE の利用量は、今までどおり Go が同じ表に書き、Web の集計に出ます。
+
+戻すとき:
+
+- Go だけを戻しても害はありません。
+- Go を再デプロイしたあとで Web だけを戻すと、古い Web が `/v1/study-log` と `/v1/admin/ai-usage` を呼んで `404` になります。学習ログは「処理できませんでした。時間をおいてもう一度お試しください。」、AI 利用量は「利用量を読めませんでした。Go API が最新かを確認してください。」と出ます。
 - Web を戻すなら Go も戻します。いっしょに戻すのがいちばん安全です。
 
 ### Web のプレビュー（Preview）

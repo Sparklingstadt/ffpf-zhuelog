@@ -1,5 +1,5 @@
-// What the signed-in user did on one Japan date ("YYYY-MM-DD"), as the Go API
-// counts it.
+// What the signed-in user did on one Japan date ("YYYY-MM-DD"), as the web
+// counts it from the database.
 export type StudyDay = {
   date: string;
   reviews: number;
@@ -109,4 +109,46 @@ export function summarize(days: readonly StudyDay[]): StudySummary {
     if (studyTotal(d) > 0) sum.activeDays++;
   }
   return sum;
+}
+
+// Go: maxStudyLogDays. The longest range one read covers, both ends included.
+export const STUDY_LOG_MAX_DAYS = 93;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+// Midnight UTC of a zero-padded real date of 2000..9999, else null.
+function strictDate(value: string): number | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!m) return null;
+  const [year, month, day] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  if (year < 2000 || year > 9999) return null;
+  const time = Date.UTC(year, month - 1, day);
+  const d = new Date(time);
+  if (
+    d.getUTCFullYear() !== year ||
+    d.getUTCMonth() !== month - 1 ||
+    d.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return time;
+}
+
+// [start, end) of the Japan dates from..to as instants, or null when Go
+// would have answered 400: either is not a zero-padded real date of
+// 2000..9999, to is before from, or the range is over 93 days.
+// Go: parseLogDate + listStudyLog's checks + LogDate.dayRange.
+export function studyLogRange(
+  from: string,
+  to: string,
+): { start: Date; end: Date } | null {
+  const first = strictDate(from);
+  const last = strictDate(to);
+  if (first === null || last === null || last < first) return null;
+  if ((last - first) / DAY_MS >= STUDY_LOG_MAX_DAYS) return null;
+  return {
+    start: new Date(first - JST_OFFSET_MS),
+    end: new Date(last + DAY_MS - JST_OFFSET_MS),
+  };
 }

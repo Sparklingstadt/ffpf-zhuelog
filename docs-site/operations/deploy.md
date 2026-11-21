@@ -43,7 +43,7 @@ Web 用とは別の OAuth App を新しく作ります。GitHub の **Settings �
 | `GITHUB_MOBILE_CLIENT_ID`     | モバイル用 GitHub OAuth App の Client ID                                                                |
 | `GITHUB_MOBILE_CLIENT_SECRET` | モバイル用 GitHub OAuth App の Client Secret                                                            |
 | `GITHUB_MOBILE_REDIRECT_URI`  | アプリのカスタム URL スキーム                                                                           |
-| `AUTH_ALLOWED_GITHUB_IDS`     | admin の許可リスト。GitHub の数値 ID をカンマ区切りで（Go API だけに設定します）                        |
+| `AUTH_ALLOWED_GITHUB_IDS`     | admin の許可リスト。GitHub の数値 ID をカンマ区切りで（Go API と Web の両方に、同じ値を設定します）     |
 | `GITHUB_WEB_CLIENT_ID`        | Web 用 GitHub OAuth App の Client ID（Web の GitHub ログインに必要。下の注を参照）                      |
 | `GITHUB_WEB_CLIENT_SECRET`    | Web 用 GitHub OAuth App の Client Secret                                                                |
 | `GITHUB_WEB_REDIRECT_URI`     | `https://<Web のホスト>/api/auth/callback/github/go`                                                    |
@@ -102,9 +102,9 @@ curl -i https://<プロジェクト>.vercel.app/health
 
 ## 6. Web の設定
 
-Web（Next.js）は、ログインも学習ノートの読み書きも Go API で行います。DB には直接つながりません。仕様は `docs/superpowers/specs/2026-10-21-web-auth-via-go-api-design.md` と `docs/superpowers/specs/2026-10-22-web-data-via-go-api-design.md` にあります。
+Web（Next.js）は、DB を Prisma（`src/infrastructure/prisma/`）で読み書きし、Go が出すアクセストークン（`zl_access`）も `API_JWT_SECRET` で自分で確かめます。ログイン、フォロー、タイムライン、メンバー、admin、LINE、cron は、今も Go API が行います。仕様は `docs/superpowers/specs/2026-10-21-web-auth-via-go-api-design.md` と `docs/superpowers/specs/2026-10-22-web-data-via-go-api-design.md` にあります。
 
-Go API の Vercel プロジェクトには、`GITHUB_WEB_CLIENT_ID`・`GITHUB_WEB_CLIENT_SECRET`・`GITHUB_WEB_REDIRECT_URI`・`API_WEB_PROXY_SECRET` を入れておきます（上の「3. 環境変数」の表）。Web の Vercel プロジェクトに入れる値は、次の 4 つです。
+Go API の Vercel プロジェクトには、`GITHUB_WEB_CLIENT_ID`・`GITHUB_WEB_CLIENT_SECRET`・`GITHUB_WEB_REDIRECT_URI`・`API_WEB_PROXY_SECRET` を入れておきます（上の「3. 環境変数」の表）。Web の Vercel プロジェクトに入れる値は、次の 4 つに、あとの「Web が実行時に使う DB と秘密」の値を足したものです。
 
 | 名前                   | 内容                                                                        |
 | ---------------------- | --------------------------------------------------------------------------- |
@@ -119,7 +119,7 @@ Go API の Vercel プロジェクトには、`GITHUB_WEB_CLIENT_ID`・`GITHUB_WE
 - `AUTH_URL` は必ず設定し、利用者が開く Web の origin と同じにします。GitHub ログインの `redirect_uri` は、この origin から作ります。
 - Go API の `GITHUB_WEB_REDIRECT_URI` は、`<AUTH_URL の origin>/api/auth/callback/github/go` と **1 文字も違わず** 同じにします。違うと Go API が `401` を返し、GitHub ログインができません。そのため、URL が合わないプレビューのデプロイでは GitHub ログインは使えません（パスワードとゲストのログインは使えます）。
 - `AUTH_GITHUB_ID` と `GITHUB_WEB_CLIENT_ID` が別の OAuth App だと、GitHub が発行した `code` を Go API が交換できず、GitHub ログインが失敗します。
-- `AUTH_SECRET`・`AUTH_GITHUB_SECRET`・`AUTH_ALLOWED_GITHUB_IDS` は、Web では使いません。`DATABASE_URL` も Web の実行とビルドには要りません。ただし、マイグレーションの手順（`vercel env pull`）で本番の `DATABASE_URL` を取るのに使うので、Web のプロジェクトに残しておいて構いません。
+- `AUTH_SECRET`・`AUTH_GITHUB_SECRET` は、Web では使いません。`DATABASE_URL` は、Web の実行時にも、**本番のビルド**の `prisma migrate deploy` にも使います（「4. 本番の DB の確認」）。消すと、ログイン中の人を決められず、本番の Web のデプロイも失敗します。
 
 LINE 連携を使うときは、Web の Vercel プロジェクトに、もう 1 つ次の値を入れます（無くても Web は動きます）。
 
@@ -129,6 +129,19 @@ LINE 連携を使うときは、Web の Vercel プロジェクトに、もう 1 
 | `LINE_OFFICIAL_ACCOUNT_ID` | 連携 QR と「LINEで開く」の送信先となる公式アカウントの公開 ID（`@393bohaw`）。コードは入力欄に入るだけで、自動送信はしません |
 
 `LINE_ADD_FRIEND_URL` が無い・`https://` で始まらないときは、「LINE 連携」画面（`/account/line`）に友だち追加のリンクを出しません（連携コードの発行と解除はできます）。
+
+### Web が実行時に使う DB と秘密
+
+Web は実行時に、次の値を使います。Web の Vercel プロジェクトの Production に入れます。
+
+| 名前                      | 内容                                                                                                  |
+| ------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`            | Neon の接続文字列（pooled の URL）。実行時の読み書きと、本番のビルドの `prisma migrate deploy` に使う |
+| `API_JWT_SECRET`          | Go API と **同じ値**（32 バイト以上。足りないと、全員が未ログインになる）                             |
+| `AUTH_ALLOWED_GITHUB_IDS` | 管理者にする GitHub ユーザーの数字の ID（カンマ区切り。Go API と同じ値）                              |
+| `DEMO_LOGIN_ID`           | デモアカウントのログイン ID（Go API と同じ。デモを使わないなら入れなくてよい）                        |
+
+値は、Go API のプロジェクトに入れているものと同じにします。Web だけ値が違うと、Go が出したトークンを Web が確かめられず、管理者やデモの判定もずれます。詳しい説明は `docs/api-deployment.md` の同じ節にあります。
 
 ### Web のプレビュー（Preview）
 

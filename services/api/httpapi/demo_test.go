@@ -41,8 +41,7 @@ func demoAuth(demo bool) *fakeAuth {
 func allRoutesDeps(a Auth) Deps {
 	return Deps{
 		Auth: a, Follows: &fakeFollows{},
-		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret,
-		StudyLog: &fakeStudyLog{}, AIUsage: &fakeAIUsage{}, DemoReset: &fakeDemoReset{},
+		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret, DemoReset: &fakeDemoReset{},
 		Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
 	}.withDefaults()
 }
@@ -93,20 +92,15 @@ func TestDemoIsRefusedExactlyTheClosedRoutes(t *testing.T) {
 	}
 }
 
-func TestDemoKeepsItsOwnRecords(t *testing.T) {
-	sl := &fakeStudyLog{}
+// The member directory is closed to the demo and open to a normal member.
+func TestDemoIsRefusedTheMemberDirectory(t *testing.T) {
 	follows := &fakeFollows{listMembers: func(_ context.Context, viewer string) (store.MemberDirectory, error) {
 		return store.MemberDirectory{Members: []store.Member{}}, nil
 	}}
-	d := Deps{StudyLog: sl, Follows: follows}
+	d := Deps{Follows: follows}
 
-	// The demo reads its own study log, and the member directory is closed
-	// to it.
 	d.Auth = demoAuth(true)
 	h, _, _ := routerWith(t, auth.RoleMember, d)
-	if w := do(h, http.MethodGet, "/v1/study-log?from=2026-11-01&to=2026-11-30", "", authHeader); w.Code != http.StatusOK || sl.owner != testOwner {
-		t.Fatalf("demo study log: %d for %q", w.Code, sl.owner)
-	}
 	w := do(h, http.MethodGet, "/v1/members", "", authHeader)
 	wantError(t, w, http.StatusForbidden, "forbidden")
 	if msg := decodeError(t, w).Error.Message; msg != "デモでは使えません。" {
