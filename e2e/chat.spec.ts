@@ -1,4 +1,8 @@
+import type { Request } from "@playwright/test";
+import { randomUUID } from "node:crypto";
+import { openAiStubURL } from "./environment";
 import {
+  adminOwnerId,
   asAdmin,
   asGuest,
   asMember,
@@ -8,6 +12,8 @@ import {
   test,
   openSiteMenu,
 } from "./fixtures";
+
+const FAILURE = "ChatGPTから応答を受信できませんでした。";
 
 test("admin chats, the conversation is saved and can be continued and deleted", async ({
   page,
@@ -180,29 +186,161 @@ test("a save that fails says so and is retried after the next answer", async ({
   await expect(page.getByRole("article")).toHaveCount(4);
 });
 
-// e2e/openai-stub.ts holds a "[hang]" answer open after one piece. Stopping
-// it keeps the message to send again, without sending it by itself.
-test("stopping an answer does not send the message again", async ({
+// e2e/openai-stub.ts cuts an answer at "[incomplete]" (after one piece, with
+// usage) and refuses one at "[fail]" (500, no usage). The chat keeps what
+// arrived of a cut answer and saves it; a refused one leaves nothing.
+test("an answer OpenAI cuts at its limit is kept, a refused one is not", async ({
   page,
   context,
+  db,
 }) => {
   await asAdmin(context);
   await page.goto("/chat");
+  const input = page.getByLabel("ChatGPTへのメッセージ");
+  const answers = page.getByRole("article", { name: "ChatGPTのメッセージ" });
+
+  await input.fill("[incomplete] 你好");
+  await input.press("Enter");
+  await expect(answers).toHaveText(["你好！"]);
+  await expect(page).toHaveURL((url) => url.searchParams.has("id"));
+  const saved = async () =>
+    (
+      await db.query(
+        `SELECT jsonb_array_length("messages") AS n,
+                "messages"->-1->>'role' AS role,
+                "messages"->-1->>'text' AS text
+           FROM "ChatConversation"`,
+      )
+    ).rows;
+  await expect
+    .poll(saved)
+    .toEqual([{ n: 2, role: "assistant", text: "你好！" }]);
+  const usage = async () =>
+    (
+      await db.query(
+        `SELECT "ownerId", "model", "inputTokens", "outputTokens" FROM "AiUsage"
+          WHERE "feature" = 'chat'`,
+      )
+    ).rows;
+  const billed = [
+    {
+      ownerId: adminOwnerId,
+      model: "gpt-6.1-sol",
+      inputTokens: 21,
+      outputTokens: 43,
+    },
+  ];
+  await expect.poll(usage).toEqual(billed);
+
+  await input.fill("[fail] 再见");
+  await input.press("Enter");
+  await expect(page.getByText(FAILURE)).toBeVisible();
+  await expect(input).toHaveValue("[fail] 再见");
+  await page.waitForLoadState("networkidle");
+  expect(await saved()).toEqual([{ n: 2, role: "assistant", text: "你好！" }]);
+  expect(await usage()).toEqual(billed);
+});
+
+// A conversation id is the browser's, so the save names it: another owner
+// can neither read it nor overwrite it by sending the same id.
+test("another owner's conversation cannot be read or overwritten", async ({
+  page,
+  context,
+  db,
+  browser,
+}) => {
+  await asAdmin(context);
+  await page.goto("/chat");
+  // Server Actions post to the page with a next-action header.
+  const saves: Request[] = [];
+  page.on("request", (request) => {
+    if (
+      request.method() === "POST" &&
+      new URL(request.url()).pathname === "/chat" &&
+      request.headers()["next-action"]
+    )
+      saves.push(request);
+  });
+  const input = page.getByLabel("ChatGPTへのメッセージ");
+  await input.fill("我今天很忙");
+  await input.press("Enter");
+  await expect(
+    page.getByRole("article", { name: "ChatGPTのメッセージ" }),
+  ).toHaveText(["你好！「我今天很忙」ですね。"]);
+  await expect(page).toHaveURL((url) => url.searchParams.has("id"));
+  await page.waitForLoadState("networkidle");
+  expect(saves).toHaveLength(1);
+  const [save] = saves;
+  const conversations =
+    'SELECT "id", "ownerId", "title", "updatedAt" FROM "ChatConversation"';
+  const { rows: before } = await db.query(conversations);
+  expect(before).toHaveLength(1);
+  expect(before[0].ownerId).toBe(adminOwnerId);
+  const { id, title } = before[0];
+
+  await createMember(db, "chat-member", "会員", "member-password-1");
+  const other = await browser.newContext();
+  const otherPage = await other.newPage();
+  await asMember(otherPage, "chat-member", "member-password-1");
+  expect((await otherPage.goto(`/chat?id=${id}`))?.status()).toBe(404);
+  await otherPage.goto("/conversations");
+  await expect(otherPage.getByText("まだ会話ノートがありません")).toBeVisible();
+
+  const body = save.postData() ?? "";
+  const titleField = `"title":${JSON.stringify(title)}`;
+  expect(body).toContain(titleField);
+  const headers = save.headers();
+  const overwrite = await otherPage.request.post(save.url(), {
+    headers: {
+      "next-action": headers["next-action"],
+      "content-type": headers["content-type"],
+      accept: headers["accept"],
+    },
+    data: body.replace(titleField, `"title":${JSON.stringify("書き換え")}`),
+  });
+  expect(await overwrite.text()).toContain(
+    "処理できませんでした。時間をおいてもう一度お試しください。",
+  );
+  expect((await db.query(conversations)).rows).toEqual(before);
+  await other.close();
+});
+
+// e2e/openai-stub.ts holds a "[hang]" answer open after one piece and
+// reports whether its caller closed the connection. Stopping it closes the
+// browser's request, and the web then stops its own request to OpenAI. The
+// message is kept to send again, without being sent by itself.
+test("stopping an answer stops OpenAI and does not send the message again", async ({
+  page,
+  context,
+  request,
+}) => {
+  await asAdmin(context);
+  await page.goto("/chat");
+  const message = `[hang] ${randomUUID()}`;
+  const state = async () => {
+    const response = await request.get(
+      `${openAiStubURL}/e2e/streams?message=${encodeURIComponent(message)}`,
+    );
+    return ((await response.json()) as { state: string }).state;
+  };
   let sent = 0;
   page.on("request", (request) => {
     if (new URL(request.url()).pathname === "/api/chat") sent++;
   });
   const input = page.getByLabel("ChatGPTへのメッセージ");
-  await input.fill("[hang] 我今天很忙");
+  await input.fill(message);
   await input.press("Enter");
   await expect(
     page.getByRole("article", { name: "ChatGPTのメッセージ" }),
   ).toContainText("你好！");
+  expect(await state()).toBe("open");
   await page.getByRole("button", { name: "停止", exact: true }).click();
   await expect(page.getByText("応答を停止しました。")).toBeVisible();
-  await expect(input).toHaveValue("[hang] 我今天很忙");
+  await expect(input).toHaveValue(message);
   await expect(
     page.getByRole("button", { name: "送信", exact: true }),
   ).toBeEnabled();
+  // Well before the stub's own 30 s end.
+  await expect.poll(state, { timeout: 10_000 }).toBe("closed");
   expect(sent).toBe(1);
 });

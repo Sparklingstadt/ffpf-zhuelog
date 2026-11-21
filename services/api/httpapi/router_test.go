@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"net/http"
 	"sort"
@@ -10,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
-	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
 
 // TestNoRouteAcceptsUserParam walks every registered route and checks that
@@ -23,7 +21,6 @@ func TestNoRouteAcceptsUserParam(t *testing.T) {
 	d := Deps{
 		Auth: a, Follows: &fakeFollows{},
 		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret,
-		Chat: &fakeChat{}, Conversations: &fakeConversations{},
 		AIUsage: &fakeAIUsage{}, Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
 	}.withDefaults()
 	mux, routes := newMux(d)
@@ -58,7 +55,6 @@ func TestPublicRouteSetIsExactlyTheKnownRoutes(t *testing.T) {
 	d := Deps{
 		Auth: &fakeAuth{}, Follows: &fakeFollows{},
 		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret,
-		Chat: &fakeChat{}, Conversations: &fakeConversations{},
 		DemoReset: &fakeDemoReset{}, Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
 	}.withDefaults()
 	mux, routes := newMux(d)
@@ -131,7 +127,6 @@ func TestRoutesRejectGuests(t *testing.T) {
 	d := Deps{
 		Auth: a, Follows: &fakeFollows{},
 		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret,
-		Chat: &fakeChat{}, Conversations: &fakeConversations{},
 		Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
 	}.withDefaults()
 	mux, routes := newMux(d)
@@ -154,36 +149,4 @@ func TestRoutesRejectGuests(t *testing.T) {
 	if want := []string{"GET /v1/me"}; strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("routes allowing guests\n got: %q\nwant: %q", got, want)
 	}
-}
-
-// TestSavedNotesReadableWithoutOpenAI builds the router the way main does
-// without OPENAI_API_KEY: the conversation store is there, the streamer is
-// not. The saved conversations are still served (and one can be deleted);
-// sending a message and saving a conversation are not registered.
-func TestSavedNotesReadableWithoutOpenAI(t *testing.T) {
-	conv := &fakeConversations{saved: map[string]store.Conversation{
-		testConversationID: {ConversationSummary: store.ConversationSummary{ID: testConversationID, Title: "t", ModelName: "gpt-old"}},
-	}}
-	h, _, _ := routerWith(t, auth.RoleMember, Deps{Conversations: conv})
-
-	for _, path := range []string{"/v1/conversations", "/v1/conversations/" + testConversationID} {
-		if w := do(h, "GET", path, "", jsonAuth); w.Code != http.StatusOK {
-			t.Errorf("GET %s = %d %s, want 200", path, w.Code, w.Body.String())
-		}
-	}
-	// The list reports no chat model, which tells the web the chat is off.
-	var body struct {
-		ChatModel *string `json:"chatModel"`
-	}
-	if err := json.Unmarshal(do(h, "GET", "/v1/conversations", "", jsonAuth).Body.Bytes(), &body); err != nil || body.ChatModel == nil || *body.ChatModel != "" {
-		t.Errorf("GET /v1/conversations chatModel = %v (%v), want \"\"", body.ChatModel, err)
-	}
-	if w := do(h, "DELETE", "/v1/conversations/"+testConversationID, "", jsonAuth); w.Code != http.StatusNoContent {
-		t.Errorf("DELETE conversation = %d %s, want 204", w.Code, w.Body.String())
-	}
-
-	wantError(t, do(h, "POST", "/v1/chat", oneUserMessage, jsonAuth), http.StatusNotFound, "not_found")
-	// Saving answers 405: the path exists (GET), the method does not.
-	putConv := `{"title":"t","modelName":"m","ended":false,"createdAt":"2026-01-01T00:00:00Z","messages":[]}`
-	wantError(t, do(h, "PUT", "/v1/conversations/"+testConversationID, putConv, jsonAuth), http.StatusMethodNotAllowed, "method_not_allowed")
 }

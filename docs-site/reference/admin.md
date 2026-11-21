@@ -136,7 +136,7 @@ OpenAI を呼んだ回数とトークン数を、1 か月（日本時間）ぶ�
 | `feature`          | 機能                                                                  |
 | ------------------ | --------------------------------------------------------------------- |
 | `line`             | LINE の添削・翻訳（[LINE 連携](./line.md)。翌朝の拾い直しも含みます） |
-| `chat`             | 会話練習（`POST /v1/chat`）                                           |
+| `chat`             | 会話練習（Web の `POST /api/chat`。Web が記録）                       |
 | `quick_question`   | クイック質問（Web の `POST /api/quick-question`。Web が記録）         |
 | `vocabulary_draft` | 単語帳の下書き（Web が記録）                                          |
 

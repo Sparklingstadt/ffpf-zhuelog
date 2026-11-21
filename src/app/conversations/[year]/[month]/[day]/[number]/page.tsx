@@ -44,11 +44,9 @@ export default async function ConversationDetailPage({
   const conversationNumber = parseLogNumber(number);
   if (!date || !conversationNumber) notFound();
   const conversations = await loadConversationList();
-  const summary = conversations
-    ? conversationsOn(conversations, date).find(
-        (item) => item.number === conversationNumber,
-      )
-    : undefined;
+  const summary = conversationsOn(conversations, date).find(
+    (item) => item.number === conversationNumber,
+  );
   const conversation = summary ? await conversationNotes.get(summary.id) : null;
   if (!conversation) notFound();
 

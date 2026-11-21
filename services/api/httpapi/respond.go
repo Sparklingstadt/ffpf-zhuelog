@@ -8,7 +8,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"regexp"
 
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
@@ -48,10 +47,6 @@ const (
 	msgLoginIDTaken    = "このログインIDはすでに使われています。"
 	msgAccountNotFound = "アカウントが見つかりません。"
 
-	msgChatInvalid          = "会話内容が上限を超えているか、形式が不正です。"
-	msgChatFailed           = "ChatGPTから応答を受信できませんでした。"
-	msgConversationNotFound = "会話が見つかりません。"
-
 	msgStudyLogInvalid = "学習ログの期間が不正です。YYYY-MM-DD で、93日以内にしてください。"
 )
 
@@ -72,7 +67,6 @@ const (
 	codeInvalidCurrentPassword = "invalid_current_password"
 	codeSelfFollow             = "self_follow"
 	codeLoginIDTaken           = "login_id_taken"
-	codeChatFailed             = "chat_failed"
 )
 
 type errorEnvelope struct {
@@ -163,13 +157,6 @@ func writeNotFound(w http.ResponseWriter) {
 func writeForbidden(w http.ResponseWriter, msg string) {
 	writeError(w, http.StatusForbidden, codeForbidden, msg)
 }
-
-var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
-
-// validUUID reports whether s is a UUID in lower-case hex (any version), the
-// form of the ids the browser makes for conversations, vocabulary words,
-// questions and review logs.
-func validUUID(s string) bool { return uuidPattern.MatchString(s) }
 
 // pathValue returns the named path value if valid accepts it; otherwise it
 // answers 404 itself and returns false, since such a value cannot name any row.

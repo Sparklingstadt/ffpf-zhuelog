@@ -1,4 +1,4 @@
-import { RECORD_TIMEOUT_MS, recordWithin } from "../ai-usage/record-within";
+import { RECORD_TIMEOUT_MS } from "../ai-usage/record-within";
 import {
   checkQuestionNote,
   QUESTION_ID,
@@ -7,11 +7,16 @@ import {
   type QuestionSummary,
   type SaveQuestionInput,
 } from "../../domain/chat/question";
-import {
-  isMemberRole,
-  type AuthenticatedUser,
-} from "../../domain/identity/entities/authenticated-user";
+import type { AuthenticatedUser } from "../../domain/identity/entities/authenticated-user";
 import type { OpenAiUsage } from "../../domain/vocabulary/vocabulary-entry";
+import {
+  askRefusal,
+  chatPerson,
+  meteredAnswer,
+  type AskRefusal,
+} from "./chat-user";
+
+export type { AskRefusal } from "./chat-user";
 
 const FEATURE = "quick_question";
 
@@ -23,7 +28,6 @@ export class QuestionForbiddenError extends Error {
 
 export type SaveQuestionResult =
   "saved" | "invalid" | "conflict" | "unavailable";
-export type AskRefusal = "signed-out" | "forbidden" | "demo" | "unavailable";
 export type Asker = {
   ask(text: string, signal: AbortSignal): AsyncIterable<string>;
 };
@@ -59,45 +63,14 @@ export type QuestionNotesDeps = {
   now: () => Date;
 };
 
-type Person = { ownerId: string; actorId: string; demo: boolean };
-
 // The signed-in user's question notes and quick questions: whose notes they
 // are (the member an admin acts as), who pays for an answer (the admin
 // themself), what the demo account may not do, and whether OpenAI is on.
 export function createQuestionNotes(deps: QuestionNotesDeps) {
-  // ownerId is whose notes these are; actorId is who is operating (the
-  // admin themself while acting as a member), who pays for an answer.
-  function person(user: AuthenticatedUser | null): Person | null {
-    if (!user || !isMemberRole(user.role) || !user.githubId) return null;
-    return {
-      ownerId: user.githubId,
-      actorId: user.actorId ?? user.githubId,
-      demo: user.demo === true,
-    };
-  }
-
   async function owner(): Promise<string> {
-    const found = person(await deps.currentUser());
+    const found = chatPerson(await deps.currentUser());
     if (!found) throw new QuestionForbiddenError();
     return found.ownerId;
-  }
-
-  // Records the tokens an answer spent, waiting at most recordTimeoutMs. A
-  // failed or late write is only logged, so it never changes what the user
-  // gets.
-  async function record(actorId: string, usage: OpenAiUsage): Promise<void> {
-    await recordWithin(
-      () =>
-        deps.recordUsage({
-          ownerId: actorId,
-          feature: FEATURE,
-          model: usage.model,
-          inputTokens: usage.inputTokens,
-          outputTokens: usage.outputTokens,
-        }),
-      deps.recordTimeoutMs ?? RECORD_TIMEOUT_MS,
-      (code, name) => deps.logError(code, FEATURE, name),
-    );
   }
 
   function askerFor(
@@ -105,22 +78,22 @@ export function createQuestionNotes(deps: QuestionNotesDeps) {
     answer: NonNullable<QuestionNotesDeps["answer"]>,
   ): Asker {
     return {
-      // The answer's pieces. The usage is recorded before the answer ends or
-      // fails (Go wrote it before the last line), and also when the caller
-      // stops early.
-      async *ask(text, signal) {
-        const spent: OpenAiUsage[] = [];
-        try {
-          yield* answer(text, signal, (usage) => spent.push(usage));
-        } catch (error) {
-          // An answer the browser stopped is not a failure worth logging.
-          if (!signal.aborted)
-            deps.logError("QUICK_QUESTION_FAILED", failureCode(error));
-          throw error;
-        } finally {
-          for (const usage of spent) await record(actorId, usage);
-        }
-      },
+      ask: (text, signal) =>
+        meteredAnswer((onUsage) => answer(text, signal, onUsage), {
+          signal,
+          failureCode: "QUICK_QUESTION_FAILED",
+          feature: FEATURE,
+          record: (usage) =>
+            deps.recordUsage({
+              ownerId: actorId,
+              feature: FEATURE,
+              model: usage.model,
+              inputTokens: usage.inputTokens,
+              outputTokens: usage.outputTokens,
+            }),
+          recordTimeoutMs: deps.recordTimeoutMs ?? RECORD_TIMEOUT_MS,
+          logError: deps.logError,
+        }),
     };
   }
 
@@ -165,10 +138,10 @@ export function createQuestionNotes(deps: QuestionNotesDeps) {
       { ok: true; asker: Asker } | { ok: false; reason: AskRefusal }
     > {
       const user = await deps.currentUser();
-      if (!user) return { ok: false, reason: "signed-out" };
-      const found = person(user);
-      if (!found) return { ok: false, reason: "forbidden" };
-      if (found.demo) return { ok: false, reason: "demo" };
+      const refusal = askRefusal(user);
+      const found = chatPerson(user);
+      if (refusal || !found)
+        return { ok: false, reason: refusal ?? "forbidden" };
       if (!deps.answer || !deps.chatModel)
         return { ok: false, reason: "unavailable" };
       return { ok: true, asker: askerFor(found.actorId, deps.answer) };
@@ -177,15 +150,3 @@ export function createQuestionNotes(deps: QuestionNotesDeps) {
 }
 
 export type QuestionNotes = ReturnType<typeof createQuestionNotes>;
-
-function errorName(error: unknown): string {
-  return error instanceof Error ? error.name : typeof error;
-}
-
-// OpenAI's error code (the whole message of its errors), else the error's
-// name: application code does not import the infrastructure's error class.
-function failureCode(error: unknown): string {
-  if (error instanceof Error && /^OPENAI_[A-Z_]+$/.test(error.message))
-    return error.message;
-  return errorName(error);
-}

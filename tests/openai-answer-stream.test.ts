@@ -6,6 +6,7 @@ import {
   type AnswerRequest,
   streamAnswer,
 } from "../src/infrastructure/openai/answer-stream";
+import { CHAT_INSTRUCTIONS } from "../src/infrastructure/openai/chat";
 import { QUICK_QUESTION_INSTRUCTIONS } from "../src/infrastructure/openai/quick-question";
 import { OpenAiError } from "../src/infrastructure/openai/responses";
 
@@ -132,6 +133,62 @@ test("the request is the one Go sent", async () => {
     instructions: QUICK_QUESTION_INSTRUCTIONS,
     // The text goes as it is, not trimmed.
     input: [{ role: "user", content: " 了？ " }],
+    stream: true,
+    store: false,
+    max_output_tokens: 1600,
+    reasoning: { effort: "medium" },
+  });
+});
+
+test("the chat request is the one Go sent", async () => {
+  // Go: chat/openai_test.go TestStreamSendsModelPromptAndStoreFalse, and the
+  // instructions copied from chat/chat.go SystemPrompt. A change to either
+  // side must be deliberate.
+  const goPrompt =
+    "あなたは中国語学習アプリ「学习録」の会話パートナーです。\n" +
+    "ユーザーの中国語学習を支援してください。\n" +
+    "- 原則として、ユーザーが使った言語に合わせて答える。\n" +
+    "- 中国語の例文には、必要に応じてピンインと自然な日本語訳を添える。\n" +
+    "- 間違いを直すときは、自然な修正文と短い理由を示す。\n" +
+    "- 会話練習では細かい訂正で流れを止めすぎず、会話を続けてから要点を整理する。\n" +
+    "- 確信がない内容を断定しない。\n" +
+    "- 回答は学習しやすい長さにまとめる。";
+  assert.equal(CHAT_INSTRUCTIONS, goPrompt);
+
+  let body: unknown;
+  const fetchImpl = serve(
+    [
+      delta("不客气"),
+      sse({ type: "response.incomplete", response: { status: "incomplete" } }),
+    ],
+    200,
+    (_url, init) => {
+      body = JSON.parse(String(init.body));
+    },
+  );
+  const request: AnswerRequest = {
+    model: config.chatModel,
+    instructions: CHAT_INSTRUCTIONS,
+    messages: [
+      { role: "user", text: "你好" },
+      { role: "assistant", text: "你好！" },
+      { role: "user", text: "谢谢" },
+    ],
+    requireComplete: false,
+  };
+  // An answer cut at the token limit ends the chat answer without an error.
+  assert.deepEqual(
+    await collect(streamAnswer(config, request, options(fetchImpl))),
+    { pieces: ["不客气"] },
+  );
+  assert.deepEqual(body, {
+    model: "gpt-6.1-sol",
+    instructions: CHAT_INSTRUCTIONS,
+    input: [
+      { role: "user", content: "你好" },
+      { role: "assistant", content: "你好！" },
+      { role: "user", content: "谢谢" },
+    ],
     stream: true,
     store: false,
     max_output_tokens: 1600,

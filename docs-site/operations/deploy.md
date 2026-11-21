@@ -51,7 +51,6 @@ Web 用とは別の OAuth App を新しく作ります。GitHub の **Settings �
 | `LINE_CHANNEL_SECRET`         | LINE の Messaging API のチャネルシークレット（LINE 連携を使うときだけ。下の注と「7. LINE 連携」を参照） |
 | `LINE_CHANNEL_ACCESS_TOKEN`   | LINE の長期のチャネルアクセストークン                                                                   |
 | `OPENAI_API_KEY`              | OpenAI の API キー                                                                                      |
-| `OPENAI_CHAT_MODEL`           | 会話練習のモデル（任意。無ければ `gpt-6.1-sol`）。「8. 会話練習」を参照                                 |
 | `OPENAI_LEARNING_MODEL`       | LINE の添削・翻訳と単語帳の下書きのモデル（任意。無ければ `gpt-5-mini`）                                |
 | `CRON_SECRET`                 | 拾い直しの Cron の認証用の秘密。Vercel が Cron の呼び出しに `Authorization: Bearer <値>` を付けます     |
 
@@ -68,7 +67,7 @@ Web 用とは別の OAuth App を新しく作ります。GitHub の **Settings �
 - Web 用の OAuth App は、以前から Web で使っているものをそのまま使えます。GitHub は登録した callback URL の **下の階層** を `redirect_uri` に使えるので、Web の callback（`https://<Web>/api/auth/callback/github/go`）は登録済みの callback（`/api/auth/callback/github`）の下になり、OAuth App の設定を変える必要はありません。
 - `API_WEB_PROXY_SECRET` は、Web（Next.js）が利用者の IP を渡すための共有の秘密です。使い方は [レート制限とクライアントの IP](#レート制限とクライアントの-ip) を見てください。空のときは `X-Zhuelog-Client-IP` を常に無視します。
 - `API_WEB_PROXY_SECRET` も `API_JWT_SECRET` と同じく、Production と Preview で **別の値** にします。同じだと、プレビューの Web が本番の Go API に任意の IP を名乗れてしまいます。
-- LINE の 2 つ（`LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`）は、**両方設定するか、両方空** にします。LINE を使うときは `OPENAI_API_KEY` も要ります。足りないと起動時に止まります。LINE の 2 つが空のときは Go API は普通に起動し、`/v1/line/*` の 5 つのルートが `404` になります（LINE 連携が無い状態です）。`OPENAI_API_KEY` だけを設定すると、会話練習だけが有効になります（「8. 会話練習」）。
+- LINE の 2 つ（`LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`）は、**両方設定するか、両方空** にします。LINE を使うときは `OPENAI_API_KEY` も要ります。足りないと起動時に止まります。LINE の 2 つが空のときは Go API は普通に起動し、`/v1/line/*` の 5 つのルートが `404` になります（LINE 連携が無い状態です）。
 - `CRON_SECRET` が空のときは、`GET /v1/line/drain` は常に `401` です（拾い直しが動きません）。LINE 連携を使うときは設定します。
 - `OPENAI_API_BASE_URL` と `LINE_API_BASE_URL` は、テストが偽のサーバーへつなぐための設定です。`127.0.0.1` などのループバックの URL だけを受け付け、それ以外は起動時に止まります。**本番と Preview には設定しません。**
 
@@ -204,18 +203,7 @@ LINE 連携を本番で使い始めるときは、次の順で行います。
 
 ## 8. 会話練習（ChatGPT）
 
-管理者が Web の `/chat` で ChatGPT と中国語の会話練習をし、会話を会話ノート（`/conversations`）で見返すための設定です。Go API の `POST /v1/chat` と `/v1/conversations` で動きます。
-
-- Go API に `OPENAI_API_KEY` があれば有効になります（LINE の設定は要りません）。空のときは 5 つのルートが `404` で、Web の `/chat` には「ChatGPT が設定されていません」と出ます。
-- モデルは `OPENAI_CHAT_MODEL`（無ければ `gpt-6.1-sol`）です。
-- 使えるのは管理者だけです。会員とゲストには入口が出ず、Web の `/chat`・`/conversations` は `404`、API は `403` です。
-
-### 切り替えの手順
-
-1. **マージの前に**、本番の Neon にマイグレーション `20261024090000_add_chat_conversations`（`ChatConversation` の追加）を当てます。
-2. **マージの前に**、Go API のプレビューのデプロイで `/chat` を開き、回答が少しずつ表示されること（最後にまとめて表示されないこと）を確かめます。Go は回答を 1 行ずつ `Flush` しますが、Vercel の Go の関数で途中の書き込みがそのまま届くかは、まだ本番で確かめていません。
-3. Go API の Vercel プロジェクトの Production に `OPENAI_API_KEY`（と、変えるなら `OPENAI_CHAT_MODEL`）を入れます。
-4. マージの後に、Go API のプロジェクトへ main を手でデプロイします（Git の自動デプロイは切っています）。Web は main への push で自動でデプロイされます。
+Web に移りました。設定は Web の `OPENAI_API_KEY`・`OPENAI_CHAT_MODEL`（`docs/api-deployment.md` の 8.）
 
 ## 運用上の注意
 

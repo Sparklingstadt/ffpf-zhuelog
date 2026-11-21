@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/aiusage"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/auth"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
@@ -92,18 +91,10 @@ type Deps struct {
 	Line              LineService
 	LineChannelSecret []byte
 	CronSecret        []byte
-	// Conversations keeps the saved conversations; with it alone they can be
-	// read and deleted. Chat calls OpenAI and is nil when it is not
-	// configured, which leaves out sending a message and saving a
-	// conversation. ChatModel is the model name the list reports ("" without
-	// OpenAI, which the web reads as "the chat is off").
-	Chat          ChatStreamer
-	Conversations Conversations
-	ChatModel     string
 	// StudyLog counts what owners did each day.
 	StudyLog StudyLog
-	// AIUsage records the tokens of every OpenAI call and sums them up for
-	// the admin; nil records nothing and leaves the summary route out.
+	// AIUsage sums up the tokens of the OpenAI calls for the admin; nil
+	// leaves the summary route out.
 	AIUsage AIUsage
 	// DemoReset puts the demo account back to its fixture; nil (no demo)
 	// leaves its cron route out. CronSecret guards it.
@@ -161,7 +152,6 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	r.adminRoutes()
 	r.studyLogRoutes()
 	r.lineRoutes()
-	r.conversationRoutes()
 	return r.mux, r.routes
 }
 
@@ -223,11 +213,6 @@ func (r *registrar) notForDemo(pattern string, h http.Handler) {
 // is the handler before authentication and wrap goes around it.
 func (r *registrar) notForDemoWrapped(pattern string, wrap func(http.Handler) http.Handler, h http.Handler) {
 	r.handle(route{pattern: pattern, authed: true, closedToDemo: true}, wrap(notDemo(r.d.Auth, h)))
-}
-
-// trackAI records the OpenAI tokens h uses under feature.
-func (r *registrar) trackAI(feature string, h http.Handler) http.Handler {
-	return trackAIUsage(r.d.AIUsage, feature, r.d.Now, h)
 }
 
 func (r *registrar) healthRoutes() {
@@ -327,27 +312,6 @@ func (r *registrar) lineRoutes() {
 	r.notForDemo("DELETE /v1/line/link", notActing(lineUnlink(l)))
 	r.notForDemo("PUT /v1/line/review-notify", notActing(lineReviewNotify(l, true)))
 	r.notForDemo("DELETE /v1/line/review-notify", notActing(lineReviewNotify(l, false)))
-}
-
-// conversationRoutes are the chat with ChatGPT and its saved conversations,
-// for members and admins (guests get 403 from requireAuth). Reading and
-// deleting saved conversations needs only the store, so they stay readable
-// when OpenAI is not configured (ChatModel is then "", which tells the web
-// the chat itself is off); sending a message and saving one exist only with
-// OpenAI.
-func (r *registrar) conversationRoutes() {
-	if cs := r.d.Conversations; cs != nil {
-		r.private("GET /v1/conversations", listConversations(cs, r.d.ChatModel))
-		r.private("GET /v1/conversations/{id}", getConversation(cs))
-		r.private("DELETE /v1/conversations/{id}", deleteConversation(cs))
-	}
-	if r.d.Chat == nil {
-		return
-	}
-	r.notForDemo("POST /v1/chat", r.trackAI(aiusage.FeatureChat, streamChat(r.d.Chat)))
-	if cs := r.d.Conversations; cs != nil {
-		r.private("PUT /v1/conversations/{id}", putConversation(cs, r.d.Now))
-	}
 }
 
 func ping() http.Handler {

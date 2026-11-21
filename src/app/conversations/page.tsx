@@ -26,7 +26,7 @@ export const dynamic = "force-dynamic";
 export default async function ConversationsPage() {
   const user = await requireChatUser("/signin?callbackUrl=/conversations");
   const conversations = await loadConversationList();
-  const dates = conversations ? listConversationDates(conversations) : [];
+  const dates = listConversationDates(conversations);
 
   return (
     <PageShell user={user} width="4xl">
@@ -35,7 +35,7 @@ export default async function ConversationsPage() {
         description="「ChatGPT と話す」で話した会話を、話した日ごとに見返せます。"
         actions={
           // The demo account cannot chat; it only reads the notes.
-          conversations && !user.demo ? (
+          !user.demo ? (
             <Button asChild size="sm">
               <Link href="/chat">
                 <MessageCircle /> ChatGPT と話す
@@ -46,13 +46,7 @@ export default async function ConversationsPage() {
         dense
       />
 
-      {!conversations ? (
-        <EmptyState
-          icon={MessageCircle}
-          title="ChatGPT が設定されていません"
-          description="Go API に OPENAI_API_KEY を設定すると、会話ノートを使えます。"
-        />
-      ) : dates.length === 0 ? (
+      {dates.length === 0 ? (
         <EmptyState icon={CalendarDays} title="まだ会話ノートがありません" />
       ) : (
         // Each day with its conversations, so the list shows what was

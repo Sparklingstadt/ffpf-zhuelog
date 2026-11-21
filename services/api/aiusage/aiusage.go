@@ -10,10 +10,9 @@ import "context"
 
 // Features name what an OpenAI call was for. They are stored as they are, so
 // never rename one.
-// "quick_question" (and "vocabulary_draft") rows are written by the web now.
+// "quick_question", "vocabulary_draft" and "chat" rows are written by the web now.
 const (
 	FeatureLine = "line"
-	FeatureChat = "chat"
 )
 
 // Usage is what one OpenAI call used.

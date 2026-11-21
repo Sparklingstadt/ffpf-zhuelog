@@ -33,7 +33,6 @@ export default async function ConversationDayPage({
   const date = parseLogDate(year, month, day);
   if (!date) notFound();
   const conversations = await loadConversationList();
-  if (!conversations) notFound();
   const items = conversationsOn(conversations, date);
   const dayHref = getLogDateHref(date, "/conversations");
 
