@@ -128,7 +128,7 @@ export async function liveEntriesById(
   );
 }
 
-// Reads the owner's learning notes the way the Go API's store does. Every
+// Reads the owner's learning notes the way the retired Go API's store did. Every
 // list is ordered in SQL, so ties on time are broken by the database's id
 // order.
 export function createLearningNoteReads(db: () => PrismaClient) {

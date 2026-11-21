@@ -116,7 +116,6 @@ test("the import check catches each forbidden form", () => {
     'const m = await import("../generated/prisma/client");',
     'import "pg";',
     'import { pgTable } from "pgx";',
-    'import { x } from "@/infrastructure/go-api/client";',
   ].join("\n");
   assert.deepEqual(moduleSpecifiers(sample).filter(forbiddenModule), [
     "@/generated/prisma/client",
@@ -127,22 +126,6 @@ test("the import check catches each forbidden form", () => {
     "../generated/prisma/client",
     "pg",
   ]);
-});
-
-// Pages and UI components reach the Go API through composition and the
-// presentation actions and controllers; eslint.config.mjs says the same.
-test("pages and UI components never import the Go API gateways", () => {
-  const files = readdirSync(root, { recursive: true, encoding: "utf8" })
-    .map((path) => path.replaceAll("\\", "/"))
-    .filter((path) => /\.(ts|tsx)$/.test(path))
-    .filter((path) => /^(app|presentation\/components)\//.test(path));
-  assert.ok(files.length > 0);
-  const offenders = files.flatMap((path) =>
-    moduleSpecifiers(readFileSync(`${root}${path}`, "utf8"))
-      .filter((specifier) => /^@\/infrastructure\/go-api(\/|$)/.test(specifier))
-      .map((specifier) => `${path}: ${specifier}`),
-  );
-  assert.deepEqual(offenders, []);
 });
 
 // UI components take nothing from infrastructure; browser-side stores come

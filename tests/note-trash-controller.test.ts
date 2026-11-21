@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { LearningForbiddenError } from "../src/application/learning/learning-notes";
-import { GoApiError } from "../src/infrastructure/go-api/client";
 import {
   handleEmptyTrash,
   handleNoteAction,
@@ -100,8 +99,8 @@ test("a note action reports a note the owner does not have", async () => {
   );
 });
 
-test("a note action reports a Go failure without details", async () => {
-  const { run } = recorder(new GoApiError(503, "unavailable", "停止中です"));
+test("a note action reports a failure without details", async () => {
+  const { run } = recorder(new Error("停止中です"));
   const logged: unknown[][] = [];
   const original = console.error;
   console.error = (...args: unknown[]) => logged.push(args);
@@ -113,52 +112,15 @@ test("a note action reports a Go failure without details", async () => {
   } finally {
     console.error = original;
   }
-  assert.deepEqual(logged, [["NOTE_TRASH_FAILED", 503, "unavailable"]]);
+  assert.deepEqual(logged, [["NOTE_TRASH_FAILED", "Error"]]);
 });
 
-test("a note action gives every retry-later Go failure the generic text", async () => {
-  const original = console.error;
-  console.error = () => {};
-  try {
-    for (const status of [0, 429, 500, 502]) {
-      const { run } = recorder(new GoApiError(status, "x", "Go の文言"));
-      assert.deepEqual(
-        await handleNoteAction(form({ id: "cmabc123" }), { run }),
-        failed,
-        String(status),
-      );
-    }
-  } finally {
-    console.error = original;
-  }
-});
-
-test("a note action treats Go's 403 as not allowed and shows Go's text only for known codes", async () => {
-  const forbidden = recorder(
-    new GoApiError(403, "forbidden", "権限がありません"),
-  );
+test("a note action treats the application's refusal as not allowed", async () => {
+  const forbidden = recorder(new LearningForbiddenError());
   assert.deepEqual(
     await handleNoteAction(form({ id: "cmabc123" }), { run: forbidden.run }),
     unauthorized,
   );
-  const invalid = recorder(
-    new GoApiError(400, "invalid_request", "入力が正しくありません。"),
-  );
-  assert.deepEqual(
-    await handleNoteAction(form({ id: "cmabc123" }), { run: invalid.run }),
-    { status: "error", message: "入力が正しくありません。" },
-  );
-  const other = recorder(new GoApiError(400, "self_follow", "Go の文言"));
-  const original = console.error;
-  console.error = () => {};
-  try {
-    assert.deepEqual(
-      await handleNoteAction(form({ id: "cmabc123" }), { run: other.run }),
-      failed,
-    );
-  } finally {
-    console.error = original;
-  }
 });
 
 test("a note action lets Next's redirect through", async () => {
@@ -193,14 +155,14 @@ test("emptying the trash succeeds however many notes it deleted", async () => {
   assert.equal(runs, 1);
 });
 
-test("emptying the trash reports a Go failure", async () => {
+test("emptying the trash reports a failure", async () => {
   const original = console.error;
   console.error = () => {};
   try {
     assert.deepEqual(
       await handleEmptyTrash({
         run: async () => {
-          throw new GoApiError(500, "internal");
+          throw new Error("db");
         },
       }),
       failed,

@@ -1,4 +1,4 @@
-// Mirrors services/api/auth/oauth_error.go, services/api/httpclient and the
+// Mirrors the retired services/api/auth/oauth_error.go, services/api/httpclient and the
 // `do` helpers of services/api/auth/github.go and ffpf.go.
 import assert from "node:assert/strict";
 import { test } from "node:test";

@@ -40,7 +40,7 @@ const NEWEST_FIRST = [
   id?: "desc";
 }[];
 
-// Reads and writes the owner's question notes the way the Go API's
+// Reads and writes the owner's question notes the way the retired Go API's
 // store/questions.go did. Every query names the owner; `now` comes from the
 // caller, read once per request.
 export function createQuestionStore(db: () => PrismaClient) {

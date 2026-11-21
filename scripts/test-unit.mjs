@@ -40,19 +40,11 @@ async function testFiles(dir) {
 }
 
 const files = await testFiles("tests/");
-const goDir = new URL("../services/api/", import.meta.url);
-const [nodePassed, goPassed] = await Promise.all([
-  run(process.execPath, [
-    "--import",
-    "tsx",
-    "--test",
-    "--test-concurrency=4",
-    ...files,
-  ]),
-  // The Go API lives in its own module; vet then test, concurrently with Node.
-  run("go", ["vet", "./..."], { cwd: goDir }).then(
-    (vetPassed) =>
-      vetPassed && run("go", ["test", "-race", "./..."], { cwd: goDir }),
-  ),
+const passed = await run(process.execPath, [
+  "--import",
+  "tsx",
+  "--test",
+  "--test-concurrency=4",
+  ...files,
 ]);
-process.exitCode = !interrupted && nodePassed && goPassed ? 0 : 1;
+process.exitCode = !interrupted && passed ? 0 : 1;

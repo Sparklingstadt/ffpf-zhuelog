@@ -7,7 +7,7 @@ import { Alert, AlertDescription } from "@/presentation/components/ui/alert";
 import { Button } from "@/presentation/components/ui/button";
 import { genericErrorMessage } from "@/presentation/presenters/generic-error-message";
 
-// A page whose data could not be read, such as when the Go API is down.
+// A page whose data could not be read, such as when the database cannot be reached.
 export default function AppError({ retry }: { retry: () => void }) {
   return (
     <>

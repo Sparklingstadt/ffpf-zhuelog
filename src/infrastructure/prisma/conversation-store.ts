@@ -15,7 +15,7 @@ import {
 //
 // Prisma's upsert cannot put a WHERE on its update (it would overwrite the
 // other owner's row, or need a read first that races), so this is raw SQL,
-// with bound parameters only. It is the statement of the Go API's
+// with bound parameters only. It is the statement of the retired Go API's
 // store/conversations.go PutConversation (lines 84-106).
 export function saveConversationSql(
   ownerId: string,
@@ -80,7 +80,7 @@ const NEWEST_FIRST = [
   id?: "desc";
 }[];
 
-// Reads and writes the owner's saved conversations the way the Go API's
+// Reads and writes the owner's saved conversations the way the retired Go API's
 // store/conversations.go did. Every query names the owner; `now` comes from
 // the caller, read once per request.
 export function createConversationStore(db: () => PrismaClient) {

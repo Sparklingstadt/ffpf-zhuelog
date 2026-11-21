@@ -1,33 +1,29 @@
-// Creates the sample members and notes for trying the Go API locally.
-// Run through `pnpm run api:db`; safe to run again (it skips what exists).
+// Puts the sample members and the friend's shared notes into the local
+// database for trying the web (docs/development.md). Run through
+// `pnpm run db:seed:sample`; safe to run again (it skips what exists).
+// Local test values only.
 import { PrismaPg } from "@prisma/adapter-pg";
+import "dotenv/config";
 
 import { PrismaClient } from "../src/generated/prisma/client";
 import { ScryptPasswordHasher } from "../src/infrastructure/security/scrypt-password-hasher";
+import { securePostgresConnectionString } from "../prisma/postgres-connection";
 
-function required(name: string) {
-  const value = process.env[name];
-  if (!value)
-    throw new Error(`${name} is not set; source scripts/api-local-env.sh`);
-  return value;
-}
-
-const connectionString = required("API_LOCAL_DATABASE_URL");
-const url = new URL(connectionString);
+const rawConnectionString = process.env.DATABASE_URL;
+if (!rawConnectionString) throw new Error("DATABASE_URL is not set.");
+const url = new URL(rawConnectionString);
 if (!["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)) {
-  throw new Error("api-local-seed only writes to a database on this machine.");
+  throw new Error(
+    "sample-members-seed only writes to a database on this machine.",
+  );
 }
+const connectionString = securePostgresConnectionString(rawConnectionString);
 
-// Members for Go's sign-in, unused since stage 11 (stage 12 removes this seed).
 const members = [
+  { loginId: "demo", password: "demo-password-123", displayName: "デモ" },
   {
-    loginId: required("API_LOCAL_DEMO_LOGIN"),
-    password: required("API_LOCAL_DEMO_PASSWORD"),
-    displayName: "デモ",
-  },
-  {
-    loginId: required("API_LOCAL_FRIEND_LOGIN"),
-    password: required("API_LOCAL_FRIEND_PASSWORD"),
+    loginId: "friend",
+    password: "friend-password-123",
     displayName: "フレンド",
   },
 ];
@@ -72,7 +68,7 @@ async function main() {
     console.log(`${existing ? "kept" : "created"} member ${member.loginId}`);
   }
 
-  const friendOwner = `password:${ids[required("API_LOCAL_FRIEND_LOGIN")]}`;
+  const friendOwner = `password:${ids["friend"]}`;
   const already = await prisma.learningEntry.count({
     where: { ownerId: friendOwner },
   });
@@ -83,7 +79,7 @@ async function main() {
   const now = new Date();
   await prisma.importBatch.create({
     data: {
-      fileName: "api-local-seed",
+      fileName: "sample-members-seed",
       rowCount: friendNotes.length,
       entries: {
         create: friendNotes.map((note) => ({

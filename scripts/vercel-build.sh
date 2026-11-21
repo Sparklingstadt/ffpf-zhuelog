@@ -3,7 +3,7 @@
 # Production builds apply pending Prisma migrations before building, so a
 # merge to main never ships code ahead of its tables. Preview builds use
 # their own Neon branch and must not migrate (its schema is kept in step by
-# hand; see docs/api-deployment.md).
+# hand; see docs/deployment.md).
 set -euo pipefail
 
 if [ "${VERCEL_ENV:-}" = "production" ]; then

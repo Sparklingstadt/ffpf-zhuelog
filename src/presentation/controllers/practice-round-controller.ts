@@ -9,7 +9,7 @@ import { COMPLEMENT_ROUND_MODES } from "@/domain/practice/complement-record";
 import { PRACTICE_RECORD_ID } from "@/domain/practice/practice-round";
 import { practiceAnswerInput } from "@/presentation/actions/practice-round-input";
 import {
-  attemptGo,
+  attemptCall,
   type ActionResult,
 } from "@/presentation/controllers/action-state";
 import { accountForbiddenMessage } from "@/presentation/presenters/account-action-errors";
@@ -49,7 +49,7 @@ export async function handlePracticeRoundSave<T extends { startedAt: string }>(
     return { ok: false, message: accountForbiddenMessage };
   const parsed = dependencies.schema.safeParse(input);
   if (!parsed.success) return { ok: false, message: invalidRoundMessage };
-  const attempt = await attemptGo(dependencies.code, () =>
+  const attempt = await attemptCall(dependencies.code, () =>
     dependencies.save({
       ...parsed.data,
       startedAt: new Date(parsed.data.startedAt),

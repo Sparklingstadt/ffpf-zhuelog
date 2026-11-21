@@ -25,16 +25,6 @@ const innerLayerBoundaries = [
   },
 ];
 
-// Pages and UI components reach the Go API only through composition and the
-// presentation actions and controllers, never through its gateways directly.
-const goApiBoundary = [
-  {
-    group: ["@/infrastructure/go-api", "@/infrastructure/go-api/**"],
-    message:
-      "画面（app・presentation/components）から Go API の gateway を直接 import しないでください。composition か presentation の actions・controllers を通し、型やエラーは domain から import してください。",
-  },
-];
-
 // UI components take nothing from infrastructure at all: browser-side stores
 // come through composition/browser-preferences.ts.
 const componentBoundary = [
@@ -58,12 +48,6 @@ const eslintConfig = defineConfig([
     },
   },
   {
-    files: ["src/app/**/*.{ts,tsx,mts}"],
-    rules: {
-      "no-restricted-imports": ["error", { patterns: goApiBoundary }],
-    },
-  },
-  {
     files: ["src/presentation/components/**/*.{ts,tsx,mts}"],
     rules: {
       "no-restricted-imports": ["error", { patterns: componentBoundary }],
@@ -78,10 +62,6 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     "playwright-report/**",
     "test-results/**",
-    // VuePress output for docs-site.
-    "docs-site/.vuepress/.temp/**",
-    "docs-site/.vuepress/.cache/**",
-    "docs-site/.vuepress/dist/**",
     // Claude Code worktrees live here. Git skips them via .git/info/exclude,
     // which ESLint does not read.
     ".claude/**",

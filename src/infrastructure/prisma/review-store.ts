@@ -117,7 +117,7 @@ export function reviewLogRow(input: {
 }
 
 // The one statement that puts practice mistakes in the owner's queue at now
-// (one statement for the whole round; the Go API's per-target version is
+// (one statement for the whole round; the retired Go API's per-target version was
 // described in docs/superpowers/plans/2026-11-16-deprecate-go-stage5-go-reference.md): a new
 // target becomes a New card due now; a target due later is brought forward
 // to now with its FSRS columns kept; a target already due is left as it is,

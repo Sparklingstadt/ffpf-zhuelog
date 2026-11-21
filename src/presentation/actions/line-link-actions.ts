@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { LineLinkForbiddenError } from "@/application/line/line-link";
 import { lineLink } from "@/composition/line-container";
-import { attemptGo } from "@/presentation/controllers/action-state";
+import { attemptCall } from "@/presentation/controllers/action-state";
 
 export type LineLinkState =
   | { status: "idle" }
@@ -14,12 +14,12 @@ export type LineLinkState =
 // The signed-in member's or admin's own LINE link, read and written in the
 // database by the lineLink use case, which refuses guests, the demo account
 // and an admin acting as a member (LineLinkForbiddenError, shown as
-// accountForbiddenMessage by attemptGo).
+// accountForbiddenMessage by attemptCall).
 
 // Takes no arguments: the state and the form data are both unused, and a
 // function with fewer parameters still works as a useActionState action.
 export async function issueLineLinkCodeAction(): Promise<LineLinkState> {
-  const issued = await attemptGo("LINE_LINK_CODE_FAILED", () =>
+  const issued = await attemptCall("LINE_LINK_CODE_FAILED", () =>
     lineLink.issueCode(),
   );
   if (!issued.ok) return { status: "error", message: issued.message };
@@ -53,7 +53,7 @@ export async function setLineReviewNotifyAction(
   formData: FormData,
 ): Promise<LineReviewNotifyState> {
   const on = formData.get("on") === "1";
-  const saved = await attemptGo("LINE_REVIEW_NOTIFY_FAILED", () =>
+  const saved = await attemptCall("LINE_REVIEW_NOTIFY_FAILED", () =>
     lineLink.setReviewNotify(on),
   );
   if (!saved.ok) return { status: "error", message: saved.message };

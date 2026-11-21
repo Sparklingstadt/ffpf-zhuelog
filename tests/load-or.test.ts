@@ -4,25 +4,10 @@ import { test } from "node:test";
 import { notFound, redirect } from "next/navigation";
 
 import { LearningForbiddenError } from "../src/application/learning/learning-notes";
-import { GoApiError } from "../src/infrastructure/go-api/client";
 import { loadOr } from "../src/presentation/controllers/load-or";
 
 test("loadOr returns what loaded", async () => {
   assert.deepEqual(await loadOr("CODE", async () => [1, 2], null), [1, 2]);
-});
-
-test("loadOr falls back on a Go failure and logs only its codes", async (t) => {
-  const logged: unknown[][] = [];
-  t.mock.method(console, "error", (...args: unknown[]) => logged.push(args));
-  const result = await loadOr(
-    "VOCABULARY_UNAVAILABLE",
-    async () => {
-      throw new GoApiError(503, "unavailable", "detail");
-    },
-    null,
-  );
-  assert.equal(result, null);
-  assert.deepEqual(logged, [["VOCABULARY_UNAVAILABLE", 503, "unavailable"]]);
 });
 
 test("loadOr falls back on any other failure and logs only its name", async (t) => {

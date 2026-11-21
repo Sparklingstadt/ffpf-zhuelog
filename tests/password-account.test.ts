@@ -12,7 +12,7 @@ import {
   normalizeLoginId,
 } from "../src/domain/identity/password-account";
 
-// Mirrors services/api/auth/validate_test.go and TestAdminCreateAccount*.
+// Mirrors the retired services/api/auth/validate_test.go and TestAdminCreateAccount*.
 test("login ids, names and passwords follow Go's rules", () => {
   const loginIds: [string, string][] = [
     ["alice", "alice"],

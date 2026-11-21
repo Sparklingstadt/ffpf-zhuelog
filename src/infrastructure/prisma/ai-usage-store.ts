@@ -3,7 +3,7 @@ import type { AiUsageTotal } from "../../domain/ai-usage/monthly-usage";
 import type { OpenAiUsage } from "../../domain/vocabulary/vocabulary-entry";
 import { newId } from "./new-id";
 
-// Records one OpenAI call at `now`, as the Go API's RecordAIUsage does.
+// Records one OpenAI call at `now`, as the retired Go API's RecordAIUsage did.
 export async function recordAiUsage(
   db: () => PrismaClient,
   entry: OpenAiUsage & { ownerId: string; feature: string },

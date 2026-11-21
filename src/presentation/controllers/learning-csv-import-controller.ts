@@ -1,6 +1,6 @@
 import type { CsvImportResult } from "@/application/learning/learning-notes";
 import {
-  attemptGoAction,
+  attemptAction,
   type ActionState,
 } from "@/presentation/controllers/action-state";
 
@@ -38,7 +38,7 @@ export async function handleLearningCsvImport(
     return { status: "error", message: "CSVファイルを選択してください。" };
   }
 
-  return attemptGoAction("CSV_IMPORT_FAILED", async () => {
+  return attemptAction("CSV_IMPORT_FAILED", async () => {
     const result = await dependencies.importCsv(file);
     if (!result.ok) return { status: "error", message: result.message };
     return {
