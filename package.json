@@ -40,7 +40,7 @@
     "csv-parse": "^7.0.3",
     "dotenv": "18.0.10",
     "geist": "^1.9.2",
-    "lucide-react": "^1.72.0",
+    "lucide-react": "^1.75.0",
     "next": "16.4.6",
     "pg": "^8.23.1",
     "qrcode.react": "4.2.0",
@@ -51,7 +51,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@playwright/test": "^1.65.0",
+    "@playwright/test": "^1.65.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^24.19.2",
     "@types/pg": "^8.23.1",
