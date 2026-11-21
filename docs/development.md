@@ -142,6 +142,7 @@ rm .env.production.local
 - `PasswordAccount`: ID・パスワードのアカウント（ログインID・表示名・パスワードのハッシュ・`sessionVersion`）。`failedAttempts`・`lockedUntil` は旧ロック用で、今は使っていません
 - `FfpfAccount`: FFPF ID でログインしたメンバー（`sub`・メールアドレス・表示名・`sessionVersion`・最終ログイン日時）。ログインのたびに最新の値で更新します
 - `SignInThrottle`: ログイン試行回数の制限用のカウンター（キー・回数・期限）。Go API が使います
+- `Session`: Web のログインのセッション（トークンの SHA-256 ハッシュ・所有者・役割・期限）。段階 11a で表と部品を足しましたが、使うのは段階 11b からで、それまでは空です
 
 インポートはファイル単位のトランザクションです。途中の行でエラーになった場合、そのファイルのデータは1件も保存されません。
 

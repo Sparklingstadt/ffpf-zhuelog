@@ -40,15 +40,34 @@ export function isSafeGoApiUrl(raw: string): boolean {
 }
 
 // FFPF ID sign-in on the web needs the portal's issuer (to build the
-// authorize URL) and this service's client id; the secret stays with the Go
-// API. Without both, the FFPF ID button is not shown. The issuer must be
-// HTTPS unless it is this machine (local development and e2e).
+// authorize URL) and this service's client id (the secret is
+// ffpfIdClientSecret). Without both, the FFPF ID button is not shown. The
+// issuer must be HTTPS unless it is this machine (local development and e2e).
 export function ffpfIdConfig():
   { issuer: string; clientId: string } | undefined {
   const issuer = process.env.FFPF_ID_ISSUER?.trim().replace(/\/+$/, "");
   const clientId = process.env.FFPF_ID_CLIENT_ID?.trim();
   if (!issuer || !clientId || !isSafeGoApiUrl(issuer)) return undefined;
   return { issuer, clientId };
+}
+
+// The web's GitHub OAuth App for the code exchange: AUTH_GITHUB_ID (the id
+// the authorize URL already uses) and GITHUB_WEB_CLIENT_SECRET (the value Go
+// has today). Both trimmed as Go's strings.TrimSpace and non-empty, else
+// undefined.
+export function githubOAuthConfig():
+  { clientId: string; clientSecret: string } | undefined {
+  const clientId = goTrimSpace(process.env.AUTH_GITHUB_ID ?? "");
+  const clientSecret = goTrimSpace(process.env.GITHUB_WEB_CLIENT_SECRET ?? "");
+  if (!clientId || !clientSecret) return undefined;
+  return { clientId, clientSecret };
+}
+
+// FFPF ID's client secret (Go: FFPF_ID_CLIENT_SECRET), trimmed; undefined
+// when blank.
+export function ffpfIdClientSecret(): string | undefined {
+  const secret = goTrimSpace(process.env.FFPF_ID_CLIENT_SECRET ?? "");
+  return secret ? secret : undefined;
 }
 
 // Link to add the LINE official account as a friend. It is shown as a link
@@ -92,11 +111,12 @@ export function apiJwtSecret(): string {
 }
 
 // GitHub account ids allowed to act as administrator: comma separated,
-// trimmed, digits only. Empty means no administrator gets through.
+// trimmed as Go's strings.TrimSpace, digits only. Empty means no
+// administrator gets through.
 export function allowedGitHubIds(): ReadonlySet<string> {
   const ids = (process.env.AUTH_ALLOWED_GITHUB_IDS ?? "")
     .split(",")
-    .map((id) => id.trim())
+    .map((id) => goTrimSpace(id))
     .filter((id) => /^[0-9]+$/.test(id));
   return new Set(ids);
 }

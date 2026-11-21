@@ -5,8 +5,9 @@
 // Every password change bumps "sessionVersion" in the same UPDATE as the
 // hash. Go's Authenticate and Refresh and the web's TokenCurrentUserProvider
 // compare it on every request, so that one statement revokes every existing
-// session (Go's refresh also revokes the token family); nothing touches
-// ApiRefreshToken.
+// session (Go's refresh also revokes the token family); the same transaction
+// deletes the owner's Session rows (stage 11); ApiRefreshToken is left to Go
+// until stage 12.
 //
 // A member's own change replaces the hash only while it is still the one the
 // member's current password was verified against (compare-and-swap in the
@@ -16,6 +17,7 @@
 import { Prisma, type PrismaClient } from "../../generated/prisma/client";
 import type { MemberAccount } from "../../domain/identity/member-account";
 import { newId } from "./new-id";
+import { SESSION_TRANSACTION_OPTIONS } from "./session-store";
 
 type AccountRow = {
   id: string;
@@ -71,6 +73,23 @@ export function setPasswordSql(
     RETURNING "loginId"`;
 }
 
+// Runs a setPasswordSql statement and, only when it changed the account,
+// deletes the account's sessions in the same transaction, so no session
+// outlives the password it was signed in with. The loginId, or null when no
+// row changed.
+async function updatePasswordEndingSessions(
+  db: () => PrismaClient,
+  id: string,
+  statement: Prisma.Sql,
+): Promise<string | null> {
+  return db().$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<{ loginId: string }[]>(statement);
+    if (rows.length !== 1) return null;
+    await tx.session.deleteMany({ where: { ownerId: `password:${id}` } });
+    return rows[0].loginId;
+  }, SESSION_TRANSACTION_OPTIONS);
+}
+
 export function createPasswordAccountStore(
   db: () => PrismaClient,
   newAccountId: () => string = newId,
@@ -119,10 +138,11 @@ export function createPasswordAccountStore(
       passwordHash: string,
       now: Date,
     ): Promise<string | null> {
-      const rows = await db().$queryRaw<{ loginId: string }[]>(
+      return updatePasswordEndingSessions(
+        db,
+        id,
         setPasswordSql(id, passwordHash, now),
       );
-      return rows[0]?.loginId ?? null;
     },
 
     // A member's own change. false: the account is gone or its hash is no
@@ -133,10 +153,12 @@ export function createPasswordAccountStore(
       passwordHash: string,
       now: Date,
     ): Promise<boolean> {
-      const rows = await db().$queryRaw<{ loginId: string }[]>(
+      const loginId = await updatePasswordEndingSessions(
+        db,
+        id,
         setPasswordSql(id, passwordHash, now, expectedHash),
       );
-      return rows.length === 1;
+      return loginId !== null;
     },
   };
 }

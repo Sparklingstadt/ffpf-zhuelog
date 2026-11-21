@@ -5,6 +5,8 @@ import {
   allowedGitHubIds,
   cronSecret,
   demoLoginId,
+  ffpfIdClientSecret,
+  githubOAuthConfig,
   lineConfig,
 } from "../src/infrastructure/config/environment";
 
@@ -20,6 +22,9 @@ const LINE_KEYS = [
   "OPENAI_API_KEY",
   "OPENAI_API_BASE_URL",
   "CRON_SECRET",
+  "AUTH_GITHUB_ID",
+  "GITHUB_WEB_CLIENT_SECRET",
+  "FFPF_ID_CLIENT_SECRET",
 ] as const;
 const savedLine = Object.fromEntries(
   LINE_KEYS.map((key) => [key, process.env[key]]),
@@ -39,6 +44,12 @@ afterEach(() => {
 test("allowedGitHubIds keeps only numeric ids", () => {
   process.env.AUTH_ALLOWED_GITHUB_IDS = " 10001, abc ,2002,,";
   assert.deepEqual([...allowedGitHubIds()].sort(), ["10001", "2002"]);
+});
+
+test("allowedGitHubIds trims Go's spaces, not String.prototype.trim's", () => {
+  // Go's strings.TrimSpace strips U+0085 but keeps U+FEFF.
+  process.env.AUTH_ALLOWED_GITHUB_IDS = "\u0085301\u0085,\uFEFF302";
+  assert.deepEqual([...allowedGitHubIds()], ["301"]);
 });
 
 test("allowedGitHubIds is empty when unset", () => {
@@ -124,4 +135,31 @@ test("cronSecret is the trimmed CRON_SECRET", () => {
   assert.equal(cronSecret(), undefined);
   setLine({});
   assert.equal(cronSecret(), undefined);
+});
+
+test("githubOAuthConfig needs both the client id and the secret", () => {
+  setLine({ AUTH_GITHUB_ID: " id ", GITHUB_WEB_CLIENT_SECRET: " secret " });
+  assert.deepEqual(githubOAuthConfig(), {
+    clientId: "id",
+    clientSecret: "secret",
+  });
+  for (const values of [
+    { AUTH_GITHUB_ID: "id" },
+    { GITHUB_WEB_CLIENT_SECRET: "secret" },
+    { AUTH_GITHUB_ID: "id", GITHUB_WEB_CLIENT_SECRET: "  " },
+    { AUTH_GITHUB_ID: " \t", GITHUB_WEB_CLIENT_SECRET: "secret" },
+    {},
+  ]) {
+    setLine(values);
+    assert.equal(githubOAuthConfig(), undefined, JSON.stringify(values));
+  }
+});
+
+test("ffpfIdClientSecret is the trimmed secret", () => {
+  setLine({ FFPF_ID_CLIENT_SECRET: " s " });
+  assert.equal(ffpfIdClientSecret(), "s");
+  setLine({ FFPF_ID_CLIENT_SECRET: "  " });
+  assert.equal(ffpfIdClientSecret(), undefined);
+  setLine({});
+  assert.equal(ffpfIdClientSecret(), undefined);
 });
