@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "next dev",
     "test:unit": "node scripts/test-unit.mjs",
+    "test:unit:stop": "docker compose -f compose.test.yaml down",
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint --max-warnings 0",

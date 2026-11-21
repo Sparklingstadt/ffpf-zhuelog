@@ -39,6 +39,49 @@ async function testFiles(dir) {
     .map((name) => `${dir}${name}`);
 }
 
+// The Go tests that need Postgres skip without API_TEST_DATABASE_URL. Unless
+// the caller names a database, start the one in compose.test.yaml and bring
+// its tables up to date. It is left running for the next run; stop it with
+// `pnpm run test:unit:stop`.
+const TEST_DATABASE_URL =
+  "postgresql://zhuelog_test:local-test-only@127.0.0.1:55441/zhuelog_test";
+
+async function testDatabaseUrl() {
+  if (process.env.API_TEST_DATABASE_URL)
+    return process.env.API_TEST_DATABASE_URL;
+  const cwd = new URL("../", import.meta.url);
+  const ready =
+    (await run(
+      "docker",
+      ["compose", "-f", "compose.test.yaml", "up", "-d", "--wait"],
+      { cwd },
+    )) &&
+    (await run(
+      process.execPath,
+      ["node_modules/prisma/build/index.js", "migrate", "deploy"],
+      { cwd, env: { ...process.env, DATABASE_URL: TEST_DATABASE_URL } },
+    ));
+  if (ready) return TEST_DATABASE_URL;
+  if (!interrupted)
+    console.error(
+      "Could not prepare the test database. Start Docker, or set API_TEST_DATABASE_URL to a migrated database.",
+    );
+  return null;
+}
+
+async function goTests() {
+  const databaseUrl = await testDatabaseUrl();
+  if (!databaseUrl) return false;
+  const options = {
+    cwd: goDir,
+    env: { ...process.env, API_TEST_DATABASE_URL: databaseUrl },
+  };
+  return (
+    (await run("go", ["vet", "./..."], options)) &&
+    (await run("go", ["test", "-race", "./..."], options))
+  );
+}
+
 const files = await testFiles("tests/");
 const goDir = new URL("../services/api/", import.meta.url);
 const [nodePassed, goPassed] = await Promise.all([
@@ -50,9 +93,6 @@ const [nodePassed, goPassed] = await Promise.all([
     ...files,
   ]),
   // The Go API lives in its own module; vet then test, concurrently with Node.
-  run("go", ["vet", "./..."], { cwd: goDir }).then(
-    (vetPassed) =>
-      vetPassed && run("go", ["test", "-race", "./..."], { cwd: goDir }),
-  ),
+  goTests(),
 ]);
 process.exitCode = !interrupted && nodePassed && goPassed ? 0 : 1;

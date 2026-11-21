@@ -81,7 +81,7 @@ rm .env.production.local
 
 ## ネイティブアプリ向け API
 
-`services/api/` に、ネイティブアプリ（iOS など）と Web が使う Go 製 API があります。Web とは別の Vercel プロジェクトとして動かし、本番の Neon を読み書きします。ローカルでのテストは `pnpm run test:unit` に含まれます（DB を使うテストは `API_TEST_DATABASE_URL` が無いと skip されます）。Vercel の準備、モバイル用 GitHub OAuth App の登録、本番へのマイグレーション適用、デプロイの手順は [docs/api-deployment.md](api-deployment.md) を参照してください。手元で API を起動して試す手順（`pnpm run api:db` → `pnpm run api:dev` → `pnpm run api:smoke`）は [docs/api-local.md](api-local.md) にあります。
+`services/api/` に、ネイティブアプリ（iOS など）と Web が使う Go 製 API があります。Web とは別の Vercel プロジェクトとして動かし、本番の Neon を読み書きします。ローカルでのテストは `pnpm run test:unit` に含まれます。DB を使うテストのために、`pnpm run test:unit` はテスト専用の PostgreSQL（`compose.test.yaml`、`127.0.0.1:55441`）を Docker で起動し、マイグレーションを適用します。起動したままにするので、止めるときは `pnpm run test:unit:stop` を使います。別の DB で走らせるときは `API_TEST_DATABASE_URL` を指定します。`go test` を直接実行した場合、DB を使うテストは `API_TEST_DATABASE_URL` が無いと skip されます。Vercel の準備、モバイル用 GitHub OAuth App の登録、本番へのマイグレーション適用、デプロイの手順は [docs/api-deployment.md](api-deployment.md) を参照してください。手元で API を起動して試す手順（`pnpm run api:db` → `pnpm run api:dev` → `pnpm run api:smoke`）は [docs/api-local.md](api-local.md) にあります。
 
 ## 学習ノートの持ち主の本番への反映
 

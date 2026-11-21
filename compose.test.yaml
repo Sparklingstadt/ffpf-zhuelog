@@ -1,0 +1,20 @@
+# Database for the Go tests that need Postgres (scripts/test-unit.mjs).
+# Its own name and port keep it apart from the e2e run, which truncates its
+# tables between tests, and from the local API database.
+name: zhuelog-test
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: zhuelog_test
+      POSTGRES_PASSWORD: local-test-only
+      POSTGRES_DB: zhuelog_test
+    ports:
+      - "127.0.0.1:55441:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zhuelog_test -d zhuelog_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 30

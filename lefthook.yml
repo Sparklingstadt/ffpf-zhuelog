@@ -28,8 +28,9 @@ pre-push:
     typecheck:
       priority: 2
       run: pnpm run typecheck
-    # Store and server tests that need Postgres skip unless
-    # API_TEST_DATABASE_URL is set (see services/api/main_test.go).
+    # A quick pass: the tests that need Postgres skip here unless
+    # API_TEST_DATABASE_URL is set. `pnpm run test:unit` below runs them
+    # against the database in compose.test.yaml.
     go:
       priority: 3
       root: "services/api/"
