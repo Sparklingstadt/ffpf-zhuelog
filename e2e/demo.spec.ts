@@ -142,3 +142,32 @@ test("the demo account can import CSV", async ({ page, db }) => {
   );
   expect(rows).toEqual([{ ownerId: memberOwnerId(account.rows[0].id) }]);
 });
+
+test("the demo account can answer a review", async ({ page, db }) => {
+  await resetDemo();
+  const account = await db.query(
+    `SELECT id FROM "PasswordAccount" WHERE "loginId" = $1`,
+    [demoLoginId],
+  );
+  const owner = memberOwnerId(account.rows[0].id);
+  const logs = async () =>
+    (
+      await db.query(
+        `SELECT count(*)::int AS n FROM "ReviewLog" WHERE "ownerId" = $1`,
+        [owner],
+      )
+    ).rows[0].n as number;
+  const before = await logs();
+
+  await page.goto("/signin");
+  await page.getByRole("button", { name: "デモで試す" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  // The fixture's due cards are notes and words, both turned over.
+  await page.goto("/review");
+  await page.getByRole("button", { name: "めくる" }).click();
+  await page
+    .getByRole("group", { name: "思い出せた度合い" })
+    .getByRole("button", { name: /^できた/ })
+    .click();
+  await expect.poll(logs).toBe(before + 1);
+});

@@ -14,7 +14,7 @@ export async function setNoteReviewAction(
 ): Promise<ActionState> {
   const state = await handleNoteReview(formData, {
     getMember: getCurrentMemberUser,
-    // Go puts the token owner's note in their own queue.
+    // learningNotes puts the signed-in user's own note in their own queue.
     run: (id, inReview) => learningNotes.setInReview(id, inReview),
   });
   if (state.status === "success") {

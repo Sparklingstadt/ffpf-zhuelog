@@ -113,3 +113,49 @@ func TestReviewNotifyTargetsAndClaim(t *testing.T) {
 		t.Fatal("claim after turning off must fail")
 	}
 }
+
+// The message counts reviews as the web's queue does: the cards of notes in
+// the trash are left out until the notes are restored.
+func TestReviewNotifyTargetsLeaveOutTrashedNotes(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	// 2026-10-20 06:00 JST.
+	morning := time.Date(2026, 10, 19, 21, 0, 0, 0, time.UTC)
+	owner := reviewOwner(t, s)
+	user := newLineUser()
+	cleanLine(t, s, []string{owner}, user)
+	linkLine(t, s, owner, user, morning.Add(-48*time.Hour))
+	if err := s.SetLineReviewNotify(ctx, owner, true); err != nil {
+		t.Fatal(err)
+	}
+	notes := createEntries(t, s, owner, morning.Add(-2*time.Hour), 2, 0)
+	for _, e := range notes {
+		putEntryInReview(t, s, owner, e.ID, morning.Add(-time.Hour))
+	}
+	due := func() int {
+		t.Helper()
+		got := notifyTargetsOf(t, s, morning, user)
+		if len(got) == 0 {
+			return 0
+		}
+		return got[0].Due
+	}
+	if n := due(); n != 2 {
+		t.Fatalf("due with both notes = %d, want 2", n)
+	}
+
+	trashNote(t, s, owner, notes[0].ID, morning.Add(-30*time.Minute))
+	if n := due(); n != 1 {
+		t.Fatalf("due with one note in the trash = %d, want 1", n)
+	}
+	trashNote(t, s, owner, notes[1].ID, morning.Add(-30*time.Minute))
+	if got := notifyTargetsOf(t, s, morning, user); len(got) != 0 {
+		t.Fatalf("both notes in the trash: targets = %+v, want none", got)
+	}
+
+	restoreNote(t, s, owner, notes[0].ID)
+	restoreNote(t, s, owner, notes[1].ID)
+	if n := due(); n != 2 {
+		t.Fatalf("due after the restore = %d, want 2", n)
+	}
+}

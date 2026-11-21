@@ -1,42 +1,25 @@
 "use server";
 
-import { z } from "zod";
-
 import { getCurrentViewerUser } from "@/composition/identity-container";
 import { reviews } from "@/composition/review-container";
-import { isMemberRole } from "@/domain/identity/entities/authenticated-user";
+import type { ActionResult } from "@/presentation/controllers/action-state";
 import {
-  attemptGoResult,
-  type ActionResult,
-} from "@/presentation/controllers/action-state";
-import { accountForbiddenMessage } from "@/presentation/presenters/account-action-errors";
+  handleReviewAnswer,
+  type AnswerReviewInput,
+} from "@/presentation/controllers/review-answer-controller";
 
-// The shape only; Go checks the item and the owner.
-const answerInput = z.object({
-  itemId: z.string().min(1),
-  logId: z.uuid(),
-  rating: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
-});
-
-export type AnswerReviewInput = z.infer<typeof answerInput>;
+export type { AnswerReviewInput };
 export type AnswerReviewResult = ActionResult;
 
-// Answers one review for members and admins; Go checks the role again. A
-// retry with the same logId is applied once.
+// Answers one review for members and admins. A retry with the same logId is
+// applied once.
 export async function answerReviewAction(
   input: AnswerReviewInput,
 ): Promise<AnswerReviewResult> {
-  const user = await getCurrentViewerUser();
-  if (!user || !isMemberRole(user.role))
-    return { ok: false, message: accountForbiddenMessage };
-  const parsed = answerInput.safeParse(input);
-  if (!parsed.success)
-    return { ok: false, message: "復習の回答の形式が不正です。" };
-  // No revalidatePath: /review reads Go on every visit, and re-rendering
-  // it here would reset the open session.
-  return attemptGoResult(
-    "REVIEW_ANSWER_FAILED",
-    () => reviews.answer(parsed.data),
-    { notFound: "この問題は復習の一覧にありません。" },
-  );
+  // No revalidatePath: /review reads the queue on every visit, and
+  // re-rendering it here would reset the open session.
+  return handleReviewAnswer(input, {
+    getViewer: getCurrentViewerUser,
+    answer: (answer) => reviews.answer(answer),
+  });
 }

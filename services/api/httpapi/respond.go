@@ -55,9 +55,6 @@ const (
 	msgPracticeRecordInvalid  = "練習の記録の形式が不正です。"
 	msgPracticeRecordNotFound = "練習の記録が見つかりません。"
 
-	msgReviewInvalid  = "復習の回答の形式が不正です。"
-	msgReviewNotFound = "復習する問題が見つかりません。"
-
 	msgStudyLogInvalid = "学習ログの期間が不正です。YYYY-MM-DD で、93日以内にしてください。"
 )
 

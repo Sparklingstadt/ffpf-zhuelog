@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { GoApiError } from "../src/infrastructure/go-api/client";
+import { LearningForbiddenError } from "../src/application/learning/learning-notes";
 import { handleNoteReview } from "../src/presentation/controllers/note-review-controller";
+import { genericErrorMessage } from "../src/presentation/presenters/generic-error-message";
 
 const success = { status: "success", message: "" };
 const unauthorized = { status: "error", message: "ログインし直してください。" };
@@ -61,7 +62,7 @@ test("guests and signed-out users are asked to sign in again", async () => {
     );
 });
 
-test("a malformed form or a note Go does not find is not found", async () => {
+test("a malformed form or a note that is not the user's is not found", async () => {
   const getMember = async () => ({ role: "member" as const });
   const never = async () => assert.fail("run must not be called");
   for (const fields of <Record<string, string>[]>[
@@ -82,22 +83,29 @@ test("a malformed form or a note Go does not find is not found", async () => {
   );
 });
 
-test("Go's 403 is not allowed and other errors go through the generic message", async (t) => {
-  t.mock.method(console, "error", () => {});
+test("LearningForbiddenError is not allowed and other errors go through the generic message", async (t) => {
+  const logged: unknown[][] = [];
+  t.mock.method(console, "error", (...args: unknown[]) => logged.push(args));
   const getMember = async () => ({ role: "member" as const });
-  const fail = (status: number) => async () => {
-    throw new GoApiError(status, "x");
-  };
   assert.deepEqual(
     await handleNoteReview(form({ id: "cmabc123", inReview: "true" }), {
       getMember,
-      run: fail(403),
+      run: async () => {
+        throw new LearningForbiddenError();
+      },
     }),
     unauthorized,
   );
   const state = await handleNoteReview(
     form({ id: "cmabc123", inReview: "true" }),
-    { getMember, run: fail(500) },
+    {
+      getMember,
+      run: async () => {
+        throw new Error("db down");
+      },
+    },
   );
   assert.equal(state.status, "error");
+  assert.equal(state.message, genericErrorMessage);
+  assert.deepEqual(logged, [["NOTE_REVIEW_FAILED", "Error"]]);
 });

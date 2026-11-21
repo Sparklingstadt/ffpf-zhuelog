@@ -50,6 +50,7 @@ const entry: LearningEntry = {
   hints: [],
 };
 const date = { year: 2026, month: 11, day: 16 };
+const now = new Date("2026-11-16T03:00:00.000Z");
 const search: EntrySearch = { query: "去", kind: null, hint: "" };
 
 // Records every call to reads and writes with its arguments.
@@ -78,6 +79,12 @@ function setup(user: AuthenticatedUser | null) {
       emptyTrash: record("emptyTrash", 2),
       setShared: record("setShared", true),
     },
+    entryReviews: {
+      isEntryInReview: record("isEntryInReview", true),
+      addEntry: record("addEntry", true),
+      removeEntry: record("removeEntry", true),
+    },
+    now: () => now,
     csvImport: {
       checkFile: checkCsvFile,
       parse: parseLearningCsv,
@@ -214,6 +221,41 @@ test("only plain members may share", async () => {
         notes.setShared("e1", shared),
         LearningForbiddenError,
       );
+    assert.deepEqual(calls, []);
+  }
+});
+
+test("the review status is the signed-in owner's", async () => {
+  for (const [user, ownerId] of [
+    [member, "password:abc"],
+    [actingAdmin, "password:abc"],
+    [demo, "password:abc"],
+  ] as const) {
+    const { notes, calls } = setup(user);
+    assert.equal(await notes.isInReview("e1"), true);
+    assert.equal(await notes.setInReview("e1", true), true);
+    assert.equal(await notes.setInReview("e1", false), true);
+    assert.deepEqual(calls, [
+      ["isEntryInReview", ownerId, "e1"],
+      ["addEntry", ownerId, "e1", now],
+      ["removeEntry", ownerId, "e1"],
+    ]);
+  }
+
+  const { notes, deps } = setup(member);
+  deps.entryReviews.isEntryInReview = async () => null;
+  deps.entryReviews.addEntry = async () => false;
+  assert.equal(await notes.isInReview("e9"), null);
+  assert.equal(await notes.setInReview("e9", true), false);
+
+  for (const user of [null, guest, revoked, noGithubId]) {
+    const { notes, calls } = setup(user);
+    for (const run of [
+      () => notes.isInReview("e1"),
+      () => notes.setInReview("e1", true),
+      () => notes.setInReview("e1", false),
+    ])
+      await assert.rejects(run(), LearningForbiddenError, String(user?.role));
     assert.deepEqual(calls, []);
   }
 });

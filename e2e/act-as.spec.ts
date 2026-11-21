@@ -4,6 +4,7 @@ import {
   createMember,
   expect,
   memberOwnerId,
+  seedNotes,
   test,
   upload,
 } from "./fixtures";
@@ -147,4 +148,50 @@ test("acting as a member is refused for a member who does not exist", async ({
   await expect(
     page.getByRole("status").filter({ hasText: "として操作中" }),
   ).toHaveCount(0);
+});
+
+test("an admin acting as a member reviews the member's queue", async ({
+  page,
+  context,
+  db,
+}) => {
+  const accountId = await createMember(
+    db,
+    "test04",
+    "テスト四郎",
+    "member-password-1",
+  );
+  const member = memberOwnerId(accountId);
+  await seedNotes(db, member, [
+    { text: "我昨天去学校了。", createdAt: "2026-10-04T01:00:00Z" },
+  ]);
+  await asAdmin(context);
+  await page.goto("/admin/accounts");
+  await page.getByRole("button", { name: "この会員として操作" }).click();
+  await expect(page).toHaveURL((url) => url.pathname === "/");
+  await expect(
+    page.getByRole("status").filter({ hasText: "として操作中" }),
+  ).toContainText("テスト四郎");
+
+  await page.getByRole("button", { name: "復習に入れる" }).click();
+  await expect(
+    page.getByRole("button", { name: "復習から外す" }),
+  ).toBeVisible();
+  await page.goto("/review");
+  await page.getByRole("button", { name: "めくる" }).click();
+  await page
+    .getByRole("group", { name: "思い出せた度合い" })
+    .getByRole("button", { name: /^できた/ })
+    .click();
+  await expect(page.getByText("1問 復習しました")).toBeVisible();
+
+  const items = await db.query(`SELECT "ownerId", reps FROM "ReviewItem"`);
+  expect(items.rows).toEqual([{ ownerId: member, reps: 1 }]);
+  const logs = await db.query(`SELECT "ownerId", rating FROM "ReviewLog"`);
+  expect(logs.rows).toEqual([{ ownerId: member, rating: 3 }]);
+  const own = await db.query(
+    `SELECT count(*)::int AS n FROM "ReviewItem" WHERE "ownerId" = $1`,
+    [adminOwnerId],
+  );
+  expect(own.rows[0].n).toBe(0);
 });

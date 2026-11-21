@@ -56,6 +56,14 @@ export type LearningNotesDeps = {
     emptyTrash(ownerId: string): Promise<number>;
     setShared(ownerId: string, id: string, shared: boolean): Promise<boolean>;
   };
+  // A note's place in its owner's review queue. isEntryInReview is null and
+  // the others false when the owner has no such live note.
+  entryReviews: {
+    isEntryInReview(ownerId: string, id: string): Promise<boolean | null>;
+    addEntry(ownerId: string, id: string, now: Date): Promise<boolean>;
+    removeEntry(ownerId: string, id: string): Promise<boolean>;
+  };
+  now: () => Date;
   // The CSV import: the checks and the parser throw CsvValidationError (or,
   // for checkFile, return its message) with the text to show the user.
   csvImport: {
@@ -154,6 +162,22 @@ export function createLearningNotes(deps: LearningNotesDeps) {
     // Newest in the trash first.
     listTrashed: async (): Promise<TrashedLearningEntries> =>
       deps.reads.listTrashed(await own()),
+
+    // Whether the signed-in user's own note is in their review queue (the
+    // demo has a queue too); null when the note is not theirs or is in the
+    // trash.
+    isInReview: async (id: string): Promise<boolean | null> =>
+      deps.entryReviews.isEntryInReview(await own(), id),
+
+    // Puts the note in as a new card due now, keeping the card of a note
+    // already there, or takes it out with its answers. False when the user
+    // has no such live note.
+    async setInReview(id: string, inReview: boolean): Promise<boolean> {
+      const ownerId = await own();
+      return inReview
+        ? deps.entryReviews.addEntry(ownerId, id, deps.now())
+        : deps.entryReviews.removeEntry(ownerId, id);
+    },
 
     // Only members can be followed, so only a plain member (not an admin,
     // even acting as one, and not the demo) shares notes.

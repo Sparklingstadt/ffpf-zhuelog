@@ -22,7 +22,7 @@ func (f *fakeStudyLog) StudyLog(_ context.Context, ownerID string, from, to stor
 }
 
 func TestStudyLogRejectsGuests(t *testing.T) {
-	h, _ := reviewRouter(t, auth.RoleGuest, Deps{StudyLog: &fakeStudyLog{}})
+	h, _, _ := routerWith(t, auth.RoleGuest, Deps{StudyLog: &fakeStudyLog{}})
 	wantError(t, do(h, "GET", "/v1/study-log?from=2026-11-01&to=2026-11-30", "", jsonAuth), http.StatusForbidden, "forbidden")
 }
 
@@ -30,7 +30,7 @@ func TestStudyLog(t *testing.T) {
 	sl := &fakeStudyLog{days: []store.StudyDay{
 		{Date: store.LogDate{Year: 2026, Month: 11, Day: 2}, Reviews: 5, PracticeQuestions: 25, Notes: 1, Words: 2},
 	}}
-	h, _ := reviewRouter(t, auth.RoleMember, Deps{StudyLog: sl})
+	h, _, _ := routerWith(t, auth.RoleMember, Deps{StudyLog: sl})
 
 	w := do(h, "GET", "/v1/study-log?from=2026-10-27&to=2026-12-06", "", jsonAuth)
 	var got struct {

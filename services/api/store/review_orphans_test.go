@@ -39,19 +39,13 @@ func assertNoOrphanReviews(t *testing.T, s *Store, owner string) {
 	}
 }
 
-// answerItem answers the item once, so it has a review log.
-func answerItem(t *testing.T, s *Store, owner, kind, targetID string, now time.Time) {
+// answerTarget answers the owner's item of kind and targetID once, so it has
+// a review log.
+func answerTarget(t *testing.T, s *Store, owner, kind, targetID string, now time.Time) {
 	t.Helper()
-	ctx := context.Background()
-	due, err := s.ListDueReviewItems(ctx, owner, now.Add(24*time.Hour), 100)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, it := range due {
+	for _, it := range dueItems(t, s, owner, now.Add(24*time.Hour)) {
 		if it.Kind == kind && it.TargetID == targetID {
-			if _, err := s.RecordReview(ctx, owner, it.ID, newUUID(), review.Good, now); err != nil {
-				t.Fatal(err)
-			}
+			answerItem(t, s, owner, it.ID, review.Good, now)
 			return
 		}
 	}
@@ -63,10 +57,8 @@ func notesInReview(t *testing.T, s *Store, owner string, now time.Time, n int) [
 	t.Helper()
 	notes := createEntries(t, s, owner, now.Add(-time.Hour), n, 1)
 	for _, e := range notes {
-		if err := s.AddEntryReview(context.Background(), owner, e.ID, now); err != nil {
-			t.Fatal(err)
-		}
-		answerItem(t, s, owner, ReviewKindEntry, e.ID, now)
+		putEntryInReview(t, s, owner, e.ID, now)
+		answerTarget(t, s, owner, ReviewKindEntry, e.ID, now)
 	}
 	return notes
 }
@@ -75,21 +67,6 @@ func reviewCount(t *testing.T, s *Store, owner string) (items, logs int) {
 	t.Helper()
 	return countRows(t, s, `SELECT count(*) FROM "ReviewItem" WHERE "ownerId" = $1`, owner),
 		countRows(t, s, `SELECT count(*) FROM "ReviewLog" WHERE "ownerId" = $1`, owner)
-}
-
-func TestRemoveEntryReviewLeavesNoOrphanLog(t *testing.T) {
-	s := testStore(t)
-	ctx := context.Background()
-	a := reviewOwner(t, s)
-	now := fixedNow()
-	notes := notesInReview(t, s, a, now, 1)
-	if err := s.RemoveEntryReview(ctx, a, notes[0].ID); err != nil {
-		t.Fatal(err)
-	}
-	assertNoOrphanReviews(t, s, a)
-	if items, logs := reviewCount(t, s, a); items != 0 || logs != 0 {
-		t.Errorf("%d items and %d logs left, want none", items, logs)
-	}
 }
 
 // The reset replaces everything the demo owns, including what visitors put
@@ -107,7 +84,7 @@ func TestResetDemoLeavesNoOrphanReview(t *testing.T) {
 	notesInReview(t, s, owner, now, 2)
 	w := word("认真", "まじめに")
 	addWord(t, s, owner, w, now)
-	answerItem(t, s, owner, ReviewKindVocabulary, w.ID, now)
+	answerTarget(t, s, owner, ReviewKindVocabulary, w.ID, now)
 
 	if _, err := s.ResetDemo(ctx, loginID, smallDemoSeed(now), now); err != nil {
 		t.Fatal(err)

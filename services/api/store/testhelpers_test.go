@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/review"
 )
 
 // newOwner returns a fresh owner ID and removes everything it created when the
@@ -168,4 +170,88 @@ func readNotes(t *testing.T, s *Store, query string, args ...any) []Entry {
 		t.Fatal(err)
 	}
 	return es
+}
+
+// The web reads and answers the review queue since stage 4 of the Go
+// retirement; these helpers do the same for the Go code that still writes or
+// counts it (practice, demo reset, study log, LINE).
+
+// dueReview is one of an owner's review items that is due.
+type dueReview struct {
+	ID, Kind, TargetID string
+}
+
+// dueItems returns the owner's items due at or before now, leaving out the
+// items of notes in the trash, the longest overdue first.
+func dueItems(t *testing.T, s *Store, owner string, now time.Time) []dueReview {
+	t.Helper()
+	rows, err := s.pool.Query(context.Background(), `SELECT "id", "kind", "targetId" FROM "ReviewItem"
+	 WHERE "ownerId" = $1 AND "due" <= $2 AND `+notTrashedEntry("$3")+` ORDER BY "due", "id"`,
+		owner, dbTime(now), ReviewKindEntry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := pgx.CollectRows(rows, pgx.RowToStructByPos[dueReview])
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// reviewCard returns the FSRS card of one of the owner's items.
+func reviewCard(t *testing.T, s *Store, owner, itemID string) review.Card {
+	t.Helper()
+	var c review.Card
+	var state int
+	var lastReview *time.Time
+	err := s.pool.QueryRow(context.Background(), `SELECT "due", "stability", "difficulty", "scheduledDays",
+	 "reps", "lapses", "state", "remainingSteps", "lastReview" FROM "ReviewItem" WHERE "id" = $1 AND "ownerId" = $2`,
+		itemID, owner).Scan(&c.Due, &c.Stability, &c.Difficulty, &c.ScheduledDays, &c.Reps, &c.Lapses, &state,
+		&c.RemainingSteps, &lastReview)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.State = review.State(state)
+	if lastReview != nil {
+		c.LastReview = *lastReview
+	}
+	return c
+}
+
+// answerItem answers one of the owner's items rated rating at now, as the
+// web does: it logs the card as it was and reschedules the item with FSRS.
+func answerItem(t *testing.T, s *Store, owner, itemID string, rating review.Rating, now time.Time) {
+	t.Helper()
+	ctx := context.Background()
+	now = dbTime(now)
+	c := reviewCard(t, s, owner, itemID)
+	next, err := review.Next(c, rating, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.pool.Exec(ctx, `INSERT INTO "ReviewLog"
+	 ("id", "ownerId", "itemId", "rating", "state", "due", "stability", "difficulty", "scheduledDays", "reviewedAt")
+	 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		newUUID(), owner, itemID, int(rating), int(c.State), dbTime(c.Due), c.Stability, c.Difficulty,
+		c.ScheduledDays, now); err != nil {
+		t.Fatal(err)
+	}
+	execOne(t, s, `UPDATE "ReviewItem" SET "due" = $3, "stability" = $4, "difficulty" = $5,
+	 "scheduledDays" = $6, "reps" = $7, "lapses" = $8, "state" = $9, "remainingSteps" = $10,
+	 "lastReview" = $11, "updatedAt" = $12 WHERE "id" = $1 AND "ownerId" = $2`,
+		itemID, owner, dbTime(next.Due), next.Stability, next.Difficulty, next.ScheduledDays, next.Reps,
+		next.Lapses, int(next.State), next.RemainingSteps, dbTime(next.LastReview), now)
+}
+
+// putEntryInReview puts one of the owner's notes in review as a new card due
+// at now, as the web does; a note already there keeps its card.
+func putEntryInReview(t *testing.T, s *Store, owner, entryID string, now time.Time) {
+	t.Helper()
+	if _, err := s.pool.Exec(context.Background(), `INSERT INTO "ReviewItem"
+	 ("id", "ownerId", "language", "kind", "targetId", "due", "state", "createdAt", "updatedAt")
+	 VALUES ($1, $2, $3, $4, $5, $6, $7, $6, $6)
+	 ON CONFLICT ("ownerId", "language", "kind", "targetId") DO NOTHING`,
+		newID(), owner, entryReviewLanguage, ReviewKindEntry, entryID, dbTime(now), int(review.New)); err != nil {
+		t.Fatal(err)
+	}
 }

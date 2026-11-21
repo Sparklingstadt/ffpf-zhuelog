@@ -57,8 +57,8 @@ async function loadEntries(
   );
 }
 
-// How many reviews are due and the review streak, or null when Go cannot
-// say: the home then just leaves the card out.
+// How many reviews are due and the review streak, or null when they cannot
+// be read: the home then just leaves the card out.
 async function loadDueReviews(): Promise<Pick<
   DueReviews,
   "count" | "streakDays" | "byKind" | "recentDays"
@@ -75,7 +75,8 @@ async function loadDueReviews(): Promise<Pick<
 }
 
 // The ids of the user's notes in their review queue, so each card can offer
-// to put it in or take it out; null when Go cannot say (no button then).
+// to put it in or take it out; null when they cannot be read (no button
+// then).
 async function loadNotesInReview(): Promise<Set<string> | null> {
   return loadOr(
     "NOTES_IN_REVIEW_UNAVAILABLE",

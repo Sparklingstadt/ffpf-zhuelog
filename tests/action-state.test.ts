@@ -4,6 +4,7 @@ import { test, type TestContext } from "node:test";
 import { redirect } from "next/navigation";
 
 import { LearningForbiddenError } from "../src/application/learning/learning-notes";
+import { ReviewForbiddenError } from "../src/application/review/review-queue";
 import { GoApiError } from "../src/infrastructure/go-api/client";
 import {
   actionSuccess,
@@ -131,20 +132,22 @@ test("Go helpers rethrow Next's redirect", async () => {
     await assert.rejects(run(), (error) => error === thrown);
 });
 
-test("Go helpers treat LearningForbiddenError as not allowed", async (t) => {
+test("Go helpers treat LearningForbiddenError and ReviewForbiddenError as not allowed", async (t) => {
   const logged = captureErrors(t);
-  const forbidden = async () => {
-    throw new LearningForbiddenError();
-  };
-  assert.deepEqual(await attemptGoAction("C", forbidden), actionUnauthorized);
-  assert.deepEqual(await attemptGo("C", forbidden), {
-    ok: false,
-    message: accountForbiddenMessage,
-  });
-  assert.deepEqual(await attemptGoResult("C", forbidden), {
-    ok: false,
-    message: accountForbiddenMessage,
-  });
+  for (const Forbidden of [LearningForbiddenError, ReviewForbiddenError]) {
+    const forbidden = async () => {
+      throw new Forbidden();
+    };
+    assert.deepEqual(await attemptGoAction("C", forbidden), actionUnauthorized);
+    assert.deepEqual(await attemptGo("C", forbidden), {
+      ok: false,
+      message: accountForbiddenMessage,
+    });
+    assert.deepEqual(await attemptGoResult("C", forbidden), {
+      ok: false,
+      message: accountForbiddenMessage,
+    });
+  }
   assert.deepEqual(logged, []);
 });
 
