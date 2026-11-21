@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { complementRecords } from "@/composition/practice-container";
 import { accuracyPercent } from "@/domain/practice/practice-record";
+import { PRACTICE_RECORD_ID } from "@/domain/practice/practice-round";
 import { Breadcrumbs } from "@/presentation/components/layout/breadcrumbs";
 import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
@@ -14,8 +15,6 @@ import { formatTokyoDateTime } from "@/presentation/presenters/log-date-presente
 
 export const dynamic = "force-dynamic";
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-
 type ComplementRecordPageProps = { params: Promise<{ id: string }> };
 
 export default async function ComplementRecordPage({
@@ -25,7 +24,7 @@ export default async function ComplementRecordPage({
     "/signin?callbackUrl=/practice/complements/records",
   );
   const { id } = await params;
-  if (!UUID.test(id)) notFound();
+  if (!PRACTICE_RECORD_ID.test(id)) notFound();
   const record = await complementRecords.get(id);
   if (!record) notFound();
 

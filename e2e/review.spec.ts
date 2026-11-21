@@ -1,43 +1,17 @@
-import type { Page } from "@playwright/test";
-
 import {
   asGuest,
   asMember,
   createMember,
   expect,
   memberOwnerId,
+  pickUntilRight,
+  practicePrepositionRound,
   test,
 } from "./fixtures";
 
 const QUESTION_COUNT = 25;
 // How many due items /review shows at once (SESSION_SIZE in its page).
 const REVIEW_SESSION_SIZE = 20;
-
-// Picks the choices in order until the right one, so most rounds miss some.
-async function pickUntilRight(page: Page, groupName: string) {
-  const choices = page.getByRole("group", { name: groupName });
-  for (const button of await choices.getByRole("button").all()) {
-    await button.click();
-    if (await choices.getByRole("button", { name: /（正解）$/ }).count())
-      return;
-  }
-}
-
-async function practiceOneRound(page: Page) {
-  await page.goto("/practice/prepositions");
-  for (let i = 0; i < QUESTION_COUNT; i++) {
-    await expect(
-      page.getByRole("progressbar", { name: "進捗" }),
-    ).toHaveAttribute("aria-valuenow", String(i));
-    await pickUntilRight(page, "介詞を選ぶ");
-    await page
-      .getByRole("button", {
-        name: i + 1 < QUESTION_COUNT ? "次へ" : "結果を見る",
-      })
-      .click();
-  }
-  await expect(page.getByText("記録に保存しました。")).toBeVisible();
-}
 
 test("missed practice questions come back on the review page and an answer reschedules them", async ({
   page,
@@ -58,7 +32,7 @@ test("missed practice questions come back on the review page and an answer resch
     ),
   ).toBeVisible();
 
-  await practiceOneRound(page);
+  await practicePrepositionRound(page);
   const {
     rows: [round],
   } = await db.query(

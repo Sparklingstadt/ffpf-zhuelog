@@ -31,20 +31,21 @@ func actAsHeaders(ownerID string) map[string]string {
 }
 
 func TestActAsWritesGoToTheMember(t *testing.T) {
-	recs := &fakePrepositionRecords{}
+	qs := &fakeQuestions{}
 	h, _, logs := routerWith(t, "", Deps{
-		Auth:               actingAuth(auth.RoleAdmin),
-		PrepositionRecords: recs,
+		Auth: actingAuth(auth.RoleAdmin),
+		// Saving a question note is registered only with the quick chat.
+		QuickChat: &fakeChat{},
+		Questions: qs,
 	})
-	q := map[string]any{"id": "P001", "answer": "在", "noun": "学校", "prompt": "（　）学校学习", "misses": []string{}}
 	headers := actAsHeaders(actedMember)
 	headers["Content-Type"] = "application/json"
-	w := do(h, http.MethodPut, "/v1/preposition-records/"+testConversationID, prepositionBody(t, 1000, q), headers)
+	w := do(h, http.MethodPut, "/v1/questions/"+testConversationID, `{"question":"了と过？","answer":"違いです"}`, headers)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, body %q", w.Code, w.Body.String())
 	}
-	if recs.addOwner != actedMember {
-		t.Fatalf("store owner = %q, want %q", recs.addOwner, actedMember)
+	if qs.owner != actedMember {
+		t.Fatalf("store owner = %q, want %q", qs.owner, actedMember)
 	}
 	if !strings.Contains(logs.String(), `"msg":"acting as member"`) ||
 		!strings.Contains(logs.String(), `"actor":"`+testOwner+`"`) ||
@@ -94,7 +95,7 @@ func TestActAsRejections(t *testing.T) {
 
 	t.Run("member is refused on every authed route", func(t *testing.T) {
 		d := Deps{Auth: actingAuth(auth.RoleMember), Line: &fakeLine{}, LineChannelSecret: testLineSecret,
-			CronSecret: testCronSecret, QuickChat: &fakeChat{}, Questions: &fakeQuestions{}, Chat: &fakeChat{}, Conversations: &fakeConversations{}, PrepositionRecords: &fakePrepositionRecords{}}
+			CronSecret: testCronSecret, QuickChat: &fakeChat{}, Questions: &fakeQuestions{}, Chat: &fakeChat{}, Conversations: &fakeConversations{}}
 		d = d.withDefaults()
 		mux, routes := newMux(d)
 		h := wrap(d, jsonMuxErrors(mux))

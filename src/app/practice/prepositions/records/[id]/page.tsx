@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { prepositionRecords } from "@/composition/practice-container";
 import { accuracyPercent } from "@/domain/practice/practice-record";
+import { PRACTICE_RECORD_ID } from "@/domain/practice/practice-round";
 import { Breadcrumbs } from "@/presentation/components/layout/breadcrumbs";
 import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
@@ -13,8 +14,6 @@ import { formatTokyoDateTime } from "@/presentation/presenters/log-date-presente
 
 export const dynamic = "force-dynamic";
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-
 type PrepositionRecordPageProps = { params: Promise<{ id: string }> };
 
 export default async function PrepositionRecordPage({
@@ -24,7 +23,7 @@ export default async function PrepositionRecordPage({
     "/signin?callbackUrl=/practice/prepositions/records",
   );
   const { id } = await params;
-  if (!UUID.test(id)) notFound();
+  if (!PRACTICE_RECORD_ID.test(id)) notFound();
   const record = await prepositionRecords.get(id);
   if (!record) notFound();
 
