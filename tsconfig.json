@@ -30,10 +30,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": [
-    "node_modules",
-    "docs-site/.vuepress/.temp",
-    "docs-site/.vuepress/.cache",
-    "docs-site/.vuepress/dist"
-  ]
+  "exclude": ["node_modules"]
 }

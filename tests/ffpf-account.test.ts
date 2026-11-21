@@ -1,4 +1,4 @@
-// Mirrors services/api/auth/login_test.go (TestLoginFFPFDisplayName) and the
+// Mirrors the retired services/api/auth/login_test.go (TestLoginFFPFDisplayName) and the
 // name rule of services/api/auth/ffpf.go's verify.
 import assert from "node:assert/strict";
 import { test } from "node:test";

@@ -23,13 +23,3 @@ updates:
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"] # Match minimum runtime: Node 24.
 
-  # GitHub Actions were removed (#155), so there are no workflows to update.
-  - package-ecosystem: gomod
-    directory: "/services/api"
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
-    groups:
-      go-modules:
-        patterns: ["*"]
-        update-types: ["minor", "patch"]

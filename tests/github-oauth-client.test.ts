@@ -1,4 +1,4 @@
-// Mirrors services/api/auth/github_test.go (TestExchangeSuccess,
+// Mirrors the retired services/api/auth/github_test.go (TestExchangeSuccess,
 // TestExchangeUnavailable, TestExchangeTokenErrorLogOmitsSecrets,
 // TestExchangeErrorsOmitSecrets) with a fake fetch; github.com is never called.
 import assert from "node:assert/strict";

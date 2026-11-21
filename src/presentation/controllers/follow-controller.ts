@@ -5,7 +5,7 @@ import { z } from "zod";
 import {
   actionSuccess,
   actionUnauthorized,
-  attemptGoAction,
+  attemptAction,
   noteIdSchema,
   type ActionState,
 } from "@/presentation/controllers/action-state";
@@ -38,7 +38,7 @@ export async function handleFollow(
   const followerId = user.githubId;
   const followeeId = followeeIdSchema.safeParse(formData.get("followeeId"));
   if (!followeeId.success) return notFound;
-  return attemptGoAction("FOLLOW_FAILED", async () => {
+  return attemptAction("FOLLOW_FAILED", async () => {
     const result = await dependencies.run(followerId, followeeId.data);
     if (result === "followed") return actionSuccess;
     return result === "self" ? selfFollow : notFound;
@@ -59,7 +59,7 @@ export async function handleUnfollow(
   const followerId = user.githubId;
   const followeeId = followeeIdSchema.safeParse(formData.get("followeeId"));
   if (!followeeId.success) return notFound;
-  return attemptGoAction("FOLLOW_FAILED", async () => {
+  return attemptAction("FOLLOW_FAILED", async () => {
     await dependencies.run(followerId, followeeId.data);
     return actionSuccess;
   });
@@ -80,7 +80,7 @@ export async function handleShare(
   const id = noteIdSchema.safeParse(formData.get("id"));
   const shared = sharedSchema.safeParse(formData.get("shared"));
   if (!id.success || !shared.success) return notFound;
-  return attemptGoAction("SHARE_FAILED", async () =>
+  return attemptAction("SHARE_FAILED", async () =>
     (await dependencies.run(id.data, shared.data === "true"))
       ? actionSuccess
       : notFound,

@@ -1,4 +1,4 @@
-// A word the signed-in user picked out to learn, as the Go API keeps it.
+// A word the signed-in user picked out to learn, as the vocabulary book stores it.
 // sourceEntryId is the learning note it came from, or null.
 export type VocabularyEntry = {
   id: string;

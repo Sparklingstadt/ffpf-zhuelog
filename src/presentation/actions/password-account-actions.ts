@@ -10,7 +10,7 @@ import {
   signOutTo,
 } from "@/composition/identity-container";
 import { clientAddress } from "@/infrastructure/auth/client-address";
-import { attemptGo } from "@/presentation/controllers/action-state";
+import { attemptCall } from "@/presentation/controllers/action-state";
 import {
   accountForbiddenMessage,
   accountInputMessage,
@@ -41,13 +41,13 @@ function field(formData: FormData, name: string) {
 }
 
 // Turns a failed account call (the database, a hash, or an admin-only refusal)
-// into the form's error (see attemptGo). Only fixed codes and error names are
-// logged: the form data carries plaintext passwords.
+// into the form's error (see attemptCall). Only fixed codes and error names
+// are logged: the form data carries plaintext passwords.
 async function attemptAccountCall<T>(
   code: string,
   run: () => Promise<T>,
 ): Promise<{ ok: true; value: T } | { ok: false; state: FailedState }> {
-  const attempt = await attemptGo(code, run);
+  const attempt = await attemptCall(code, run);
   return attempt.ok
     ? attempt
     : { ok: false, state: { status: "error", message: attempt.message } };

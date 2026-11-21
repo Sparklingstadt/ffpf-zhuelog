@@ -13,7 +13,7 @@ OpenAI を呼ぶ 4 つの機能（LINE の添削・翻訳、ChatGPT と話す、
 - **共有と毎晩のリセット**: デモは試す人全員で 1 つのアカウントを使います。書いたものはほかの人にも見え、毎晩 04:00（日本時間）ごろに例のデータへ戻ります（リセットは Web が行い、Web の `vercel.json` の Cron（`0 19 * * *`、UTC）が呼びます。Hobby の Cron は時刻が 1 時間単位なので、最大 59 分遅れることがあります）。例のデータは `src/domain/demo/demo-fixture.json` です。
 - **使えないもの**: AI（ChatGPT と話す、クイック質問、単語帳の下書き）、LINE 連携、フォローと共有、パスワード変更は、断られます。ChatGPT と話す・クイック質問の API、Web のパスワード変更は「デモでは使えません。」と答えます。LINE 連携の画面（`/account/line`）は `/` に戻ります。単語帳の下書きは「この操作を行う権限がありません。再度ログインしてください。」、フォローと共有を直接送ったときは「ログインし直してください。」と出ます。デモが `/follow` を開くと `/` に戻ります。メニューにも出ません。すべてのページの上に「デモアカウントです。」と出ます。
 - **設定**: 環境変数 `DEMO_LOGIN_ID`（例: `demo`）で有効になります。Web だけに入れます（ログインもリセットも Web が行います）。空のときはデモが無く、ボタンも出ません（Web のリセットのルートは 404）。リセットは `CRON_SECRET` で守られた Web の `GET`/`POST /api/cron/demo-reset` で、1 つのトランザクションで作り直します。
-- **本番で有効にする**: Web の Vercel プロジェクトに `DEMO_LOGIN_ID` を入れてデプロイし、`curl -X POST https://ffpf-zhuelog.sparklingstadt.com/api/cron/demo-reset -H "Authorization: Bearer $CRON_SECRET"` を 1 回呼んでアカウントとデータを作ります。詳しくは [docs/api-deployment.md](api-deployment.md) の「10. デモアカウント」にあります。
+- **本番で有効にする**: Web の Vercel プロジェクトに `DEMO_LOGIN_ID` を入れてデプロイし、`curl -X POST https://ffpf-zhuelog.sparklingstadt.com/api/cron/demo-reset -H "Authorization: Bearer $CRON_SECRET"` を 1 回呼んでアカウントとデータを作ります。詳しくは [docs/deployment.md](deployment.md) の「6. デモアカウント」にあります。
 
 ## ログインとセッション
 
@@ -90,15 +90,15 @@ DBマイグレーション `20261010000353_add_follows_and_shared_notes`（`Foll
 
 ## LINE 連携
 
-LINE に中国語や日本語の文を送ると、OpenAI（ChatGPT）で添削・翻訳し、送った人の学習ノートに追加します。会員と管理者が、それぞれ自分の LINE を結びつけて使います（ゲストは使えません）。Webhook は Web の `POST /api/line/webhook`、連携の画面は Web の `/account/line` で動きます（段階 10a で Go から Web に移り、Go の LINE のコードは段階 10b で消えました）。
+LINE に中国語や日本語の文を送ると、OpenAI（ChatGPT）で添削・翻訳し、送った人の学習ノートに追加します。会員と管理者が、それぞれ自分の LINE を結びつけて使います（ゲストは使えません）。Webhook は Web の `POST /api/line/webhook`、連携の画面は Web の `/account/line` で動きます（段階 10 で、以前の Go の API から Web に移しました）。
 
 - **結びつけ**: Web の `/account/line`（メニューの「LINE 連携」）で「連携コードを出す」を押し、出た 8 文字のコード（10 分で切れます）を LINE の公式アカウントに送ります。同じ画面から連携を解除できます。デモと、会員として操作している管理者の画面は `/` に戻ります。
 - **添削と翻訳**: 漢字だけの文は添削、ひらがなやカタカナを含む文は中国語への翻訳です。結果は LINE に返信され、学習ノートに保存されます（翻訳は `kind=translation`）。500 文字までです。
 - **結びついていない LINE**: 送った文は学習ノートにも OpenAI にも届きません。
 - **復習のお知らせ**: `/account/line` で「お知らせを受け取る」を押すと、「今日の復習」に答える問題がある朝（06:00 JST ごろ。Web の `vercel.json` の Cron で、Hobby では最大 59 分遅れることがあります）に、LINE へ 1 日 1 回お知らせします。初めは止まっています。LINE の月の送信数の残りから 30 通を拾い直しのために残し、その範囲だけ送ります。
-- **失敗したとき**: 時間切れなどで結果が出なかった文は、1 日 1 回の拾い直し（毎日 06:00 JST ごろ。Hobby では最大 59 分遅れることがあります）が 1 回だけ試し直し、できた結果か失敗を LINE に送ります。拾い直しは Web の `GET /api/cron/line-drain` で、Web の `vercel.json` に登録した Cron（`0 21 * * *`、UTC）が呼びます（Go に Cron はありません）。
+- **失敗したとき**: 時間切れなどで結果が出なかった文は、1 日 1 回の拾い直し（毎日 06:00 JST ごろ。Hobby では最大 59 分遅れることがあります）が 1 回だけ試し直し、できた結果か失敗を LINE に送ります。拾い直しは Web の `GET /api/cron/line-drain` で、Web の `vercel.json` に登録した Cron（`0 21 * * *`、UTC）が呼びます。
 - **設定**: Web に `LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`（と `OPENAI_API_KEY`）を入れ、拾い直しとお知らせの Cron のために `CRON_SECRET` を入れます。友だち追加のリンクは Web の `LINE_ADD_FRIEND_URL`（無くても動きます）です。LINE の 2 つが空のときは LINE 連携は使えず、画面には「LINE 連携は今は使えません。」と出ます。ローカルでは本物の LINE のチャネルが要るので使えません。e2e は偽の LINE API（`e2e/line-stub.ts`）で確かめます。
-- **本番への反映**: マイグレーションは要りません（`LineLink`・`LineLinkCode`・`LineMessage` は `20261023090000_add_line_link` で、すでに本番にあります）。環境変数を入れる順番、LINE の Webhook URL を Go から Web に変える手順、戻し方は [docs/api-deployment.md](api-deployment.md) の「段階10（LINE とデモのリセットの cron）のマージの前と後」にあります。
+- **本番への反映**: マイグレーションは要りません（`LineLink`・`LineLinkCode`・`LineMessage` は `20261023090000_add_line_link` で、すでに本番にあります）。設定は [docs/deployment.md](deployment.md) の「3. LINE 連携」にあります。Go から Web に移したときの手順は、同じ文書の「移行の記録」の「段階10（LINE とデモのリセットの cron）のマージの前と後」にあります。
 
 ## ChatGPT と話す（会話ノート）
 
@@ -108,7 +108,7 @@ LINE に中国語や日本語の文を送ると、OpenAI（ChatGPT）で添削�
 - **会話ノート**: 回答が届くたびに、会話をまるごと保存します。`/conversations` で話した日（日本時間）ごとに見返せ、「続きを話す」で続きから話せます。削除もできます（ゴミ箱はありません）。
 - **上限**: 1 つの会話は 40 発言・合計 4 万字までです。上限に達した会話は読むだけになります。
 - **設定**: Web に `OPENAI_API_KEY`（と任意で `OPENAI_CHAT_MODEL`）を入れます。空のときは画面に「ChatGPT が設定されていません」と出ます。
-- **本番への反映**: `ChatConversation` の表は本番にすでにあり、新しいマイグレーションの手順はありません。Web への切り替えの順番は [docs/api-deployment.md](api-deployment.md) の「段階7（チャット）のマージの前と後」にあります。
+- **本番への反映**: `ChatConversation` の表は本番にすでにあり、新しいマイグレーションの手順はありません。Web へ移したときの順番は [docs/deployment.md](deployment.md) の「移行の記録」の「段階7（チャット）のマージの前と後」にあります。
 
 ## 介詞の練習
 

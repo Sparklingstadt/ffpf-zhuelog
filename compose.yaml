@@ -9,7 +9,9 @@ services:
       POSTGRES_DB: zhuelog
     ports:
       # Keep the development database reachable only from this machine.
-      - "127.0.0.1:5432:5432"
+      # Host port 55432 by default, so it does not clash with a Postgres
+      # already on 5432; override with ZHUELOG_DB_PORT.
+      - "127.0.0.1:${ZHUELOG_DB_PORT:-55432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U zhuelog -d zhuelog"]
       interval: 5s

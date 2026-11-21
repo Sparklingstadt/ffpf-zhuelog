@@ -1,4 +1,4 @@
-// Mirrors services/api/auth/password_change_test.go.
+// Mirrors the retired services/api/auth/password_change_test.go.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 

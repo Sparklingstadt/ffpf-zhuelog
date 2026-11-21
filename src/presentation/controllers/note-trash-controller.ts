@@ -1,6 +1,6 @@
 import {
   actionSuccess,
-  attemptGoAction,
+  attemptAction,
   noteIdSchema,
   type ActionState,
 } from "@/presentation/controllers/action-state";
@@ -20,7 +20,7 @@ export async function handleNoteAction(
 ): Promise<ActionState> {
   const id = noteIdSchema.safeParse(formData.get("id"));
   if (!id.success) return notFound;
-  return attemptGoAction("NOTE_TRASH_FAILED", async () =>
+  return attemptAction("NOTE_TRASH_FAILED", async () =>
     (await dependencies.run(id.data)) ? actionSuccess : notFound,
   );
 }
@@ -28,7 +28,7 @@ export async function handleNoteAction(
 export async function handleEmptyTrash(dependencies: {
   run: () => Promise<number>;
 }): Promise<ActionState> {
-  return attemptGoAction("NOTE_TRASH_FAILED", async () => {
+  return attemptAction("NOTE_TRASH_FAILED", async () => {
     await dependencies.run();
     return actionSuccess;
   });

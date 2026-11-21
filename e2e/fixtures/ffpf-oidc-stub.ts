@@ -8,7 +8,8 @@ import {
 import { createServer, type IncomingMessage } from "node:http";
 
 // A stand-in for FFPF ID (ffpf-portal's OpenID Connect provider) for the e2e
-// run. It serves exactly what the web and services/api/auth/ffpf.go use:
+// run. It serves exactly what the web's FFPF ID client uses (as Go's
+// services/api/auth/ffpf.go did):
 //
 //   GET  /oauth/authorize  checks the client and redirect URI, remembers the
 //                          PKCE challenge and nonce, and goes straight back to
