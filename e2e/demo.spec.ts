@@ -97,6 +97,15 @@ test("anyone can try the members' pages in the demo, without AI", async ({
     expect(answer.body.error.message, path).toBe("デモでは使えません。");
   }
 
+  // The demo reads its own study log.
+  await page.goto("/study-log");
+  await expect(page.getByRole("heading", { name: "学習ログ" })).toBeVisible();
+  await expect(
+    page.getByText(
+      "処理できませんでした。時間をおいてもう一度お試しください。",
+    ),
+  ).toHaveCount(0);
+
   // Leaving the demo signs out.
   await banner.getByRole("button", { name: "デモを終える" }).click();
   await expect(page).toHaveURL(/\/signin(?:\?|$)/);

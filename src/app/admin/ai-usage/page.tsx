@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { aiUsage, getCurrentAdminUser } from "@/composition/identity-container";
+import { aiUsage } from "@/composition/ai-usage-container";
+import { getCurrentAdminUser } from "@/composition/identity-container";
 import {
   aiUsageFeatureLabel,
   isAiUsageMonth,
@@ -16,6 +17,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/presentation/components/ui/card";
+import { loadOr } from "@/presentation/controllers/load-or";
 import {
   Table,
   TableBody,
@@ -46,7 +48,11 @@ export default async function AdminAiUsagePage({
       ? requested
       : undefined;
 
-  const usage = await aiUsage.month(month);
+  const usage = await loadOr(
+    "AI_USAGE_UNAVAILABLE",
+    () => aiUsage.month(month),
+    null,
+  );
   const summary = usage ? summarizeAiUsage(usage.totals) : null;
 
   return (
@@ -76,7 +82,7 @@ export default async function AdminAiUsagePage({
               role="alert"
               className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
             >
-              利用量を読めませんでした。Go API が最新かを確認してください。
+              利用量を読めませんでした。時間をおいてもう一度お試しください。
             </p>
           ) : (
             <Card>

@@ -19,7 +19,6 @@ const (
 	msgForbidden         = "このアカウントは利用できません。" // allowlist removal, revoked session
 	msgAdminOnly         = "管理者だけが利用できます。"
 	msgLineNotLinked     = "LINE と連携していません。先に連携してください。"
-	msgInvalidMonth      = "月は YYYY-MM の形で指定してください。"
 	msgMembersOnly       = "この操作は会員だけが利用できます。"
 	msgSelfFollow        = "自分はフォローできません。"
 	msgBadRequest        = "リクエストが不正です。"
@@ -46,8 +45,6 @@ const (
 	msgInvalidName     = "表示名は1〜50文字にしてください。"
 	msgLoginIDTaken    = "このログインIDはすでに使われています。"
 	msgAccountNotFound = "アカウントが見つかりません。"
-
-	msgStudyLogInvalid = "学習ログの期間が不正です。YYYY-MM-DD で、93日以内にしてください。"
 )
 
 // Error codes in the {"error":{"code":...}} body.

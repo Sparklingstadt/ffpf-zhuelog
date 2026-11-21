@@ -30,7 +30,7 @@ flowchart LR
   UI -->|HttpOnly Cookie| Web
   Web -->|Bearer JWT<br/>サーバー間| API
   API --> DB
-  Web -->|Prisma: アカウントの確認・単語帳・学習ノート・CSV の取り込み・復習・練習の記録・質問ノート・会話ノート| DB
+  Web -->|Prisma: アカウントの確認・単語帳・学習ノート・CSV の取り込み・復習・練習の記録・質問ノート・会話ノート・学習ログ・AI の利用量の集計| DB
   Web -->|単語帳の下書き・クイック質問・チャット| OpenAI
   AI --> OpenAI
   LINE -->|Webhook| LINEBOT
@@ -40,7 +40,7 @@ flowchart LR
 ```
 
 - ブラウザーが話す相手は Web だけです。Go API を直接は呼びません。
-- Web は、ログイン中の人を決めるために、実行時に DB のアカウント（`PasswordAccount`・`FfpfAccount`）を Prisma（`src/infrastructure/prisma/`）で読みます。アクセストークンも Web が自分で確かめます。単語帳（一覧・保存・削除）と学習ノート（一覧・検索・カレンダー・日ごとの表示・ゴミ箱・共有・CSV の取り込み）と練習の記録（介詞・補語）も Prisma で読み書きし（CSV は Web が自分で検証・解析し、1 つのトランザクションで保存します）、「AI で下書き」・クイック質問・ChatGPT と話すは Web が OpenAI を直接呼んで、使った量を `AiUsage` に記録し、質問ノートと会話ノートも Prisma で読み書きします。ほかの読み書きとログイン、LINE の AI（添削・翻訳）は今も Go API を通します。機能は、設計書（[2026-11-16-deprecate-go-backend-design.md](superpowers/specs/2026-11-16-deprecate-go-backend-design.md)）の段階ごとに、Go から Web へ移していきます。
+- Web は、ログイン中の人を決めるために、実行時に DB のアカウント（`PasswordAccount`・`FfpfAccount`）を Prisma（`src/infrastructure/prisma/`）で読みます。アクセストークンも Web が自分で確かめます。単語帳（一覧・保存・削除）と学習ノート（一覧・検索・カレンダー・日ごとの表示・ゴミ箱・共有・CSV の取り込み）と練習の記録（介詞・補語）も Prisma で読み書きし（CSV は Web が自分で検証・解析し、1 つのトランザクションで保存します）、「AI で下書き」・クイック質問・ChatGPT と話すは Web が OpenAI を直接呼んで、使った量を `AiUsage` に記録し、質問ノートと会話ノートも Prisma で読み書きし、学習ログ（カレンダー）と AI の利用量の月ごとの集計は Prisma で読むだけです。ほかの読み書きとログイン、LINE の AI（添削・翻訳）は今も Go API を通します。機能は、設計書（[2026-11-16-deprecate-go-backend-design.md](superpowers/specs/2026-11-16-deprecate-go-backend-design.md)）の段階ごとに、Go から Web へ移していきます。
 - LINE は Go API に Webhook を送ります。添削の結果は Go API が LINE に push で返します。
 
 ## 2. Web と Go API を分けた理由

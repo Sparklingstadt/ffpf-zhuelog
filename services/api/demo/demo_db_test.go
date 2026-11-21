@@ -10,7 +10,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/jst"
 	"github.com/Sparklingstadt/ffpf-zhuelog/services/api/store"
 )
 
@@ -63,13 +62,16 @@ func TestResetWithTheFixture(t *testing.T) {
 		owner); orphans != 0 {
 		t.Errorf("%d review items name nothing", orphans)
 	}
-	logDate := func(t time.Time) store.LogDate {
-		t = t.In(jst.Location)
-		return store.LogDate{Year: t.Year(), Month: int(t.Month()), Day: t.Day()}
-	}
-	days, err := s.StudyLog(ctx, owner, logDate(now.AddDate(0, 0, -8)), logDate(now))
-	if err != nil || len(days) < 5 {
-		t.Fatalf("study log = %+v, %v; want most of the last 7 days", days, err)
+	// The seed has activity on most of the last seven Japan days.
+	days := countRows(t, url, `SELECT count(DISTINCT ("at" + interval '9 hours')::date) FROM (
+	  SELECT "createdAt" AS "at" FROM "LearningEntry" WHERE "ownerId" = $1 AND "deletedAt" IS NULL
+	  UNION ALL SELECT "createdAt" FROM "VocabularyEntry" WHERE "ownerId" = $1
+	  UNION ALL SELECT "createdAt" FROM "PrepositionPracticeRecord" WHERE "ownerId" = $1
+	  UNION ALL SELECT "createdAt" FROM "ComplementPracticeRecord" WHERE "ownerId" = $1
+	  UNION ALL SELECT "reviewedAt" FROM "ReviewLog" WHERE "ownerId" = $1) AS "activity"
+	  WHERE "at" >= $2`, owner, now.AddDate(0, 0, -8).UTC())
+	if days < 5 {
+		t.Fatalf("activity on %d days; want most of the last 7", days)
 	}
 }
 

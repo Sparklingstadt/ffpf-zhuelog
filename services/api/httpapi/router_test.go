@@ -21,7 +21,7 @@ func TestNoRouteAcceptsUserParam(t *testing.T) {
 	d := Deps{
 		Auth: a, Follows: &fakeFollows{},
 		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret,
-		AIUsage: &fakeAIUsage{}, Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
+		Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
 	}.withDefaults()
 	mux, routes := newMux(d)
 	h := wrap(d, jsonMuxErrors(mux))

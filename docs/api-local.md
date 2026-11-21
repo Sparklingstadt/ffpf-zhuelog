@@ -53,7 +53,7 @@ TOKEN=$(curl -s -X POST "$API_LOCAL_URL/v1/auth/password" \
   -H 'Content-Type: application/json' \
   -d '{"loginId":"demo","password":"demo-password-123"}' | jq -r .accessToken)
 
-curl -s "$API_LOCAL_URL/v1/study-log?from=2026-11-01&to=2026-11-30" -H "Authorization: Bearer $TOKEN" | jq
+curl -s "$API_LOCAL_URL/v1/me" -H "Authorization: Bearer $TOKEN" | jq
 curl -s "$API_LOCAL_URL/v1/members" -H "Authorization: Bearer $TOKEN" | jq
 ```
 

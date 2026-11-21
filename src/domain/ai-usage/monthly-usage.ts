@@ -54,7 +54,7 @@ export function shiftAiUsageMonth(month: string, by: -1 | 1): string {
   return `${y}-${String((index % 12) + 1).padStart(2, "0")}`;
 }
 
-// Groups the totals by person, keeping Go's order (most tokens first).
+// Groups the totals by person, keeping the order the store read (most tokens first).
 export function summarizeAiUsage(totals: AiUsageTotal[]): {
   people: AiUsagePerson[];
   requests: number;
@@ -87,4 +87,23 @@ export function summarizeAiUsage(totals: AiUsageTotal[]): {
     inputTokens: list.reduce((sum, p) => sum + p.inputTokens, 0),
     outputTokens: list.reduce((sum, p) => sum + p.outputTokens, 0),
   };
+}
+
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+// [from, to) of the Japan month "YYYY-MM" as instants. Go: AIUsageMonth.
+// Throws a RangeError when isAiUsageMonth(month) is false.
+export function aiUsageMonthRange(month: string): { from: Date; to: Date } {
+  if (!isAiUsageMonth(month)) throw new RangeError("not a month");
+  const [year, m] = month.split("-").map(Number);
+  return {
+    from: new Date(Date.UTC(year, m - 1, 1) - JST_OFFSET_MS),
+    to: new Date(Date.UTC(year, m, 1) - JST_OFFSET_MS),
+  };
+}
+
+// The Japan month of an instant as "YYYY-MM". Go: parseMonth("").
+export function aiUsageMonthOf(now: Date): string {
+  const jst = new Date(now.getTime() + JST_OFFSET_MS);
+  return `${jst.getUTCFullYear()}-${String(jst.getUTCMonth() + 1).padStart(2, "0")}`;
 }
