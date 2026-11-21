@@ -88,6 +88,9 @@ const [nodePassed, goPassed] = await Promise.all([
   run(process.execPath, [
     "--import",
     "tsx",
+    // Lets the Server Action tests stand in for next/headers and the like
+    // (tests/helpers/next-stubs.ts).
+    "--experimental-test-module-mocks",
     "--test",
     "--test-concurrency=4",
     ...files,
