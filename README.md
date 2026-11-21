@@ -48,7 +48,7 @@
 
 ## 品質
 
-- 単体テスト 472 件（TypeScript）、Go のテスト（DB を使うものを含む）、E2E 226 件（Playwright、PC とスマホの 2 つの幅）があります。
+- 単体テスト 469 件（TypeScript）、Go のテスト（DB を使うものを含む）、E2E 199 件（Playwright、PC とスマホの 2 つの幅。幅で結果が変わらないものは PC だけ）があります。
 - E2E は、Docker の Postgres、Go API、Web、OpenAI と FFPF ID のスタブを立ち上げて、本物の画面を通して確かめます。
 - commit の前に format・lint・型チェック、push の前に単体テストと E2E を lefthook が走らせます。
 - 本番の Lighthouse（6 ページとも性能・ベストプラクティス・SEO が 100）とアクセシビリティの記録は [docs/quality.md](docs/quality.md) にあります。
