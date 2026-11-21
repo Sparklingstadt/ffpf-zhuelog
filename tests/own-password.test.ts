@@ -31,9 +31,9 @@ const actingAdmin: AuthenticatedUser = {
   },
   actorId: "10001",
 };
-const ffpfMember: AuthenticatedUser = {
+const sidMember: AuthenticatedUser = {
   githubLogin: "f@example.com",
-  githubId: "ffpf:cabc",
+  githubId: "sid:cabc",
   role: "member",
 };
 const demo: AuthenticatedUser = { ...member, demo: true };
@@ -124,7 +124,7 @@ test("who may change: password members only", async () => {
   for (const user of [
     admin,
     actingAdmin,
-    ffpfMember,
+    sidMember,
     demo,
     guest,
     null,

@@ -3,24 +3,24 @@ import {
   baseURL,
   databaseUrl,
   demoLoginId,
-  ffpfIssuerURL,
+  sidIssuerURL,
   cronSecret,
   lineAccessToken,
   lineChannelSecret,
   lineStubURL,
   openAiStubURL,
 } from "./environment";
-import { startFfpfOidcStub } from "./fixtures/ffpf-oidc-stub";
+import { startSidOidcStub } from "./fixtures/sid-oidc-stub";
 import { startLineStub } from "./line-stub";
 import { startOpenAiStub } from "./openai-stub";
 
-// FFPF ID for this run: the stub is the issuer, and the web is its client.
+// Sparklingstadt ID for this run: the stub is the issuer, and the web is its client.
 // The secret is a fixed test value; the stub runs on loopback only.
-const ffpf = {
-  issuer: ffpfIssuerURL,
-  clientId: "e2e-ffpf-client",
-  clientSecret: "e2e-ffpf-client-secret",
-  redirectUri: `${baseURL}/api/auth/callback/ffpf`,
+const sid = {
+  issuer: sidIssuerURL,
+  clientId: "e2e-sid-client",
+  clientSecret: "e2e-sid-client-secret",
+  redirectUri: `${baseURL}/api/auth/callback/sid`,
 };
 
 async function main() {
@@ -39,10 +39,10 @@ async function main() {
     GITHUB_WEB_CLIENT_SECRET: "e2e-github-secret",
     LINE_OFFICIAL_ACCOUNT_ID: "@393bohaw",
     LINE_LINK_PREVIEW_MODE: "false",
-    // Shows the FFPF ID button; sign-in completes against the local stub.
-    FFPF_ID_ISSUER: ffpf.issuer,
-    FFPF_ID_CLIENT_ID: ffpf.clientId,
-    FFPF_ID_CLIENT_SECRET: ffpf.clientSecret,
+    // Shows the Sparklingstadt ID button; sign-in completes against the local stub.
+    SID_ISSUER: sid.issuer,
+    SID_CLIENT_ID: sid.clientId,
+    SID_CLIENT_SECRET: sid.clientSecret,
     // The web drafts vocabulary and answers quick questions with OpenAI
     // itself; the base URL is the loopback stub, so nothing leaves this
     // machine.
@@ -71,7 +71,7 @@ async function main() {
 
   await startOpenAiStub(Number(new URL(openAiStubURL).port));
   await startLineStub(Number(new URL(lineStubURL).port), lineAccessToken());
-  await startFfpfOidcStub({ ...ffpf, port: Number(new URL(ffpf.issuer).port) });
+  await startSidOidcStub({ ...sid, port: Number(new URL(sid.issuer).port) });
   const server = spawn(
     process.execPath,
     [

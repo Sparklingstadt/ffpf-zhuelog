@@ -15,7 +15,7 @@ test("aiUsageMonthSql orders people by their tokens as Go did", () => {
   for (const part of [
     `coalesce(m."displayName", '')`,
     `'password:' || p."id"`,
-    `'ffpf:' || f."id"`,
+    `'sid:' || f."id"`,
     "LEFT JOIN",
     'AS "ownerId"',
     `AS "displayName"`,

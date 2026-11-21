@@ -72,7 +72,7 @@ test("CSP permits only nonce scripts and same-origin connections in production",
   );
 });
 
-test("CSP lets sign-in forms go to GitHub, and to the FFPF ID issuer when configured", () => {
+test("CSP lets sign-in forms go to GitHub, and to the Sparklingstadt ID issuer when configured", () => {
   assert.match(
     contentSecurityPolicy("x", false, true),
     /form-action 'self' https:\/\/github\.com;/,

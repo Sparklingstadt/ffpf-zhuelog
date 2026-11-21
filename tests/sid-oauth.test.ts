@@ -1,30 +1,30 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { NextRequest } from "next/server";
-import { ffpfIdConfig } from "../src/infrastructure/config/environment";
+import { sidConfig } from "../src/infrastructure/config/environment";
 import type {
   IssuedSession,
   SignInResult,
 } from "../src/application/identity/sign-in";
 import {
-  createFfpfOAuthStart,
-  FFPF_CALLBACK_PATH,
-  ffpfAuthorizeUrl,
-  ffpfRedirectUri,
-  parseFfpfOAuthCookie,
-} from "../src/infrastructure/auth/ffpf-oauth";
+  createSidOAuthStart,
+  SID_CALLBACK_PATH,
+  sidAuthorizeUrl,
+  parseSidOAuthCookie,
+  sidRedirectUri,
+} from "../src/infrastructure/auth/sid-oauth";
 import {
   createOAuthStart,
   parseOAuthCookie,
 } from "../src/infrastructure/auth/github-oauth";
 import { signedInCookieWrites } from "../src/infrastructure/auth/session-cookies";
-import { handleFfpfCallback } from "../src/presentation/http/ffpf-callback";
+import { handleSidCallback } from "../src/presentation/http/sid-callback";
 
 const originalEnv = {
   AUTH_URL: process.env.AUTH_URL,
-  FFPF_ID_ISSUER: process.env.FFPF_ID_ISSUER,
-  FFPF_ID_CLIENT_ID: process.env.FFPF_ID_CLIENT_ID,
-  FFPF_ID_CLIENT_SECRET: process.env.FFPF_ID_CLIENT_SECRET,
+  SID_ISSUER: process.env.SID_ISSUER,
+  SID_CLIENT_ID: process.env.SID_CLIENT_ID,
+  SID_CLIENT_SECRET: process.env.SID_CLIENT_SECRET,
 };
 afterEach(() => {
   for (const [name, value] of Object.entries(originalEnv)) {
@@ -33,20 +33,20 @@ afterEach(() => {
   }
 });
 
-test("the redirect URI is the FFPF callback path on the origin", () => {
-  assert.equal(FFPF_CALLBACK_PATH, "/api/auth/callback/ffpf");
+test("the redirect URI is the Sparklingstadt ID callback path on the origin", () => {
+  assert.equal(SID_CALLBACK_PATH, "/api/auth/callback/sid");
   assert.equal(
-    ffpfRedirectUri("https://example.com"),
-    "https://example.com/api/auth/callback/ffpf",
+    sidRedirectUri("https://example.com"),
+    "https://example.com/api/auth/callback/sid",
   );
 });
 
 test("the authorize URL asks the issuer for openid email profile with PKCE and a nonce", () => {
   const url = new URL(
-    ffpfAuthorizeUrl({
+    sidAuthorizeUrl({
       issuer: "https://portal.example",
       clientId: "zhuelog",
-      redirectUri: "https://example.com/api/auth/callback/ffpf",
+      redirectUri: "https://example.com/api/auth/callback/sid",
       state: "state-1",
       challenge: "challenge-1",
       nonce: "nonce-1",
@@ -60,7 +60,7 @@ test("the authorize URL asks the issuer for openid email profile with PKCE and a
   assert.equal(url.searchParams.get("client_id"), "zhuelog");
   assert.equal(
     url.searchParams.get("redirect_uri"),
-    "https://example.com/api/auth/callback/ffpf",
+    "https://example.com/api/auth/callback/sid",
   );
   assert.equal(url.searchParams.get("scope"), "openid email profile");
   assert.equal(url.searchParams.get("state"), "state-1");
@@ -69,9 +69,9 @@ test("the authorize URL asks the issuer for openid email profile with PKCE and a
   assert.equal(url.searchParams.get("nonce"), "nonce-1");
 });
 
-test("an FFPF start has fresh random values, an S256 challenge and a nonce", () => {
-  const a = createFfpfOAuthStart("/logs");
-  const b = createFfpfOAuthStart("/logs");
+test("a Sparklingstadt ID start has fresh random values, an S256 challenge and a nonce", () => {
+  const a = createSidOAuthStart("/logs");
+  const b = createSidOAuthStart("/logs");
   assert.notEqual(a.state, b.state);
   assert.notEqual(a.verifier, b.verifier);
   assert.notEqual(a.nonce, b.nonce);
@@ -83,27 +83,27 @@ test("an FFPF start has fresh random values, an S256 challenge and a nonce", () 
   assert.notEqual(a.challenge, a.verifier);
 });
 
-test("the FFPF cookie value round-trips", () => {
-  const start = createFfpfOAuthStart("/logs?a=1");
-  assert.deepEqual(parseFfpfOAuthCookie(start.cookieValue), {
+test("the Sparklingstadt ID cookie value round-trips", () => {
+  const start = createSidOAuthStart("/logs?a=1");
+  assert.deepEqual(parseSidOAuthCookie(start.cookieValue), {
     state: start.state,
     verifier: start.verifier,
     nonce: start.nonce,
     callbackPath: "/logs?a=1",
-    provider: "ffpf",
+    provider: "sid",
   });
 });
 
-test("a GitHub cookie never parses as FFPF, and an FFPF cookie never as GitHub", () => {
-  assert.equal(parseFfpfOAuthCookie(createOAuthStart("/").cookieValue), null);
-  assert.equal(parseOAuthCookie(createFfpfOAuthStart("/").cookieValue), null);
+test("a GitHub cookie never parses as Sparklingstadt ID, and a Sparklingstadt ID cookie never as GitHub", () => {
+  assert.equal(parseSidOAuthCookie(createOAuthStart("/").cookieValue), null);
+  assert.equal(parseOAuthCookie(createSidOAuthStart("/").cookieValue), null);
 });
 
-test("a missing or broken FFPF cookie value is null", () => {
+test("a missing or broken Sparklingstadt ID cookie value is null", () => {
   const encode = (value: unknown) =>
     Buffer.from(JSON.stringify(value)).toString("base64url");
   const valid = {
-    provider: "ffpf",
+    provider: "sid",
     state: "s",
     verifier: "v",
     nonce: "n",
@@ -123,20 +123,20 @@ test("a missing or broken FFPF cookie value is null", () => {
     encode({ ...valid, verifier: "" }),
     encode({ ...valid, callbackPath: 1 }),
   ])
-    assert.equal(parseFfpfOAuthCookie(value), null, String(value));
+    assert.equal(parseSidOAuthCookie(value), null, String(value));
 });
 
-test("ffpfIdConfig needs the issuer, the client id and the secret", () => {
-  process.env.FFPF_ID_ISSUER = " https://portal.example/ ";
-  process.env.FFPF_ID_CLIENT_ID = " zhuelog ";
-  process.env.FFPF_ID_CLIENT_SECRET = " secret ";
-  assert.deepEqual(ffpfIdConfig(), {
+test("sidConfig needs the issuer, the client id and the secret", () => {
+  process.env.SID_ISSUER = " https://portal.example/ ";
+  process.env.SID_CLIENT_ID = " zhuelog ";
+  process.env.SID_CLIENT_SECRET = " secret ";
+  assert.deepEqual(sidConfig(), {
     issuer: "https://portal.example",
     clientId: "zhuelog",
     clientSecret: "secret",
   });
-  process.env.FFPF_ID_ISSUER = "http://127.0.0.1:3100";
-  assert.equal(ffpfIdConfig()?.issuer, "http://127.0.0.1:3100");
+  process.env.SID_ISSUER = "http://127.0.0.1:3100";
+  assert.equal(sidConfig()?.issuer, "http://127.0.0.1:3100");
 
   for (const issuer of [
     "",
@@ -144,18 +144,18 @@ test("ffpfIdConfig needs the issuer, the client id and the secret", () => {
     "javascript:alert(1)",
     "portal.example",
   ]) {
-    process.env.FFPF_ID_ISSUER = issuer;
-    assert.equal(ffpfIdConfig(), undefined, issuer);
+    process.env.SID_ISSUER = issuer;
+    assert.equal(sidConfig(), undefined, issuer);
   }
-  process.env.FFPF_ID_ISSUER = "https://portal.example";
-  process.env.FFPF_ID_CLIENT_ID = "";
-  assert.equal(ffpfIdConfig(), undefined);
-  delete process.env.FFPF_ID_CLIENT_ID;
-  assert.equal(ffpfIdConfig(), undefined);
+  process.env.SID_ISSUER = "https://portal.example";
+  process.env.SID_CLIENT_ID = "";
+  assert.equal(sidConfig(), undefined);
+  delete process.env.SID_CLIENT_ID;
+  assert.equal(sidConfig(), undefined);
 });
 
 // The callback, with the sign-in faked: the code exchange itself is tested
-// in ffpf-oidc-client.test.ts and sign-in.test.ts.
+// in sid-oidc-client.test.ts and sign-in.test.ts.
 type SignInCall = [
   { code: string; verifier: string; redirectUri: string; nonce: string },
   string,
@@ -175,7 +175,7 @@ function callback(query: string, cookies: Record<string, string> = {}) {
   const pairs = Object.entries(cookies).map(([k, v]) => `${k}=${v}`);
   if (pairs.length) headers.set("cookie", pairs.join("; "));
   return new NextRequest(
-    `https://app.example.com/api/auth/callback/ffpf${query}`,
+    `https://app.example.com/api/auth/callback/sid${query}`,
     { headers },
   );
 }
@@ -233,9 +233,9 @@ const failure = "https://app.example.com/signin?error=OAuthCallbackError";
 
 test("a successful callback passes the cookie's verifier and nonce and sets zl_session", async () => {
   process.env.AUTH_URL = "https://zhuelog.test";
-  const start = createFfpfOAuthStart("/notes?x=1");
+  const start = createSidOAuthStart("/notes?x=1");
   const { calls, previous, deps: d } = deps({ ok: true, session: issued });
-  const response = await handleFfpfCallback(
+  const response = await handleSidCallback(
     callback(`?code=code-1&state=${start.state}`, {
       zl_oauth: start.cookieValue,
       zl_session: "old-token",
@@ -252,7 +252,7 @@ test("a successful callback passes the cookie's verifier and nonce and sets zl_s
       {
         code: "code-1",
         verifier: start.verifier,
-        redirectUri: "https://zhuelog.test/api/auth/callback/ffpf",
+        redirectUri: "https://zhuelog.test/api/auth/callback/sid",
         nonce: start.nonce,
       },
       "203.0.113.7",
@@ -282,22 +282,22 @@ test("a successful callback passes the cookie's verifier and nonce and sets zl_s
 
 test("the redirect URI follows the request without AUTH_URL, and an unsafe saved path falls back to /", async () => {
   delete process.env.AUTH_URL;
-  const start = createFfpfOAuthStart("//evil.example/x");
+  const start = createSidOAuthStart("//evil.example/x");
   const { calls, deps: d } = deps({ ok: true, session: issued });
-  const response = await handleFfpfCallback(
+  const response = await handleSidCallback(
     callback(`?code=c&state=${start.state}`, { zl_oauth: start.cookieValue }),
     d,
   );
   assert.equal(response.headers.get("location"), "https://app.example.com/");
   assert.equal(
     calls[0]?.[0].redirectUri,
-    "https://app.example.com/api/auth/callback/ffpf",
+    "https://app.example.com/api/auth/callback/sid",
   );
 });
 
 test("a missing cookie, a state mismatch or an error parameter never signs in", async () => {
   delete process.env.AUTH_URL;
-  const start = createFfpfOAuthStart("/");
+  const start = createSidOAuthStart("/");
   const github = createOAuthStart("/");
   const { calls, deps: d } = deps({ ok: true, session: issued });
   const oauth = { zl_oauth: start.cookieValue };
@@ -311,7 +311,7 @@ test("a missing cookie, a state mismatch or an error parameter never signs in", 
     callback(`?error=access_denied&state=${start.state}&code=c`, oauth),
     callback(`?error=access_denied&state=${start.state}`, oauth),
   ]) {
-    const response = await handleFfpfCallback(request, d);
+    const response = await handleSidCallback(request, d);
     assert.equal(response.status, 303);
     assert.equal(response.headers.get("location"), failure);
     assert.equal(setCookies(response).length, 1);
@@ -322,7 +322,7 @@ test("a missing cookie, a state mismatch or an error parameter never signs in", 
 
 test("every failure and error is OAuthCallbackError", async () => {
   delete process.env.AUTH_URL;
-  const start = createFfpfOAuthStart("/");
+  const start = createSidOAuthStart("/");
   const spy = quietConsole();
   try {
     for (const result of [
@@ -331,7 +331,7 @@ test("every failure and error is OAuthCallbackError", async () => {
       { ok: false, reason: "throttled" } as const,
       new Error("db"),
     ]) {
-      const response = await handleFfpfCallback(
+      const response = await handleSidCallback(
         callback(`?code=c&state=${start.state}`, {
           zl_oauth: start.cookieValue,
         }),
@@ -345,23 +345,23 @@ test("every failure and error is OAuthCallbackError", async () => {
     spy.restore();
   }
   assert.deepEqual(spy.logged, [
-    ["SIGN_IN_FFPF_REFUSED", "invalid"],
-    ["SIGN_IN_FFPF_REFUSED", "unavailable"],
-    ["SIGN_IN_FFPF_REFUSED", "throttled"],
-    ["SIGN_IN_FFPF_FAILED", "Error"],
+    ["SIGN_IN_SID_REFUSED", "invalid"],
+    ["SIGN_IN_SID_REFUSED", "unavailable"],
+    ["SIGN_IN_SID_REFUSED", "throttled"],
+    ["SIGN_IN_SID_FAILED", "Error"],
   ]);
 });
 
 test("nothing secret is logged", async () => {
   delete process.env.AUTH_URL;
-  const start = createFfpfOAuthStart("/");
+  const start = createSidOAuthStart("/");
   const spy = quietConsole();
   try {
     for (const result of [
       { ok: false, reason: "invalid" } as const,
       new Error(`boom code-secret ${start.nonce}`),
     ])
-      await handleFfpfCallback(
+      await handleSidCallback(
         callback(`?code=code-secret&state=${start.state}`, {
           zl_oauth: start.cookieValue,
           zl_session: "old-token-secret",
@@ -382,4 +382,30 @@ test("nothing secret is logged", async () => {
     "old-token-secret",
   ])
     assert.ok(!text.includes(secret), secret);
+});
+
+test("the sid cookie value carries provider sid, and a ffpf one is refused", () => {
+  const encode = (value: unknown) =>
+    Buffer.from(JSON.stringify(value)).toString("base64url");
+  const valid = {
+    state: "s",
+    verifier: "v",
+    nonce: "n",
+    callbackPath: "/",
+  };
+  assert.deepEqual(parseSidOAuthCookie(encode({ ...valid, provider: "sid" })), {
+    ...valid,
+    provider: "sid",
+  });
+  assert.equal(
+    parseSidOAuthCookie(encode({ ...valid, provider: "ffpf" })),
+    null,
+  );
+});
+
+test("sidRedirectUri points at the sid callback", () => {
+  assert.equal(
+    sidRedirectUri("https://x.example"),
+    "https://x.example/api/auth/callback/sid",
+  );
 });

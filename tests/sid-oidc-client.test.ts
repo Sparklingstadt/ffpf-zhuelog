@@ -1,25 +1,25 @@
-// Mirrors the retired services/api/auth/ffpf_test.go with a fake fetch and a P-256 key
-// made here; the real FFPF ID is never called.
+// Tests the Sparklingstadt ID OIDC client with a fake fetch and a P-256 key
+// made here; the real Sparklingstadt ID is never called.
 import assert from "node:assert/strict";
 import { generateKeyPairSync, sign, type KeyObject } from "node:crypto";
 import { test } from "node:test";
 
 import {
-  FFPF_JWKS_CACHE_MS,
-  FFPF_LEEWAY_MS,
-  createFfpfOidcClient,
-} from "../src/infrastructure/auth/ffpf-oidc-client";
+  SID_JWKS_CACHE_MS,
+  SID_LEEWAY_MS,
+  createSidOidcClient,
+} from "../src/infrastructure/auth/sid-oidc-client";
 
-const issuer = "https://ffpf.example";
+const issuer = "https://sid.example";
 const tokenUrl = `${issuer}/oauth/token`;
 const jwksUrl = `${issuer}/oauth/jwks`;
 const clientId = "zhuelog";
-const clientSecret = "ffpf-client-secret-xyz";
-const redirectUri = "https://zhuelog.example/api/auth/callback/ffpf";
-const code = "ffpf-code-0123456789";
-const verifier = "ffpf-verifier-abcdefghijklmnopqrstuvwxyz0123456789";
-const nonce = "ffpf-nonce-0123456789";
-const accessToken = "ffpf-access-token-0123456789";
+const clientSecret = "sid-client-secret-xyz";
+const redirectUri = "https://zhuelog.example/api/auth/callback/sid";
+const code = "sid-code-0123456789";
+const verifier = "sid-verifier-abcdefghijklmnopqrstuvwxyz0123456789";
+const nonce = "sid-nonce-0123456789";
+const accessToken = "sid-access-token-0123456789";
 const secrets = [clientSecret, code, verifier, nonce, accessToken, "eyJ"];
 
 const testNow = Date.parse("2026-10-27T12:00:00Z");
@@ -71,9 +71,9 @@ const json = (body: string, status = 200) =>
 
 type Log = [string, Record<string, string | number> | undefined];
 
-// FFPF ID's /oauth/token and /oauth/jwks. The token endpoint answers with
+// Sparklingstadt ID's /oauth/token and /oauth/jwks. The token endpoint answers with
 // idToken unless token is set.
-function fakeFfpf(config: { clientId?: string; clientSecret?: string } = {}) {
+function fakeSid(config: { clientId?: string; clientSecret?: string } = {}) {
   const state: {
     idToken: string;
     token?: (init: RequestInit) => Response;
@@ -115,7 +115,7 @@ function fakeFfpf(config: { clientId?: string; clientSecret?: string } = {}) {
     throw new TypeError("unexpected url");
   }) as typeof fetch;
 
-  const client = createFfpfOidcClient({
+  const client = createSidOidcClient({
     issuer,
     clientId: config.clientId ?? clientId,
     clientSecret: config.clientSecret ?? clientSecret,
@@ -157,8 +157,8 @@ function assertNoSecrets(text: string) {
 }
 
 // A fake with key k1 in its JWKS and a valid ID token signed by it.
-function readyFfpf(claims?: (c: Record<string, unknown>) => void) {
-  const f = fakeFfpf();
+function readySid(claims?: (c: Record<string, unknown>) => void) {
+  const f = fakeSid();
   const key = newKey();
   const c = claimsAt(testNow);
   claims?.(c);
@@ -172,12 +172,12 @@ const invalid = { ok: false, reason: "invalid" };
 const unavailable = { ok: false, reason: "unavailable" };
 
 test("Go's numbers: the JWKS is kept 10 minutes, exp has 60 s of leeway", () => {
-  assert.equal(FFPF_JWKS_CACHE_MS, 600_000);
-  assert.equal(FFPF_LEEWAY_MS, 60_000);
+  assert.equal(SID_JWKS_CACHE_MS, 600_000);
+  assert.equal(SID_LEEWAY_MS, 60_000);
 });
 
 test("a valid code gives the ID token's user", async () => {
-  const { f } = readyFfpf();
+  const { f } = readySid();
   assert.deepEqual(await f.exchange(), { ok: true, user: alice });
   assert.equal(f.tokenCalls.length, 1);
   assert.equal(f.jwksCalls.length, 1);
@@ -215,7 +215,7 @@ test("a valid code gives the ID token's user", async () => {
 });
 
 test("the Basic credentials are form-encoded first", async () => {
-  const f = fakeFfpf({ clientId: "a b", clientSecret: "p+q:r" });
+  const f = fakeSid({ clientId: "a b", clientSecret: "p+q:r" });
   const key = newKey();
   f.state.jwks = [jwk(key, "k1")];
   f.state.idToken = signIdToken(key, "k1", {
@@ -257,7 +257,7 @@ test("accepted ID tokens", async () => {
     ],
   ];
   for (const [name, change, display] of cases) {
-    const { f } = readyFfpf(change);
+    const { f } = readySid(change);
     assert.deepEqual(
       await f.exchange(),
       { ok: true, user: { ...alice, name: display } },
@@ -267,7 +267,7 @@ test("accepted ID tokens", async () => {
 });
 
 test("a header typ of null is no typ, as in Go", async () => {
-  const f = fakeFfpf();
+  const f = fakeSid();
   const key = newKey();
   f.state.jwks = [jwk(key, "k1")];
   f.state.idToken = signJwt(
@@ -430,13 +430,13 @@ test("refused ID tokens name Go's reason", async () => {
     ],
   ];
   for (const [name, make, reason] of cases) {
-    const f = fakeFfpf();
+    const f = fakeSid();
     const key = newKey();
     const c = claimsAt(testNow);
     f.state.jwks = [jwk(key, "k1")];
     f.state.idToken = make(key, c) ?? signIdToken(key, "k1", c);
     assert.deepEqual(await f.exchange(), invalid, name);
-    assert.deepEqual(f.logs, [["FFPF_ID_REJECTED", { reason }]], name);
+    assert.deepEqual(f.logs, [["SID_REJECTED", { reason }]], name);
   }
 });
 
@@ -445,17 +445,17 @@ test("refused token answers", async () => {
     [
       "400 invalid_grant",
       () => json(`{"error":"invalid_grant"}`, 400),
-      { reason: "token_endpoint", status: 400, ffpf_error: "invalid_grant" },
+      { reason: "token_endpoint", status: 400, sid_error: "invalid_grant" },
     ],
     [
       "401 invalid_client",
       () => json(`{"error":"invalid_client"}`, 401),
-      { reason: "token_endpoint", status: 401, ffpf_error: "invalid_client" },
+      { reason: "token_endpoint", status: 401, sid_error: "invalid_client" },
     ],
     [
       "400 echoing the secret",
       () => json(`{"error":"${clientSecret}"}`, 400),
-      { reason: "token_endpoint", status: 400, ffpf_error: "unrecognized" },
+      { reason: "token_endpoint", status: 400, sid_error: "unrecognized" },
     ],
     [
       "no id_token",
@@ -471,17 +471,17 @@ test("refused token answers", async () => {
     ["not JSON", () => json("<html>"), { reason: "id_token" }],
   ];
   for (const [name, answer, fields] of cases) {
-    const { f } = readyFfpf();
+    const { f } = readySid();
     f.state.token = answer;
     assert.deepEqual(await f.exchange(), invalid, name);
     assert.equal(f.jwksCalls.length, 0, name);
-    assert.deepEqual(f.logs, [["FFPF_ID_REJECTED", fields]], name);
+    assert.deepEqual(f.logs, [["SID_REJECTED", fields]], name);
   }
 });
 
 test("empty code, verifier or nonce is invalid without calling", async () => {
   for (const input of [{ code: "" }, { verifier: "" }, { nonce: "" }]) {
-    const { f } = readyFfpf();
+    const { f } = readySid();
     assert.deepEqual(await f.exchange(input), invalid);
     assert.equal(f.tokenCalls.length, 0);
     assert.equal(f.jwksCalls.length, 0);
@@ -491,7 +491,7 @@ test("empty code, verifier or nonce is invalid without calling", async () => {
 test("unavailable answers", async () => {
   const cases: [
     string,
-    (f: ReturnType<typeof fakeFfpf>) => void,
+    (f: ReturnType<typeof fakeSid>) => void,
     Record<string, string | number>,
   ][] = [
     [
@@ -542,10 +542,10 @@ test("unavailable answers", async () => {
     ["server down", (f) => (f.state.down = true), { reason: "transport" }],
   ];
   for (const [name, setup, fields] of cases) {
-    const { f } = readyFfpf();
+    const { f } = readySid();
     setup(f);
     assert.deepEqual(await f.exchange(), unavailable, name);
-    assert.deepEqual(f.logs, [["FFPF_ID_UNAVAILABLE", fields]], name);
+    assert.deepEqual(f.logs, [["SID_UNAVAILABLE", fields]], name);
     if (name === "token 307 is not followed") {
       assert.equal(f.tokenCalls.length, 1);
       assert.equal(f.tokenCalls[0]!.redirect, "manual");
@@ -554,27 +554,27 @@ test("unavailable answers", async () => {
 });
 
 test("a rotated key costs one refetch; an unknown kid one more, then is refused", async () => {
-  const f = fakeFfpf();
+  const f = fakeSid();
   const [first, second, unknown] = [newKey(), newKey(), newKey()];
   f.state.jwks = [jwk(first, "k1")];
   f.state.idToken = signIdToken(first, "k1", claimsAt(testNow));
   assert.equal((await f.exchange()).ok, true);
 
-  // FFPF ID rotates its key while the cached JWKS is still fresh.
+  // Sparklingstadt ID rotates its key while the cached JWKS is still fresh.
   f.state.jwks = [jwk(second, "k2")];
   f.state.idToken = signIdToken(second, "k2", claimsAt(testNow));
   assert.deepEqual(await f.exchange(), { ok: true, user: alice });
   assert.equal(f.jwksCalls.length, 2);
 
-  // A kid FFPF ID does not have either costs one fetch, then is refused.
+  // A kid Sparklingstadt ID does not have either costs one fetch, then is refused.
   f.state.idToken = signIdToken(unknown, "k3", claimsAt(testNow));
   assert.deepEqual(await f.exchange(), invalid);
   assert.equal(f.jwksCalls.length, 3);
-  assert.deepEqual(f.logs, [["FFPF_ID_REJECTED", { reason: "kid" }]]);
+  assert.deepEqual(f.logs, [["SID_REJECTED", { reason: "kid" }]]);
 });
 
 test("the JWKS is kept 10 minutes, and a failed refetch is not covered by stale keys", async () => {
-  const f = fakeFfpf();
+  const f = fakeSid();
   const key = newKey();
   f.state.jwks = [jwk(key, "k1")];
   const sign = () =>
@@ -601,7 +601,7 @@ test("the JWKS is kept 10 minutes, and a failed refetch is not covered by stale 
 });
 
 test("unusable JWKs are left out", async () => {
-  const f = fakeFfpf();
+  const f = fakeSid();
   const key = newKey();
   const offCurve = { ...jwk(key, "k1"), y: b64(Buffer.alloc(32)) };
   const encryption = { ...jwk(key, "k1"), use: "enc" };
@@ -624,7 +624,7 @@ test("unusable JWKs are left out", async () => {
   ];
   f.state.idToken = signIdToken(key, "k1", claimsAt(testNow));
   assert.deepEqual(await f.exchange(), invalid);
-  assert.deepEqual(f.logs, [["FFPF_ID_REJECTED", { reason: "kid" }]]);
+  assert.deepEqual(f.logs, [["SID_REJECTED", { reason: "kid" }]]);
 
   const usable = jwk(key, "k1");
   delete usable.use; // use is optional
@@ -633,18 +633,18 @@ test("unusable JWKs are left out", async () => {
 });
 
 test("only the first key of a kid is kept", async () => {
-  const f = fakeFfpf();
+  const f = fakeSid();
   const [key, other] = [newKey(), newKey()];
   f.state.jwks = [jwk(other, "k1"), jwk(key, "k1")];
   f.state.idToken = signIdToken(key, "k1", claimsAt(testNow));
   assert.deepEqual(await f.exchange(), invalid);
-  assert.deepEqual(f.logs, [["FFPF_ID_REJECTED", { reason: "signature" }]]);
+  assert.deepEqual(f.logs, [["SID_REJECTED", { reason: "signature" }]]);
 });
 
 test("nothing secret reaches the log or the result", async () => {
-  // fakeFfpf's exchange checks every outcome and log line; these are the
+  // fakeSid's exchange checks every outcome and log line; these are the
   // answers most likely to carry a secret back.
-  const cases: ((f: ReturnType<typeof fakeFfpf>) => void)[] = [
+  const cases: ((f: ReturnType<typeof fakeSid>) => void)[] = [
     (f) =>
       (f.state.token = () =>
         json(
@@ -656,7 +656,7 @@ test("nothing secret reaches the log or the result", async () => {
     (f) => (f.state.token = () => json(`{"id_token":"${accessToken}"}`)),
   ];
   for (const setup of cases) {
-    const { f } = readyFfpf();
+    const { f } = readySid();
     setup(f);
     const outcome = await f.exchange();
     assert.equal(outcome.ok, false);

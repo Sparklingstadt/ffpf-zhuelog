@@ -74,7 +74,7 @@ export function parseOAuthCookie(value: string | undefined): OAuthState | null {
       string,
       unknown
     >;
-    // An FFPF ID start (ffpf-oauth.ts) shares the cookie but names its
+    // An Sparklingstadt ID start (sid-oauth.ts) shares the cookie but names its
     // provider; it never finishes at the GitHub callback.
     if (
       provider !== undefined ||

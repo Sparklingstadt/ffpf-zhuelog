@@ -122,7 +122,7 @@ test("public routes pass while signed out", () => {
   for (const path of [
     "/signin",
     "/api/auth/callback/github/go?code=x",
-    "/api/auth/callback/ffpf?code=x",
+    "/api/auth/callback/sid?code=x",
     "/robots.txt",
     "/sitemap.xml",
     "/opengraph-image.png?a1b2c3",
@@ -167,7 +167,7 @@ test("a route that only looks public is gated", () => {
   assert.equal(api.status, 401);
   assert.equal(isPublicRoute("/signin/other"), false);
   assert.equal(isPublicRoute("/api/authx"), false);
-  assert.equal(isPublicRoute("/api/auth/callback/ffpf"), true);
+  assert.equal(isPublicRoute("/api/auth/callback/sid"), true);
 });
 
 test("the gate never sets cookies", () => {

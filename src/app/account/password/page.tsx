@@ -2,8 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getCurrentMemberUser } from "@/composition/identity-container";
-import { FFPF_OWNER_PREFIX } from "@/domain/identity/owner-id";
-import { ffpfIdConfig } from "@/infrastructure/config/environment";
+import { SID_OWNER_PREFIX } from "@/domain/identity/owner-id";
+import { sidConfig } from "@/infrastructure/config/environment";
 import { ChangePasswordForm } from "@/presentation/components/auth/change-password-form";
 import {
   Card,
@@ -19,11 +19,11 @@ export const dynamic = "force-dynamic";
 export default async function ChangePasswordPage() {
   const user = await getCurrentMemberUser();
   if (user?.role !== "member") redirect("/");
-  // FFPF ID members have no password account here (no accountId); their
+  // Sparklingstadt ID members have no password account here (no accountId); their
   // password lives in the portal.
-  const isFfpfMember = Boolean(user.githubId?.startsWith(FFPF_OWNER_PREFIX));
-  if (!isFfpfMember && !user.accountId) redirect("/");
-  const ffpfIssuer = ffpfIdConfig()?.issuer;
+  const isSidMember = Boolean(user.githubId?.startsWith(SID_OWNER_PREFIX));
+  if (!isSidMember && !user.accountId) redirect("/");
+  const sidIssuer = sidConfig()?.issuer;
 
   return (
     <>
@@ -42,21 +42,22 @@ export default async function ChangePasswordPage() {
             </h1>
           </header>
 
-          {isFfpfMember ? (
+          {isSidMember ? (
             <Card>
               <CardHeader>
-                <CardTitle>FFPF IDでログインしています</CardTitle>
+                <CardTitle>Sparklingstadt ID でログインしています</CardTitle>
                 <CardDescription>
-                  パスワードは FFPF ID のマイページで変更できます
+                  パスワードは Sparklingstadt ID
+                  のアカウントページで変更できます
                 </CardDescription>
               </CardHeader>
-              {ffpfIssuer ? (
+              {sidIssuer ? (
                 <CardContent>
                   <a
-                    href={`${ffpfIssuer}/id`}
+                    href={`${sidIssuer}/account`}
                     className="text-sm font-medium underline underline-offset-4"
                   >
-                    FFPF ID のマイページを開く
+                    Sparklingstadt ID のアカウントページを開く
                   </a>
                 </CardContent>
               ) : null}

@@ -2,7 +2,7 @@ import {
   createSignIn,
   type IssuedSession,
 } from "@/application/identity/sign-in";
-import { createFfpfOidcClient } from "@/infrastructure/auth/ffpf-oidc-client";
+import { createSidOidcClient } from "@/infrastructure/auth/sid-oidc-client";
 import { createGitHubOAuthClient } from "@/infrastructure/auth/github-oauth-client";
 import {
   signedInCookieWrites,
@@ -11,10 +11,10 @@ import {
 import {
   allowedGitHubIds,
   demoLoginId,
-  ffpfIdConfig,
+  sidConfig,
   githubOAuthConfig,
 } from "@/infrastructure/config/environment";
-import { createFfpfAccountStore } from "@/infrastructure/prisma/ffpf-account-store";
+import { createSidAccountStore } from "@/infrastructure/prisma/sid-account-store";
 import { createPasswordAccountStore } from "@/infrastructure/prisma/password-account-store";
 import { prisma } from "@/infrastructure/prisma/prisma-client";
 import { createSessionStore } from "@/infrastructure/prisma/session-store";
@@ -22,7 +22,7 @@ import { createSignInThrottleStore } from "@/infrastructure/prisma/sign-in-throt
 import { ScryptPasswordHasher } from "@/infrastructure/security/scrypt-password-hasher";
 import { errorName } from "@/presentation/controllers/sign-in-controller";
 
-// Signing in on the web, built once per server instance: the FFPF ID client
+// Signing in on the web, built once per server instance: the Sparklingstadt ID client
 // (and so its JWKS cache) and the hasher's dummy hash live here. The
 // environment (the OAuth apps, the allowlist, the demo login id) is read
 // once, when this module loads: as before, a change needs a redeploy.
@@ -39,18 +39,18 @@ export function warmSignIn(): Promise<void> {
 }
 
 const github = githubOAuthConfig();
-const ffpf = ffpfIdConfig();
+const sid = sidConfig();
 
 export const sessionStore = createSessionStore(prisma);
 
 export const signIn = createSignIn({
   throttle: createSignInThrottleStore(prisma),
   passwordAccounts: createPasswordAccountStore(prisma),
-  ffpfAccounts: createFfpfAccountStore(prisma),
+  sidAccounts: createSidAccountStore(prisma),
   passwords,
   sessions: sessionStore,
   github: github ? createGitHubOAuthClient(github) : null,
-  ffpf: ffpf ? createFfpfOidcClient(ffpf) : null,
+  sid: sid ? createSidOidcClient(sid) : null,
   allowedGitHubIds: allowedGitHubIds(),
   demoLoginId: demoLoginId(),
   now: () => new Date(),

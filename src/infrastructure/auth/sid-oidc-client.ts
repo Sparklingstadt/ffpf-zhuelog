@@ -1,9 +1,8 @@
-// "Sign in with FFPF ID": the OpenID Connect provider run by ffpf-portal,
-// with the authorization code flow and PKCE, as Go's FFPFClient
-// (services/api/auth/ffpf.go). Endpoints are built from the issuer (no
+// "Sign in with Sparklingstadt ID": the OpenID Connect provider run by sparklingstadt-id,
+// with the authorization code flow and PKCE. Endpoints are built from the issuer (no
 // discovery). The client secret goes only to the token endpoint, as HTTP
 // Basic credentials (client_secret_basic). The ID token is verified here with
-// node:crypto: an ES256 signature by a key of FFPF ID's JWKS, then iss, aud,
+// node:crypto: an ES256 signature by a key of Sparklingstadt ID's JWKS, then iss, aud,
 // exp, nonce, email_verified, email and sub. The access token is not used.
 //
 // The checks run in the order golang-jwt v5.3.1 and Go's verify run them, and
@@ -12,9 +11,9 @@
 // read, null leaves a string field empty, and keys match fields ignoring case.
 // A duplicate key is the one exception: JSON.parse keeps the last value, while
 // Go also remembers a type error from an earlier one. This is harmless: the
-// token and the JWKS both come from FFPF ID over TLS, and the token is signed.
+// token and the JWKS both come from Sparklingstadt ID over TLS, and the token is signed.
 //
-// Outcomes: "invalid" when FFPF ID refuses the code or the ID token is not
+// Outcomes: "invalid" when Sparklingstadt ID refuses the code or the ID token is not
 // acceptable; "unavailable" for transport and upstream failures. Neither the
 // result nor the log ever carries the code, verifier, nonce, client secret,
 // a token or a claim.
@@ -27,12 +26,9 @@ import {
 
 import type {
   ExchangeOutcome,
-  FfpfIdentity,
+  SidIdentity,
 } from "@/application/identity/sign-in";
-import {
-  FFPF_SUB_PATTERN,
-  emailLocalPart,
-} from "@/domain/identity/ffpf-account";
+import { SID_SUB_PATTERN, emailLocalPart } from "@/domain/identity/sid-account";
 import { goTrimSpace } from "@/domain/line/go-text";
 
 import {
@@ -43,12 +39,12 @@ import {
   loggableOAuthErrorCode,
 } from "./oauth-http";
 
-// Go: ffpfJWKSCacheFor. A key FFPF ID drops is still accepted this long.
-export const FFPF_JWKS_CACHE_MS = 600_000;
-// Go: ffpfLeeway. An ID token is accepted up to and including exp + 60 s.
-export const FFPF_LEEWAY_MS = 60_000;
+// A key Sparklingstadt ID drops is still accepted this long.
+export const SID_JWKS_CACHE_MS = 600_000;
+// An ID token is accepted up to and including exp + 60 s.
+export const SID_LEEWAY_MS = 60_000;
 
-// Go: ffpfJWTSegment. One non-empty unpadded base64url segment.
+// One non-empty unpadded base64url segment.
 const JWT_SEGMENT = /^[A-Za-z0-9_-]+$/;
 
 // The algs golang-jwt v5 knows. An unknown alg is refused before the
@@ -70,7 +66,7 @@ const JWT_KNOWN_ALGS = new Set([
   "none",
 ]);
 
-// Go: errFFPFExpRange. exp outside 0..2^53 seconds is refused.
+// exp outside 0..2^53 seconds is refused.
 const MAX_EXP_SECONDS = 2 ** 53;
 
 const P256_COORDINATE_BYTES = 32;
@@ -176,7 +172,7 @@ function hasInfiniteNumber(value: unknown): boolean {
 
 // golang-jwt's header (map[string]any). null is a nil map: no error, but no
 // alg either. On an error, `made` says whether Go had made the map, which
-// decides the logged reason (ffpfRejectReason).
+// decides the logged reason (sidRejectReason).
 function decodeHeader(
   bytes: Buffer,
 ):
@@ -190,7 +186,7 @@ function decodeHeader(
   return { ok: true, header: parsed.value };
 }
 
-// Go: ffpfClaims (auth/ffpf.go:161-170). iat and nbf are not read.
+// The claims read from the ID token. iat and nbf are not read.
 type Claims = {
   iss: string;
   aud: string[];
@@ -216,7 +212,7 @@ function goClaimStrings(values: unknown[]): { value: string[]; bad: boolean } {
   return { value, bad };
 }
 
-// null when Go could not read the claims into ffpfClaims.
+// null when Go could not read the claims into the claims.
 function decodeClaims(bytes: Buffer): Claims | null {
   const parsed = parseJson(utf8.decode(bytes));
   if (!parsed) return null;
@@ -244,7 +240,7 @@ function decodeClaims(bytes: Buffer): Claims | null {
   };
 }
 
-// Go: ffpfP256Key. x and y strict base64url of 32 bytes each, and the point
+// x and y strict base64url of 32 bytes each, and the point
 // on P-256 (ECDH.convertKey checks it, as Go's crypto/ecdh does).
 function p256Key(x: string, y: string): KeyObject | null {
   const xBytes = strictBase64Url(x);
@@ -326,7 +322,7 @@ function decodeErrorCode(text: string): string {
   return goString(goFieldValues(parsed.value, "error")).value;
 }
 
-export function createFfpfOidcClient(config: {
+export function createSidOidcClient(config: {
   issuer: string; // trailing slashes dropped
   clientId: string;
   clientSecret: string;
@@ -356,7 +352,7 @@ export function createFfpfOidcClient(config: {
     reason: string,
     fields: Record<string, string | number> = {},
   ): typeof INVALID {
-    log("FFPF_ID_REJECTED", { reason, ...fields });
+    log("SID_REJECTED", { reason, ...fields });
     return INVALID;
   }
 
@@ -365,7 +361,7 @@ export function createFfpfOidcClient(config: {
     reason: string,
     fields: Record<string, string | number> = {},
   ): typeof UNAVAILABLE {
-    log("FFPF_ID_UNAVAILABLE", { reason, ...fields });
+    log("SID_UNAVAILABLE", { reason, ...fields });
     return UNAVAILABLE;
   }
 
@@ -400,7 +396,7 @@ export function createFfpfOidcClient(config: {
       // one, so an answer that echoes the request never reaches the log.
       return reject("token_endpoint", {
         status,
-        ffpf_error: loggableOAuthErrorCode(decodeErrorCode(text)),
+        sid_error: loggableOAuthErrorCode(decodeErrorCode(text)),
       });
     }
     // 3xx included: redirects are never followed.
@@ -422,14 +418,14 @@ export function createFfpfOidcClient(config: {
   }
 
   // Go: key. The JWKS is fetched when the cache is older than 10 minutes or
-  // lacks kid (FFPF ID may have rotated), but at most once per ID token. A
+  // lacks kid (Sparklingstadt ID may have rotated), but at most once per ID token. A
   // failed fetch is unavailable even when a stale key of kid is cached; a
   // kid the fresh JWKS lacks too is refused.
   async function keyFor(kid: string): Promise<{ key: KeyObject } | Failure> {
     const cached = cachedKeys.get(kid);
     const fresh =
       fetchedAt !== undefined &&
-      now().getTime() - fetchedAt < FFPF_JWKS_CACHE_MS;
+      now().getTime() - fetchedAt < SID_JWKS_CACHE_MS;
     if (cached && fresh) return { key: cached };
     const keys = await fetchJwks();
     if (!(keys instanceof Map)) return keys;
@@ -445,7 +441,7 @@ export function createFfpfOidcClient(config: {
   async function verify(
     idToken: string,
     nonce: string,
-  ): Promise<ExchangeOutcome<FfpfIdentity>> {
+  ): Promise<ExchangeOutcome<SidIdentity>> {
     // Three non-empty base64url segments, so an unsigned "header.claims."
     // is malformed rather than a wrong alg.
     const segments = idToken.split(".");
@@ -511,30 +507,30 @@ export function createFfpfOidcClient(config: {
       exp < 0 ||
       exp > MAX_EXP_SECONDS ||
       // time.Unix(int64(exp)) drops the fraction.
-      now().getTime() > Math.trunc(exp) * 1000 + FFPF_LEEWAY_MS
+      now().getTime() > Math.trunc(exp) * 1000 + SID_LEEWAY_MS
     )
       return reject("exp");
 
     if (claims.nonce !== nonce) return reject("nonce");
     if (!claims.emailVerified) return reject("email_verified");
     if (claims.email === "") return reject("email");
-    if (!FFPF_SUB_PATTERN.test(claims.sub)) return reject("sub");
-    // FFPF ID's name may be empty; the email's local part stands in. The
+    if (!SID_SUB_PATTERN.test(claims.sub)) return reject("sub");
+    // Sparklingstadt ID's name may be empty; the email's local part stands in. The
     // sign-in trims and shortens it again for the display name.
     const name = goTrimSpace(claims.name) || emailLocalPart(claims.email);
     return { ok: true, user: { sub: claims.sub, email: claims.email, name } };
   }
 
   return {
-    // Go: FFPFClient.Exchange. verifier is the PKCE verifier; redirectUri
+    // verifier is the PKCE verifier; redirectUri
     // and nonce are the values the authorize request carried. Empty code,
-    // verifier or nonce is refused without calling FFPF ID.
+    // verifier or nonce is refused without calling Sparklingstadt ID.
     async exchange(
       code: string,
       verifier: string,
       redirectUri: string,
       nonce: string,
-    ): Promise<ExchangeOutcome<FfpfIdentity>> {
+    ): Promise<ExchangeOutcome<SidIdentity>> {
       if (code === "" || verifier === "" || nonce === "") return INVALID;
       const idToken = await fetchIdToken(code, verifier, redirectUri);
       if (typeof idToken !== "string") return idToken;

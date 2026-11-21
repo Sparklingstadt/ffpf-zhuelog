@@ -16,10 +16,10 @@ import type { AuthenticatedUser } from "@/domain/identity/entities/authenticated
 import type { CurrentUserProvider } from "@/application/identity/ports/current-user-provider";
 import { clientAddress } from "@/infrastructure/auth/client-address";
 import {
-  createFfpfOAuthStart,
-  ffpfAuthorizeUrl,
-  ffpfRedirectUri,
-} from "@/infrastructure/auth/ffpf-oauth";
+  createSidOAuthStart,
+  sidAuthorizeUrl,
+  sidRedirectUri,
+} from "@/infrastructure/auth/sid-oauth";
 import {
   createOAuthStart,
   githubAuthorizeUrl,
@@ -43,7 +43,7 @@ import {
 } from "@/infrastructure/auth/web-session";
 import {
   demoLoginId,
-  ffpfIdConfig,
+  sidConfig,
   githubOAuthConfig,
 } from "@/infrastructure/config/environment";
 import { ACT_AS_PATTERN } from "@/infrastructure/identity/session-current-user-provider";
@@ -186,14 +186,14 @@ export async function signInWithGitHub(redirectTo: string) {
   );
 }
 
-// Starts FFPF ID sign-in the same way: PKCE, state and nonce go into
-// zl_oauth (provider "ffpf"), and the browser goes to the portal's authorize
-// endpoint. /api/auth/callback/ffpf finishes it.
-export async function signInWithFfpf(redirectTo: string) {
-  const config = ffpfIdConfig();
+// Starts Sparklingstadt ID sign-in the same way: PKCE, state and nonce go into
+// zl_oauth (provider "sid"), and the browser goes to the portal's authorize
+// endpoint. /api/auth/callback/sid finishes it.
+export async function signInWithSid(redirectTo: string) {
+  const config = sidConfig();
   if (!config) redirect("/signin?error=Configuration");
   const requestHeaders = await headers();
-  const start = createFfpfOAuthStart(redirectTo);
+  const start = createSidOAuthStart(redirectTo);
   await writeCookies([
     cookieWrite(
       OAUTH_COOKIE,
@@ -203,10 +203,10 @@ export async function signInWithFfpf(redirectTo: string) {
     ),
   ]);
   redirect(
-    ffpfAuthorizeUrl({
+    sidAuthorizeUrl({
       issuer: config.issuer,
       clientId: config.clientId,
-      redirectUri: ffpfRedirectUri(publicOrigin(requestOrigin(requestHeaders))),
+      redirectUri: sidRedirectUri(publicOrigin(requestOrigin(requestHeaders))),
       state: start.state,
       challenge: start.challenge,
       nonce: start.nonce,

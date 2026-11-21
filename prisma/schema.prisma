@@ -64,10 +64,10 @@ model PasswordAccount {
   updatedAt      DateTime  @updatedAt
 }
 
-// A member who signs in with FFPF ID (issued by ffpf-portal). id is the
-// portal's sub; the ownerId is "ffpf:" + id. email is for display only and is
+// A member who signs in with Sparklingstadt ID (issued by sparklingstadt-id). id is the
+// portal's sub; the ownerId is "sid:" + id. email is for display only and is
 // never used for authorization.
-model FfpfAccount {
+model SidAccount {
   id             String   @id
   email          String
   displayName    String

@@ -2,7 +2,7 @@ import { normalizeLoginId } from "@/domain/identity/password-account";
 import { goTrimSpace } from "@/domain/line/go-text";
 import { normalizeLineOfficialAccountId } from "@/domain/line/official-account";
 
-// Secrets travel to these URLs (the FFPF ID issuer), so they must be HTTPS
+// Secrets travel to these URLs (the Sparklingstadt ID issuer), so they must be HTTPS
 // unless they are this machine (local development and e2e).
 export function isHttpsOrLoopbackUrl(raw: string): boolean {
   let url: URL;
@@ -18,16 +18,16 @@ export function isHttpsOrLoopbackUrl(raw: string): boolean {
   );
 }
 
-// FFPF ID sign-in needs the portal's issuer (the authorize, token and JWKS
+// Sparklingstadt ID sign-in needs the portal's issuer (the authorize, token and JWKS
 // URLs are built from it), this service's client id and its client secret
-// (Go: FFPF_ID_CLIENT_SECRET, trimmed as strings.TrimSpace). Without all
-// three, the FFPF ID button is not shown. The issuer must be HTTPS unless it
+// (trimmed of surrounding whitespace). Without all
+// three, the Sparklingstadt ID button is not shown. The issuer must be HTTPS unless it
 // is this machine (local development and e2e).
-export function ffpfIdConfig():
+export function sidConfig():
   { issuer: string; clientId: string; clientSecret: string } | undefined {
-  const issuer = process.env.FFPF_ID_ISSUER?.trim().replace(/\/+$/, "");
-  const clientId = process.env.FFPF_ID_CLIENT_ID?.trim();
-  const clientSecret = goTrimSpace(process.env.FFPF_ID_CLIENT_SECRET ?? "");
+  const issuer = process.env.SID_ISSUER?.trim().replace(/\/+$/, "");
+  const clientId = process.env.SID_CLIENT_ID?.trim();
+  const clientSecret = goTrimSpace(process.env.SID_CLIENT_SECRET ?? "");
   if (!issuer || !clientId || !clientSecret || !isHttpsOrLoopbackUrl(issuer))
     return undefined;
   return { issuer, clientId, clientSecret };

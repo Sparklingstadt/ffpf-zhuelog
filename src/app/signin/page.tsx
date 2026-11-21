@@ -16,13 +16,13 @@ import {
 } from "@/composition/identity-container";
 import { warmSignIn } from "@/composition/sign-in-container";
 import {
-  ffpfIdConfig,
+  sidConfig,
   githubOAuthConfig,
 } from "@/infrastructure/config/environment";
 import {
   signInAsDemoAction,
   signInAsGuestAction,
-  signInWithFfpfAction,
+  signInWithSidAction,
   signInWithGitHubAction,
   signInWithPasswordAction,
 } from "@/presentation/actions/auth-actions";
@@ -73,7 +73,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   const params = await searchParams;
   const callbackPath = getSafeCallbackPath(params.callbackUrl);
   const isConfigured = Boolean(githubOAuthConfig());
-  const showFfpfId = Boolean(ffpfIdConfig());
+  const showSid = Boolean(sidConfig());
   const showDemo = await demoAvailable();
   const errorMessage = params.error
     ? (errorMessages[params.error] ??
@@ -203,19 +203,17 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
                 </form>
                 <div
                   className={
-                    showFfpfId ? "grid gap-2 sm:grid-cols-2" : "grid gap-2"
+                    showSid ? "grid gap-2 sm:grid-cols-2" : "grid gap-2"
                   }
                 >
-                  {showFfpfId ? (
-                    <form
-                      action={signInWithFfpfAction.bind(null, callbackPath)}
-                    >
+                  {showSid ? (
+                    <form action={signInWithSidAction.bind(null, callbackPath)}>
                       <Button
                         type="submit"
                         className="w-full"
                         variant="outline"
                       >
-                        <UserRoundCheck /> FFPF IDでログイン
+                        <UserRoundCheck /> Sparklingstadt ID でログイン
                       </Button>
                     </form>
                   ) : null}
@@ -234,8 +232,8 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
                 </div>
                 <p className="text-xs leading-5 text-muted-foreground">
                   IDとパスワードのアカウントは管理者が発行します。
-                  {showFfpfId
-                    ? "FFPF IDではメールアドレスと表示名が利用されます。"
+                  {showSid
+                    ? "Sparklingstadt ID ではメールアドレスと表示名が利用されます。"
                     : null}
                   GitHub認証ではユーザー名・表示名・メールアドレス・プロフィール画像が利用されます。
                 </p>

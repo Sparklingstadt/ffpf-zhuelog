@@ -55,7 +55,7 @@ stubSource("composition/identity-container", {
     user && user.role !== "guest" ? user : null,
   getCurrentAdminUser: async () => (user?.role === "admin" ? user : null),
   signInWithGitHub: record("signInWithGitHub"),
-  signInWithFfpf: record("signInWithFfpf"),
+  signInWithSid: record("signInWithSid"),
   signInAsGuest: record("signInAsGuest"),
   signInAsDemo: record("signInAsDemo"),
   signInWithPassword: record("signInWithPassword"),
@@ -123,7 +123,7 @@ test("sign-in actions only ever come back to a path of this site", async () => {
   const actions = await auth();
 
   await actions.signInWithGitHubAction("https://evil.example");
-  await actions.signInWithFfpfAction("//evil.example");
+  await actions.signInWithSidAction("//evil.example");
   await actions.signInAsGuestAction("/%2fevil.example");
   await actions.signInAsDemoAction("/logs/2026/9/24?view=all");
   await actions.signInWithPasswordAction(
@@ -133,7 +133,7 @@ test("sign-in actions only ever come back to a path of this site", async () => {
 
   assert.deepEqual(calls, [
     ["signInWithGitHub", "/"],
-    ["signInWithFfpf", "/"],
+    ["signInWithSid", "/"],
     ["signInAsGuest", "/"],
     ["signInAsDemo", "/logs/2026/9/24?view=all"],
     [
@@ -168,10 +168,10 @@ test("only an admin starts acting, and only as a member", async () => {
   }
   assert.deepEqual(calls, []);
 
-  // An admin's own id, an FFPF ID account and a made-up path are not
+  // An admin's own id, a Sparklingstadt ID account and a made-up path are not
   // password members; nothing is even looked up.
   user = admin;
-  for (const ownerId of ["10001", "ffpf:abc", "password:../x", ""])
+  for (const ownerId of ["10001", "sid:abc", "password:../x", ""])
     assert.equal(
       (await redirectOf(() => startActingAsAction(ownerId))).to,
       "/admin/accounts?actAs=failed",

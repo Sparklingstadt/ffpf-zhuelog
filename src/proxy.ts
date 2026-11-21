@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { ffpfIdConfig } from "@/infrastructure/config/environment";
+import { sidConfig } from "@/infrastructure/config/environment";
 import { contentSecurityPolicy } from "@/infrastructure/security/content-security-policy";
 import { isMetadataFile, sessionGate } from "@/presentation/http/session-gate";
 
@@ -10,13 +10,13 @@ function passThrough(request: NextRequest) {
   if (pathname.startsWith("/api/") || isMetadataFile(pathname))
     return NextResponse.next();
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
-  // The FFPF ID sign-in form redirects to the issuer.
-  const ffpf = ffpfIdConfig();
+  // The Sparklingstadt ID sign-in form redirects to the issuer.
+  const sid = sidConfig();
   const csp = contentSecurityPolicy(
     nonce,
     process.env.NODE_ENV === "development",
     request.nextUrl.protocol === "https:",
-    ffpf ? [new URL(ffpf.issuer).origin] : [],
+    sid ? [new URL(sid.issuer).origin] : [],
   );
   const headers = new Headers(request.headers);
   headers.set("x-nonce", nonce);

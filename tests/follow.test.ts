@@ -7,17 +7,13 @@ import {
 } from "../src/domain/social/follow";
 
 test("member owner ids are Go's", () => {
-  for (const id of [
-    "password:abc",
-    "ffpf:cabc",
-    "password:" + "a".repeat(64),
-  ]) {
+  for (const id of ["password:abc", "sid:cabc", "password:" + "a".repeat(64)]) {
     assert.equal(isMemberOwnerId(id), true, id);
   }
   for (const id of [
     "password:" + "a".repeat(65),
     "password:",
-    "ffpf:",
+    "sid:",
     "github:1",
     "10001",
     "password:ABC",

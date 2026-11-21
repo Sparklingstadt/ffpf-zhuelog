@@ -7,27 +7,26 @@ import {
 } from "node:crypto";
 import { createServer, type IncomingMessage } from "node:http";
 
-// A stand-in for FFPF ID (ffpf-portal's OpenID Connect provider) for the e2e
-// run. It serves exactly what the web's FFPF ID client uses (as Go's
-// services/api/auth/ffpf.go did):
+// A stand-in for Sparklingstadt ID (sparklingstadt-id's OpenID Connect provider) for the e2e
+// run. It serves exactly what the web's Sparklingstadt ID client uses (the Sparklingstadt ID server's OpenID Connect endpoints):
 //
 //   GET  /oauth/authorize  checks the client and redirect URI, remembers the
 //                          PKCE challenge and nonce, and goes straight back to
 //                          redirect_uri?code=stub&state=… (no login screen).
 //   POST /oauth/token      client_secret_basic; checks the code (once only),
 //                          redirect URI and PKCE verifier, and answers with an
-//                          ES256 ID token for ffpfStubUser carrying the nonce.
+//                          ES256 ID token for sidStubUser carrying the nonce.
 //   GET  /oauth/jwks       the public key of this run's random P-256 key.
 //
 // Nothing leaves this machine, and the key exists only in this process.
 
-export const ffpfStubUser = {
+export const sidStubUser = {
   sub: "e2estub01",
   email: "yukina@example.com",
   name: "雪菜",
 };
 
-export type FfpfStubOptions = {
+export type SidStubOptions = {
   port: number;
   issuer: string;
   clientId: string;
@@ -38,8 +37,8 @@ export type FfpfStubOptions = {
 const code = "stub";
 const kid = "e2e-stub-key";
 
-export function startFfpfOidcStub(
-  options: FfpfStubOptions,
+export function startSidOidcStub(
+  options: SidStubOptions,
 ): Promise<{ close(): Promise<void> }> {
   const { privateKey, publicKey } = generateKeyPairSync("ec", {
     namedCurve: "P-256",
@@ -61,10 +60,10 @@ export function startFfpfOidcStub(
       iat: now,
       exp: now + 300,
       nonce,
-      sub: ffpfStubUser.sub,
-      email: ffpfStubUser.email,
+      sub: sidStubUser.sub,
+      email: sidStubUser.email,
       email_verified: true,
-      name: ffpfStubUser.name,
+      name: sidStubUser.name,
     })}`;
     // JWS wants r‖s (RFC 7518 §3.4), not DER.
     const signature = sign("sha256", Buffer.from(unsigned), {
@@ -158,7 +157,7 @@ export function startFfpfOidcStub(
 }
 
 // client_secret_basic: Basic base64(urlencode(id):urlencode(secret)).
-function isClient(header: string | undefined, options: FfpfStubOptions) {
+function isClient(header: string | undefined, options: SidStubOptions) {
   const expected = Buffer.from(
     `Basic ${Buffer.from(
       `${encodeURIComponent(options.clientId)}:${encodeURIComponent(options.clientSecret)}`,

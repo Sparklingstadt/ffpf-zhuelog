@@ -11,7 +11,7 @@ export type IdentityAccount = {
   sessionVersion: number;
 };
 
-export type FfpfIdentityAccount = {
+export type SidIdentityAccount = {
   id: string;
   email: string;
   displayName: string;
@@ -22,7 +22,7 @@ export type FfpfIdentityAccount = {
 // adapter in this layer.
 export interface IdentityAccounts {
   findPasswordAccount(id: string): Promise<IdentityAccount | null>;
-  findFfpfAccount(id: string): Promise<FfpfIdentityAccount | null>;
+  findSidAccount(id: string): Promise<SidIdentityAccount | null>;
 }
 
 export type SessionIdentityConfig = {
@@ -31,7 +31,7 @@ export type SessionIdentityConfig = {
 };
 
 const PASSWORD_PREFIX = "password:";
-const FFPF_PREFIX = "ffpf:";
+const SID_PREFIX = "sid:";
 // The only ownerIds an admin may act as. startActingAs checks the same shape
 // before it writes zl_act_as.
 export const ACT_AS_PATTERN = /^password:[a-z0-9]{1,64}$/;
@@ -110,10 +110,10 @@ export class SessionCurrentUserProvider implements CurrentUserProvider {
     principal: Extract<SessionPrincipal, { role: "member" }>,
   ): Promise<AuthenticatedUser | null> {
     const { ownerId, sessionVersion } = principal;
-    if (ownerId.startsWith(FFPF_PREFIX)) {
-      const id = ownerId.slice(FFPF_PREFIX.length);
+    if (ownerId.startsWith(SID_PREFIX)) {
+      const id = ownerId.slice(SID_PREFIX.length);
       if (!id) return null;
-      const account = await this.accounts.findFfpfAccount(id);
+      const account = await this.accounts.findSidAccount(id);
       if (!account || account.sessionVersion !== sessionVersion) return null;
       return {
         githubLogin: account.email,

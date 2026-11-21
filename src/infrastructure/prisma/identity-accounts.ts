@@ -14,8 +14,8 @@ export const prismaIdentityAccounts: IdentityAccounts = {
         sessionVersion: true,
       },
     }),
-  findFfpfAccount: (id) =>
-    prisma().ffpfAccount.findUnique({
+  findSidAccount: (id) =>
+    prisma().sidAccount.findUnique({
       where: { id },
       select: {
         id: true,
