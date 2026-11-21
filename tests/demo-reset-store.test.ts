@@ -167,7 +167,7 @@ test("the reset empties exactly those tables, in one transaction", async () => {
       },
     ],
   );
-  for (const model of ["aiUsage", "apiRefreshToken", "passwordAccount"])
+  for (const model of ["aiUsage", "session", "passwordAccount"])
     assert.deepEqual(
       calls.filter((c) => c.model === model),
       [],

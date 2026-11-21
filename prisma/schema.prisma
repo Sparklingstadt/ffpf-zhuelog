@@ -101,30 +101,11 @@ model Follow {
   @@index([followeeId])
 }
 
-// Refresh tokens that the retired Go mobile API (services/api) issued. Only the SHA-256
-// hash of the token is stored. Tokens of one login share a familyId so reuse of
-// a rotated token can revoke the whole family. ownerId has no foreign key:
-// admins have no row in the database.
-model ApiRefreshToken {
-  id             String    @id @default(cuid())
-  ownerId        String
-  role           String // "admin" | "member"
-  login          String? // admin only: GitHub login at issue time
-  sessionVersion Int? // member only: PasswordAccount.sessionVersion at issue time
-  tokenHash      String    @unique // SHA-256 hex
-  familyId       String
-  expiresAt      DateTime
-  revokedAt      DateTime?
-  createdAt      DateTime  @default(now())
-
-  @@index([familyId])
-  @@index([ownerId])
-}
-
 // A signed-in browser (stage 11 of the Go retirement). The cookie holds a
 // random token; only its SHA-256 is kept here. role/login/sessionVersion are
-// what ApiRefreshToken kept, so the per-request check stays the same. The
-// CHECK constraint in the migration pins the shape of each role.
+// what Go's refresh tokens kept (the ApiRefreshToken table, dropped in stage
+// 12b), so the per-request check stayed the same. The CHECK constraint in the
+// migration pins the shape of each role.
 model Session {
   id             String   @id @default(cuid())
   tokenHash      String   @unique // SHA-256 hex of the cookie's token

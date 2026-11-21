@@ -4,8 +4,7 @@
 // Every password change bumps "sessionVersion" in the same UPDATE as the
 // hash. The web's SessionCurrentUserProvider compares it on every request,
 // so that one statement revokes every existing session; the same
-// transaction deletes the owner's Session rows (stage 11). ApiRefreshToken
-// is left alone until stage 12 drops it.
+// transaction deletes the owner's Session rows (stage 11).
 //
 // A member's own change replaces the hash only while it is still the one the
 // member's current password was verified against (compare-and-swap in the

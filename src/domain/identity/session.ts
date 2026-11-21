@@ -1,6 +1,7 @@
 // Who a signed-in browser is (stage 11 of the Go retirement). A session keeps
 // what Go's refresh token kept (services/api/auth/token.go), so the check on
-// every request stays the one ApiRefreshToken had.
+// every request stays the one Go's refresh tokens (ApiRefreshToken, dropped in
+// stage 12b) had.
 
 export const GUEST_OWNER_ID = "guest";
 
