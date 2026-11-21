@@ -93,7 +93,9 @@ test("了・过・着: 25 questions are saved as mode aspect, listed with the co
   // Missed questions come back on the review page as complement items,
   // their sentence under a 了・过・着 badge.
   const missed = questions.filter((q) => q.misses.length > 0);
-  test.skip(missed.length === 0, "the round happened to have no misses");
+  // Picking in order misses whenever the right choice is not the first, so
+  // a round of 25 without a miss does not happen.
+  expect(missed.length).toBeGreaterThan(0);
   const { rows: items } = await db.query(
     `SELECT "kind", "targetId" FROM "ReviewItem" WHERE "ownerId" = $1 ORDER BY "targetId"`,
     [owner],

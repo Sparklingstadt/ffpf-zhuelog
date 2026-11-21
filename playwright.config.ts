@@ -16,7 +16,12 @@ export default defineConfig({
   use: { baseURL, trace: "retain-on-failure", screenshot: "only-on-failure" },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
-    { name: "mobile-chromium", use: { ...devices["Pixel 7"] } },
+    {
+      name: "mobile-chromium",
+      use: { ...devices["Pixel 7"] },
+      // anyWidth tests (e2e/fixtures.ts) give the same result at any width.
+      grepInvert: /@any-width/,
+    },
   ],
   webServer: {
     command: "node --import tsx e2e/server.ts",

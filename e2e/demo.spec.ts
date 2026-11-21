@@ -1,4 +1,5 @@
 import {
+  anyWidth,
   createMember,
   expect,
   memberOwnerId,
@@ -46,7 +47,7 @@ const orphanItems = `SELECT count(*)::int AS n FROM "ReviewItem" i WHERE i."owne
   AND NOT EXISTS (SELECT 1 FROM "LearningEntry" e WHERE i."kind" = 'entry' AND e."id" = i."targetId" AND e."ownerId" = i."ownerId")
   AND NOT EXISTS (SELECT 1 FROM "VocabularyEntry" v WHERE i."kind" = 'vocabulary' AND v."id" = i."targetId" AND v."ownerId" = i."ownerId")`;
 
-test("the demo reset needs the cron secret", async () => {
+test("the demo reset needs the cron secret", anyWidth, async () => {
   const response = await fetch(`${baseURL}/api/cron/demo-reset`, {
     method: "POST",
     headers: { authorization: "Bearer wrong" },
@@ -60,7 +61,7 @@ test("the demo reset needs the cron secret", async () => {
 });
 
 // Was Go's TestResetWithTheFixture (services/api/demo/demo_db_test.go, removed in stage 10b).
-test("the reset seeds the demo as Go did", async ({ db }) => {
+test("the reset seeds the demo as Go did", anyWidth, async ({ db }) => {
   await resetDemo();
   const account = await demoAccount(db);
   expect(account.passwordHash).toBe("demo:no-password");
@@ -112,7 +113,7 @@ test("the reset seeds the demo as Go did", async ({ db }) => {
 });
 
 // Go: TestResetDemoReplacesEverythingTheDemoOwns (store/demo_test.go).
-test("the reset replaces only the demo's data", async ({ db }) => {
+test("the reset replaces only the demo's data", anyWidth, async ({ db }) => {
   await resetDemo();
   const before = await demoAccount(db);
   const owner = memberOwnerId(before.id);
@@ -230,7 +231,7 @@ test("the reset replaces only the demo's data", async ({ db }) => {
 
 // A member whose loginId is DEMO_LOGIN_ID is not overwritten (Go: ON CONFLICT
 // DO NOTHING); the demo sign-in refuses it, as it has a real password.
-test("an existing account keeps its password", async ({ db }) => {
+test("an existing account keeps its password", anyWidth, async ({ db }) => {
   const id = await createMember(
     db,
     demoLoginId,
@@ -365,7 +366,7 @@ test("anyone can try the members' pages in the demo, without AI", async ({
 
 // The demo is shared by strangers, so it cannot put a note on followers'
 // timelines: the share button answers as for anyone who may not share.
-test("the demo account cannot share", async ({ page, db }) => {
+test("the demo account cannot share", anyWidth, async ({ page, db }) => {
   await resetDemo();
   await page.goto("/signin");
   await page.getByRole("button", { name: "デモで試す" }).click();

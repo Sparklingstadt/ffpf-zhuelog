@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import type { Client } from "pg";
 import { sessionCookieName } from "./environment";
 import {
+  anyWidth,
   asGuest,
   asMember,
   createMember,
@@ -97,106 +98,106 @@ test("signing in stores only the token's hash, and signing out deletes the row",
   await expectSignedOut(page);
 });
 
-test("a planted session cookie, an act-as cookie and Go's old cookies are replaced at sign-in", async ({
-  page,
-  context,
-  db,
-  baseURL,
-}) => {
-  await createMember(db, "taro", "太郎", password);
-  const otherId = await createMember(db, "jiro", "次郎", password);
-  const planted = "A".repeat(43);
-  await context.addCookies(
-    [
-      [sessionCookieName, planted],
-      // Names a real member, so only the sign-in clearing it removes it.
-      ["zl_act_as", memberOwnerId(otherId)],
-      ["zl_access", "x"],
-      ["zl_refresh", "y"],
-    ].map(([name, value]) => ({
-      name,
-      value,
-      url: baseURL!,
-      httpOnly: true,
-      sameSite: "Lax" as const,
-    })),
-  );
-  // A token of the right shape that names no row is refused.
-  await expectSignedOut(page);
+test(
+  "a planted session cookie, an act-as cookie and Go's old cookies are replaced at sign-in",
+  anyWidth,
+  async ({ page, context, db, baseURL }) => {
+    await createMember(db, "taro", "太郎", password);
+    const otherId = await createMember(db, "jiro", "次郎", password);
+    const planted = "A".repeat(43);
+    await context.addCookies(
+      [
+        [sessionCookieName, planted],
+        // Names a real member, so only the sign-in clearing it removes it.
+        ["zl_act_as", memberOwnerId(otherId)],
+        ["zl_access", "x"],
+        ["zl_refresh", "y"],
+      ].map(([name, value]) => ({
+        name,
+        value,
+        url: baseURL!,
+        httpOnly: true,
+        sameSite: "Lax" as const,
+      })),
+    );
+    // A token of the right shape that names no row is refused.
+    await expectSignedOut(page);
 
-  await asMember(page, "taro", password, "/logs");
-  const session = await cookie(context, sessionCookieName);
-  expect(session?.value).toBeTruthy();
-  expect(session?.value).not.toBe(planted);
-  expect(await cookie(context, "zl_act_as")).toBeUndefined();
-  expect(await cookie(context, "zl_access")).toBeUndefined();
-  expect(await cookie(context, "zl_refresh")).toBeUndefined();
-  expect(await sessionRows(db)).toHaveLength(1);
-});
+    await asMember(page, "taro", password, "/logs");
+    const session = await cookie(context, sessionCookieName);
+    expect(session?.value).toBeTruthy();
+    expect(session?.value).not.toBe(planted);
+    expect(await cookie(context, "zl_act_as")).toBeUndefined();
+    expect(await cookie(context, "zl_access")).toBeUndefined();
+    expect(await cookie(context, "zl_refresh")).toBeUndefined();
+    expect(await sessionRows(db)).toHaveLength(1);
+  },
+);
 
-test("a second sign-in in the same browser deletes the previous session row", async ({
-  context,
-  db,
-}) => {
-  const taroId = await createMember(db, "taro", "太郎", password);
-  const jiroId = await createMember(db, "jiro", "次郎", password);
-  // The sign-in page sends a signed-in browser away, so both forms are open
-  // before the first sign-in. The second then submits with the first's cookie.
-  const first = await context.newPage();
-  const second = await context.newPage();
-  await second.goto("/signin?callbackUrl=%2Flogs");
+test(
+  "a second sign-in in the same browser deletes the previous session row",
+  anyWidth,
+  async ({ context, db }) => {
+    const taroId = await createMember(db, "taro", "太郎", password);
+    const jiroId = await createMember(db, "jiro", "次郎", password);
+    // The sign-in page sends a signed-in browser away, so both forms are open
+    // before the first sign-in. The second then submits with the first's cookie.
+    const first = await context.newPage();
+    const second = await context.newPage();
+    await second.goto("/signin?callbackUrl=%2Flogs");
 
-  await asMember(first, "taro", password, "/logs");
-  const firstToken = (await cookie(context, sessionCookieName))!.value;
-  expect(await sessionRows(db)).toEqual([
-    expect.objectContaining({
-      tokenHash: sha256(firstToken),
-      ownerId: memberOwnerId(taroId),
-    }),
-  ]);
+    await asMember(first, "taro", password, "/logs");
+    const firstToken = (await cookie(context, sessionCookieName))!.value;
+    expect(await sessionRows(db)).toEqual([
+      expect.objectContaining({
+        tokenHash: sha256(firstToken),
+        ownerId: memberOwnerId(taroId),
+      }),
+    ]);
 
-  await second.getByLabel("ログインID").fill("jiro");
-  await second.getByLabel("パスワード", { exact: true }).fill(password);
-  await second
-    .getByRole("button", { name: "IDとパスワードでログイン" })
-    .click();
-  await expect(second).toHaveURL((url) => url.pathname === "/logs");
+    await second.getByLabel("ログインID").fill("jiro");
+    await second.getByLabel("パスワード", { exact: true }).fill(password);
+    await second
+      .getByRole("button", { name: "IDとパスワードでログイン" })
+      .click();
+    await expect(second).toHaveURL((url) => url.pathname === "/logs");
 
-  const secondToken = (await cookie(context, sessionCookieName))!.value;
-  expect(secondToken).not.toBe(firstToken);
-  expect(await sessionRows(db)).toEqual([
-    expect.objectContaining({
-      tokenHash: sha256(secondToken),
-      ownerId: memberOwnerId(jiroId),
-    }),
-  ]);
-  const { rows } = await db.query(
-    `SELECT count(*)::int AS n FROM "Session" WHERE "tokenHash" = $1`,
-    [sha256(firstToken)],
-  );
-  expect(rows[0].n).toBe(0);
-});
+    const secondToken = (await cookie(context, sessionCookieName))!.value;
+    expect(secondToken).not.toBe(firstToken);
+    expect(await sessionRows(db)).toEqual([
+      expect.objectContaining({
+        tokenHash: sha256(secondToken),
+        ownerId: memberOwnerId(jiroId),
+      }),
+    ]);
+    const { rows } = await db.query(
+      `SELECT count(*)::int AS n FROM "Session" WHERE "tokenHash" = $1`,
+      [sha256(firstToken)],
+    );
+    expect(rows[0].n).toBe(0);
+  },
+);
 
-test("a guest session lasts 24 hours and is shared by the owner id guest", async ({
-  page,
-  context,
-  db,
-}) => {
-  await asGuest(page);
-  const session = await cookie(context, sessionCookieName);
-  expectLifetime(session?.expires, 86_400);
-  expect(await sessionRows(db)).toEqual([
-    {
-      tokenHash: sha256(session!.value),
-      ownerId: "guest",
-      role: "guest",
-      sessionVersion: null,
-      login: null,
-    },
-  ]);
-});
+test(
+  "a guest session lasts 24 hours and is shared by the owner id guest",
+  anyWidth,
+  async ({ page, context, db }) => {
+    await asGuest(page);
+    const session = await cookie(context, sessionCookieName);
+    expectLifetime(session?.expires, 86_400);
+    expect(await sessionRows(db)).toEqual([
+      {
+        tokenHash: sha256(session!.value),
+        ownerId: "guest",
+        role: "guest",
+        sessionVersion: null,
+        login: null,
+      },
+    ]);
+  },
+);
 
-test("an expired session is signed out", async ({ page, db }) => {
+test("an expired session is signed out", anyWidth, async ({ page, db }) => {
   await createMember(db, "taro", "太郎", password);
   await asMember(page, "taro", password, "/logs");
   await db.query(
@@ -205,7 +206,7 @@ test("an expired session is signed out", async ({ page, db }) => {
   await expectSignedOut(page);
 });
 
-test("a sign-in prunes expired sessions", async ({ page, db }) => {
+test("a sign-in prunes expired sessions", anyWidth, async ({ page, db }) => {
   const ids = [0, 1, 2].map(() => `c${randomBytes(12).toString("hex")}`);
   for (const id of ids)
     await db.query(
@@ -223,49 +224,48 @@ test("a sign-in prunes expired sessions", async ({ page, db }) => {
   expect(await sessionRows(db)).toHaveLength(1);
 });
 
-test("the old Go cookies alone are signed out", async ({
-  page,
-  context,
-  baseURL,
-}) => {
-  await context.addCookies(
-    [
-      ["zl_access", "x"],
-      ["zl_refresh", "y"],
-    ].map(([name, value]) => ({
-      name,
-      value,
-      url: baseURL!,
-      httpOnly: true,
-      sameSite: "Lax" as const,
-    })),
-  );
-  await expectSignedOut(page);
-});
+test(
+  "the old Go cookies alone are signed out",
+  anyWidth,
+  async ({ page, context, baseURL }) => {
+    await context.addCookies(
+      [
+        ["zl_access", "x"],
+        ["zl_refresh", "y"],
+      ].map(([name, value]) => ({
+        name,
+        value,
+        url: baseURL!,
+        httpOnly: true,
+        sameSite: "Lax" as const,
+      })),
+    );
+    await expectSignedOut(page);
+  },
+);
 
-test("a member's act-as cookie is ignored", async ({
-  page,
-  context,
-  db,
-  baseURL,
-}) => {
-  await createMember(db, "taro", "太郎", password);
-  const otherId = await createMember(db, "jiro", "次郎", password);
-  await asMember(page, "taro", password, "/logs");
-  // Only admins may act as someone; a member's own cookie changes nothing.
-  await context.addCookies([
-    {
-      name: "zl_act_as",
-      value: memberOwnerId(otherId),
-      url: baseURL!,
-      httpOnly: true,
-      sameSite: "Lax",
-    },
-  ]);
-  await page.goto("/logs");
-  await expect(page).toHaveURL((url) => url.pathname === "/logs");
-  await expect(page.getByText("太郎")).toBeVisible();
-  await expect(
-    page.getByRole("status").filter({ hasText: "として操作中" }),
-  ).toHaveCount(0);
-});
+test(
+  "a member's act-as cookie is ignored",
+  anyWidth,
+  async ({ page, context, db, baseURL }) => {
+    await createMember(db, "taro", "太郎", password);
+    const otherId = await createMember(db, "jiro", "次郎", password);
+    await asMember(page, "taro", password, "/logs");
+    // Only admins may act as someone; a member's own cookie changes nothing.
+    await context.addCookies([
+      {
+        name: "zl_act_as",
+        value: memberOwnerId(otherId),
+        url: baseURL!,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto("/logs");
+    await expect(page).toHaveURL((url) => url.pathname === "/logs");
+    await expect(page.getByText("太郎")).toBeVisible();
+    await expect(
+      page.getByRole("status").filter({ hasText: "として操作中" }),
+    ).toHaveCount(0);
+  },
+);

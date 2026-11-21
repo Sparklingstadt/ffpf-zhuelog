@@ -1,4 +1,5 @@
 import {
+  anyWidth,
   asGuest,
   asMember,
   createMember,
@@ -118,7 +119,7 @@ test("the AI draft comes from OpenAI and its usage is recorded", async ({
   ]);
 });
 
-test("guests have no vocabulary book", async ({ page }) => {
+test("guests have no vocabulary book", anyWidth, async ({ page }) => {
   await asGuest(page);
   await page.goto("/vocabulary");
   await expect(page).toHaveURL((url) => url.pathname === "/");

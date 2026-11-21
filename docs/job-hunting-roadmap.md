@@ -19,7 +19,7 @@
 ## いまの立ち位置
 
 - **公開リポジトリで、本番が動いている**：GitHub は public で、本番は <https://ffpf-zhuelog.sparklingstadt.com/> です。2026 年 9 月 20 日から 275 コミット、リリースノートは 31 本（v0.31.0 まで）あります。
-- **テストがある**：TypeScript の単体テスト 739 件、Playwright の E2E 322 件（PC とスマホの 2 つの幅）が、push のたびに lefthook で走ります。GitHub Actions の CI は置いていません。
+- **テストがある**：TypeScript の単体テスト 789 件、Playwright の E2E 269 件（PC の幅で 164 件、うち 105 件はスマホの幅でも）が、push のたびに lefthook で走ります。GitHub Actions の CI は置いていません。
 - **設計の記録がある**：README に層の構成（domain / application / infrastructure / presentation / composition）、`docs/superpowers/specs/` と `plans/` に機能ごとの設計と計画、`docs/security-review-2026-09-24.md` にセキュリティの見直しがあります。ただし、全体を 1 つにまとめた文書はなく、README は機能の説明が 30 節以上並んでいて、入口としては長すぎます。
 - **知らない人は触れない**：ID・パスワードのアカウントは管理者が発行し、セルフ登録はありません。ゲストは介詞・補語・量詞・了・过・着の練習だけ使えます。学習ノート・復習・単語帳・LINE・AI は、採用担当が自分で試せません。
 - **リポジトリの顔が古い**：GitHub の説明文は「ピン音」のまま（v0.30.0 で「ピンイン」にそろえました）、homepage は `ffpf-zhuelog.vercel.app`、トピックは空、LICENSE はありません。
