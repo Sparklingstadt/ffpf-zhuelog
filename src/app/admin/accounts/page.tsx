@@ -1,9 +1,7 @@
 import { redirect } from "next/navigation";
 
-import {
-  getCurrentAdminUser,
-  memberAccounts,
-} from "@/composition/identity-container";
+import { memberAccounts } from "@/composition/account-container";
+import { getCurrentAdminUser } from "@/composition/identity-container";
 import { startActingAsAction } from "@/presentation/actions/acting-actions";
 import { CreateAccountForm } from "@/presentation/components/auth/create-account-form";
 import { ResetPasswordForm } from "@/presentation/components/auth/reset-password-form";
@@ -34,7 +32,7 @@ export default async function AdminAccountsPage({
   if (!user) redirect("/");
   const actAsFailed = (await searchParams).actAs === "failed";
 
-  const accounts = await memberAccounts.listAccounts();
+  const accounts = await memberAccounts.list();
 
   return (
     <PageShell user={user} width="6xl">

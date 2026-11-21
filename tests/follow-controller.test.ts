@@ -4,8 +4,9 @@ import { test, type TestContext } from "node:test";
 import { redirect } from "next/navigation";
 
 import { LearningForbiddenError } from "../src/application/learning/learning-notes";
+import { SocialForbiddenError } from "../src/application/social/social-network";
+import type { FollowResult } from "../src/domain/social/follow";
 import { GoApiError } from "../src/infrastructure/go-api/client";
-import type { FollowResult } from "../src/infrastructure/go-api/social-gateway";
 import {
   handleFollow,
   handleShare,
@@ -368,4 +369,25 @@ test("share treats Go's 403 and LearningForbiddenError as not allowed and lets N
     }),
     (error) => error === thrown,
   );
+});
+
+test("follow and unfollow treat SocialForbiddenError as not allowed", async (t) => {
+  const errors = silenceConsoleError(t);
+  const following = recorder<FollowResult>(new SocialForbiddenError());
+  assert.deepEqual(
+    await handleFollow(form({ followeeId: "password:def" }), {
+      getMember: member,
+      run: following.run,
+    }),
+    unauthorized,
+  );
+  const unfollowing = recorder<void>(new SocialForbiddenError());
+  assert.deepEqual(
+    await handleUnfollow(form({ followeeId: "password:def" }), {
+      getMember: member,
+      run: unfollowing.run,
+    }),
+    unauthorized,
+  );
+  assert.equal(errors.mock.callCount(), 0);
 });

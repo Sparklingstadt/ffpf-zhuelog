@@ -43,7 +43,7 @@ const entrySelect = {
   sharedAt: true,
 } as const;
 
-function toKind(kind: string): LearningKind {
+export function toKind(kind: string): LearningKind {
   if ((LEARNING_KINDS as readonly string[]).includes(kind)) {
     return kind as LearningKind;
   }
@@ -83,7 +83,7 @@ function searchCondition(search: EntrySearch | undefined): Prisma.Sql {
 
 // The hints of the given notes in one query, each note's by position; [] for
 // a note without any.
-async function hintsByEntry(
+export async function hintsByEntry(
   client: Pick<PrismaClient, "hint">,
   ids: string[],
 ): Promise<Map<string, LearningHint[]>> {

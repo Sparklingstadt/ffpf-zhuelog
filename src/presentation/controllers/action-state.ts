@@ -3,9 +3,11 @@ import { z } from "zod";
 
 import { ConversationForbiddenError } from "@/application/chat/conversation-notes";
 import { QuestionForbiddenError } from "@/application/chat/question-notes";
+import { AccountAdminForbiddenError } from "@/application/identity/member-accounts";
 import { LearningForbiddenError } from "@/application/learning/learning-notes";
 import { PracticeForbiddenError } from "@/application/practice/practice-records";
 import { ReviewForbiddenError } from "@/application/review/review-queue";
+import { SocialForbiddenError } from "@/application/social/social-network";
 import { GoApiError } from "@/infrastructure/go-api/client";
 import { errorName } from "@/presentation/controllers/load-or";
 import { accountForbiddenMessage } from "@/presentation/presenters/account-action-errors";
@@ -31,9 +33,6 @@ export const noteIdSchema = z.string().regex(/^[a-z0-9]{1,64}$/);
 // act on.
 const userFacingCodes = new Set([
   "invalid_request",
-  "password_mismatch",
-  "invalid_current_password",
-  "login_id_taken",
   "vocabulary_exists",
   "too_large",
 ]);
@@ -60,11 +59,10 @@ function unexpectedFailureMessage(code: string, error: unknown): string {
 }
 
 // Runs an action that calls the Go API or the database. Next's own errors
-// (the redirect to /signin, notFound) are rethrown. Go's 403,
-// LearningForbiddenError, ReviewForbiddenError, PracticeForbiddenError,
-// QuestionForbiddenError and ConversationForbiddenError are treated as not
-// being allowed; other Go failures go through goFailureMessage, anything
-// else gets the generic text.
+// (the redirect to /signin, notFound) are rethrown. Go's 403 and the
+// application's forbidden errors (see isForbidden) are treated as not being
+// allowed; other Go failures go through goFailureMessage, anything else gets
+// the generic text.
 export async function attemptGoAction(
   code: string,
   run: () => Promise<ActionState>,
@@ -90,12 +88,10 @@ export type GoAttempt<T> =
   { ok: true; value: T } | { ok: false; message: string };
 
 // Runs an action's Go or database call and keeps its value. Next's own
-// errors are rethrown. Go's 403, LearningForbiddenError,
-// ReviewForbiddenError, PracticeForbiddenError, QuestionForbiddenError and
-// ConversationForbiddenError mean not allowed; a Go 404 gets `notFound`
-// when the action gives one; other Go failures go through goFailureMessage
-// and anything else gets the generic text, logging codes and error names
-// only.
+// errors are rethrown. Go's 403 and the application's forbidden errors (see
+// isForbidden) mean not allowed; a Go 404 gets `notFound` when the action
+// gives one; other Go failures go through goFailureMessage and anything else
+// gets the generic text, logging codes and error names only.
 export async function attemptGo<T>(
   code: string,
   run: () => Promise<T>,
@@ -125,6 +121,9 @@ export async function attemptGoResult(
   return attempt.ok ? { ok: true } : attempt;
 }
 
+// Go's 403, or an application refusing the signed-in user: learning notes,
+// reviews, practice records, questions, conversations, follows and member
+// accounts.
 function isForbidden(error: unknown): boolean {
   return (
     error instanceof LearningForbiddenError ||
@@ -132,6 +131,8 @@ function isForbidden(error: unknown): boolean {
     error instanceof PracticeForbiddenError ||
     error instanceof QuestionForbiddenError ||
     error instanceof ConversationForbiddenError ||
+    error instanceof SocialForbiddenError ||
+    error instanceof AccountAdminForbiddenError ||
     (error instanceof GoApiError && error.status === 403)
   );
 }

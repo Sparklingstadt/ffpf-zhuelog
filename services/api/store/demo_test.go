@@ -161,10 +161,7 @@ func TestResetDemoReplacesEverythingTheDemoOwns(t *testing.T) {
 	}
 	other := newOwner(t, s)
 	otherEntries := createEntries(t, s, other, now, 1, 0)
-	if err := s.Follow(ctx, owner, other, now); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Follow(ctx, other, owner, now); err != nil {
+	if _, err := s.pool.Exec(ctx, `INSERT INTO "Follow" ("followerId", "followeeId", "createdAt") VALUES ($1, $2, $3), ($2, $1, $3)`, owner, other, dbTime(now)); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
@@ -227,8 +224,9 @@ func TestResetDemoKeepsAnExistingAccount(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	loginID := newDemoLoginID(t, s)
-	made, err := s.CreatePasswordAccount(ctx, loginID, "試用", "scrypt:existing", fixedNow())
-	if err != nil {
+	made := newID()
+	if _, err := s.pool.Exec(ctx, `INSERT INTO "PasswordAccount" ("id", "loginId", "displayName", "passwordHash", "sessionVersion", "createdAt", "updatedAt") VALUES ($1, $2, '試用', 'scrypt:existing', 0, $3, $3)`,
+		made, loginID, dbTime(fixedNow())); err != nil {
 		t.Fatal(err)
 	}
 	id, err := s.ResetDemo(ctx, loginID, smallDemoSeed(fixedNow()), fixedNow())
@@ -236,7 +234,7 @@ func TestResetDemoKeepsAnExistingAccount(t *testing.T) {
 		t.Fatalf("ResetDemo: %v", err)
 	}
 	a, err := s.FindPasswordAccountByID(ctx, id)
-	if err != nil || id != made.ID || a.DisplayName != "試用" || a.PasswordHash != "scrypt:existing" {
+	if err != nil || id != made || a.DisplayName != "試用" || a.PasswordHash != "scrypt:existing" {
 		t.Fatalf("account = %+v, %v; want the existing one unchanged", a, err)
 	}
 }

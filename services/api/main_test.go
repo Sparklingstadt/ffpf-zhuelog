@@ -206,12 +206,6 @@ type tokens struct {
 	ExpiresIn    int    `json:"expiresIn"`
 }
 
-type entryResp struct {
-	ID            string `json:"id"`
-	OriginalText  string `json:"originalText"`
-	CorrectedText string `json:"correctedText"`
-}
-
 // directConn opens a plain pgx connection for fixtures (Prisma's ?schema=
 // parameter is not accepted by pgx).
 func directConn(t *testing.T, rawURL string) *pgx.Conn {
@@ -263,8 +257,7 @@ func TestRunEndToEnd(t *testing.T) {
 		_, _ = conn.Exec(ctx, `DELETE FROM "PasswordAccount" WHERE id = $1`, accountID)
 	})
 
-	// Two more members for the follow round trip: B shares an entry, C is a
-	// bystander whose shared entry must not reach A's timeline.
+	// Another member, whose wrong password the throttle counts.
 	type member struct{ accountID, loginID, owner string }
 	newMember := func(suffix string) member {
 		m := member{accountID: accountID + suffix}
@@ -276,15 +269,12 @@ func TestRunEndToEnd(t *testing.T) {
 		}
 		t.Cleanup(func() {
 			ctx := context.Background()
-			_, _ = conn.Exec(ctx,
-				`DELETE FROM "ImportBatch" WHERE id IN (SELECT "batchId" FROM "LearningEntry" WHERE "ownerId" = $1)`, m.owner)
-			_, _ = conn.Exec(ctx, `DELETE FROM "Follow" WHERE "followerId" = $1 OR "followeeId" = $1`, m.owner)
 			_, _ = conn.Exec(ctx, `DELETE FROM "ApiRefreshToken" WHERE "ownerId" = $1`, m.owner)
 			_, _ = conn.Exec(ctx, `DELETE FROM "PasswordAccount" WHERE id = $1`, m.accountID)
 		})
 		return m
 	}
-	memberB, memberC := newMember("b"), newMember("c")
+	memberC := newMember("c")
 
 	// Every sign-in below comes from 127.0.0.1, whose per-client count lives
 	// in the shared DB; start each run from zero so reruns within the
@@ -389,62 +379,15 @@ func TestRunEndToEnd(t *testing.T) {
 		t.Errorf("refresh did not return a new pair: %+v", second)
 	}
 
-	// Follow round trip: B and C each share an entry, A follows B only. The
-	// web writes and shares notes, so they are inserted directly.
-	shareEntry := func(m member, text string) {
-		t.Helper()
-		batchID, entryID := "cb"+m.accountID, "ce"+m.accountID
-		if _, err := conn.Exec(setup,
-			`INSERT INTO "ImportBatch" ("id", "fileName", "rowCount", "importedAt") VALUES ($1, 'e2e', 1, now())`, batchID); err != nil {
-			t.Fatalf("insert batch for %s: %v", m.loginID, err)
-		}
-		if _, err := conn.Exec(setup,
-			`INSERT INTO "LearningEntry" ("id", "originalText", "correctedText", "pinyin", "ownerId", "batchId", "sharedAt")
-			 VALUES ($1, $2, $3, 'p', $4, $5, now())`, entryID, text, text+"!", m.owner, batchID); err != nil {
-			t.Fatalf("insert shared note for %s: %v", m.loginID, err)
-		}
+	// The refreshed access token works.
+	var me struct {
+		OwnerID string `json:"ownerId"`
 	}
-	shareEntry(memberB, "from b")
-	shareEntry(memberC, "from c")
-
-	var members struct {
-		Members []struct {
-			OwnerID     string `json:"ownerId"`
-			DisplayName string `json:"displayName"`
-			Following   bool   `json:"following"`
-		} `json:"members"`
-		FollowingCount int `json:"followingCount"`
+	if code := c.do("GET", "/v1/me", second.AccessToken, nil, &me); code != http.StatusOK {
+		t.Fatalf("me = %d", code)
 	}
-	if code := c.do("GET", "/v1/members", second.AccessToken, nil, &members); code != http.StatusOK {
-		t.Fatalf("members = %d", code)
-	}
-	listed := map[string]bool{}
-	for _, m := range members.Members {
-		listed[m.OwnerID] = m.Following
-	}
-	if _, ok := listed[memberB.owner]; !ok || listed[memberB.owner] || members.FollowingCount != 0 {
-		t.Fatalf("members before follow = %+v", members)
-	}
-	if code := c.do("PUT", "/v1/follows/"+owner, second.AccessToken, nil, nil); code != http.StatusBadRequest {
-		t.Fatalf("self follow = %d, want 400", code)
-	}
-	if code := c.do("PUT", "/v1/follows/"+memberB.owner, second.AccessToken, nil, nil); code != http.StatusNoContent {
-		t.Fatalf("follow = %d", code)
-	}
-	var timeline struct {
-		Items []struct {
-			Entry     entryResp `json:"entry"`
-			OwnerID   string    `json:"ownerId"`
-			OwnerName string    `json:"ownerName"`
-		} `json:"items"`
-		NextCursor *string `json:"nextCursor"`
-	}
-	if code := c.do("GET", "/v1/timeline", second.AccessToken, nil, &timeline); code != http.StatusOK {
-		t.Fatalf("timeline = %d", code)
-	}
-	if len(timeline.Items) != 1 || timeline.Items[0].OwnerID != memberB.owner ||
-		timeline.Items[0].OwnerName != "E2E-b" || timeline.Items[0].Entry.OriginalText != "from b" || timeline.NextCursor != nil {
-		t.Fatalf("timeline = %+v", timeline)
+	if me.OwnerID != owner {
+		t.Fatalf("me.ownerId = %q, want %q", me.OwnerID, owner)
 	}
 
 	cancel()

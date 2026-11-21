@@ -112,7 +112,7 @@ func countRows(t *testing.T, s *Store, query string, args ...any) int {
 
 // The web writes the notes (trash, restore, share) since stage 2 of the Go
 // retirement; these helpers make the same changes for the Go code that still
-// reads the notes (timeline, reviews, LINE, demo reset).
+// reads the notes (reviews, LINE, demo reset).
 
 // trashNote moves one of the owner's notes to the trash at at.
 func trashNote(t *testing.T, s *Store, owner, id string, at time.Time) {
@@ -128,13 +128,6 @@ func restoreNote(t *testing.T, s *Store, owner, id string) {
 	 WHERE "id" = $1 AND "ownerId" = $2 AND "deletedAt" IS NOT NULL`, id, owner)
 }
 
-// shareNote shares one of the owner's notes outside the trash at at.
-func shareNote(t *testing.T, s *Store, owner, id string, at time.Time) {
-	t.Helper()
-	execOne(t, s, `UPDATE "LearningEntry" SET "sharedAt" = $3
-	 WHERE "id" = $1 AND "ownerId" = $2 AND "deletedAt" IS NULL`, id, owner, dbTime(at))
-}
-
 // execOne runs an UPDATE that must change exactly one row.
 func execOne(t *testing.T, s *Store, query string, args ...any) {
 	t.Helper()
@@ -148,7 +141,7 @@ func execOne(t *testing.T, s *Store, query string, args ...any) {
 }
 
 // liveNotes returns the owner's notes outside the trash with their hints,
-// newest first, read with the scan the timeline and reviews use.
+// newest first, read with the scan the reviews use.
 func liveNotes(t *testing.T, s *Store, owner string) []Entry {
 	t.Helper()
 	return readNotes(t, s, `SELECT `+entryColumns+` FROM "LearningEntry"

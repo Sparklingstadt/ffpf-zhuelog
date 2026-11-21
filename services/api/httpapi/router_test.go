@@ -19,7 +19,7 @@ func TestNoRouteAcceptsUserParam(t *testing.T) {
 		return auth.Principal{OwnerID: testOwner, Role: auth.RoleAdmin}, nil
 	}}
 	d := Deps{
-		Auth: a, Follows: &fakeFollows{},
+		Auth: a,
 		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret,
 		Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
 	}.withDefaults()
@@ -53,7 +53,7 @@ func TestNoRouteAcceptsUserParam(t *testing.T) {
 // their credential checks are tested in line_handlers_test.go.
 func TestPublicRouteSetIsExactlyTheKnownRoutes(t *testing.T) {
 	d := Deps{
-		Auth: &fakeAuth{}, Follows: &fakeFollows{},
+		Auth: &fakeAuth{},
 		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret,
 		DemoReset: &fakeDemoReset{}, Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
 	}.withDefaults()
@@ -125,7 +125,7 @@ func TestRoutesRejectGuests(t *testing.T) {
 		return auth.Principal{OwnerID: auth.GuestOwnerID, Role: auth.RoleGuest}, nil
 	}}
 	d := Deps{
-		Auth: a, Follows: &fakeFollows{},
+		Auth: a,
 		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret,
 		Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
 	}.withDefaults()

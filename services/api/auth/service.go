@@ -48,7 +48,6 @@ var (
 type Store interface {
 	FindPasswordAccountByLoginID(ctx context.Context, loginID string) (store.PasswordAccount, error)
 	FindPasswordAccountByID(ctx context.Context, id string) (store.PasswordAccount, error)
-	SetPassword(ctx context.Context, id, hash string, now time.Time) error
 	SessionVersion(ctx context.Context, accountID string) (int, error)
 	ConsumeThrottle(ctx context.Context, key string, limit int, window time.Duration, now time.Time) (bool, error)
 	ResetThrottle(ctx context.Context, key string) error
@@ -75,13 +74,12 @@ type FFPF interface {
 	Exchange(ctx context.Context, code, verifier, redirectURI, nonce string) (FFPFUser, error)
 }
 
-// Hasher checks and hashes passwords; *PasswordVerifier satisfies it. Errors
+// Hasher checks passwords; *PasswordVerifier satisfies it. Errors
 // mean the computation did not run (for example ctx was done while waiting for
 // a slot); a wrong password or malformed hash is (false, nil).
 type Hasher interface {
 	Verify(ctx context.Context, password, hash string) (bool, error)
 	Simulate(ctx context.Context, password string) error
-	Hash(ctx context.Context, password string) (string, error)
 }
 
 // TokenPair is what a login or refresh returns. ExpiresIn is the access
@@ -92,10 +90,9 @@ type TokenPair struct {
 	RefreshExpiresIn          int
 }
 
-// Service runs sign-in, refresh-token rotation, logout, the per-request
-// revocation check, and members' own password changes. Errors are
-// ErrUnauthorized, ErrForbidden, ErrThrottled, ErrFFPFDisabled, the GitHub and
-// FFPF ID clients' sentinels, ChangePassword's sentinels, or (for store
+// Service runs sign-in, refresh-token rotation, logout and the per-request
+// revocation check. Errors are ErrUnauthorized, ErrForbidden, ErrThrottled,
+// ErrFFPFDisabled, the GitHub and FFPF ID clients' sentinels, or (for store
 // failures) other errors; none of them contain tokens, hashes, codes or
 // passwords.
 type Service struct {
