@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Sends one request to every Go API endpoint against the local API
-# (pnpm run api:dev) and stops at the first unexpected status.
-# See docs/api-local.md.
+# Checks the local Go API (pnpm run api:dev): the Go API serves only its health
+# routes since stage 11, so sign-in answers 404. Stops at the first unexpected
+# status. See docs/api-local.md.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -15,7 +15,6 @@ trap 'rm -f "$body"' EXIT
 call() {
   local method=$1 path=$2 want=$3 data=${4:-}
   local args=(-s -o "$body" -w '%{http_code}' -X "$method" "$base$path")
-  [ -n "${TOKEN:-}" ] && args+=(-H "Authorization: Bearer $TOKEN")
   [ -n "$data" ] && args+=(-H 'Content-Type: application/json' --data "$data")
   local got
   got=$(curl "${args[@]}")
@@ -30,14 +29,7 @@ call() {
 }
 
 call GET /health 200 >/dev/null
-
-login=$(jq -n --arg l "$API_LOCAL_DEMO_LOGIN" --arg p "$API_LOCAL_DEMO_PASSWORD" '{loginId: $l, password: $p}')
-tokens=$(call POST /v1/auth/password 200 "$login")
-TOKEN=$(jq -r .accessToken <<<"$tokens")
-refresh=$(jq -r .refreshToken <<<"$tokens")
-
-TOKEN=""
-renewed=$(call POST /v1/auth/refresh 200 "$(jq -n --arg t "$refresh" '{refreshToken: $t}')")
-call POST /v1/auth/logout 204 "$(jq -n --arg t "$(jq -r .refreshToken <<<"$renewed")" '{refreshToken: $t}')" >/dev/null
+call GET /ping 200 >/dev/null
+call POST /v1/auth/password 404 '{}' >/dev/null
 
 echo "All requests succeeded." >&2

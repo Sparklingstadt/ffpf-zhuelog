@@ -1,4 +1,4 @@
-import type { IdentityAccounts } from "../identity/token-current-user-provider";
+import type { IdentityAccounts } from "../identity/session-current-user-provider";
 import { prisma } from "./prisma-client";
 
 // Reads only the columns that decide who is signed in.

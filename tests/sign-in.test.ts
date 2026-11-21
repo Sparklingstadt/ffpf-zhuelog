@@ -404,6 +404,25 @@ test('store and hasher errors are thrown, not "invalid"', async () => {
   assert.deepEqual(hashFails.resets, []);
 });
 
+// Go: TestLoginPasswordHasherErrorIsNotUnauthorized.
+test("a hasher failure is an error, not invalid", async () => {
+  const f = fixture();
+  f.deps.passwords.verify = async () => {
+    throw new RangeError("scrypt");
+  };
+  await assert.rejects(
+    createSignIn(f.deps).withPassword(
+      { loginId: "alice", password: "pw" },
+      client,
+    ),
+    { name: "RangeError" },
+  );
+  // The login key keeps its count, and no session is started.
+  assert.equal(f.count(`login:${client}:alice`), 1);
+  assert.deepEqual(f.resets, []);
+  assert.deepEqual(f.started, []);
+});
+
 test('a guest shares the owner id "guest" for 24 hours', async () => {
   const f = fixture();
   assert.deepEqual(await f.signIn.asGuest(client), {

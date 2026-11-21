@@ -1,46 +1,53 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import type {
+  IssuedSession,
+  SignInResult,
+} from "@/application/identity/sign-in";
+import { newSessionCookies, signIn } from "@/composition/sign-in-container";
 import { clientAddress } from "@/infrastructure/auth/client-address";
-import {
-  GoApiError,
-  loginGitHub,
-  type GoTokens,
-} from "@/infrastructure/go-api/client";
 import {
   githubRedirectUri,
   isSameState,
   parseOAuthCookie,
   publicOrigin,
   requestOrigin,
-} from "@/infrastructure/go-api/github-oauth";
-import { isSecureRequest } from "@/infrastructure/go-api/go-api-session";
+} from "@/infrastructure/auth/github-oauth";
+import { isSecureRequest } from "@/infrastructure/auth/secure-request";
 import {
+  cookieWrite,
   OAUTH_COOKIE,
-  sessionCookie,
-  clearedActAsCookie,
-  sessionCookieOptions,
-  type SessionCookie,
-} from "@/infrastructure/go-api/session-cookies";
+  SESSION_COOKIE,
+  type CookieWrite,
+} from "@/infrastructure/auth/session-cookies";
+import {
+  errorName,
+  oauthFailurePath,
+} from "@/presentation/controllers/sign-in-controller";
 import { getSafeCallbackPath } from "@/presentation/http/safe-callback-path";
 
 export type GitHubCallbackDeps = {
-  login: (
-    code: string,
-    codeVerifier: string,
-    redirectUri: string,
-    clientIp: string,
-  ) => Promise<GoTokens>;
+  signIn: (
+    input: { code: string; verifier: string; redirectUri: string },
+    client: string,
+  ) => Promise<SignInResult>;
+  sessionCookies: (
+    previousToken: string | undefined,
+    session: IssuedSession,
+    secure: boolean,
+  ) => Promise<CookieWrite[]>;
 };
 
 const defaultDeps: GitHubCallbackDeps = {
-  login: loginGitHub,
+  signIn: (input, client) => signIn.withGitHub(input, client),
+  sessionCookies: newSessionCookies,
 };
 
-const failurePath = (error: "AccessDenied" | "OAuthCallbackError") =>
-  `/signin?error=${error}`;
-
-// GET /api/auth/callback/github/go. The code, state and tokens never go into
-// a redirect URL or a log, and zl_oauth is cleared on every outcome.
+// GET /api/auth/callback/github/go (the path Go's sign-in registered with
+// the OAuth App). The state must match the zl_oauth cookie of a GitHub start
+// before anything is signed in; the web exchanges the code with the same
+// redirect URI the authorize step sent. The code, state and tokens never go
+// into a redirect URL or a log, and zl_oauth is cleared on every outcome.
 export async function handleGitHubCallback(
   request: NextRequest,
   deps: GitHubCallbackDeps = defaultDeps,
@@ -53,8 +60,8 @@ export async function handleGitHubCallback(
   const state = params.get("state");
   const saved = parseOAuthCookie(request.cookies.get(OAUTH_COOKIE)?.value);
 
-  let target: string = failurePath("OAuthCallbackError");
-  const cookies: SessionCookie[] = [sessionCookie(OAUTH_COOKIE, "", 0, secure)];
+  let target = oauthFailurePath("error");
+  const cookies: CookieWrite[] = [cookieWrite(OAUTH_COOKIE, "", 0, secure)];
   if (
     !params.has("error") &&
     saved &&
@@ -63,20 +70,29 @@ export async function handleGitHubCallback(
     isSameState(state, saved.state)
   ) {
     try {
-      const tokens = await deps.login(
-        code,
-        saved.verifier,
-        githubRedirectUri(origin),
+      const result = await deps.signIn(
+        {
+          code,
+          verifier: saved.verifier,
+          redirectUri: githubRedirectUri(origin),
+        },
         clientAddress(request.headers),
       );
-      cookies.push(
-        ...sessionCookieOptions(tokens, secure),
-        clearedActAsCookie(secure),
-      );
-      target = getSafeCallbackPath(saved.callbackPath);
+      if (result.ok) {
+        cookies.push(
+          ...(await deps.sessionCookies(
+            request.cookies.get(SESSION_COOKIE)?.value || undefined,
+            result.session,
+            secure,
+          )),
+        );
+        target = getSafeCallbackPath(saved.callbackPath);
+      } else {
+        console.warn("SIGN_IN_GITHUB_REFUSED", result.reason);
+        target = oauthFailurePath(result.reason);
+      }
     } catch (error) {
-      if (error instanceof GoApiError && error.status === 403)
-        target = failurePath("AccessDenied");
+      console.error("SIGN_IN_GITHUB_FAILED", errorName(error));
     }
   }
 

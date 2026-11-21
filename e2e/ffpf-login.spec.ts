@@ -13,9 +13,9 @@ import {
 const password = "member-password-1";
 
 // Signs in through the real button: the web sends the browser to the stub's
-// /oauth/authorize, which comes straight back with a code; the web's callback
-// hands it to the Go API, which exchanges it at the stub and verifies the ID
-// token (signature, iss, aud, exp, nonce) before starting a member session.
+// /oauth/authorize, which comes straight back with a code; the web exchanges it
+// at the stub and verifies the ID token itself (signature, iss, aud, exp,
+// nonce) before starting a member session.
 async function signInWithFfpf(page: Page, callback = "/") {
   await page.goto(`/signin?callbackUrl=${encodeURIComponent(callback)}`);
   await page.getByRole("button", { name: "FFPF IDでログイン" }).click();
@@ -29,8 +29,7 @@ async function signInWithFfpf(page: Page, callback = "/") {
 
 async function sessionCookies(context: BrowserContext) {
   const cookies = await context.cookies();
-  const value = (name: string) => cookies.find((c) => c.name === name)?.value;
-  return { access: value("zl_access"), refresh: value("zl_refresh") };
+  return { session: cookies.find((c) => c.name === "zl_session")?.value };
 }
 
 const memberRow = (page: Page, name: string) =>
@@ -74,6 +73,12 @@ test("an FFPF ID user signs in, keeps notes, gets the portal link and signs out"
   expect(
     (await db.query('SELECT "ownerId" FROM "LearningEntry"')).rows,
   ).toEqual([{ ownerId: `ffpf:${ffpfStubUser.sub}` }]);
+  expect(
+    (await db.query('SELECT "ownerId", role, "sessionVersion" FROM "Session"'))
+      .rows,
+  ).toEqual([
+    { ownerId: `ffpf:${ffpfStubUser.sub}`, role: "member", sessionVersion: 0 },
+  ]);
 
   // No password here: the page points to the portal instead of the form.
   await page.goto("/account/password");
@@ -87,10 +92,8 @@ test("an FFPF ID user signs in, keeps notes, gets the portal link and signs out"
   await expect(
     page.getByRole("button", { name: "ゲストとして使う" }),
   ).toBeVisible();
-  expect(await sessionCookies(context)).toEqual({
-    access: undefined,
-    refresh: undefined,
-  });
+  expect(await sessionCookies(context)).toEqual({ session: undefined });
+  expect((await db.query('SELECT 1 FROM "Session"')).rows).toEqual([]);
   await page.goto("/logs");
   await expect(page).toHaveURL(/\/signin(?:\?|$)/);
 });

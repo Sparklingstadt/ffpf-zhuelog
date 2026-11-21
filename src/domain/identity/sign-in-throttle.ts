@@ -1,6 +1,7 @@
 // Attempt limits counted in the SignInThrottle table, with Go's keys and
-// numbers (services/api/auth/service.go, services/api/httpapi/router.go), so
-// the web and Go's sign-in share the same counts until sign-in moves too.
+// numbers (services/api/auth/service.go, services/api/httpapi/router.go),
+// kept so the counts in SignInThrottle carried over when sign-in moved
+// (stage 11).
 
 export type ThrottleRule = { limit: number; windowMs: number };
 

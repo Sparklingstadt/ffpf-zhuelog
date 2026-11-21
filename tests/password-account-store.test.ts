@@ -129,3 +129,24 @@ test("a replaced-meanwhile change deletes nothing", async () => {
   );
   assert.deepEqual(deletes, []);
 });
+
+test("sign-in looks an account up by loginId, reading only what it needs", async () => {
+  const queries: unknown[] = [];
+  const row = { id: "cacc1", passwordHash: "scrypt:x", sessionVersion: 3 };
+  const db = {
+    passwordAccount: {
+      findUnique: async (args: unknown) => {
+        queries.push(args);
+        return row;
+      },
+    },
+  } as unknown as PrismaClient;
+  const store = createPasswordAccountStore(() => db);
+  assert.deepEqual(await store.findByLoginId("alice"), row);
+  assert.deepEqual(queries, [
+    {
+      where: { loginId: "alice" },
+      select: { id: true, passwordHash: true, sessionVersion: true },
+    },
+  ]);
+});

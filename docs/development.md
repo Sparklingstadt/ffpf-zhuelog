@@ -4,47 +4,50 @@
 
 ## 起動方法
 
-前提: Node.js 24 または 26、Docker Desktop、Go（`services/api/go.mod` の版）
+前提: Node.js 24 または 26、Docker Desktop（Go は要りません。Go の health を試すときだけ、`services/api/go.mod` の版が要ります）
 
-ログインも学習ノートの読み書きも Go API で行います。ただし Web は、ログイン中の人を決めるために、Go が出すアクセストークンを `API_JWT_SECRET` で確かめ、DB のアカウントを Prisma で読みます。手元では、ローカル専用の Go API（[docs/api-local.md](api-local.md)）を使います。
+ログインも学習ノートの読み書きも Web が行います（段階 11 で、ログインも Go から Web に移りました）。ログイン中の人は、Cookie `zl_session` のトークンから DB の `Session` の行を引いて決めるので、手元では DB だけが要ります。Go API は要りません。
 
 ```bash
 cp .env.example .env
 pnpm install
-pnpm run api:db    # Go API 用の DB を起動し、マイグレーションとサンプルデータを入れる
-pnpm run api:dev   # Go API を 127.0.0.1:8081 で起動（起動したまま、別のターミナルで次へ）
+pnpm run api:db    # サンプルの会員を入れた DB を 127.0.0.1:55440 に起動する（Go は起動しない）
 pnpm run dev
 ```
 
-ブラウザで <http://localhost:3000> を開き、ゲストか、サンプルの会員（`docs/api-local.md` の表）でログインします。GitHub ログインは本物の OAuth App が要るので、手元では使えません。
+ブラウザーで <http://localhost:3000> を開き、ゲストか、サンプルの会員（[docs/api-local.md](api-local.md) の表）でログインします。GitHub ログインは本物の OAuth App が要るので、手元では使えません。
 
-`.env` の `GO_API_URL`・`API_WEB_PROXY_SECRET`・`AUTH_URL`・`AUTH_GITHUB_ID` が Web の設定です（FFPF ID を試すときは `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID` も）。`DATABASE_URL`・`API_JWT_SECRET`・`AUTH_ALLOWED_GITHUB_IDS`・`DEMO_LOGIN_ID` も Web が実行時に使います。アカウントはローカルの Go API の DB にあるので、`.env` では次のようにそろえます（値は `scripts/api-local-env.sh` にあります）。
+`.env` では、次のようにそろえます（値は `scripts/api-local-env.sh` にあります）。
 
-- `DATABASE_URL`: `API_LOCAL_DATABASE_URL`（`pnpm run api:db` の DB）と同じ値。
-- `API_JWT_SECRET`: `scripts/api-local-env.sh` の `API_JWT_SECRET` と同じ値。違うと Go が出したトークンを Web が確かめられず、ログインしても未ログインになります。
+- `DATABASE_URL`: `API_LOCAL_DATABASE_URL`（`pnpm run api:db` の DB）と同じ値。サンプルの会員がこの DB にあります。`docker compose up -d` の開発用 DB（`.env.example` の値）を使うと、会員がいないので、ログインできるのはゲストだけです。
+- `AUTH_URL`: `http://localhost:3000`。GitHub と FFPF ID の `redirect_uri` を決めます。
 - `AUTH_ALLOWED_GITHUB_IDS`・`DEMO_LOGIN_ID`: ローカルでは `0` と `demo`。
+- `GITHUB_WEB_CLIENT_SECRET`（`AUTH_GITHUB_ID` と一緒）: GitHub のボタンを使うときだけ。無いと GitHub のボタンは押せません。
+- `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID`・`FFPF_ID_CLIENT_SECRET`: 手元で FFPF ID を試すときだけ。3 つそろわないと、FFPF ID のボタンは出ません。
+
+`GO_API_URL`・`API_WEB_PROXY_SECRET`・`API_JWT_SECRET` は、段階 11b から Web が読みません（段階 12 で消します）。`.env` に残っていても害はありません。
 
 Prisma のマイグレーションと seed は、同じ `DATABASE_URL` を使います（`docker compose up -d` の開発用 DB に対して実行するときは、そちらの URL に替えます）。
 
 ## 認証・認可の設定
 
-ログインは Go API が行います。Web の Vercel プロジェクトに入れる値は `GO_API_URL`・`API_WEB_PROXY_SECRET`・`AUTH_URL`・`AUTH_GITHUB_ID` の 4 つです（FFPF ID を使うときは、下の「FFPF ID でのログイン」の 2 つも）。Go API に入れる値も含めて、手順は [docs/api-deployment.md](api-deployment.md) の「6. Web の設定」にあります。
+ログインは Web が行います。Web の Vercel プロジェクトに入れる値は `AUTH_URL`・`AUTH_GITHUB_ID`・`GITHUB_WEB_CLIENT_SECRET`・`AUTH_ALLOWED_GITHUB_IDS`・`DEMO_LOGIN_ID`・`DATABASE_URL` です（FFPF ID を使うときは、下の「FFPF ID でのログイン」の 3 つも）。手順は [docs/api-deployment.md](api-deployment.md) の「6. Web の設定」にあります。
 
 GitHubの **Settings → Developer settings → OAuth Apps** で、Web 用のOAuth Appを作成します。
 
 - Homepage URL: `https://本番ドメイン`
 - Authorization callback URL: `https://本番ドメイン/api/auth/callback/github`（実際の callback は、この下の `/api/auth/callback/github/go` です）
 
-Client ID は Web の `AUTH_GITHUB_ID` と Go API の `GITHUB_WEB_CLIENT_ID` に、Client Secret は Go API の `GITHUB_WEB_CLIENT_SECRET` だけに入れます。
+Client ID は Web の `AUTH_GITHUB_ID` に、Client Secret は Web の `GITHUB_WEB_CLIENT_SECRET` に入れます。Web は、`AUTH_URL` の origin から `redirect_uri`（`/api/auth/callback/github/go`）を作って、GitHub に code を渡します。
 
-管理者の許可リストは、Go API の `AUTH_ALLOWED_GITHUB_IDS` です。GitHubユーザーの **数字のID** をカンマ区切りで並べます。IDは `https://api.github.com/users/<ログイン名>` の `id` で確認できます。ログイン名は使いません。ログイン名は変更でき、空いた名前を別人が取得できるためです。空の場合は安全側に倒し、すべてのGitHubユーザーを拒否します。
+管理者の許可リストは、Web の `AUTH_ALLOWED_GITHUB_IDS` です。Web がモジュールを読み込むときに 1 度だけ読むので、値を変えたら再デプロイします。GitHubユーザーの **数字のID** をカンマ区切りで並べます。IDは `https://api.github.com/users/<ログイン名>` の `id` で確認できます。ログイン名は使いません。ログイン名は変更でき、空いた名前を別人が取得できるためです。空の場合は安全側に倒し、すべてのGitHubユーザーを拒否します。
 
 ### FFPF ID でのログイン
 
-ログイン画面の「FFPF IDでログイン」から、FFPF ID（ffpf-portal の OpenID Connect）のアカウントでメンバーとしてログインできます。任意の機能です。Web の `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID` が無ければボタンは出ません（Web は自分の 2 つの変数だけを見ます）。Go API の設定が無いままボタンを出すと、押してもログインは `503` で失敗するので、Web と Go API の両方に入れてください。
+ログイン画面の「FFPF IDでログイン」から、FFPF ID（ffpf-portal の OpenID Connect）のアカウントでメンバーとしてログインできます。任意の機能です。Web の `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID`・`FFPF_ID_CLIENT_SECRET` の 3 つがそろっていないと、ボタンは出ません。
 
 - portal で `pnpm run oidc:client zhuelog` を実行してクライアントを登録します（redirect URI は `https://本番ドメイン/api/auth/callback/ffpf`。手順は ffpf-portal の README）。
-- Web には `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID` を、Go API には `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID`・`FFPF_ID_CLIENT_SECRET`・`FFPF_ID_REDIRECT_URI` を入れます。Client Secret は Go API だけに入れます。
+- Web に `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID`・`FFPF_ID_CLIENT_SECRET` を入れます。`redirect_uri` は、`AUTH_URL` の origin に `/api/auth/callback/ffpf` を付けた値で、portal に登録した値と 1 文字も違わない必要があります。
 - 本番 DB にマイグレーション `20261027120000_add_ffpf_accounts`（`FfpfAccount` の追加）が必要です。main へのマージで Web の本番ビルドが自動で当てます（下の「マイグレーションの適用」）。
 - 詳しい手順は [docs/api-deployment.md](api-deployment.md) の「9. FFPF ID でのログイン」にあります。
 
@@ -61,8 +64,8 @@ ID・パスワードのmemberのアカウントは、GitHub管理者が `/admin/
 
 - **作成・再設定**: ログインID（英小文字・数字・`.` `_` `-` の3〜32文字）と表示名を入力します。パスワードは12〜128文字で、空欄にすると自動生成します。パスワードは作成・再設定の直後に一度だけ画面に表示され、あとから確認できません。管理者から本人に別の経路で伝えてください。
 - **パスワード変更**: memberは、メニューの「パスワード変更」（`/account/password`）から自分で変更できます。変更するとログアウトされ、新しいパスワードでログインし直します。FFPF ID のメンバーには、この画面に FFPF ID のマイページへのリンクを出します（パスワードは portal で変えます）。
-- **試行回数の制限**: 接続元（IPアドレス。IPv6は /64 単位）ごとに数えます。同じ接続元から同じログインIDへ15分間に5回まで、ログインID全体で15分間に20回までです。超えると、その接続元からは15分間、正しいパスワードでもログインできません。アカウント単位ではロックしないので、ほかの場所からの失敗で本人が締め出されることはありません。接続元は Vercel が設定する `x-real-ip` / `x-forwarded-for` で判定し、Web が Go API に渡します。回数は Go API が DB のテーブル（`SignInThrottle`）で数えます。ログイン画面には、IDの有無や制限の状態を区別せず「IDまたはパスワードが違うか、一時的にロックされています。」とだけ表示します。パスワード変更画面の現在のパスワードも、アカウントごとに15分間5回までです。
-- **セッションの失効**: パスワードを再設定・変更すると、そのアカウントの既存のセッションは、すべて使えなくなります。セッションの有効性（`sessionVersion`）は、Go API も Web も、リクエストのたびにDBで確認します。
+- **試行回数の制限**: 接続元（IPアドレス。IPv6は /64 単位）ごとに数えます。同じ接続元から同じログインIDへ15分間に5回まで、ログインID全体で15分間に20回までです。超えると、その接続元からは15分間、正しいパスワードでもログインできません。アカウント単位ではロックしないので、ほかの場所からの失敗で本人が締め出されることはありません。接続元は Vercel が設定する `x-real-ip` / `x-forwarded-for` で、Web が判定します。回数は Web が DB のテーブル（`SignInThrottle`）で数えます。ログイン画面には、IDの有無や制限の状態を区別せず「IDまたはパスワードが違うか、一時的にロックされています。」とだけ表示します。パスワード変更画面の現在のパスワードも、アカウントごとに15分間5回までです。
+- **セッションの失効**: パスワードを再設定・変更すると、そのアカウントの既存のセッションは、すべて使えなくなります。ログインのセッションは Web が DB の `Session` に持ち、会員の `sessionVersion` と管理者の許可リストは、リクエストのたびに確認します。パスワードを変えると、そのアカウントの `Session` の行はすべて消えます。
 - **パスワードの保存**: scrypt（N=2^15, r=8, p=1）でハッシュ化したものだけを保存します。平文はDBにもログにも残しません。
 - **記録の持ち主**: memberの学習ノートは、所有者 `password:<アカウントID>`（FFPF ID のメンバーは `ffpf:<sub>`）に紐づきます。本人と管理者が見られます（詳細は「学習ノートの公開範囲」）。
 
@@ -79,15 +82,15 @@ rm .env.production.local
 
 適用前にデプロイすると、ID・パスワードでのログインと `/admin/accounts` だけがエラーになります。GitHubログインとゲストログインは影響を受けません。
 
-認可はProxyによるページ保護に加え、画面のServer ComponentとServer Actionでも検証します。データの権限は、最後に Go API が確かめます。
+認可はProxyによるページ保護に加え、画面のServer ComponentとServer Actionでも検証します。データの権限は、Server Component・Server Action・Route Handler が、リクエストのたびに `Session` から確かめます。
 
 ログイン画面からは、GitHub認証を使わずゲストとしてログインすることもできます。学習ノート・日付別ログ・CSVインポート・フォローは管理者・メンバー専用です。書き込み権限と記録の持ち主はServer Actionでも検証します。
 
 開発用PostgreSQLはDockerホストの `127.0.0.1` にだけ公開されます。`.env` はGit管理対象外です。秘密情報をコミットせず、公開・漏洩した可能性がある場合は該当する認証情報を直ちに失効・再発行してください。
 
-## ネイティブアプリ向け API
+## Go API（`services/api`）
 
-`services/api/` に、ネイティブアプリ（iOS など）と Web が使う Go 製 API があります。Web とは別の Vercel プロジェクトとして動かし、本番の Neon を読み書きします。ローカルでのテストは `pnpm run test:unit` に含まれます（DB を使うテストは `API_TEST_DATABASE_URL` が無いと skip されます）。Vercel の準備、モバイル用 GitHub OAuth App の登録、本番へのマイグレーション適用、デプロイの手順は [docs/api-deployment.md](api-deployment.md) を参照してください。手元で API を起動して試す手順（`pnpm run api:db` → `pnpm run api:dev` → `pnpm run api:smoke`）は [docs/api-local.md](api-local.md) にあります。
+`services/api/` の Go 製 API は、段階 11b から `/health`・`/healthz`・`/ping` を返すだけです。Web とは別の Vercel プロジェクトで、読む環境変数は `PORT` と `DATABASE_URL` だけです。段階 12 で、`services/api`・`GO_API_URL`・`API_WEB_PROXY_SECRET`・`API_JWT_SECRET`・`ApiRefreshToken`・`docs-site/` と一緒に消します。ローカルでのテストは `pnpm run test:unit` に含まれます（DB を使うテストは `API_TEST_DATABASE_URL` が無いと skip されます）。デプロイの手順は [docs/api-deployment.md](api-deployment.md)、手元で試す手順（`pnpm run api:db` → `pnpm run api:dev` → `pnpm run api:smoke`）は [docs/api-local.md](api-local.md) にあります。
 
 ## 学習ノートの持ち主の本番への反映
 
@@ -141,14 +144,14 @@ rm .env.production.local
 - `Hint`: 学習文に属する可変個数のヒントと表示順
 - `PasswordAccount`: ID・パスワードのアカウント（ログインID・表示名・パスワードのハッシュ・`sessionVersion`）。`failedAttempts`・`lockedUntil` は旧ロック用で、今は使っていません
 - `FfpfAccount`: FFPF ID でログインしたメンバー（`sub`・メールアドレス・表示名・`sessionVersion`・最終ログイン日時）。ログインのたびに最新の値で更新します
-- `SignInThrottle`: ログイン試行回数の制限用のカウンター（キー・回数・期限）。Go API が使います
-- `Session`: Web のログインのセッション（トークンの SHA-256 ハッシュ・所有者・役割・期限）。段階 11a で表と部品を足しましたが、使うのは段階 11b からで、それまでは空です
+- `SignInThrottle`: ログイン試行回数の制限用のカウンター（キー・回数・期限）。Web が使います
+- `Session`: Web のログインのセッション（トークンの SHA-256 ハッシュ・所有者・役割・期限）。会員と管理者は 30 日、ゲストは 24 時間で、使っても延びません。期限切れの行は、ログインのたびに 100 行まで消します
 
 インポートはファイル単位のトランザクションです。途中の行でエラーになった場合、そのファイルのデータは1件も保存されません。
 
 ## セキュリティ
 
-ページの保護は `src/proxy.ts` と各Server Componentで、書き込みはServer Action内で再検証します。管理者の許可リストは、Go API がリクエストのたびに確認します。リモートPostgreSQL接続は `sslmode=verify-full` に統一し、証明書とホスト名を検証します。
+ページの保護は `src/proxy.ts` と各Server Componentで、書き込みはServer Action内で再検証します。管理者の許可リストは、Web がリクエストのたびに確認します。リモートPostgreSQL接続は `sslmode=verify-full` に統一し、証明書とホスト名を検証します。
 
 HTMLにはリクエストごとのnonce付きCSPを設定します。ログの秘匿化、監査範囲と制約は [2026-09-24 セキュリティレビュー](security-review-2026-09-24.md) を参照してください（AI機能はその後削除しました）。
 
@@ -165,7 +168,7 @@ pnpm run db:seed
 
 ## Playwright E2E
 
-Node.js 24 または 26、起動済みのDocker（Compose v2）、Go（`services/api/go.mod` の版）が必要です。
+Node.js 24 または 26、起動済みのDocker（Compose v2）が必要です。Go は要りません。
 
 ```bash
 pnpm install --frozen-lockfile
@@ -178,7 +181,7 @@ pnpm run test:e2e:stop
 ```
 
 Desktop Chromiumとモバイル幅（Pixel 7 / Chromium）の両方で検証します。
-テスト起動時に専用PostgreSQLを起動し、既存マイグレーションを適用してTurbopackでビルド、`127.0.0.1:3107`に本番モードのサーバーを起動します。Go API（`services/api`）もビルドして `127.0.0.1:3108` で起動し、Web はこれを通してログインとデータの読み書きを行います。
+テスト起動時に専用PostgreSQLを起動し、既存マイグレーションを適用してTurbopackでビルド、`127.0.0.1:3107`に本番モードのサーバーを起動します。Go API は起動しません（段階 11b から、ログインも Web が受け持つため）。
 既存サーバーは再利用しません。通常の開発サーバーは停止してから実行してください（ビルド先の`.next`を共有します）。
 
 - 認証前のリダイレクト、ゲストログイン／ログアウト、外部URLへのリダイレクト拒否
@@ -192,7 +195,7 @@ Desktop Chromiumとモバイル幅（Pixel 7 / Chromium）の両方で検証し�
 DBは`127.0.0.1:55439/zhuelog_e2e`に固定され、`compose.e2e.yaml`の専用コンテナだけを使用します。
 各テスト前にこのDBの学習データを初期化します。ポート55439を別のDBに割り当てないでください。
 通常の`DATABASE_URL`と実際のOAuth情報は使用しません。
-管理者セッションはテスト側で実行ごとのランダムな秘密鍵を使って作成します。本番コードに認証バイパスは追加していません。
+管理者のセッションは、テスト側が `Session` の行を DB に書き、そのトークンを Cookie `zl_session` に入れて作ります。本番コードに認証バイパスは追加していません。
 GitHub OAuthの外部ログインは、このE2Eの対象外です。
 
 失敗時のスクリーンショット・トレースは`test-results/`、HTMLレポートは`playwright-report/`に出力されます（Git管理外）。

@@ -1,13 +1,11 @@
 // Password accounts, written with the statements Go's store used
-// (services/api/store/accounts.go; stage 9 reference §4 and §8) so Go's
-// sign-in, which stays until stage 11, keeps reading what the web writes.
+// (services/api/store/accounts.go; stage 9 reference §4 and §8).
 //
 // Every password change bumps "sessionVersion" in the same UPDATE as the
-// hash. Go's Authenticate and Refresh and the web's TokenCurrentUserProvider
-// compare it on every request, so that one statement revokes every existing
-// session (Go's refresh also revokes the token family); the same transaction
-// deletes the owner's Session rows (stage 11); ApiRefreshToken is left to Go
-// until stage 12.
+// hash. The web's SessionCurrentUserProvider compares it on every request,
+// so that one statement revokes every existing session; the same
+// transaction deletes the owner's Session rows (stage 11). ApiRefreshToken
+// is left alone until stage 12 drops it.
 //
 // A member's own change replaces the hash only while it is still the one the
 // member's current password was verified against (compare-and-swap in the
@@ -121,6 +119,18 @@ export function createPasswordAccountStore(
         select: { loginId: true },
       });
       return row?.loginId ?? null;
+    },
+
+    // Sign-in's lookup by the (already normalised) loginId.
+    async findByLoginId(loginId: string): Promise<{
+      id: string;
+      passwordHash: string;
+      sessionVersion: number;
+    } | null> {
+      return db().passwordAccount.findUnique({
+        where: { loginId },
+        select: { id: true, passwordHash: true, sessionVersion: true },
+      });
     },
 
     async credentials(

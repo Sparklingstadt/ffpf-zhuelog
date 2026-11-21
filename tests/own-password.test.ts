@@ -58,10 +58,12 @@ function fakeDeps(
     counts = {},
     account = { id: "cacc1", passwordHash: "hash:correct horse" },
     replaced = true,
+    verifyError,
   }: {
     counts?: Record<string, number>;
     account?: { id: string; passwordHash: string } | null;
     replaced?: boolean;
+    verifyError?: Error;
   } = {},
 ) {
   const calls: unknown[][] = [];
@@ -85,6 +87,7 @@ function fakeDeps(
       },
       verify: async (password, hash) => {
         calls.push(["verify", password, hash]);
+        if (verifyError) throw verifyError;
         return hash === `hash:${password}`;
       },
       simulate: async (password) => {
@@ -346,4 +349,18 @@ test("a hash replaced meanwhile is a wrong current password", async () => {
     "invalid-current-password",
   );
   assert.deepEqual(named(calls, "reset"), []);
+});
+
+// The real hasher rethrows a scrypt failure (Go returns it as an error): the
+// change fails as an error, never as a wrong current password, and nothing
+// is replaced or reset.
+test("a hasher failure is thrown, not invalid-current-password", async () => {
+  const { ownPassword, calls } = fakeDeps(member, {
+    verifyError: new RangeError("scrypt"),
+  });
+  await assert.rejects(ownPassword.change(valid, client), {
+    name: "RangeError",
+  });
+  for (const name of ["hash", "replacePassword", "reset", "simulate"])
+    assert.deepEqual(named(calls, name), [], name);
 });

@@ -18,6 +18,7 @@ if (!["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)) {
   throw new Error("api-local-seed only writes to a database on this machine.");
 }
 
+// Members for Go's sign-in, unused since stage 11 (stage 12 removes this seed).
 const members = [
   {
     loginId: required("API_LOCAL_DEMO_LOGIN"),

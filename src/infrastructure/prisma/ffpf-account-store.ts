@@ -1,6 +1,6 @@
 // FFPF ID accounts, written with Go's statement (services/api/store/
-// ffpf_accounts.go) so Go's sign-in, which stays until stage 11b, and the
-// web's read the same rows.
+// ffpf_accounts.go), so the rows Go's sign-in wrote before stage 11 read
+// the same way.
 import { Prisma, type PrismaClient } from "../../generated/prisma/client";
 
 type FfpfAccountInput = { id: string; email: string; displayName: string };

@@ -14,9 +14,10 @@ import {
   demoAvailable,
   getCurrentViewerUser,
 } from "@/composition/identity-container";
+import { warmSignIn } from "@/composition/sign-in-container";
 import {
   ffpfIdConfig,
-  isAuthConfigured,
+  githubOAuthConfig,
 } from "@/infrastructure/config/environment";
 import {
   signInAsDemoAction,
@@ -63,12 +64,15 @@ type SignInPageProps = {
 };
 
 export default async function SignInPage({ searchParams }: SignInPageProps) {
+  // Builds the hasher's dummy hash before a password can be submitted, so an
+  // unknown login id costs what a known one does. Never throws; not awaited.
+  void warmSignIn();
   const user = await getCurrentViewerUser();
   if (user) redirect("/");
 
   const params = await searchParams;
   const callbackPath = getSafeCallbackPath(params.callbackUrl);
-  const isConfigured = isAuthConfigured();
+  const isConfigured = Boolean(githubOAuthConfig());
   const showFfpfId = Boolean(ffpfIdConfig());
   const showDemo = await demoAvailable();
   const errorMessage = params.error

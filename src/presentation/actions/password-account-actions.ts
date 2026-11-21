@@ -7,9 +7,9 @@ import { memberAccounts, ownPassword } from "@/composition/account-container";
 import {
   getCurrentAdminUser,
   getCurrentMemberUser,
+  signOutTo,
 } from "@/composition/identity-container";
 import { clientAddress } from "@/infrastructure/auth/client-address";
-import { signOutViaGo } from "@/infrastructure/go-api/go-api-session";
 import { attemptGo } from "@/presentation/controllers/action-state";
 import {
   accountForbiddenMessage,
@@ -137,10 +137,9 @@ export async function changeOwnPasswordAction(
   if (outcome === "rate-limited") console.error("PASSWORD_CHANGE_RATE_LIMITED");
   if (outcome !== "changed")
     return { status: "error", message: changePasswordMessage(outcome) };
-  // The change bumped the account's sessionVersion, which revokes every
-  // session of the member; Go's sign-out also revokes this browser's refresh
-  // token family (until sign-in moves, stage 11). Runs outside any
-  // try/catch: signOutViaGo ends by throwing NEXT_REDIRECT.
-  await signOutViaGo("/signin?notice=password-changed");
+  // The change already deleted every Session row of the member; signOutTo
+  // clears this browser's cookies. Runs outside any try/catch: signOutTo
+  // ends by throwing NEXT_REDIRECT.
+  await signOutTo("/signin?notice=password-changed");
   return { status: "idle" };
 }

@@ -180,12 +180,12 @@ test("the reset empties exactly those tables, in one transaction", async () => {
   );
 });
 
-// What the reset writes to the account Go's sign-in reads: the demo's loginId,
-// the hash no password matches, session version 0 and now for both times, and
-// nothing at all when the account is there (its password, name and session
-// version stay). Members carry no role column: Go's LoginDemo makes the demo
-// a member from this row.
-test("the account is Go's demo account", async () => {
+// What the reset writes to the account the web's demo sign-in reads: the
+// demo's loginId, the hash no password matches, session version 0 and now for
+// both times, and nothing at all when the account is there (its password, name
+// and session version stay). Members carry no role column: the demo sign-in
+// makes the demo a member from this row (and DEMO_PASSWORD_HASH marks it).
+test("the account is the demo account", async () => {
   const { db, calls } = fakeDb();
   const store = createDemoResetStore(
     () => db,
