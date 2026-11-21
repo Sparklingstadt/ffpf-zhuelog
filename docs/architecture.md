@@ -14,7 +14,7 @@ flowchart LR
     SA[Server Actions]
     RH[Route Handlers<br/>チャット・クイック質問の答え・OAuth の callback・LINE の webhook と拾い直し・デモのリセット]
     PX[proxy.ts<br/>refresh token の更新]
-    CRON[Cron<br/>vercel.json に登録するのは段階 10c<br/>拾い直し・デモのリセット]
+    CRON[Vercel Cron（Web の vercel.json）<br/>/api/cron/line-drain・/api/cron/demo-reset]
   end
   subgraph API[Go API on Vercel]
     AUTH[auth]
@@ -41,7 +41,7 @@ flowchart LR
 
 - ブラウザーが話す相手は Web だけです。Go API を直接は呼びません。
 - Web は、ログイン中の人を決めるために、実行時に DB のアカウント（`PasswordAccount`・`FfpfAccount`）を Prisma（`src/infrastructure/prisma/`）で読みます。アクセストークンも Web が自分で確かめます。単語帳（一覧・保存・削除）と学習ノート（一覧・検索・カレンダー・日ごとの表示・ゴミ箱・共有・CSV の取り込み）と練習の記録（介詞・補語）も Prisma で読み書きし（CSV は Web が自分で検証・解析し、1 つのトランザクションで保存します）、「AI で下書き」・クイック質問・ChatGPT と話すは Web が OpenAI を直接呼んで、使った量を `AiUsage` に記録し、質問ノートと会話ノートも Prisma で読み書きし、フォロー（会員の一覧・タイムライン・フォローする／外す）も Prisma で読み書きし、会員の管理（作成・一覧・パスワードの再設定）と自分のパスワードの変更も Prisma で書き（ハッシュは Web が scrypt で Go と同じ形に作ります）、学習ログ（カレンダー）と AI の利用量の月ごとの集計は Prisma で読むだけです。LINE も Web が受け、webhook の署名を確かめ、添削・翻訳の OpenAI を直接呼んで reply し、連携とメッセージ（`LineLink`・`LineLinkCode`・`LineMessage`）を Prisma で読み書きします。デモのリセットも Web が 1 つのトランザクションで行います。ログインは今も Go API を通します。機能は、設計書（[2026-11-16-deprecate-go-backend-design.md](superpowers/specs/2026-11-16-deprecate-go-backend-design.md)）の段階ごとに、Go から Web へ移していきます。
-- LINE は Web の `POST /api/line/webhook` に Webhook を送ります。Web が署名を確かめ、OpenAI で添削・翻訳し、結果を reply で返します。拾い直しと朝のお知らせは Web の `GET /api/cron/line-drain` です。Go API には LINE のコードはありません（段階 10b で消しました）。Cron に登録するのは段階 10c で、それまでは定期には動きません。
+- LINE は Web の `POST /api/line/webhook` に Webhook を送ります。Web が署名を確かめ、OpenAI で添削・翻訳し、結果を reply で返します。拾い直しと朝のお知らせは Web の `GET /api/cron/line-drain` で、Web の `vercel.json` の Cron が毎日 06:00 JST ごろに呼びます。Go API には LINE のコードも Cron もありません。
 
 ## 2. Web と Go API を分けた理由
 
@@ -160,13 +160,13 @@ sequenceDiagram
   else 時間が足りない
     Note over W,D: pending のまま残す
   end
-  Note over W: 毎朝 06:00 の拾い直し（GET /api/cron/line-drain）
+  Note over W: 毎朝 06:00 JST ごろの拾い直し（Vercel Cron が GET /api/cron/line-drain を呼ぶ）
   W->>D: 5 分以上 pending の行を拾い直す（2 回まで）
   W->>L: 結果か失敗を push。期日の来た復習のお知らせ
 ```
 
 - Web の入口は `src/app/api/line/webhook/route.ts`（Webhook）と `src/app/api/cron/line-drain/route.ts`（拾い直しと朝のお知らせ）です。Webhook は署名を、リクエストの生のバイト列に対して確かめます。連携の画面（`/account/line`）と Server Actions も Web が Prisma で読み書きし、Go を呼びません。
-- **Cron は段階 10c で登録します**：`/api/cron/line-drain` と `/api/cron/demo-reset` は Web にありますが、`vercel.json` の Cron には、まだ登録していません（登録は段階 10c）。それまでは、拾い直しもデモのリセットも定期には動きません（拾い直しが飛ぶのは設計どおりです。リセットは `docs/api-deployment.md` の curl で手でできます）。Go の Cron は段階 10b で消しました。
+- **Cron は Web の `vercel.json` に登録しています**：`/api/cron/line-drain` は `0 21 * * *`（06:00 JST）、`/api/cron/demo-reset` は `0 19 * * *`（04:00 JST）で、どちらも UTC です。Vercel が `Authorization: Bearer <CRON_SECRET>` を付けて `GET` します。Hobby の Cron は時刻が 1 時間単位で、最大 59 分遅れることがあります。Go に Cron はありません。
 - 同じ Webhook が 2 回届いても、`webhookEventId` の一意制約で 1 回だけ処理します。
 - Vercel の関数の時間切れで添削が終わらなかった文は、`pending` のまま残し、毎朝の拾い直しが拾い直します。
 - 無料プランの push は月 200 通です。お知らせの前に残りを確かめ、拾い直しの返信のために 30 通を残します。

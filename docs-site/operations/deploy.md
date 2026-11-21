@@ -170,7 +170,7 @@ PR ごとの Web のプレビューも、ログインとデータの読み書き
 
 ## 7. LINE 連携とデモのリセット
 
-LINE 連携（webhook・連携の画面・拾い直しと復習のお知らせ）とデモの毎晩のリセットは、段階 10 で Web に移り、Go からは消えました（段階 10b）。Go API の `services/api/vercel.json` には Cron がもうありません。Go API の Vercel プロジェクトの `LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`OPENAI_API_KEY`・`OPENAI_LEARNING_MODEL`・`CRON_SECRET`・`OPENAI_API_BASE_URL`・`LINE_API_BASE_URL` は使いません（Go を再デプロイしたあとに消してよい値です。`DEMO_LOGIN_ID` は Go のログインが使うので残します）。Web の Cron は段階 10c で登録するので、それまで拾い直しとデモのリセットは定期には動きません。Web の環境変数と、LINE の Webhook URL を Web に変える手順は、リポジトリの `docs/api-deployment.md` の「7. LINE 連携」と「段階10（LINE とデモのリセットの cron）のマージの前と後」にあります。
+LINE 連携（webhook・連携の画面・拾い直しと復習のお知らせ）とデモの毎晩のリセットは、段階 10 で Web に移り、Go からは消えました（段階 10b）。Go API の `services/api/vercel.json` には Cron がもうありません。Go API の Vercel プロジェクトの `LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`OPENAI_API_KEY`・`OPENAI_LEARNING_MODEL`・`CRON_SECRET`・`OPENAI_API_BASE_URL`・`LINE_API_BASE_URL` は使いません（Go を再デプロイしたあとに消してよい値です。`DEMO_LOGIN_ID` は Go のログインが使うので残します）。拾い直しとデモのリセットの Cron は、Web の `vercel.json` に登録してあります（06:00 JST と 04:00 JST。Hobby では最大 59 分遅れることがあります）。Web の環境変数と、LINE の Webhook URL を Web に変える手順は、リポジトリの `docs/api-deployment.md` の「7. LINE 連携」と「段階10（LINE とデモのリセットの cron）のマージの前と後」にあります。
 
 ## 8. 会話練習（ChatGPT）
 
