@@ -1,5 +1,7 @@
 # LINE 連携
 
+> **移行の注**：Web の画面と webhook は段階 10a で Web（`POST /api/line/webhook`・`/account/line`・`GET /api/cron/line-drain`）に移り、Go のこのページのルートは段階 10b で消えます（それまでは Go もまだ答えます）。LINE の Webhook URL を Web に変えるまでは、今までどおり Go が受けます。切り替えの順番は、リポジトリの `docs/api-deployment.md` の「段階10（LINE とデモのリセットの cron）のマージの前と後」にあります。
+
 LINE に送った文を OpenAI で添削・翻訳し、送った人の学習ノートに追加するためのルートです。LINE の設定が無いときは、このページのルートはすべて `404 not_found` で、API は普通に起動します。
 
 - 使えるのは会員と admin です。ゲストは `403`（`forbidden`）です。

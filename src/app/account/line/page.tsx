@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { LineLinkForbiddenError } from "@/application/line/line-link";
 import { getCurrentViewerUser } from "@/composition/identity-container";
 import { lineLink } from "@/composition/line-container";
 import {
@@ -25,7 +26,15 @@ export default async function LineLinkPage() {
   // The viewer guard lets guests through; they have no LINE link.
   if (!user || user.role === "guest") redirect("/");
 
-  const link = await lineLink.getLineLink();
+  // The demo account and an admin acting as a member have no LINE link
+  // either. redirect is called outside the try: it throws.
+  let link: Awaited<ReturnType<typeof lineLink.status>> | null = null;
+  try {
+    link = await lineLink.status();
+  } catch (error) {
+    if (!(error instanceof LineLinkForbiddenError)) throw error;
+  }
+  if (!link) redirect("/");
 
   return (
     <>
