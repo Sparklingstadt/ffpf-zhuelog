@@ -27,30 +27,30 @@ SELECT 1 FROM pg_collation WHERE collname = 'ja-x-icu';
 
 ## 2. Web の設定
 
-Web（Next.js）は、ログインも学習ノートの読み書きも自分で行います。ログイン中の人は、Cookie `zl_session` のトークンの SHA-256 で DB の `Session` の行を引いて決め、DB の `PasswordAccount`・`FfpfAccount` を Prisma（`src/infrastructure/prisma/`）で読みます。ログインとログアウトも Web が行います（GitHub・ID とパスワード・FFPF ID・ゲスト・デモ）。会員の管理とパスワードの変更は `PasswordAccount`・`SignInThrottle` に書き、パスワードの変更と管理者の再設定は、そのアカウントの `Session` も同じトランザクションで消します。設計は `docs/superpowers/specs/2026-11-16-deprecate-go-backend-design.md` にあります。
+Web（Next.js）は、ログインも学習ノートの読み書きも自分で行います。ログイン中の人は、Cookie `zl_session` のトークンの SHA-256 で DB の `Session` の行を引いて決め、DB の `PasswordAccount`・`SidAccount` を Prisma（`src/infrastructure/prisma/`）で読みます。ログインとログアウトも Web が行います（GitHub・ID とパスワード・Sparklingstadt ID・ゲスト・デモ）。会員の管理とパスワードの変更は `PasswordAccount`・`SignInThrottle` に書き、パスワードの変更と管理者の再設定は、そのアカウントの `Session` も同じトランザクションで消します。設計は `docs/superpowers/specs/2026-11-16-deprecate-go-backend-design.md` にあります。
 
 Web の Vercel プロジェクトの Production に入れる、ログインの値は次のとおりです。
 
-| 名前                       | 内容                                                                                                                       |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `AUTH_URL`                 | Web の公開されている origin（例: `https://ffpf-zhuelog.sparklingstadt.com`）。GitHub と FFPF ID の `redirect_uri` を決める |
-| `AUTH_GITHUB_ID`           | Web 用 GitHub OAuth App の Client ID                                                                                       |
-| `GITHUB_WEB_CLIENT_SECRET` | Web 用 GitHub OAuth App の Client Secret（段階 11 までは Go に入れていた値。読み戻せないときは、新しく作る）               |
-| `FFPF_ID_ISSUER`           | FFPF ID（portal）の issuer（段階 11 までは Go に入れていた値）                                                             |
-| `FFPF_ID_CLIENT_ID`        | portal に登録した zhuelog のクライアント ID（段階 11 までは Go に入れていた値）                                            |
-| `FFPF_ID_CLIENT_SECRET`    | portal の `pnpm run oidc:client zhuelog` で作ったシークレット（段階 11 までは Go に入れていた値）                          |
+| 名前                       | 内容                                                                                                                                 |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `AUTH_URL`                 | Web の公開されている origin（例: `https://ffpf-zhuelog.sparklingstadt.com`）。GitHub と Sparklingstadt ID の `redirect_uri` を決める |
+| `AUTH_GITHUB_ID`           | Web 用 GitHub OAuth App の Client ID                                                                                                 |
+| `GITHUB_WEB_CLIENT_SECRET` | Web 用 GitHub OAuth App の Client Secret（段階 11 までは Go に入れていた値。読み戻せないときは、新しく作る）                         |
+| `SID_ISSUER`               | Sparklingstadt ID の issuer（本番は `https://id.sparklingstadt.com`、末尾スラッシュなし）                                            |
+| `SID_CLIENT_ID`            | Sparklingstadt ID に登録した zhuelog のクライアント ID                                                                               |
+| `SID_CLIENT_SECRET`        | sparklingstadt-id の `pnpm run oidc:client zhuelog` で作ったシークレット                                                             |
 
 注意:
 
-- `AUTH_URL` は必ず設定し、利用者が開く Web の origin と同じにします。GitHub の `redirect_uri` は `<AUTH_URL の origin>/api/auth/callback/github/go`、FFPF ID の `redirect_uri` は `<AUTH_URL の origin>/api/auth/callback/ffpf` です。どちらも、GitHub の OAuth App と FFPF ID の portal に登録した URL と **1 文字も違わず** 同じにします。
-- GitHub の OAuth App の callback URL は、以前から登録している `https://<Web>/api/auth/callback/github` のままにします。GitHub は登録した callback URL の **下の階層** を `redirect_uri` に使えるので、`/api/auth/callback/github/go` はその下になり、設定を変える必要はありません。FFPF ID の portal に登録した redirect URI も変えません。
+- `AUTH_URL` は必ず設定し、利用者が開く Web の origin と同じにします。GitHub の `redirect_uri` は `<AUTH_URL の origin>/api/auth/callback/github/go`、Sparklingstadt ID の `redirect_uri` は `<AUTH_URL の origin>/api/auth/callback/sid` です。どちらも、GitHub の OAuth App と Sparklingstadt ID に登録した URL と **1 文字も違わず** 同じにします。
+- GitHub の OAuth App の callback URL は、以前から登録している `https://<Web>/api/auth/callback/github` のままにします。GitHub は登録した callback URL の **下の階層** を `redirect_uri` に使えるので、`/api/auth/callback/github/go` はその下になり、設定を変える必要はありません。Sparklingstadt ID に登録した redirect URI は、`https://<Web>/api/auth/callback/sid` です（「5. Sparklingstadt ID でのログイン」）。
 - `AUTH_GITHUB_ID` と `GITHUB_WEB_CLIENT_SECRET` は、同じ OAuth App の組にします。違うと、GitHub が `code` の交換を断り、GitHub ログインが失敗します。
 - 足りないときの症状：
   - `GITHUB_WEB_CLIENT_SECRET`（または `AUTH_GITHUB_ID`）が無いと、ログイン画面の GitHub のボタンが押せません。
-  - `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID`・`FFPF_ID_CLIENT_SECRET` のどれかが無い（または `FFPF_ID_ISSUER` が `https://` でない。`localhost`・`127.0.0.1` を除く）と、「FFPF IDでログイン」が出ません。
-  - `AUTH_URL` が違う（または無くて、リクエストの origin と登録した URL が合わない）と、GitHub と FFPF ID が `redirect_uri` を登録した URL と合わないと判断して、ログインできません。ログイン画面に戻り、エラーが出ます。
+  - `SID_ISSUER`・`SID_CLIENT_ID`・`SID_CLIENT_SECRET` のどれかが無い（または `SID_ISSUER` が `https://` でない。`localhost`・`127.0.0.1` を除く）と、「Sparklingstadt ID でログイン」が出ません。
+  - `AUTH_URL` が違う（または無くて、リクエストの origin と登録した URL が合わない）と、GitHub と Sparklingstadt ID が `redirect_uri` を登録した URL と合わないと判断して、ログインできません。ログイン画面に戻り、エラーが出ます。
 - パスワード・ゲスト・デモのログインは、上の値が無くても使えます（`DATABASE_URL` は要ります）。
-- Preview には、`GITHUB_WEB_CLIENT_SECRET` と `FFPF_ID_CLIENT_SECRET` を **入れません**。プレビューの URL は、GitHub と FFPF ID に登録した URL と合わないためです（下の「Web のプレビュー（Preview）」）。
+- Preview には、`GITHUB_WEB_CLIENT_SECRET` と `SID_CLIENT_SECRET` を **入れません**。プレビューの URL は、GitHub と Sparklingstadt ID に登録した URL と合わないためです（下の「Web のプレビュー（Preview）」）。
 - `AUTH_SECRET`・`AUTH_GITHUB_SECRET` は、Web では使いません。`DATABASE_URL` は、Web の実行時にも、**本番のビルド**の `prisma migrate deploy` にも使います（「1. 本番の DB とマイグレーション」）。消すと、ログイン中の人を決められず、本番の Web のデプロイも失敗します。
 
 LINE 連携を使うときは、Web の Vercel プロジェクトに、もう 1 つ次の値を入れます（無くても Web は動きます）。
@@ -62,7 +62,7 @@ LINE 連携を使うときは、Web の Vercel プロジェクトに、もう 1 
 
 `LINE_ADD_FRIEND_URL` が無い・`https://` で始まらないときは、「LINE 連携」画面（`/account/line`）に友だち追加のリンクを出しません（連携コードの発行と解除はできます）。
 
-FFPF ID でのログインを使うときは、上の表の `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID`・`FFPF_ID_CLIENT_SECRET` の 3 つを入れます（「5. FFPF ID でのログイン」）。3 つがそろっていないときは、ログイン画面に「FFPF IDでログイン」を出しません。
+Sparklingstadt ID でのログインを使うときは、上の表の `SID_ISSUER`・`SID_CLIENT_ID`・`SID_CLIENT_SECRET` の 3 つを入れます（「5. Sparklingstadt ID でのログイン」）。3 つがそろっていないときは、ログイン画面に「Sparklingstadt ID でログイン」を出しません。
 
 ### Web が実行時に使う DB と秘密
 
@@ -106,7 +106,7 @@ PR ごとの Web のプレビューも、ログインとデータの読み書き
 
 注意:
 
-- `GITHUB_WEB_CLIENT_SECRET` と `FFPF_ID_CLIENT_SECRET` は、Preview に **入れません**。プレビューの URL はデプロイごとに変わり、GitHub と FFPF ID に登録した URL と合わないので、どちらのログインも使えないためです（GitHub のボタンは押せず、「FFPF IDでログイン」は出ません）。パスワード・ゲスト・デモのログインは使えます。
+- `GITHUB_WEB_CLIENT_SECRET` と `SID_CLIENT_SECRET` は、Preview に **入れません**。プレビューの URL はデプロイごとに変わり、GitHub と Sparklingstadt ID に登録した URL と合わないので、どちらのログインも使えないためです（GitHub のボタンは押せず、「Sparklingstadt ID でログイン」は出ません）。パスワード・ゲスト・デモのログインは使えます。
 - 同じ DB や秘密を本番と使うと、プレビューが本番のデータを書き換えかねません。必ず別の Neon ブランチにします。
 - プレビューのビルドはマイグレーションを当てません（`scripts/vercel-build.sh`）。そのため、Preview 用の Neon ブランチのスキーマは、手で合わせます。次のどちらかです。
   - 本番から Neon のブランチを作り直す（スキーマも本番と同じになる）。
@@ -119,7 +119,7 @@ Web を戻すときは、Vercel の **Instant Rollback** で前のデプロイ�
 
 ### e2e
 
-`pnpm run test:e2e` は、Docker の Postgres と Web（本番モードでビルド）と、外部サービスのスタブだけで動きます。テストの側が `Session` の行を DB に書き、そのトークンを Cookie `zl_session` に入れてログインした状態を作ります。パスワードとゲストのログインは、画面から実際に行います。FFPF ID は、`e2e/fixtures/ffpf-oidc-stub.ts` の小さな OIDC スタブ（`127.0.0.1:3110`）を issuer にして、Web に `FFPF_ID_*` を渡します。スタブは実行ごとに P-256 の鍵を作り、`/oauth/authorize` は画面を出さずにすぐ `redirect_uri?code=stub&state=…` へ戻し、`/oauth/token` は ES256 の ID トークンを、`/oauth/jwks` はその公開鍵を返します。本物の portal には接続しません。
+`pnpm run test:e2e` は、Docker の Postgres と Web（本番モードでビルド）と、外部サービスのスタブだけで動きます。テストの側が `Session` の行を DB に書き、そのトークンを Cookie `zl_session` に入れてログインした状態を作ります。パスワードとゲストのログインは、画面から実際に行います。Sparklingstadt ID は、`e2e/fixtures/sid-oidc-stub.ts` の小さな OIDC スタブ（`127.0.0.1:3110`）を issuer にして、Web に `SID_*` を渡します。スタブは実行ごとに P-256 の鍵を作り、`/oauth/authorize` は画面を出さずにすぐ `redirect_uri?code=stub&state=…` へ戻し、`/oauth/token` は ES256 の ID トークンを、`/oauth/jwks` はその公開鍵を返し、`/oauth/logout` は `post_logout_redirect_uri` へ戻します。本物の Sparklingstadt ID には接続しません。
 
 ## 3. LINE 連携
 
@@ -158,22 +158,29 @@ LINE の連携を最初から作り直すとき（以前のチャネルが無い
 - 使えるのは会員と管理者です。デモは会話ノートを読む・消すことはできますが、チャットで新しく聞くことはできません。ゲストには入口が出ません。
 - 履歴：テーブル `ChatConversation` は、以前の Go の API のころに作ったものです（マイグレーション `20261024090000_add_chat_conversations`）。いまは新しい手順は要りません。Web へ移したときの手順は、末尾の「移行の記録」の「段階7（チャット）のマージの前と後」にあります。
 
-## 5. FFPF ID でのログイン
+## 5. Sparklingstadt ID でのログイン
 
-FFPF ID（ffpf-portal が提供する OpenID Connect のプロバイダー）のアカウントで、会員（`member`）としてログインする機能です。ログイン画面の「FFPF IDでログイン」から使います。仕様は ffpf-portal の `docs/superpowers/specs/2026-10-27-ffpf-id-design.md` の「4. zhuelog」にあります。
+Sparklingstadt ID（sparklingstadt-id が提供する OpenID Connect のプロバイダー。<https://github.com/Sparklingstadt/sparklingstadt-id>）のアカウントで、会員（`member`）としてログインする機能です。ログイン画面の「Sparklingstadt ID でログイン」から使います。以前の FFPF ID のログインは、これに置き換えました。仕様は `docs/superpowers/specs/2026-11-22-sparklingstadt-id-login-design.md` にあります。
 
-- 流れ：Web が PKCE・`state`・`nonce` を作って `zl_oauth` Cookie に入れ、portal の `/oauth/authorize` へ送ります。戻り先 `/api/auth/callback/ffpf` で `state` を確かめてから、Web が portal の `/oauth/token` で `code` を交換し（client_secret_basic。`FFPF_ID_CLIENT_SECRET` を使う）、ID トークンを `/oauth/jwks` で検証します（ES256・`iss`・`aud`・`exp`・`nonce`・`email_verified`）。discovery は使わず、エンドポイントは `FFPF_ID_ISSUER` から組み立てます。検証が通ったら、`FfpfAccount` を更新して `Session` の行を作り、`zl_session` を発行します。`redirect_uri` は `AUTH_URL` の origin に `/api/auth/callback/ffpf` を付けた値です。
-- 持ち主の ID は `ffpf:<sub>` です。`FfpfAccount` にメールアドレスと表示名を保存し、ログインのたびに最新の値で更新します。メールアドレスは表示用で、認可には使いません。許可リストは無く、メールアドレスを確認済みの FFPF ID なら誰でも会員になれます。
-- FFPF ID の会員は、パスワード会員と同じく学習ノート・共有・フォロー・タイムライン・LINE 連携を使えます。メンバー一覧にも出ます。パスワードはこのサービスに無いので、`/account/password` には portal のマイページ（`<FFPF_ID_ISSUER>/id`）へのリンクだけを出します（パスワードを変えるフォームは出しません）。
-- 誤りの扱い：`state` の不一致、`code` の交換と ID トークンの検証の失敗、portal に届かない・5xx・JWKS が取れないときは、どれも固定のコードだけをログに出し（秘密や `code` は出さない）、「認証サービスからの結果を確認できませんでした。」と出してログイン画面に戻します。
-- 使う表は `FfpfAccount` で、Prisma のマイグレーション `20261027120000_add_ffpf_accounts` で作ります。
+- 流れ：Web が PKCE・`state`・`nonce` を作って `zl_oauth` Cookie に入れ、`<SID_ISSUER>/oauth/authorize` へ送ります。戻り先 `/api/auth/callback/sid` で `state` を確かめてから、Web が `/oauth/token` で `code` を交換し（client_secret_basic。`SID_CLIENT_SECRET` を使う）、ID トークンを `/oauth/jwks` で検証します（ES256・`iss`・`aud`・`exp`・`nonce`・`email_verified`）。discovery は使わず、エンドポイントは `SID_ISSUER` から組み立てます。検証が通ったら、`SidAccount` を更新して `Session` の行を作り、`zl_session` を発行します。`redirect_uri` は `AUTH_URL` の origin に `/api/auth/callback/sid` を付けた値です。
+- 持ち主の ID は `sid:<sub>` です。`SidAccount` にメールアドレスと表示名を保存し、ログインのたびに最新の値で更新します。メールアドレスは表示用で、認可には使いません。許可リストは無く、メールアドレスを確認済みの Sparklingstadt ID なら誰でも会員になれます。
+- Sparklingstadt ID の会員は、パスワード会員と同じく学習ノート・共有・フォロー・タイムライン・LINE 連携を使えます。メンバー一覧にも出ます。パスワードはこのサービスに無いので、`/account/password` には Sparklingstadt ID のアカウントページ（`<SID_ISSUER>/account`）へのリンクだけを出します（パスワードを変えるフォームは出しません）。
+- ログアウト：Sparklingstadt ID の会員（持ち主の ID が `sid:` で始まる人）は、Web のセッションを消したあと、`<SID_ISSUER>/oauth/logout?client_id=<SID_CLIENT_ID>&post_logout_redirect_uri=<AUTH_URL の origin>/signin` へ送られ、ID サーバー側のログインも消えて `/signin` に戻ります。ほかのログインの人は、これまでどおり `/signin` へ戻ります。ログアウト先を決められなかったとき（DB に届かないときなど）は、ログに `SID_LOGOUT_URL_FAILED` を出し、Web のセッションは消して `/signin` へ戻します。
+- 誤りの扱い：`state` の不一致、`code` の交換と ID トークンの検証の失敗、ID サーバーに届かない・5xx・JWKS が取れないときは、どれも固定のコードだけをログに出し（秘密や `code` は出さない）、「認証サービスからの結果を確認できませんでした。」と出してログイン画面に戻します。ログのイベント名は `SID_REJECTED`（検証に失敗）と `SID_UNAVAILABLE`（届かない・5xx など）で、`SIGN_IN_SID_*` の名前も出ます。トークンの交換が断られたときのコードは `sid_error` に入ります。
+- 使う表は `SidAccount` で、Prisma のマイグレーション `20261122090000_replace_ffpf_accounts_with_sid_accounts` で作ります。
 
 ### 設定の手順
 
-1. ffpf-portal で `pnpm run oidc:client zhuelog` を実行し、シークレット（`secret=…`）とクライアントの JSON を作ります。JSON の `redirectUris` に `https://<Web のホスト>/api/auth/callback/ffpf` を入れて portal の `FFPF_OIDC_CLIENTS` に足し、portal を再デプロイします（詳しくは ffpf-portal の README）。
-2. マイグレーション `20261027120000_add_ffpf_accounts`（`FfpfAccount` の追加）は、main へのマージで Web の本番ビルドが自動で当てます（「1. 本番の DB とマイグレーション」）。
-3. Web の Vercel プロジェクトの Production に `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID`・`FFPF_ID_CLIENT_SECRET` を入れます。`redirect_uri`（`<AUTH_URL の origin>/api/auth/callback/ffpf`）は、portal に登録した redirect URI と **1 文字も違わず** 合わせます。Preview には入れません。
-4. 本番の Web で、FFPF ID のログイン・ログアウトを試します。
+1. sparklingstadt-id のリポジトリで `pnpm run oidc:client zhuelog` を実行し、シークレット（`secret=…`）とクライアントの JSON を作ります。JSON の `redirectUris` に `https://<Web のホスト>/api/auth/callback/sid`、`postLogoutRedirectUris` に `https://<Web のホスト>/signin` を入れて、sparklingstadt-id の `OIDC_CLIENTS` に足し、再デプロイします（詳しくは sparklingstadt-id の README）。
+2. マイグレーション `20261122090000_replace_ffpf_accounts_with_sid_accounts` は、main へのマージで Web の本番ビルドが自動で当てます（「1. 本番の DB とマイグレーション」）。
+3. Web の Vercel プロジェクトの Production に `SID_ISSUER`（`https://id.sparklingstadt.com`）・`SID_CLIENT_ID`・`SID_CLIENT_SECRET` を入れます。`redirect_uri`（`<AUTH_URL の origin>/api/auth/callback/sid`）と `post_logout_redirect_uri`（`<AUTH_URL の origin>/signin`）は、登録した URL と **1 文字も違わず** 合わせます。Preview には入れません。
+4. 本番の Web で、Sparklingstadt ID のログイン・ログアウトを試します（ログアウトで ID サーバーを通って `/signin` に戻ること）。
+
+### 出す順番と注意
+
+- このコードは、ID サーバーがまだ動いていなくても先に出せます。`SID_*` が無いあいだは、「Sparklingstadt ID でログイン」のボタンが出ないだけです。
+- マイグレーションは、`ffpf:` の持ち主のデータ（学習ノート・フォロー・LINE 連携など、その持ち主の行）をすべて消し、`FfpfAccount` の表を落とします。FFPF ID の利用者は持ち主だけなので、意図したことです。
+- マイグレーションが `FfpfAccount` を落としてから、新しいデプロイに切り替わるまでの短いあいだ、前のデプロイの、メンバー一覧・AI の利用状況・LINE 連携の、`FfpfAccount` を読む問い合わせがエラーになります。
 
 ## 6. デモアカウント
 
@@ -211,7 +218,7 @@ FFPF ID（ffpf-portal が提供する OpenID Connect のプロバイダー）の
 
 ログインには、次の制限があります。どれも DB の `SignInThrottle` で数えるので、インスタンスが増えても合計で数えます。
 
-- **ログイン全体**：1 つのクライアントから、1 分に 10 回まで（ID とパスワード・ゲスト・GitHub・FFPF ID・デモの入り口で共有）。パスワードの変更も、同じ鍵（`route:auth:<IP>`）の枠に入ります。
+- **ログイン全体**：1 つのクライアントから、1 分に 10 回まで（ID とパスワード・ゲスト・GitHub・Sparklingstadt ID・デモの入り口で共有）。パスワードの変更も、同じ鍵（`route:auth:<IP>`）の枠に入ります。
 - **パスワードログインの試行回数**：15 分の枠で、1 つのクライアントからは 20 回まで、同じクライアントから同じ loginId へは 5 回まで（成功すると 0 に戻ります）。超えると、正しいパスワードでもログインできません（画面には、IDの有無を区別しない同じ文が出ます）。
 - **デモ**：1 つのクライアントから 15 分に 20 回まで（キーは `demo:<IP>`）。
 
@@ -228,6 +235,8 @@ Web は Prisma で DB につなぎます。Vercel がインスタンスを増や
 外から呼べる API は、Web の Route Handler だけです。LINE の webhook（`/api/line/webhook`）は LINE の署名を、2 つの cron（`/api/cron/*`）は `CRON_SECRET` を確かめます。チャットとクイック質問（`/api/chat`・`/api/quick-question`）は、ログイン中の `Session` を確かめます。CORS は設定していません。
 
 ## 移行の記録（段階 1〜12）
+
+> 以下は Go の API をなくしたころの記録で、FFPF ID の話もそのまま残しています。FFPF ID のログインは、今は Sparklingstadt ID に置き換えました（「5. Sparklingstadt ID でのログイン」）。
 
 Go API を Next.js へ移したときの、各段階の本番への反映の手順です。もう使わない手順ですが、何をいつ変えたかの記録として残します（設計：`docs/superpowers/specs/2026-11-16-deprecate-go-backend-design.md`）。
 

@@ -12,7 +12,7 @@
 
 - **デモ**：ログイン画面の「デモで試す」で、例のデータが入った会員の画面（学習ノート、今日の復習、単語帳、会話ノート、練習の記録）を試せます。全員で 1 つのアカウントを使い、毎晩 04:00 ごろに元に戻ります（リセットは Web が行い、Vercel Cron（Web の `vercel.json`）が呼びます。Hobby の Cron は時刻が 1 時間単位で、最大 59 分遅れることがあります）。AI と LINE は使えません。
 - **ゲスト**：ログイン画面の「ゲストとして使う」で、介詞・補語・量詞・了・过・着の練習を試せます。データは残りません。
-- **会員**：ID とパスワードのアカウントは管理者が発行します。FFPF ID を持っている人は、自分でログインできます。
+- **会員**：ID とパスワードのアカウントは管理者が発行します。Sparklingstadt ID を持っている人は、自分でログインできます。
 
 ## できること
 
@@ -27,14 +27,14 @@
 
 ## 技術構成
 
-| 部分         | 使っているもの                                                                                                                                                                                                                                                         |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Web          | Next.js 16（App Router、Server Components、Server Actions）、React 19、TypeScript、Tailwind CSS 4、shadcn/ui                                                                                                                                                           |
-| DB           | PostgreSQL 17（本番は Neon）。スキーマとマイグレーションは Prisma 7。Web がすべてのデータを Prisma で読み書きします。Prisma を import してよいのは `src/infrastructure/prisma/` だけです                                                                               |
-| 認証         | GitHub OAuth（PKCE）、ID とパスワード（scrypt。ハッシュの書き込みも確認も Web）、FFPF ID（OpenID Connect）、ゲスト。ログインはランダムなトークン（Cookie `zl_session`）のハッシュを DB の `Session` に置きます。期限は 30 日（ゲストは 24 時間）で、使っても延びません |
-| 外部サービス | OpenAI API、LINE Messaging API、Web Speech API（読み上げ）                                                                                                                                                                                                             |
-| テスト       | Node の test runner、Playwright（PC とスマホの幅）、lefthook                                                                                                                                                                                                           |
-| デプロイ     | Vercel（Web の 1 プロジェクト）。本番のマイグレーションはビルドで当てます。毎日の定期実行は Vercel Cron（`vercel.json`）                                                                                                                                               |
+| 部分         | 使っているもの                                                                                                                                                                                                                                                                   |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Web          | Next.js 16（App Router、Server Components、Server Actions）、React 19、TypeScript、Tailwind CSS 4、shadcn/ui                                                                                                                                                                     |
+| DB           | PostgreSQL 17（本番は Neon）。スキーマとマイグレーションは Prisma 7。Web がすべてのデータを Prisma で読み書きします。Prisma を import してよいのは `src/infrastructure/prisma/` だけです                                                                                         |
+| 認証         | GitHub OAuth（PKCE）、ID とパスワード（scrypt。ハッシュの書き込みも確認も Web）、Sparklingstadt ID（OpenID Connect）、ゲスト。ログインはランダムなトークン（Cookie `zl_session`）のハッシュを DB の `Session` に置きます。期限は 30 日（ゲストは 24 時間）で、使っても延びません |
+| 外部サービス | OpenAI API、LINE Messaging API、Web Speech API（読み上げ）                                                                                                                                                                                                                       |
+| テスト       | Node の test runner、Playwright（PC とスマホの幅）、lefthook                                                                                                                                                                                                                     |
+| デプロイ     | Vercel（Web の 1 プロジェクト）。本番のマイグレーションはビルドで当てます。毎日の定期実行は Vercel Cron（`vercel.json`）                                                                                                                                                         |
 
 ## 設計の要点
 
@@ -49,7 +49,7 @@
 ## 品質
 
 - 単体テスト 789 件（TypeScript）、E2E 269 件（Playwright。PC の幅で 164 件、そのうち画面幅で結果が変わりうる 105 件はスマホの幅でも実行）があります。
-- E2E は、Docker の Postgres、Web、OpenAI と LINE と FFPF ID のスタブを立ち上げて、本物の画面を通して確かめます。
+- E2E は、Docker の Postgres、Web、OpenAI と LINE と Sparklingstadt ID のスタブを立ち上げて、本物の画面を通して確かめます。
 - commit の前に format・lint・型チェック、push の前に単体テストと E2E を lefthook が走らせます。
 - 本番の Lighthouse（6 ページとも性能・ベストプラクティス・SEO が 100）とアクセシビリティの記録は [docs/quality.md](docs/quality.md) にあります。
 
