@@ -13,6 +13,8 @@ export const cookieName = "zl_access";
 export const openAiStubURL = "http://127.0.0.1:3109";
 // e2e/fixtures/ffpf-oidc-stub.ts, the FFPF ID issuer for the e2e run.
 export const ffpfIssuerURL = "http://127.0.0.1:3110";
+// e2e/line-stub.ts, which the web calls instead of the LINE Messaging API.
+export const lineStubURL = "http://127.0.0.1:3111";
 
 // This run's random secret, from the Playwright config.
 function runSecret() {
@@ -31,9 +33,19 @@ export function goProxySecret() {
   return deriveSecret("api-web-proxy");
 }
 
-// Guards the Go API's cron routes, the demo reset among them.
-export function goCronSecret() {
+// Guards the cron routes of the web and of the Go API (the same value).
+export function cronSecret() {
   return deriveSecret("api-cron");
+}
+
+// The web's LINE channel: the webhook's signing secret and the token it
+// presents to e2e/line-stub.ts.
+export function lineChannelSecret() {
+  return deriveSecret("line-channel");
+}
+
+export function lineAccessToken() {
+  return deriveSecret("line-access");
 }
 
 // The demo account's loginId in this run (DEMO_LOGIN_ID).

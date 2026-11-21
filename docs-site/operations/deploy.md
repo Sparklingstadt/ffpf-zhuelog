@@ -102,7 +102,7 @@ curl -i https://<プロジェクト>.vercel.app/health
 
 ## 6. Web の設定
 
-Web（Next.js）は、DB を Prisma（`src/infrastructure/prisma/`）で読み書きし、Go が出すアクセストークン（`zl_access`）も `API_JWT_SECRET` で自分で確かめます。会員の管理とパスワードの変更では、`PasswordAccount`（作成・パスワードの再設定と変更）と `SignInThrottle`（パスワード変更の回数）にも書きます。ログイン、LINE、cron は、今も Go API が行います。仕様は `docs/superpowers/specs/2026-10-21-web-auth-via-go-api-design.md` と `docs/superpowers/specs/2026-10-22-web-data-via-go-api-design.md` にあります。
+Web（Next.js）は、DB を Prisma（`src/infrastructure/prisma/`）で読み書きし、Go が出すアクセストークン（`zl_access`）も `API_JWT_SECRET` で自分で確かめます。会員の管理とパスワードの変更では、`PasswordAccount`（作成・パスワードの再設定と変更）と `SignInThrottle`（パスワード変更の回数）にも書きます。ログインは今も Go API が行います。LINE は段階 10a で Web に移りましたが、Go のルートと 2 つの cron は段階 10b まで残ります。仕様は `docs/superpowers/specs/2026-10-21-web-auth-via-go-api-design.md` と `docs/superpowers/specs/2026-10-22-web-data-via-go-api-design.md` にあります。
 
 Go API の Vercel プロジェクトには、`GITHUB_WEB_CLIENT_ID`・`GITHUB_WEB_CLIENT_SECRET`・`GITHUB_WEB_REDIRECT_URI`・`API_WEB_PROXY_SECRET` を入れておきます（上の「3. 環境変数」の表）。Web の Vercel プロジェクトに入れる値は、次の 4 つに、あとの「Web が実行時に使う DB と秘密」の値を足したものです。
 
@@ -178,6 +178,8 @@ PR ごとの Web のプレビューも、ログインとデータの読み書き
 
 ## 7. LINE 連携
 
+> **移行の注**：Web の画面と webhook は段階 10a で Web に移り、Go のこの節のルートは段階 10b で消えます（それまでは Go もまだ答えます）。Web の環境変数（`LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`CRON_SECRET`。Production だけ）と、LINE の Webhook URL を Web に変える手順は、リポジトリの `docs/api-deployment.md` の「7. LINE 連携」と「段階10（LINE とデモのリセットの cron）のマージの前と後」にあります。
+
 LINE に送った文を OpenAI で添削・翻訳し、送った人の学習ノートに追加する機能です。会員と管理者が、Web の「LINE 連携」画面（`/account/line`）で連携コードを出し、それを LINE に送ると、その LINE とアカウントが結びつきます。ゲストは使えません。仕様は `docs/superpowers/specs/2026-10-23-line-via-go-api-design.md` にあります。
 
 Go API の次の 5 つのルートで動きます。LINE の設定（上の「3. 環境変数」）が空のときは、どれも `404` です。
@@ -196,6 +198,8 @@ Go API の次の 5 つのルートで動きます。LINE の設定（上の「3.
 - 使う表は `LineLink`・`LineLinkCode`・`LineMessage` の 3 つで、Prisma のマイグレーション `20261023090000_add_line_link` で作ります。
 
 ### 切り替えの手順
+
+これは Go だけで LINE を動かしていたころの古い手順で、Go に戻すときにだけ使います。今の手順は `docs/api-deployment.md` の「段階10（LINE とデモのリセットの cron）のマージの前と後」にあります。
 
 LINE 連携を本番で使い始めるときは、次の順で行います。
 

@@ -4,6 +4,13 @@ import { createServer } from "node:http";
 //
 // - A vocabulary draft (the "vocabulary_card_draft" JSON format) gets a
 //   completed JSON answer built from the word.
+// - A LINE correction ("chinese_correction") gets {"correctedText": "<the
+//   input>（添削）", "pinyin": "e2e pīnyīn", "hints": ["e2e のヒント 1",
+//   "e2e のヒント 2"]}, a LINE translation ("japanese_to_chinese_translation")
+//   {"translatedText": "e2e 的翻译", "pinyin": "e2e pīnyīn", "hints":
+//   ["e2e のヒント"]}, both completed with usage (15 input and 25 output
+//   tokens). An input containing "[fail]" is a 500 instead (a failure the
+//   web may try again).
 // - Every other POST /v1/responses is streamed: an echo of the last user
 //   message, split into three text deltas, then response.completed with
 //   usage (21 input and 43 output tokens). Markers in the last user message
@@ -45,6 +52,21 @@ export function startOpenAiStub(
         };
         response.writeHead(200, { "content-type": "application/json" });
         response.end(JSON.stringify(vocabularyDraft(word)));
+        return;
+      }
+      const lineFormat = parsed.text?.format?.name;
+      if (
+        lineFormat === "chinese_correction" ||
+        lineFormat === "japanese_to_chinese_translation"
+      ) {
+        const text = parsed.input as string;
+        if (text.includes("[fail]")) {
+          response.writeHead(500, { "content-type": "application/json" });
+          response.end(JSON.stringify({ error: { message: "e2e failure" } }));
+          return;
+        }
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify(lineLearning(lineFormat, text)));
         return;
       }
       const input = parsed.input as { role: string; content: string }[];
@@ -119,5 +141,35 @@ function vocabularyDraft(word: string) {
       },
     ],
     usage: { input_tokens: 12, output_tokens: 34, total_tokens: 46 },
+  };
+}
+
+// A completed Responses API body with a LINE correction of text, or a
+// translation.
+function lineLearning(
+  format: "chinese_correction" | "japanese_to_chinese_translation",
+  text: string,
+) {
+  const answer =
+    format === "chinese_correction"
+      ? {
+          correctedText: `${text}（添削）`,
+          pinyin: "e2e pīnyīn",
+          hints: ["e2e のヒント 1", "e2e のヒント 2"],
+        }
+      : {
+          translatedText: "e2e 的翻译",
+          pinyin: "e2e pīnyīn",
+          hints: ["e2e のヒント"],
+        };
+  return {
+    status: "completed",
+    output: [
+      {
+        type: "message",
+        content: [{ type: "output_text", text: JSON.stringify(answer) }],
+      },
+    ],
+    usage: { input_tokens: 15, output_tokens: 25, total_tokens: 40 },
   };
 }

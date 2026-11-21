@@ -7,13 +7,17 @@ import {
   databaseUrl,
   demoLoginId,
   ffpfIssuerURL,
+  cronSecret,
   goApiURL,
-  goCronSecret,
   goJwtSecret,
   goProxySecret,
+  lineAccessToken,
+  lineChannelSecret,
+  lineStubURL,
   openAiStubURL,
 } from "./environment";
 import { startFfpfOidcStub } from "./fixtures/ffpf-oidc-stub";
+import { startLineStub } from "./line-stub";
 import { startOpenAiStub } from "./openai-stub";
 
 // FFPF ID for this run: the stub is the issuer, and the web and the Go API are
@@ -51,6 +55,13 @@ async function main() {
     // machine.
     OPENAI_API_KEY: "e2e-openai-api-key",
     OPENAI_API_BASE_URL: openAiStubURL,
+    // The web receives LINE itself: e2e/line.spec.ts signs webhooks with
+    // this secret, and replies and pushes go to the loopback stub.
+    LINE_CHANNEL_SECRET: lineChannelSecret(),
+    LINE_CHANNEL_ACCESS_TOKEN: lineAccessToken(),
+    LINE_API_BASE_URL: lineStubURL,
+    // The web's cron routes (the daily LINE pass).
+    CRON_SECRET: cronSecret(),
     NODE_ENV: "production",
   };
 
@@ -66,6 +77,7 @@ async function main() {
   }
 
   await startOpenAiStub(Number(new URL(openAiStubURL).port));
+  await startLineStub(Number(new URL(lineStubURL).port), lineAccessToken());
   await startFfpfOidcStub({ ...ffpf, port: Number(new URL(ffpf.issuer).port) });
   const api = await startGoApi();
   const server = spawn(
@@ -136,7 +148,7 @@ async function startGoApi(): Promise<ChildProcess> {
       OPENAI_API_BASE_URL: openAiStubURL,
       // The demo account; e2e/demo.spec.ts resets it with the cron secret.
       DEMO_LOGIN_ID: demoLoginId,
-      CRON_SECRET: goCronSecret(),
+      CRON_SECRET: cronSecret(),
     },
     stdio: "inherit",
   });

@@ -11,9 +11,14 @@ export type OpenAiErrorCode =
   | "OPENAI_INCOMPLETE_RESPONSE";
 
 // A failed call. The message is only the code, so it never carries the API
-// key, the input or the response body.
+// key, the input or the response body. retryable is Go's openai.Error
+// Retryable (services/api/openai/openai.go:61-105): a later attempt may work
+// (a transport failure or a 5xx).
 export class OpenAiError extends Error {
-  constructor(readonly code: OpenAiErrorCode) {
+  constructor(
+    readonly code: OpenAiErrorCode,
+    readonly retryable = false,
+  ) {
     super(code);
     this.name = "OpenAiError";
   }
@@ -76,7 +81,7 @@ export async function respondJson(
     if (response.status === 401 || response.status === 403)
       throw new OpenAiError("OPENAI_AUTH_FAILED");
     if (response.status === 429) throw new OpenAiError("OPENAI_RATE_LIMITED");
-    throw new OpenAiError("OPENAI_REQUEST_FAILED");
+    throw new OpenAiError("OPENAI_REQUEST_FAILED", response.status >= 500);
   }
   const text = await readCapped(response);
   let payload: unknown;
@@ -93,13 +98,14 @@ export async function respondJson(
 }
 
 // A request that could not be sent or read: a timeout or abort is
-// OPENAI_TIMEOUT, anything else OPENAI_REQUEST_FAILED.
+// OPENAI_TIMEOUT, anything else OPENAI_REQUEST_FAILED. Both may be retried.
 export function transportError(error: unknown): OpenAiError {
   const name = error instanceof Error ? error.name : "";
   return new OpenAiError(
     name === "AbortError" || name === "TimeoutError"
       ? "OPENAI_TIMEOUT"
       : "OPENAI_REQUEST_FAILED",
+    true,
   );
 }
 

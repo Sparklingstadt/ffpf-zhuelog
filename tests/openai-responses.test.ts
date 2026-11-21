@@ -188,3 +188,52 @@ test("does not follow redirects", async () => {
   );
   assert.equal(redirect, "manual");
 });
+
+test("only transport failures and 5xx may be retried", async () => {
+  const errorOf = async (fetchImpl: typeof fetch) => {
+    try {
+      await respondJson(config, request, () => {}, fetchImpl);
+    } catch (error) {
+      assert.ok(error instanceof OpenAiError);
+      return { code: error.code, retryable: error.retryable };
+    }
+    assert.fail("expected OpenAiError");
+  };
+  const status = (s: number) => errorOf(json({}, s));
+  for (const s of [500, 503])
+    assert.deepEqual(await status(s), {
+      code: "OPENAI_REQUEST_FAILED",
+      retryable: true,
+    });
+  for (const s of [400, 404])
+    assert.deepEqual(await status(s), {
+      code: "OPENAI_REQUEST_FAILED",
+      retryable: false,
+    });
+  for (const s of [401, 403])
+    assert.deepEqual(await status(s), {
+      code: "OPENAI_AUTH_FAILED",
+      retryable: false,
+    });
+  assert.deepEqual(await status(429), {
+    code: "OPENAI_RATE_LIMITED",
+    retryable: false,
+  });
+  const failing =
+    (error: Error): typeof fetch =>
+    async () => {
+      throw error;
+    };
+  assert.deepEqual(await errorOf(failing(new TypeError("fetch failed"))), {
+    code: "OPENAI_REQUEST_FAILED",
+    retryable: true,
+  });
+  assert.deepEqual(
+    await errorOf(failing(new DOMException("x", "TimeoutError"))),
+    { code: "OPENAI_TIMEOUT", retryable: true },
+  );
+  assert.deepEqual(
+    await errorOf(async () => new Response("x".repeat(1024 * 1024 + 1))),
+    { code: "OPENAI_INVALID_RESPONSE", retryable: false },
+  );
+});

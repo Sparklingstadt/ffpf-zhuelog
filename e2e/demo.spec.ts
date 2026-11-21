@@ -5,14 +5,14 @@ import {
   test,
   upload,
 } from "./fixtures";
-import { demoLoginId, goApiURL, goCronSecret } from "./environment";
+import { cronSecret, demoLoginId, goApiURL } from "./environment";
 
 // Puts the demo account back to its fixture, as the nightly cron does. The
 // db fixture empties the accounts before every test, so it runs each time.
 async function resetDemo() {
   const response = await fetch(`${goApiURL}/v1/cron/demo-reset`, {
     method: "POST",
-    headers: { authorization: `Bearer ${goCronSecret()}` },
+    headers: { authorization: `Bearer ${cronSecret()}` },
   });
   expect(response.status).toBe(204);
 }
@@ -129,6 +129,10 @@ test("anyone can try the members' pages in the demo, without AI", async ({
     [demoLoginId],
   );
   expect(rows).toEqual([{ passwordHash: "demo:no-password" }]);
+
+  // LINE is for members and admins: the demo is sent home.
+  await page.goto("/account/line");
+  await expect(page).toHaveURL((url) => url.pathname === "/");
 
   // Leaving the demo signs out.
   await banner.getByRole("button", { name: "デモを終える" }).click();

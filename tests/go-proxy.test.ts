@@ -271,6 +271,29 @@ test("public routes pass while signed out", async () => {
   }
 });
 
+test("the LINE webhook and the cron routes are public", async () => {
+  for (const [method, path] of [
+    ["POST", "/api/line/webhook"],
+    ["GET", "/api/cron/line-drain"],
+    ["GET", "/api/cron/demo-reset"],
+  ]) {
+    const h = harness(async () => tokens);
+    const response = await goProxy(request(path, { method }), h.deps);
+    assert.equal(response.headers.get("x-test-next"), "1", path);
+    assert.deepEqual(h.calls, [], path);
+  }
+  for (const [method, path] of [
+    ["POST", "/api/line/webhooks"],
+    ["POST", "/api/line/link"],
+    ["GET", "/api/cronx"],
+  ]) {
+    const h = harness(async () => tokens);
+    const response = await goProxy(request(path, { method }), h.deps);
+    assert.equal(response.status, 401, path);
+    assert.deepEqual(await response.json(), { error: "認証が必要です。" });
+  }
+});
+
 test("only the metadata files Next.js serves for crawlers count as metadata files", () => {
   for (const path of [
     "/robots.txt",

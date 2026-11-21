@@ -1,3 +1,4 @@
+import { goTrimSpace } from "@/domain/line/go-text";
 import { normalizeLineOfficialAccountId } from "@/domain/line/official-account";
 
 // Base URL of the Go API, without surrounding spaces or a trailing slash.
@@ -142,6 +143,40 @@ export function openAiConfig(): OpenAiConfig | undefined {
 // rejected OPENAI_API_BASE_URL.
 export function openAiKeySet(): boolean {
   return Boolean(process.env.OPENAI_API_KEY?.trim());
+}
+
+export type LineConfig = {
+  channelSecret: string;
+  accessToken: string;
+  apiBaseUrl: string;
+};
+
+const DEFAULT_LINE_API_BASE_URL = "https://api.line.me";
+
+// Go: LoadConfig's LINE values (config.go:154-184) and LineEnabled. LINE works
+// only with both LINE values and OpenAI configured; Go refused to start with
+// a partial set, the web only turns LINE off. Values are trimmed as Go's
+// strings.TrimSpace does. LINE_API_BASE_URL is for tests: the access token
+// travels to it, so it must be an http(s) loopback URL; anything else means
+// not configured.
+export function lineConfig(): LineConfig | undefined {
+  const channelSecret = goTrimSpace(process.env.LINE_CHANNEL_SECRET ?? "");
+  const accessToken = goTrimSpace(process.env.LINE_CHANNEL_ACCESS_TOKEN ?? "");
+  if (!channelSecret || !accessToken || !openAiConfig()) return undefined;
+  const override = goTrimSpace(process.env.LINE_API_BASE_URL ?? "");
+  if (override && !isLoopbackHttpUrl(override)) return undefined;
+  return {
+    channelSecret,
+    accessToken,
+    apiBaseUrl: override || DEFAULT_LINE_API_BASE_URL,
+  };
+}
+
+// The secret Vercel Cron presents (Go: CRON_SECRET, trimmed); undefined when
+// unset, and every cron call is then refused.
+export function cronSecret(): string | undefined {
+  const secret = goTrimSpace(process.env.CRON_SECRET ?? "");
+  return secret ? secret : undefined;
 }
 
 function isLoopbackHttpUrl(raw: string): boolean {
