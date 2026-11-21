@@ -1,5 +1,6 @@
 import type { Request } from "@playwright/test";
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { openAiStubURL } from "./environment";
 import {
   adminOwnerId,
@@ -343,4 +344,41 @@ test("stopping an answer stops OpenAI and does not send the message again", asyn
   // Well before the stub's own 30 s end.
   await expect.poll(state, { timeout: 10_000 }).toBe("closed");
   expect(sent).toBe(1);
+});
+
+test("a conversation note is saved as a Markdown file named after its day and number", async ({
+  page,
+  context,
+}) => {
+  await asAdmin(context);
+  await page.goto("/chat");
+  const input = page.getByLabel("ChatGPTへのメッセージ");
+  await input.fill("我今天很忙");
+  await input.press("Enter");
+  await expect(
+    page.getByRole("article", { name: "ChatGPTのメッセージ" }),
+  ).toHaveText(["你好！「我今天很忙」ですね。"]);
+  await expect(page).toHaveURL((url) => url.searchParams.has("id"));
+
+  await page.goto("/conversations");
+  await page.getByText("1件の会話").click();
+  await page.getByText("#1 我今天很忙").click();
+  const notePath = /\/conversations\/(\d+)\/(\d+)\/(\d+)\/1$/;
+  await expect(page).toHaveURL(notePath);
+  const [, year, month, day] = notePath.exec(new URL(page.url()).pathname)!;
+
+  const downloading = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Markdownで保存" }).click();
+  const download = await downloading;
+  const pad = (value: string) => value.padStart(2, "0");
+  expect(download.suggestedFilename()).toBe(
+    `huihua-${year}-${pad(month)}-${pad(day)}-1.md`,
+  );
+  const markdown = await readFile(await download.path(), "utf8");
+  // The title, when and with which model, then one section per message.
+  expect(markdown).toMatch(
+    new RegExp(
+      `^# 我今天很忙\\n\\n- 日時: ${year}/${pad(month)}/${pad(day)} \\d{2}:\\d{2}\\n- モデル: \\S+\\n\\n## あなた\\n\\n我今天很忙\\n\\n## ChatGPT\\n\\n你好！「我今天很忙」ですね。\\n$`,
+    ),
+  );
 });

@@ -122,7 +122,9 @@ test("a retried save keeps one round and brings a card due later forward", async
     `SELECT "id", "due", "updatedAt" FROM "ReviewItem" WHERE "ownerId" = $1 ORDER BY "targetId"`,
     [owner],
   );
-  test.skip(items.length < 2, "the round happened to miss fewer than two");
+  // Picking in order misses whenever the right choice is not the first, so
+  // a round of 25 with fewer than two misses does not happen.
+  expect(items.length).toBeGreaterThanOrEqual(2);
   const [a, b] = items;
   // A: answered and sent days ahead, as an answer leaves it.
   await db.query(
