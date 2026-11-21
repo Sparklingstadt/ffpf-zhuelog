@@ -147,9 +147,7 @@ func TestMemberExists(t *testing.T) {
 func shareAll(t *testing.T, s *Store, owner string, es []Entry) {
 	t.Helper()
 	for _, e := range es {
-		if _, err := s.SetShared(context.Background(), owner, e.ID, true, fixedNow()); err != nil {
-			t.Fatal(err)
-		}
+		shareNote(t, s, owner, e.ID, fixedNow())
 	}
 }
 
@@ -163,11 +161,7 @@ func TestTimeline(t *testing.T) {
 
 	t0 := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
 	mk := func(owner string, n string, at time.Time) Entry {
-		_, es, err := s.CreateBatch(ctx, owner, []EntryDraft{draft(n, "h")}, at)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return es[0]
+		return createBatch(t, s, owner, []EntryDraft{draft(n, "h")}, at)[0]
 	}
 	old := mk(friend, "old", t0)
 	newer := mk(friend, "new", t0.Add(time.Hour))
@@ -176,9 +170,7 @@ func TestTimeline(t *testing.T) {
 	strangers := mk(stranger, "stranger", t0.Add(4*time.Hour))
 	shareAll(t, s, friend, []Entry{old, newer, trashed})
 	shareAll(t, s, stranger, []Entry{strangers})
-	if err := s.TrashEntry(ctx, friend, trashed.ID, fixedNow()); err != nil {
-		t.Fatal(err)
-	}
+	trashNote(t, s, friend, trashed.ID, fixedNow())
 	_ = unshared
 
 	got, err := s.ListTimeline(ctx, viewer, nil, 10)
@@ -253,10 +245,7 @@ func TestTimelineSkipsDeletedMembers(t *testing.T) {
 
 	ghosts := createEntries(t, s, ghost, fixedNow(), 3, 2)
 	shareAll(t, s, ghost, ghosts)
-	_, es, err := s.CreateBatch(ctx, friend, []EntryDraft{draft("1"), draft("2")}, time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
-	if err != nil {
-		t.Fatal(err)
-	}
+	es := createBatch(t, s, friend, []EntryDraft{draft("1"), draft("2")}, time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
 	shareAll(t, s, friend, es)
 
 	got, err := s.ListTimeline(ctx, viewer, nil, 2)
@@ -438,15 +427,9 @@ func TestTimelineIncludesFfpfMembers(t *testing.T) {
 	mustFollow(t, s, pwViewer, ffpf)
 	mustFollow(t, s, ffpf, pwFriend)
 
-	_, ffpfNotes, err := s.CreateBatch(ctx, ffpf, []EntryDraft{draft("ffpf note")}, fixedNow())
-	if err != nil {
-		t.Fatal(err)
-	}
+	ffpfNotes := createBatch(t, s, ffpf, []EntryDraft{draft("ffpf note")}, fixedNow())
 	shareAll(t, s, ffpf, ffpfNotes)
-	_, pwNotes, err := s.CreateBatch(ctx, pwFriend, []EntryDraft{draft("pw note")}, fixedNow())
-	if err != nil {
-		t.Fatal(err)
-	}
+	pwNotes := createBatch(t, s, pwFriend, []EntryDraft{draft("pw note")}, fixedNow())
 	shareAll(t, s, pwFriend, pwNotes)
 
 	got, err := s.ListTimeline(ctx, pwViewer, nil, 10)

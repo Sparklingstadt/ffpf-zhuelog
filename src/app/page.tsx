@@ -36,8 +36,9 @@ import {
 
 export const dynamic = "force-dynamic";
 
-// Go being unavailable (or failing) still shows the home with a notice. Any
-// other error, including the redirect to /signin, is rethrown.
+// A failed load still shows the home with a notice (the code and error name
+// are logged). Only Next control flow, such as the redirect to /signin, is
+// rethrown.
 async function loadEntries(
   owner: ViewedOwner,
   search: EntrySearch,

@@ -29,10 +29,7 @@ export default defineUserConfig({
         children: [
           "/reference/auth.md",
           "/reference/entries.md",
-          "/reference/trash.md",
-          "/reference/sharing.md",
           "/reference/follows.md",
-          "/reference/log-dates.md",
           "/reference/line.md",
           "/reference/chat.md",
           "/reference/quick-questions.md",

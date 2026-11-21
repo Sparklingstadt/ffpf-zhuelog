@@ -44,8 +44,8 @@ export async function shareLearningEntryAction(
 ): Promise<ActionState> {
   const state = await handleShare(formData, {
     getMember: getCurrentMemberUser,
-    // Go shares the token owner's note; the owner checked here is not sent.
-    run: (_ownerId, id, shared) => learningNotes.setShared(id, shared),
+    // learningNotes shares the signed-in member's own note.
+    run: (id, shared) => learningNotes.setShared(id, shared),
   });
   if (state.status === "success") {
     revalidateNotes();

@@ -35,8 +35,9 @@ type StudyLogPageProps = {
   }>;
 };
 
-// Go being unavailable (or failing) still shows the page with a notice. Any
-// other error, including the redirect to /signin, is rethrown.
+// A failed load still shows the page with a notice (the code and error name
+// are logged). Only Next control flow, such as the redirect to /signin, is
+// rethrown.
 async function loadDays(from: string, to: string): Promise<StudyDay[] | null> {
   return loadOr("STUDY_LOG_UNAVAILABLE", () => studyLog.list(from, to), null);
 }

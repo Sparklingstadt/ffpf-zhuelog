@@ -2,7 +2,6 @@
 
 import { redirect, RedirectType } from "next/navigation";
 
-import { getCurrentMemberUser } from "@/composition/identity-container";
 import { learningNotes } from "@/composition/learning-container";
 import { revalidateNotes } from "@/presentation/actions/revalidate-notes";
 import type { ActionState } from "@/presentation/controllers/action-state";
@@ -18,14 +17,12 @@ function redirectAfterTrash(path: string): never {
   redirect(path, RedirectType.replace);
 }
 
-// Go acts on the token's owner, so the owner the controller checked is not sent.
-type Run = (id: string) => Promise<boolean>;
-
-async function noteAction(formData: FormData, run: Run) {
-  const state = await handleNoteAction(formData, {
-    getMember: getCurrentMemberUser,
-    run: (_ownerId, id) => run(id),
-  });
+// learningNotes acts on the signed-in user's own notes.
+async function noteAction(
+  formData: FormData,
+  run: (id: string) => Promise<boolean>,
+) {
+  const state = await handleNoteAction(formData, { run });
   if (state.status === "success") revalidateNotes();
   return state;
 }
@@ -56,7 +53,6 @@ export async function purgeLearningEntryAction(
 
 export async function emptyLearningTrashAction(): Promise<ActionState> {
   const state = await handleEmptyTrash({
-    getMember: getCurrentMemberUser,
     run: () => learningNotes.emptyTrash(),
   });
   if (state.status === "success") revalidateNotes();

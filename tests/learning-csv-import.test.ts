@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { redirect } from "next/navigation";
+
 import { GoApiError } from "../src/infrastructure/go-api/client";
 import { handleLearningCsvImport } from "../src/presentation/controllers/learning-csv-import-controller";
 
@@ -160,17 +162,22 @@ test("CSV import hides other Go failures behind the generic message", async () =
   }
 });
 
-test("CSV import lets non-Go errors (such as the /signin redirect) through", async () => {
-  const redirect = new Error("NEXT_REDIRECT");
+test("CSV import lets Next's /signin redirect through", async () => {
+  let thrown: unknown;
+  try {
+    redirect("/signin");
+  } catch (error) {
+    thrown = error;
+  }
   await assert.rejects(
     handleLearningCsvImport(
       csvForm(),
       dependencies({
         importCsv: async () => {
-          throw redirect;
+          throw thrown;
         },
       }),
     ),
-    redirect,
+    (error) => error === thrown,
   );
 });

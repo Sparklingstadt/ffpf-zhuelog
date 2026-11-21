@@ -93,3 +93,33 @@ test("anyone can try the members' pages in the demo, without AI", async ({
   await banner.getByRole("button", { name: "デモを終える" }).click();
   await expect(page).toHaveURL(/\/signin(?:\?|$)/);
 });
+
+// The demo is shared by strangers, so it cannot put a note on followers'
+// timelines: the share button answers as for anyone who may not share.
+test("the demo account cannot share", async ({ page, db }) => {
+  await resetDemo();
+  await page.goto("/signin");
+  await page.getByRole("button", { name: "デモで試す" }).click();
+  await expect(page).toHaveURL(/\/$/);
+
+  // The demo's newest note: the last of its JST day.
+  const { rows } = await db.query(
+    `SELECT "correctedText", ("createdAt" + interval '9 hours')::date::text AS day
+       FROM "LearningEntry" WHERE "deletedAt" IS NULL
+      ORDER BY "createdAt" ASC, id ASC`,
+  );
+  const day = rows.at(-1).day as string;
+  const sameDay = rows.filter((row) => row.day === day);
+  const [year, month, date] = day.split("-").map(Number);
+  await page.goto(`/logs/${year}/${month}/${date}/${sameDay.length}`);
+  await expect(
+    page.getByText(rows.at(-1).correctedText, { exact: true }).first(),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "共有する" }).click();
+  await expect(page.getByText("ログインし直してください。")).toBeVisible();
+  const shared = await db.query(
+    `SELECT count(*)::int AS n FROM "LearningEntry" WHERE "sharedAt" IS NOT NULL`,
+  );
+  expect(shared.rows[0].n).toBe(0);
+});

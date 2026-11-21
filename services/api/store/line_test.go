@@ -306,9 +306,9 @@ func TestCompleteLineMessage(t *testing.T) {
 		t.Fatalf("CompleteLineMessage: %v", err)
 	}
 
-	got, err := s.GetEntry(ctx, owner, entry.ID)
-	if err != nil {
-		t.Fatalf("GetEntry: %v", err)
+	got, ok := liveNote(t, s, owner, entry.ID)
+	if !ok {
+		t.Fatal("the note is not stored")
 	}
 	if got.Kind != "translation" || got.OriginalText != d.OriginalText || got.CorrectedText != d.CorrectedText || got.Pinyin != d.Pinyin {
 		t.Errorf("entry = %+v", got)

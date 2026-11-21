@@ -45,8 +45,8 @@ import {
 
 export const dynamic = "force-dynamic";
 
-// Whether the note is in the user's review queue. Go failing hides the
-// control rather than the note; any other error is rethrown.
+// Whether the note is in the user's review queue. A failed load hides the
+// control rather than the note; only Next control flow is rethrown.
 async function loadInReview(id: string): Promise<boolean | null> {
   return loadOr(
     "NOTE_REVIEW_UNAVAILABLE",
