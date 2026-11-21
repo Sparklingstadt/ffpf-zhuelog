@@ -93,8 +93,8 @@ const PRACTICES: Practice[] = [
   },
 ];
 
-// The saved rounds of both kinds, or none when Go cannot say: the cards
-// then just leave out the last round.
+// The saved rounds of both kinds, or none when the database cannot say: the
+// cards then just leave out the last round.
 async function loadRounds(): Promise<RoundRow[]> {
   return loadOr(
     "PRACTICE_RECORDS_UNAVAILABLE",

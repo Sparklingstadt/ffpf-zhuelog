@@ -43,8 +43,6 @@ func allRoutesDeps(a Auth) Deps {
 		Auth: a, Follows: &fakeFollows{},
 		Line: &fakeLine{}, LineChannelSecret: testLineSecret, CronSecret: testCronSecret,
 		QuickChat: &fakeChat{}, Questions: &fakeQuestions{}, Chat: &fakeChat{}, Conversations: &fakeConversations{},
-		PrepositionRecords: &fakePrepositionRecords{}, ComplementRecords: &fakeComplementRecords{},
-		Reviews:  &fakeReviews{},
 		StudyLog: &fakeStudyLog{}, AIUsage: &fakeAIUsage{}, DemoReset: &fakeDemoReset{},
 		Logger: slog.New(slog.NewJSONHandler(&strings.Builder{}, nil)), Now: newClock().Now,
 	}.withDefaults()
@@ -99,18 +97,18 @@ func TestDemoIsRefusedExactlyTheClosedRoutes(t *testing.T) {
 }
 
 func TestDemoKeepsItsOwnRecords(t *testing.T) {
-	records := &fakePrepositionRecords{}
+	qs := &fakeQuestions{}
 	follows := &fakeFollows{listMembers: func(_ context.Context, viewer string) (store.MemberDirectory, error) {
 		return store.MemberDirectory{Members: []store.Member{}}, nil
 	}}
-	d := Deps{PrepositionRecords: records, Follows: follows}
+	d := Deps{Questions: qs, Follows: follows}
 
-	// The demo reads its own practice records, and the member directory is
+	// The demo reads its own question notes, and the member directory is
 	// closed to it.
 	d.Auth = demoAuth(true)
 	h, _, _ := routerWith(t, auth.RoleMember, d)
-	if w := do(h, http.MethodGet, "/v1/preposition-records", "", authHeader); w.Code != http.StatusOK || records.listOwner != testOwner {
-		t.Fatalf("demo practice records: %d for %q", w.Code, records.listOwner)
+	if w := do(h, http.MethodGet, "/v1/questions", "", authHeader); w.Code != http.StatusOK || qs.owner != testOwner {
+		t.Fatalf("demo question notes: %d for %q", w.Code, qs.owner)
 	}
 	w := do(h, http.MethodGet, "/v1/members", "", authHeader)
 	wantError(t, w, http.StatusForbidden, "forbidden")

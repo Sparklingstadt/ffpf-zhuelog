@@ -52,9 +52,6 @@ const (
 	msgChatFailed           = "ChatGPTから応答を受信できませんでした。"
 	msgConversationNotFound = "会話が見つかりません。"
 
-	msgPracticeRecordInvalid  = "練習の記録の形式が不正です。"
-	msgPracticeRecordNotFound = "練習の記録が見つかりません。"
-
 	msgStudyLogInvalid = "学習ログの期間が不正です。YYYY-MM-DD で、93日以内にしてください。"
 )
 
@@ -170,8 +167,8 @@ func writeForbidden(w http.ResponseWriter, msg string) {
 var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 // validUUID reports whether s is a UUID in lower-case hex (any version), the
-// form of the ids the browser makes for conversations, practice rounds,
-// vocabulary words, questions and review logs.
+// form of the ids the browser makes for conversations, vocabulary words,
+// questions and review logs.
 func validUUID(s string) bool { return uuidPattern.MatchString(s) }
 
 // pathValue returns the named path value if valid accepts it; otherwise it

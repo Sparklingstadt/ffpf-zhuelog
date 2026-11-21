@@ -4,6 +4,7 @@ import {
   createMember,
   expect,
   memberOwnerId,
+  practicePrepositionRound,
   seedNotes,
   test,
   upload,
@@ -58,6 +59,52 @@ test("an admin acting as a member saves the conversation as the member's", async
     [adminOwnerId],
   );
   expect(rows[0].n).toBe(0);
+});
+
+test("an admin acting as a member saves a practice round as the member's", async ({
+  page,
+  context,
+  db,
+}) => {
+  test.setTimeout(90_000);
+  const accountId = await createMember(
+    db,
+    "test04",
+    "テスト四郎",
+    "member-password-1",
+  );
+  const owner = memberOwnerId(accountId);
+  await asAdmin(context);
+  await page.goto("/admin/accounts");
+  await page.getByRole("button", { name: "この会員として操作" }).click();
+  await expect(page).toHaveURL((url) => url.pathname === "/");
+  await expect(
+    page.getByRole("status").filter({ hasText: "として操作中" }),
+  ).toContainText("テスト四郎");
+
+  await practicePrepositionRound(page);
+
+  const { rows: records } = await db.query(
+    `SELECT "ownerId", "questions" FROM "PrepositionPracticeRecord"`,
+  );
+  expect(records.map((row) => row.ownerId)).toEqual([owner]);
+  // One review item per distinct `id:noun` target among the missed questions.
+  const missedTargets = new Set(
+    (records[0].questions as { id?: string; noun: string; misses: string[] }[])
+      .filter((q) => q.id && q.misses.length > 0)
+      .map((q) => `${q.id}:${q.noun}`),
+  );
+  const count = async (sql: string, ownerId: string) =>
+    (await db.query(sql, [ownerId])).rows[0].n as number;
+  const items = `SELECT count(*)::int AS n FROM "ReviewItem" WHERE "ownerId" = $1`;
+  expect(await count(items, owner)).toBe(missedTargets.size);
+  expect(await count(items, adminOwnerId)).toBe(0);
+  expect(
+    await count(
+      `SELECT count(*)::int AS n FROM "PrepositionPracticeRecord" WHERE "ownerId" = $1`,
+      adminOwnerId,
+    ),
+  ).toBe(0);
 });
 
 test("an admin acting as a member imports into the member's notes", async ({

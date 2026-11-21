@@ -103,12 +103,6 @@ type Deps struct {
 	ChatModel     string
 	QuickChat     ChatStreamer
 	Questions     Questions
-	// PrepositionRecords keeps finished rounds of preposition practice.
-	PrepositionRecords PrepositionRecords
-	ComplementRecords  ComplementRecords
-	// Reviews is the review queue that saved practice rounds add their
-	// missed questions to; nil queues nothing.
-	Reviews Reviews
 	// StudyLog counts what owners did each day.
 	StudyLog StudyLog
 	// AIUsage records the tokens of every OpenAI call and sums them up for
@@ -168,7 +162,6 @@ func newMux(d Deps) (*http.ServeMux, []route) {
 	r.memberRoutes()
 	r.accountRoutes()
 	r.adminRoutes()
-	r.practiceRecordRoutes()
 	r.studyLogRoutes()
 	r.lineRoutes()
 	r.conversationRoutes()
@@ -312,21 +305,6 @@ func (r *registrar) adminRoutes() {
 	if r.d.AIUsage != nil {
 		r.adminOnly("GET /v1/admin/ai-usage", aiUsageMonth(r.d.AIUsage, r.d.Now))
 	}
-}
-
-// practiceRecordRoutes keep finished rounds of preposition and complement
-// practice, for members and admins. Guests may practice in the web, but
-// nothing of theirs is saved.
-func (r *registrar) practiceRecordRoutes() {
-	prep := prepositionPractice(r.d.PrepositionRecords)
-	r.private("GET /v1/preposition-records", listPracticeRecords(prep))
-	r.private("GET /v1/preposition-records/{id}", getPracticeRecord(prep))
-	r.private("PUT /v1/preposition-records/{id}", putPracticeRecord(prep, r.d.Reviews, r.d.Now))
-
-	comp := complementPractice(r.d.ComplementRecords)
-	r.private("GET /v1/complement-records", listPracticeRecords(comp))
-	r.private("GET /v1/complement-records/{id}", getPracticeRecord(comp))
-	r.private("PUT /v1/complement-records/{id}", putPracticeRecord(comp, r.d.Reviews, r.d.Now))
 }
 
 // studyLogRoutes are the study log, for members and admins.

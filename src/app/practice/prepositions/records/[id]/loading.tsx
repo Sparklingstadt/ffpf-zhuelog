@@ -2,7 +2,8 @@ import { PageSkeleton } from "@/presentation/components/layout/page-skeleton";
 import { Card, CardContent } from "@/presentation/components/ui/card";
 import { Skeleton } from "@/presentation/components/ui/skeleton";
 
-// One record before Go answers: the three stats and the list of questions.
+// One record before the database answers: the three stats and the list of
+// questions.
 export default function Loading() {
   return (
     <PageSkeleton label="練習の記録を読み込んでいます">
