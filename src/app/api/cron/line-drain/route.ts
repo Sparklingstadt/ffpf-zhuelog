@@ -8,7 +8,8 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 // The daily LINE pass (Go: GET /v1/line/drain): late results, then the
-// morning review message. Not registered as a Vercel Cron yet.
+// morning review message. Registered in vercel.json as a Vercel Cron
+// (0 21 * * * UTC = 06:00 JST).
 export async function GET(request: Request): Promise<Response> {
   // Without LINE the route does not exist, before the secret (as Go).
   if (!lineBot)
