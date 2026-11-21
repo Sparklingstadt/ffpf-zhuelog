@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { openAiStubURL } from "./environment";
 import {
   adminOwnerId,
+  anyWidth,
   asAdmin,
   asGuest,
   asMember,
@@ -136,39 +137,38 @@ test("cut answers stay unsaved and can be retried", async ({
   ).toBe(0);
 });
 
-test("members cannot read another owner's note and guests cannot use quick questions", async ({
-  page,
-  context,
-  db,
-  browser,
-}) => {
-  await asAdmin(context);
-  await page.goto("/quick-question");
-  await page.getByLabel("クイック質問の内容").fill("管理者の質問");
-  await page.getByRole("button", { name: "質問する", exact: true }).click();
-  await expect(page.getByText("質問ノートに保存しました。")).toBeVisible();
-  const { rows } = await db.query('SELECT id FROM "QuickQuestion"');
-  await createMember(db, "quick-member", "質問者", "member-password-1");
-  const member = await browser.newPage();
-  await asMember(member, "quick-member", "member-password-1");
-  expect((await member.goto(`/questions/${rows[0].id}`))?.status()).toBe(404);
-  await member.goto("/questions");
-  await expect(member.getByText("まだ質問ノートがありません")).toBeVisible();
-  await member.goto("/quick-question");
-  await member.getByLabel("クイック質問の内容").fill("メンバーの質問");
-  await member.getByRole("button", { name: "質問する", exact: true }).click();
-  await expect(member.getByText("質問ノートに保存しました。")).toBeVisible();
-  await member.close();
-  const guest = await browser.newPage();
-  await asGuest(guest);
-  for (const path of [
-    "/quick-question",
-    "/questions",
-    `/questions/${rows[0].id}`,
-  ])
-    expect((await guest.goto(path))?.status()).toBe(404);
-  await guest.close();
-});
+test(
+  "members cannot read another owner's note and guests cannot use quick questions",
+  anyWidth,
+  async ({ page, context, db, browser }) => {
+    await asAdmin(context);
+    await page.goto("/quick-question");
+    await page.getByLabel("クイック質問の内容").fill("管理者の質問");
+    await page.getByRole("button", { name: "質問する", exact: true }).click();
+    await expect(page.getByText("質問ノートに保存しました。")).toBeVisible();
+    const { rows } = await db.query('SELECT id FROM "QuickQuestion"');
+    await createMember(db, "quick-member", "質問者", "member-password-1");
+    const member = await browser.newPage();
+    await asMember(member, "quick-member", "member-password-1");
+    expect((await member.goto(`/questions/${rows[0].id}`))?.status()).toBe(404);
+    await member.goto("/questions");
+    await expect(member.getByText("まだ質問ノートがありません")).toBeVisible();
+    await member.goto("/quick-question");
+    await member.getByLabel("クイック質問の内容").fill("メンバーの質問");
+    await member.getByRole("button", { name: "質問する", exact: true }).click();
+    await expect(member.getByText("質問ノートに保存しました。")).toBeVisible();
+    await member.close();
+    const guest = await browser.newPage();
+    await asGuest(guest);
+    for (const path of [
+      "/quick-question",
+      "/questions",
+      `/questions/${rows[0].id}`,
+    ])
+      expect((await guest.goto(path))?.status()).toBe(404);
+    await guest.close();
+  },
+);
 
 // e2e/openai-stub.ts cuts an answer at "[incomplete]" (after one piece, with
 // usage) and refuses one at "[fail]" (500, no usage). Neither is saved; the
@@ -243,63 +243,62 @@ function captureSave(page: Page) {
 
 // A note id is the browser's: sending the same note again is fine, but the
 // same id with another answer, or from another member, changes nothing.
-test("a question note id cannot be overwritten", async ({
-  page,
-  context,
-  db,
-  browser,
-}) => {
-  await asAdmin(context);
-  await page.goto("/quick-question");
-  const saves = captureSave(page);
-  await page.getByLabel("クイック質問の内容").fill("了と过の違いは？");
-  await page.getByRole("button", { name: "質問する", exact: true }).click();
-  await expect(page.getByText("質問ノートに保存しました。")).toBeVisible();
-  expect(saves).toHaveLength(1);
-  const [save] = saves;
-  const notes =
-    'SELECT "id", "ownerId", "answer", "createdAt" FROM "QuickQuestion"';
-  const { rows: before } = await db.query(notes);
-  expect(before).toHaveLength(1);
-  expect(before[0].ownerId).toBe(adminOwnerId);
+test(
+  "a question note id cannot be overwritten",
+  anyWidth,
+  async ({ page, context, db, browser }) => {
+    await asAdmin(context);
+    await page.goto("/quick-question");
+    const saves = captureSave(page);
+    await page.getByLabel("クイック質問の内容").fill("了と过の違いは？");
+    await page.getByRole("button", { name: "質問する", exact: true }).click();
+    await expect(page.getByText("質問ノートに保存しました。")).toBeVisible();
+    expect(saves).toHaveLength(1);
+    const [save] = saves;
+    const notes =
+      'SELECT "id", "ownerId", "answer", "createdAt" FROM "QuickQuestion"';
+    const { rows: before } = await db.query(notes);
+    expect(before).toHaveLength(1);
+    expect(before[0].ownerId).toBe(adminOwnerId);
 
-  const retry = await page.request.fetch(save);
-  expect(retry.status()).toBe(200);
-  expect(await retry.text()).toContain('{"ok":true}');
-  expect((await db.query(notes)).rows).toEqual(before);
+    const retry = await page.request.fetch(save);
+    expect(retry.status()).toBe(200);
+    expect(await retry.text()).toContain('{"ok":true}');
+    expect((await db.query(notes)).rows).toEqual(before);
 
-  const body = save.postData() ?? "";
-  expect(body).toContain(before[0].answer);
-  const headers = save.headers();
-  const sendAs = (requester: Page, data: string) =>
-    requester.request.post(save.url(), {
-      headers: {
-        "next-action": headers["next-action"],
-        "content-type": headers["content-type"],
-        accept: headers["accept"],
-      },
-      data,
-    });
-  const changed = await sendAs(
-    page,
-    body.replace(before[0].answer, "書き換え"),
-  );
-  expect(await changed.text()).toContain(
-    "処理できませんでした。時間をおいてもう一度お試しください。",
-  );
-  expect((await db.query(notes)).rows).toEqual(before);
+    const body = save.postData() ?? "";
+    expect(body).toContain(before[0].answer);
+    const headers = save.headers();
+    const sendAs = (requester: Page, data: string) =>
+      requester.request.post(save.url(), {
+        headers: {
+          "next-action": headers["next-action"],
+          "content-type": headers["content-type"],
+          accept: headers["accept"],
+        },
+        data,
+      });
+    const changed = await sendAs(
+      page,
+      body.replace(before[0].answer, "書き換え"),
+    );
+    expect(await changed.text()).toContain(
+      "処理できませんでした。時間をおいてもう一度お試しください。",
+    );
+    expect((await db.query(notes)).rows).toEqual(before);
 
-  await createMember(db, "quick-member", "質問者", "member-password-1");
-  const other = await browser.newContext();
-  const otherPage = await other.newPage();
-  await asMember(otherPage, "quick-member", "member-password-1");
-  const stolen = await sendAs(otherPage, body);
-  expect(await stolen.text()).toContain(
-    "処理できませんでした。時間をおいてもう一度お試しください。",
-  );
-  expect((await db.query(notes)).rows).toEqual(before);
-  await other.close();
-});
+    await createMember(db, "quick-member", "質問者", "member-password-1");
+    const other = await browser.newContext();
+    const otherPage = await other.newPage();
+    await asMember(otherPage, "quick-member", "member-password-1");
+    const stolen = await sendAs(otherPage, body);
+    expect(await stolen.text()).toContain(
+      "処理できませんでした。時間をおいてもう一度お試しください。",
+    );
+    expect((await db.query(notes)).rows).toEqual(before);
+    await other.close();
+  },
+);
 
 // Stopping an answer closes the browser's request; the web then stops its
 // own request to OpenAI. e2e/openai-stub.ts holds a "[hang]" answer open

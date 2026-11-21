@@ -2,15 +2,16 @@ import { readFile } from "node:fs/promises";
 
 import {
   adminOwnerId,
+  anyWidth,
   asAdmin,
   asGuest,
   expect,
+  signOut,
   test,
   upload,
-  signOut,
 } from "./fixtures";
 
-test("unauthenticated pages redirect to signin", async ({ page }) => {
+test("unauthenticated pages redirect to signin", anyWidth, async ({ page }) => {
   for (const path of [
     "/",
     "/logs",
@@ -61,10 +62,14 @@ test("guest sees no notes and no note tools", async ({ page, db }) => {
   await expect(page).toHaveURL(/\/signin(?:\?|$)/);
 });
 
-test("guest callback rejects external redirects", async ({ page }) => {
-  await asGuest(page, "https://example.com/unsafe");
-  await expect(page).toHaveURL("http://127.0.0.1:3107/");
-});
+test(
+  "guest callback rejects external redirects",
+  anyWidth,
+  async ({ page }) => {
+    await asGuest(page, "https://example.com/unsafe");
+    await expect(page).toHaveURL("http://127.0.0.1:3107/");
+  },
+);
 
 test("CSV persists variable hints, quoted fields and survives reload", async ({
   context,
@@ -161,32 +166,32 @@ test("exports the selected notes as a CSV the import reads back", async ({
   await expect(page.getByText("5 / 5件を選択中")).toBeVisible();
 });
 
-test("imports 1000 notes with 100 hints each", async ({
-  context,
-  page,
-  db,
-}) => {
-  // The largest import the limits allow: 100,000 hints in one transaction.
-  test.setTimeout(120_000);
-  await asAdmin(context);
-  const hints = Array.from({ length: 100 }, (_, j) => `ヒント${j}`).join(",");
-  const rows = Array.from(
-    { length: 1000 },
-    (_, i) => `原文${i},添削${i},pinyin ${i},${hints}`,
-  );
-  // The header the export writes (ピンイン) is skipped too.
-  await upload(page, ["最初の文,添削後の文,ピンイン", ...rows].join("\n"));
-  await expect(page.getByText("1000件の学習文を登録しました。")).toBeVisible({
-    timeout: 60_000,
-  });
-  expect(
-    (await db.query('SELECT count(*)::int AS n FROM "LearningEntry"')).rows[0]
-      .n,
-  ).toBe(1000);
-  expect(
-    (await db.query('SELECT count(*)::int AS n FROM "Hint"')).rows[0].n,
-  ).toBe(100_000);
-});
+test(
+  "imports 1000 notes with 100 hints each",
+  anyWidth,
+  async ({ context, page, db }) => {
+    // The largest import the limits allow: 100,000 hints in one transaction.
+    test.setTimeout(120_000);
+    await asAdmin(context);
+    const hints = Array.from({ length: 100 }, (_, j) => `ヒント${j}`).join(",");
+    const rows = Array.from(
+      { length: 1000 },
+      (_, i) => `原文${i},添削${i},pinyin ${i},${hints}`,
+    );
+    // The header the export writes (ピンイン) is skipped too.
+    await upload(page, ["最初の文,添削後の文,ピンイン", ...rows].join("\n"));
+    await expect(page.getByText("1000件の学習文を登録しました。")).toBeVisible({
+      timeout: 60_000,
+    });
+    expect(
+      (await db.query('SELECT count(*)::int AS n FROM "LearningEntry"')).rows[0]
+        .n,
+    ).toBe(1000);
+    expect(
+      (await db.query('SELECT count(*)::int AS n FROM "Hint"')).rows[0].n,
+    ).toBe(100_000);
+  },
+);
 
 for (const [name, csv, error] of [
   ["missing columns", "原文,添削", "3列未満"],
@@ -197,51 +202,58 @@ for (const [name, csv, error] of [
   ["valid then invalid row", "原文,添削,pinyin\n不正な行", "3列未満"],
   ["NUL in a cell", "原文,添削,pin\u0000yin", "引用符"],
 ]) {
-  test(`invalid CSV: ${name} writes nothing`, async ({ context, page, db }) => {
+  test(
+    `invalid CSV: ${name} writes nothing`,
+    anyWidth,
+    async ({ context, page, db }) => {
+      await asAdmin(context);
+      await upload(page, csv);
+      await expect(page.getByText("インポートできませんでした")).toBeVisible();
+      await expect(
+        page
+          .getByRole("alert")
+          .filter({ hasText: "インポートできませんでした" }),
+      ).toContainText(error);
+      expect(
+        (await db.query('SELECT count(*)::int AS n FROM "ImportBatch"')).rows[0]
+          .n,
+      ).toBe(0);
+    },
+  );
+}
+
+test(
+  "stale admin form is rejected after switching to guest",
+  anyWidth,
+  async ({ context, page, db }) => {
     await asAdmin(context);
-    await upload(page, csv);
-    await expect(page.getByText("インポートできませんでした")).toBeVisible();
+    await page.goto("/import");
+    await expect(page.getByLabel("CSVファイル", { exact: true })).toBeEnabled();
+    // Drain initial prefetch responses before replacing the shared session;
+    // proxy responses refresh cookies, including in-flight requests.
+    await page.waitForLoadState("networkidle");
+    await context.clearCookies();
+    const guestTab = await context.newPage();
+    await asGuest(guestTab);
+    await upload(page, "原文,添削,pinyin");
     await expect(
-      page.getByRole("alert").filter({ hasText: "インポートできませんでした" }),
-    ).toContainText(error);
+      page.getByText(
+        "この操作を行う権限がありません。再度ログインしてください。",
+      ),
+    ).toBeVisible();
     expect(
       (await db.query('SELECT count(*)::int AS n FROM "ImportBatch"')).rows[0]
         .n,
     ).toBe(0);
-  });
-}
-
-test("stale admin form is rejected after switching to guest", async ({
-  context,
-  page,
-  db,
-}) => {
-  await asAdmin(context);
-  await page.goto("/import");
-  await expect(page.getByLabel("CSVファイル", { exact: true })).toBeEnabled();
-  // Drain initial prefetch responses before replacing the shared session;
-  // proxy responses refresh cookies, including in-flight requests.
-  await page.waitForLoadState("networkidle");
-  await context.clearCookies();
-  const guestTab = await context.newPage();
-  await asGuest(guestTab);
-  await upload(page, "原文,添削,pinyin");
-  await expect(
-    page.getByText(
-      "この操作を行う権限がありません。再度ログインしてください。",
-    ),
-  ).toBeVisible();
-  expect(
-    (await db.query('SELECT count(*)::int AS n FROM "ImportBatch"')).rows[0].n,
-  ).toBe(0);
-});
+  },
+);
 
 for (const [name, bytes, error] of [
   ["empty.csv", 0, "CSVファイルを選択"],
   ["wrong.txt", 10, "拡張子が.csv"],
   ["large.csv", 4 * 1024 * 1024 + 1, "4MB以下"],
 ] as const) {
-  test(`rejects upload ${name}`, async ({ page, context, db }) => {
+  test(`rejects upload ${name}`, anyWidth, async ({ page, context, db }) => {
     await asAdmin(context);
     await page.goto("/import");
     await page.getByLabel("CSVファイル", { exact: true }).setInputFiles({

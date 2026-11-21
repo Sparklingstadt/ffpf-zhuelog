@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import {
+  anyWidth,
   asGuest,
   asMember,
   createMember,
@@ -152,7 +153,7 @@ test("the study log counts each kind by Japan day, the owner's only", async ({
   ).toHaveAttribute("data-total", "0");
 });
 
-test("guests have no study log", async ({ page }) => {
+test("guests have no study log", anyWidth, async ({ page }) => {
   await asGuest(page);
   await page.goto("/study-log");
   await expect(page).toHaveURL((url) => url.pathname === "/");

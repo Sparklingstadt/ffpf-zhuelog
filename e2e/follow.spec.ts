@@ -1,15 +1,16 @@
 import type { Browser, Page } from "@playwright/test";
 import {
   adminOwnerId,
+  anyWidth,
   asAdmin,
   asGuest,
   asMember,
   createMember,
   expect,
   memberOwnerId,
+  openSiteMenu,
   seedNotes,
   test,
-  openSiteMenu,
 } from "./fixtures";
 
 const password = "member-password-1";
@@ -198,165 +199,167 @@ test("an admin can follow a member but has no share button", async ({
   await expect(page.getByRole("button", { name: "共有する" })).toHaveCount(0);
 });
 
-test("a member cannot share another member's note by forging its id", async ({
-  browser,
-  baseURL,
-  db,
-}) => {
-  const taro = await createMember(db, "taro", "太郎", password);
-  const hanako = await createMember(db, "hanako", "花子", password);
-  await seedNotes(db, memberOwnerId(taro), [notes[0]]);
-  await seedNotes(db, memberOwnerId(hanako), [
-    { text: "B1原文", createdAt: "2026-10-04T01:00:00Z", hint: "「一」" },
-  ]);
-  const { rows } = await db.query(
-    `SELECT id FROM "LearningEntry" WHERE "ownerId" = $1`,
-    [memberOwnerId(taro)],
-  );
-  const taroNoteId = rows[0].id as string;
-
-  const b = await signedInPage(browser, baseURL, "hanako", detail);
-  try {
-    // B's own form, with the hidden id swapped for A's note.
-    await expect(note(b.page, "B1原文")).toBeVisible();
-    await b.page
-      .locator('form:has(button:text-is("共有する")) input[name="id"]')
-      .evaluate((input, id) => {
-        (input as HTMLInputElement).value = id;
-      }, taroNoteId);
-    await b.page.getByRole("button", { name: "共有する" }).click();
-    await expect(
-      b.page.getByText("見つかりませんでした。画面を更新してください。"),
-    ).toBeVisible();
-
-    const shared = await db.query(
-      `SELECT "sharedAt" FROM "LearningEntry" WHERE id = $1`,
-      [taroNoteId],
+test(
+  "a member cannot share another member's note by forging its id",
+  anyWidth,
+  async ({ browser, baseURL, db }) => {
+    const taro = await createMember(db, "taro", "太郎", password);
+    const hanako = await createMember(db, "hanako", "花子", password);
+    await seedNotes(db, memberOwnerId(taro), [notes[0]]);
+    await seedNotes(db, memberOwnerId(hanako), [
+      { text: "B1原文", createdAt: "2026-10-04T01:00:00Z", hint: "「一」" },
+    ]);
+    const { rows } = await db.query(
+      `SELECT id FROM "LearningEntry" WHERE "ownerId" = $1`,
+      [memberOwnerId(taro)],
     );
-    expect(shared.rows[0].sharedAt).toBeNull();
-  } finally {
-    await b.context.close();
-  }
-});
+    const taroNoteId = rows[0].id as string;
 
-test("members are listed in Japanese order, then by when they joined", async ({
-  page,
-  db,
-}) => {
-  await createMember(db, "viewer", "閲覧者", password);
-  const names = [
-    "カズ",
-    "サーシャ",
-    "アキラ",
-    "コーヘイ",
-    "イチロー",
-    "ケーキ",
-    "コウヘイ",
-    "ダブル",
-    "ダブル",
-  ];
-  const ids: string[] = [];
-  for (const [index, name] of names.entries())
-    ids.push(await createMember(db, `m${index + 1}`, name, password));
-  // m9 was created after m8 but joined earlier, so it comes first.
-  const joined = [
-    "2026-10-01 00:00:01",
-    "2026-10-01 00:00:02",
-    "2026-10-01 00:00:03",
-    "2026-10-01 00:00:04",
-    "2026-10-01 00:00:05",
-    "2026-10-01 00:00:06",
-    "2026-10-01 00:00:07",
-    "2026-10-01 00:00:20",
-    "2026-10-01 00:00:10",
-  ];
-  for (const [index, id] of ids.entries())
+    const b = await signedInPage(browser, baseURL, "hanako", detail);
+    try {
+      // B's own form, with the hidden id swapped for A's note.
+      await expect(note(b.page, "B1原文")).toBeVisible();
+      await b.page
+        .locator('form:has(button:text-is("共有する")) input[name="id"]')
+        .evaluate((input, id) => {
+          (input as HTMLInputElement).value = id;
+        }, taroNoteId);
+      await b.page.getByRole("button", { name: "共有する" }).click();
+      await expect(
+        b.page.getByText("見つかりませんでした。画面を更新してください。"),
+      ).toBeVisible();
+
+      const shared = await db.query(
+        `SELECT "sharedAt" FROM "LearningEntry" WHERE id = $1`,
+        [taroNoteId],
+      );
+      expect(shared.rows[0].sharedAt).toBeNull();
+    } finally {
+      await b.context.close();
+    }
+  },
+);
+
+test(
+  "members are listed in Japanese order, then by when they joined",
+  anyWidth,
+  async ({ page, db }) => {
+    await createMember(db, "viewer", "閲覧者", password);
+    const names = [
+      "カズ",
+      "サーシャ",
+      "アキラ",
+      "コーヘイ",
+      "イチロー",
+      "ケーキ",
+      "コウヘイ",
+      "ダブル",
+      "ダブル",
+    ];
+    const ids: string[] = [];
+    for (const [index, name] of names.entries())
+      ids.push(await createMember(db, `m${index + 1}`, name, password));
+    // m9 was created after m8 but joined earlier, so it comes first.
+    const joined = [
+      "2026-10-01 00:00:01",
+      "2026-10-01 00:00:02",
+      "2026-10-01 00:00:03",
+      "2026-10-01 00:00:04",
+      "2026-10-01 00:00:05",
+      "2026-10-01 00:00:06",
+      "2026-10-01 00:00:07",
+      "2026-10-01 00:00:20",
+      "2026-10-01 00:00:10",
+    ];
+    for (const [index, id] of ids.entries())
+      await db.query(
+        `UPDATE "PasswordAccount" SET "createdAt" = $2 WHERE "id" = $1`,
+        [id, joined[index]],
+      );
+
+    await asMember(page, "viewer", password, "/follow");
+    const listed = await page
+      .locator('li input[name="followeeId"]')
+      .evaluateAll((inputs) =>
+        inputs.map((input) => (input as HTMLInputElement).value),
+      );
+    // アキラ, イチロー, カズ, ケーキ, コウヘイ, コーヘイ, サーシャ, ダブル ×2.
+    expect(listed).toEqual(
+      [3, 5, 1, 6, 7, 4, 2, 9, 8].map((m) => memberOwnerId(ids[m - 1])),
+    );
+    await expect(memberRow(page, "閲覧者")).toHaveCount(0);
+  },
+);
+
+test(
+  "the timeline shows the newest 100 shared notes of followed members",
+  anyWidth,
+  async ({ page, db }) => {
+    const taro = await createMember(db, "taro", "太郎", password);
+    const hanako = await createMember(db, "hanako", "花子", password);
+    const jiro = await createMember(db, "jiro", "次郎", password);
+    const start = Date.parse("2026-10-01T00:00:00Z");
+    await seedNotes(
+      db,
+      memberOwnerId(taro),
+      Array.from({ length: 101 }, (_, index) => ({
+        text: `共有${String(index + 1).padStart(3, "0")}`,
+        createdAt: new Date(start + (index + 1) * 60_000).toISOString(),
+        hint: "一番目",
+      })),
+    );
     await db.query(
-      `UPDATE "PasswordAccount" SET "createdAt" = $2 WHERE "id" = $1`,
-      [id, joined[index]],
+      `UPDATE "LearningEntry" SET "sharedAt" = NOW() WHERE "ownerId" = $1`,
+      [memberOwnerId(taro)],
+    );
+    const { rows } = await db.query(
+      `SELECT id FROM "LearningEntry" WHERE "originalText" = '共有101'`,
+    );
+    await db.query(
+      `INSERT INTO "Hint" (id, content, position, "learningEntryId") VALUES ('hsecond', '二番目', 1, $1)`,
+      [rows[0].id],
     );
 
-  await asMember(page, "viewer", password, "/follow");
-  const listed = await page
-    .locator('li input[name="followeeId"]')
-    .evaluateAll((inputs) =>
-      inputs.map((input) => (input as HTMLInputElement).value),
+    // Left out: a member not followed, a trashed note and a deleted member.
+    await seedNotes(db, memberOwnerId(jiro), [{ text: "次郎の共有" }]);
+    await seedNotes(db, memberOwnerId(taro), [
+      { text: "捨てた共有", createdAt: "2026-12-01T00:00:00Z" },
+    ]);
+    const gone = "password:gone00000000000000000000";
+    await seedNotes(db, gone, [
+      { text: "消えた人の共有", createdAt: "2026-12-01T00:00:00Z" },
+    ]);
+    await db.query(
+      `UPDATE "LearningEntry" SET "sharedAt" = NOW() WHERE "originalText" IN ('次郎の共有', '捨てた共有', '消えた人の共有')`,
     );
-  // アキラ, イチロー, カズ, ケーキ, コウヘイ, コーヘイ, サーシャ, ダブル ×2.
-  expect(listed).toEqual(
-    [3, 5, 1, 6, 7, 4, 2, 9, 8].map((m) => memberOwnerId(ids[m - 1])),
-  );
-  await expect(memberRow(page, "閲覧者")).toHaveCount(0);
-});
+    await db.query(
+      `UPDATE "LearningEntry" SET "deletedAt" = NOW() WHERE "originalText" = '捨てた共有'`,
+    );
+    await db.query(
+      `INSERT INTO "Follow" ("followerId", "followeeId") VALUES ($1, $2), ($1, $3)`,
+      [memberOwnerId(hanako), memberOwnerId(taro), gone],
+    );
 
-test("the timeline shows the newest 100 shared notes of followed members", async ({
-  page,
-  db,
-}) => {
-  const taro = await createMember(db, "taro", "太郎", password);
-  const hanako = await createMember(db, "hanako", "花子", password);
-  const jiro = await createMember(db, "jiro", "次郎", password);
-  const start = Date.parse("2026-10-01T00:00:00Z");
-  await seedNotes(
-    db,
-    memberOwnerId(taro),
-    Array.from({ length: 101 }, (_, index) => ({
-      text: `共有${String(index + 1).padStart(3, "0")}`,
-      createdAt: new Date(start + (index + 1) * 60_000).toISOString(),
-      hint: "一番目",
-    })),
-  );
-  await db.query(
-    `UPDATE "LearningEntry" SET "sharedAt" = NOW() WHERE "ownerId" = $1`,
-    [memberOwnerId(taro)],
-  );
-  const { rows } = await db.query(
-    `SELECT id FROM "LearningEntry" WHERE "originalText" = '共有101'`,
-  );
-  await db.query(
-    `INSERT INTO "Hint" (id, content, position, "learningEntryId") VALUES ('hsecond', '二番目', 1, $1)`,
-    [rows[0].id],
-  );
+    await asMember(page, "hanako", password, "/follow");
+    await expect(page.locator("details summary")).toHaveCount(100);
+    await expect(page.locator("details summary").first()).toContainText(
+      "共有101",
+    );
+    await expect(note(page, "共有002")).toBeVisible();
+    await expect(note(page, "共有001")).toHaveCount(0);
+    for (const text of ["次郎の共有", "捨てた共有", "消えた人の共有"])
+      await expect(page.getByText(text)).toHaveCount(0);
 
-  // Left out: a member not followed, a trashed note and a deleted member.
-  await seedNotes(db, memberOwnerId(jiro), [{ text: "次郎の共有" }]);
-  await seedNotes(db, memberOwnerId(taro), [
-    { text: "捨てた共有", createdAt: "2026-12-01T00:00:00Z" },
-  ]);
-  const gone = "password:gone00000000000000000000";
-  await seedNotes(db, gone, [
-    { text: "消えた人の共有", createdAt: "2026-12-01T00:00:00Z" },
-  ]);
-  await db.query(
-    `UPDATE "LearningEntry" SET "sharedAt" = NOW() WHERE "originalText" IN ('次郎の共有', '捨てた共有', '消えた人の共有')`,
-  );
-  await db.query(
-    `UPDATE "LearningEntry" SET "deletedAt" = NOW() WHERE "originalText" = '捨てた共有'`,
-  );
-  await db.query(
-    `INSERT INTO "Follow" ("followerId", "followeeId") VALUES ($1, $2), ($1, $3)`,
-    [memberOwnerId(hanako), memberOwnerId(taro), gone],
-  );
-
-  await asMember(page, "hanako", password, "/follow");
-  await expect(page.locator("details summary")).toHaveCount(100);
-  await expect(page.locator("details summary").first()).toContainText(
-    "共有101",
-  );
-  await expect(note(page, "共有002")).toBeVisible();
-  await expect(note(page, "共有001")).toHaveCount(0);
-  for (const text of ["次郎の共有", "捨てた共有", "消えた人の共有"])
-    await expect(page.getByText(text)).toHaveCount(0);
-
-  // Hints come in position order (cards start open).
-  const card = page.locator("details").filter({
-    has: page.locator("summary", { hasText: "共有101" }),
-  });
-  await expect(card.getByText("二番目")).toBeVisible();
-  const text = await card.innerText();
-  expect(text.indexOf("一番目")).toBeGreaterThanOrEqual(0);
-  expect(text.indexOf("一番目")).toBeLessThan(text.indexOf("二番目"));
-});
+    // Hints come in position order (cards start open).
+    const card = page.locator("details").filter({
+      has: page.locator("summary", { hasText: "共有101" }),
+    });
+    await expect(card.getByText("二番目")).toBeVisible();
+    const text = await card.innerText();
+    expect(text.indexOf("一番目")).toBeGreaterThanOrEqual(0);
+    expect(text.indexOf("一番目")).toBeLessThan(text.indexOf("二番目"));
+  },
+);
 
 test("an admin acting as a member follows as the member", async ({
   browser,
@@ -422,36 +425,42 @@ test("an admin acting as a member follows as the member", async ({
   }
 });
 
-test("forged follow targets are refused", async ({ browser, baseURL, db }) => {
-  await createMember(db, "taro", "太郎", password);
-  const hanako = await createMember(db, "hanako", "花子", password);
+test(
+  "forged follow targets are refused",
+  anyWidth,
+  async ({ browser, baseURL, db }) => {
+    await createMember(db, "taro", "太郎", password);
+    const hanako = await createMember(db, "hanako", "花子", password);
 
-  const b = await signedInPage(browser, baseURL, "hanako", "/follow");
-  try {
-    const taroRow = memberRow(b.page, "太郎");
-    const forge = async (followeeId: string) => {
-      await taroRow
-        .locator('input[name="followeeId"]')
-        .evaluate((input, id) => {
-          (input as HTMLInputElement).value = id;
-        }, followeeId);
-      await taroRow.getByRole("button", { name: "フォローする" }).click();
-    };
-    const follows = async () =>
-      (await db.query(`SELECT count(*)::int AS n FROM "Follow"`)).rows[0].n;
+    const b = await signedInPage(browser, baseURL, "hanako", "/follow");
+    try {
+      const taroRow = memberRow(b.page, "太郎");
+      const forge = async (followeeId: string) => {
+        await taroRow
+          .locator('input[name="followeeId"]')
+          .evaluate((input, id) => {
+            (input as HTMLInputElement).value = id;
+          }, followeeId);
+        await taroRow.getByRole("button", { name: "フォローする" }).click();
+      };
+      const follows = async () =>
+        (await db.query(`SELECT count(*)::int AS n FROM "Follow"`)).rows[0].n;
 
-    // A member who does not exist.
-    await forge("password:gone00000000000000000000");
-    await expect(
-      b.page.getByText("見つかりませんでした。画面を更新してください。"),
-    ).toBeVisible();
-    expect(await follows()).toBe(0);
+      // A member who does not exist.
+      await forge("password:gone00000000000000000000");
+      await expect(
+        b.page.getByText("見つかりませんでした。画面を更新してください。"),
+      ).toBeVisible();
+      expect(await follows()).toBe(0);
 
-    // Oneself.
-    await forge(memberOwnerId(hanako));
-    await expect(b.page.getByText("自分はフォローできません。")).toBeVisible();
-    expect(await follows()).toBe(0);
-  } finally {
-    await b.context.close();
-  }
-});
+      // Oneself.
+      await forge(memberOwnerId(hanako));
+      await expect(
+        b.page.getByText("自分はフォローできません。"),
+      ).toBeVisible();
+      expect(await follows()).toBe(0);
+    } finally {
+      await b.context.close();
+    }
+  },
+);

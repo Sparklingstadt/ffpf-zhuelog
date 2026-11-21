@@ -1,16 +1,18 @@
 import type { Request } from "@playwright/test";
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { openAiStubURL } from "./environment";
 import {
   adminOwnerId,
+  anyWidth,
   asAdmin,
   asGuest,
   asMember,
   createMember,
   expect,
   memberOwnerId,
-  test,
   openSiteMenu,
+  test,
 } from "./fixtures";
 
 const FAILURE = "ChatGPTから応答を受信できませんでした。";
@@ -243,67 +245,68 @@ test("an answer OpenAI cuts at its limit is kept, a refused one is not", async (
 
 // A conversation id is the browser's, so the save names it: another owner
 // can neither read it nor overwrite it by sending the same id.
-test("another owner's conversation cannot be read or overwritten", async ({
-  page,
-  context,
-  db,
-  browser,
-}) => {
-  await asAdmin(context);
-  await page.goto("/chat");
-  // Server Actions post to the page with a next-action header.
-  const saves: Request[] = [];
-  page.on("request", (request) => {
-    if (
-      request.method() === "POST" &&
-      new URL(request.url()).pathname === "/chat" &&
-      request.headers()["next-action"]
-    )
-      saves.push(request);
-  });
-  const input = page.getByLabel("ChatGPTへのメッセージ");
-  await input.fill("我今天很忙");
-  await input.press("Enter");
-  await expect(
-    page.getByRole("article", { name: "ChatGPTのメッセージ" }),
-  ).toHaveText(["你好！「我今天很忙」ですね。"]);
-  await expect(page).toHaveURL((url) => url.searchParams.has("id"));
-  await page.waitForLoadState("networkidle");
-  expect(saves).toHaveLength(1);
-  const [save] = saves;
-  const conversations =
-    'SELECT "id", "ownerId", "title", "updatedAt" FROM "ChatConversation"';
-  const { rows: before } = await db.query(conversations);
-  expect(before).toHaveLength(1);
-  expect(before[0].ownerId).toBe(adminOwnerId);
-  const { id, title } = before[0];
+test(
+  "another owner's conversation cannot be read or overwritten",
+  anyWidth,
+  async ({ page, context, db, browser }) => {
+    await asAdmin(context);
+    await page.goto("/chat");
+    // Server Actions post to the page with a next-action header.
+    const saves: Request[] = [];
+    page.on("request", (request) => {
+      if (
+        request.method() === "POST" &&
+        new URL(request.url()).pathname === "/chat" &&
+        request.headers()["next-action"]
+      )
+        saves.push(request);
+    });
+    const input = page.getByLabel("ChatGPTへのメッセージ");
+    await input.fill("我今天很忙");
+    await input.press("Enter");
+    await expect(
+      page.getByRole("article", { name: "ChatGPTのメッセージ" }),
+    ).toHaveText(["你好！「我今天很忙」ですね。"]);
+    await expect(page).toHaveURL((url) => url.searchParams.has("id"));
+    await page.waitForLoadState("networkidle");
+    expect(saves).toHaveLength(1);
+    const [save] = saves;
+    const conversations =
+      'SELECT "id", "ownerId", "title", "updatedAt" FROM "ChatConversation"';
+    const { rows: before } = await db.query(conversations);
+    expect(before).toHaveLength(1);
+    expect(before[0].ownerId).toBe(adminOwnerId);
+    const { id, title } = before[0];
 
-  await createMember(db, "chat-member", "会員", "member-password-1");
-  const other = await browser.newContext();
-  const otherPage = await other.newPage();
-  await asMember(otherPage, "chat-member", "member-password-1");
-  expect((await otherPage.goto(`/chat?id=${id}`))?.status()).toBe(404);
-  await otherPage.goto("/conversations");
-  await expect(otherPage.getByText("まだ会話ノートがありません")).toBeVisible();
+    await createMember(db, "chat-member", "会員", "member-password-1");
+    const other = await browser.newContext();
+    const otherPage = await other.newPage();
+    await asMember(otherPage, "chat-member", "member-password-1");
+    expect((await otherPage.goto(`/chat?id=${id}`))?.status()).toBe(404);
+    await otherPage.goto("/conversations");
+    await expect(
+      otherPage.getByText("まだ会話ノートがありません"),
+    ).toBeVisible();
 
-  const body = save.postData() ?? "";
-  const titleField = `"title":${JSON.stringify(title)}`;
-  expect(body).toContain(titleField);
-  const headers = save.headers();
-  const overwrite = await otherPage.request.post(save.url(), {
-    headers: {
-      "next-action": headers["next-action"],
-      "content-type": headers["content-type"],
-      accept: headers["accept"],
-    },
-    data: body.replace(titleField, `"title":${JSON.stringify("書き換え")}`),
-  });
-  expect(await overwrite.text()).toContain(
-    "処理できませんでした。時間をおいてもう一度お試しください。",
-  );
-  expect((await db.query(conversations)).rows).toEqual(before);
-  await other.close();
-});
+    const body = save.postData() ?? "";
+    const titleField = `"title":${JSON.stringify(title)}`;
+    expect(body).toContain(titleField);
+    const headers = save.headers();
+    const overwrite = await otherPage.request.post(save.url(), {
+      headers: {
+        "next-action": headers["next-action"],
+        "content-type": headers["content-type"],
+        accept: headers["accept"],
+      },
+      data: body.replace(titleField, `"title":${JSON.stringify("書き換え")}`),
+    });
+    expect(await overwrite.text()).toContain(
+      "処理できませんでした。時間をおいてもう一度お試しください。",
+    );
+    expect((await db.query(conversations)).rows).toEqual(before);
+    await other.close();
+  },
+);
 
 // e2e/openai-stub.ts holds a "[hang]" answer open after one piece and
 // reports whether its caller closed the connection. Stopping it closes the
@@ -343,4 +346,41 @@ test("stopping an answer stops OpenAI and does not send the message again", asyn
   // Well before the stub's own 30 s end.
   await expect.poll(state, { timeout: 10_000 }).toBe("closed");
   expect(sent).toBe(1);
+});
+
+test("a conversation note is saved as a Markdown file named after its day and number", async ({
+  page,
+  context,
+}) => {
+  await asAdmin(context);
+  await page.goto("/chat");
+  const input = page.getByLabel("ChatGPTへのメッセージ");
+  await input.fill("我今天很忙");
+  await input.press("Enter");
+  await expect(
+    page.getByRole("article", { name: "ChatGPTのメッセージ" }),
+  ).toHaveText(["你好！「我今天很忙」ですね。"]);
+  await expect(page).toHaveURL((url) => url.searchParams.has("id"));
+
+  await page.goto("/conversations");
+  await page.getByText("1件の会話").click();
+  await page.getByText("#1 我今天很忙").click();
+  const notePath = /\/conversations\/(\d+)\/(\d+)\/(\d+)\/1$/;
+  await expect(page).toHaveURL(notePath);
+  const [, year, month, day] = notePath.exec(new URL(page.url()).pathname)!;
+
+  const downloading = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Markdownで保存" }).click();
+  const download = await downloading;
+  const pad = (value: string) => value.padStart(2, "0");
+  expect(download.suggestedFilename()).toBe(
+    `huihua-${year}-${pad(month)}-${pad(day)}-1.md`,
+  );
+  const markdown = await readFile(await download.path(), "utf8");
+  // The title, when and with which model, then one section per message.
+  expect(markdown).toMatch(
+    new RegExp(
+      `^# 我今天很忙\\n\\n- 日時: ${year}/${pad(month)}/${pad(day)} \\d{2}:\\d{2}\\n- モデル: \\S+\\n\\n## あなた\\n\\n我今天很忙\\n\\n## ChatGPT\\n\\n你好！「我今天很忙」ですね。\\n$`,
+    ),
+  );
 });

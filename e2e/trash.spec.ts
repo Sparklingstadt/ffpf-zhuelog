@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 import {
   adminOwnerId,
+  anyWidth,
   asAdmin,
   createMember,
   expect,
@@ -121,44 +122,44 @@ test("a learning note goes to the trash, comes back, and is deleted for good", a
   await expect(page.getByText("まだ学習ノートがありません")).toBeVisible();
 });
 
-test("an admin viewing someone else can neither trash nor see their trash", async ({
-  page,
-  context,
-  db,
-}) => {
-  const id = await createMember(db, "taro", "太郎", "member-password-1");
-  const member = memberOwnerId(id);
-  await seedNotes(db, member, [notes[0], notes[1]]);
-  // One of the member's notes is already in their trash.
-  await db.query(
-    `UPDATE "LearningEntry" SET "deletedAt" = NOW() WHERE "originalText" = 'A2原文'`,
-  );
-  await asAdmin(context);
-  const user = `?user=${encodeURIComponent(member)}`;
+test(
+  "an admin viewing someone else can neither trash nor see their trash",
+  anyWidth,
+  async ({ page, context, db }) => {
+    const id = await createMember(db, "taro", "太郎", "member-password-1");
+    const member = memberOwnerId(id);
+    await seedNotes(db, member, [notes[0], notes[1]]);
+    // One of the member's notes is already in their trash.
+    await db.query(
+      `UPDATE "LearningEntry" SET "deletedAt" = NOW() WHERE "originalText" = 'A2原文'`,
+    );
+    await asAdmin(context);
+    const user = `?user=${encodeURIComponent(member)}`;
 
-  await page.goto(`/logs/${day}/1${user}`);
-  await expect(
-    page.getByText("太郎さんの記録を表示中（閲覧のみ）"),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "ゴミ箱に入れる" }),
-  ).toHaveCount(0);
-  for (const path of [`/logs${user}`, `/logs/${day}${user}`]) {
-    await page.goto(path);
+    await page.goto(`/logs/${day}/1${user}`);
     await expect(
       page.getByText("太郎さんの記録を表示中（閲覧のみ）"),
     ).toBeVisible();
     await expect(
-      page.getByRole("link", { name: "ゴミ箱", exact: true }),
+      page.getByRole("button", { name: "ゴミ箱に入れる" }),
     ).toHaveCount(0);
-  }
-  // The member's own trash is not reachable: `?user=` is ignored there.
-  await page.goto(`/logs/${day}${user}`);
-  await expect(summaries(page)).toHaveCount(1);
-  await page.goto(`/logs/trash${user}`);
-  await expect(page.getByText("ゴミ箱は空です")).toBeVisible();
-  await expect(page.getByText("A2原文")).toHaveCount(0);
-});
+    for (const path of [`/logs${user}`, `/logs/${day}${user}`]) {
+      await page.goto(path);
+      await expect(
+        page.getByText("太郎さんの記録を表示中（閲覧のみ）"),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("link", { name: "ゴミ箱", exact: true }),
+      ).toHaveCount(0);
+    }
+    // The member's own trash is not reachable: `?user=` is ignored there.
+    await page.goto(`/logs/${day}${user}`);
+    await expect(summaries(page)).toHaveCount(1);
+    await page.goto(`/logs/trash${user}`);
+    await expect(page.getByText("ゴミ箱は空です")).toBeVisible();
+    await expect(page.getByText("A2原文")).toHaveCount(0);
+  },
+);
 
 test("trash pages and buttons fit a narrow phone screen", async ({
   page,
