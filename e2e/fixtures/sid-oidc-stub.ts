@@ -17,6 +17,9 @@ import { createServer, type IncomingMessage } from "node:http";
 //                          redirect URI and PKCE verifier, and answers with an
 //                          ES256 ID token for sidStubUser carrying the nonce.
 //   GET  /oauth/jwks       the public key of this run's random P-256 key.
+//   GET  /oauth/logout     RP-Initiated Logout: checks the client, remembers the
+//                          call, and goes back to post_logout_redirect_uri.
+//   GET/DELETE /__logouts  (test only) the remembered logout calls / forget them.
 //
 // Nothing leaves this machine, and the key exists only in this process.
 
@@ -49,6 +52,11 @@ export function startSidOidcStub(
   });
   // The latest authorization request, which the code "stub" stands for.
   let pending: { challenge: string; nonce: string } | null = null;
+  // Every call to /oauth/logout, for the spec to check.
+  let logouts: {
+    clientId: string | null;
+    postLogoutRedirectUri: string | null;
+  }[] = [];
 
   const idToken = (nonce: string) => {
     const now = Math.floor(Date.now() / 1000);
@@ -140,6 +148,24 @@ export function startSidOidcStub(
 
     if (request.method === "GET" && url.pathname === "/oauth/jwks") {
       json(200, jwks);
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname === "/oauth/logout") {
+      const clientId = url.searchParams.get("client_id");
+      const back = url.searchParams.get("post_logout_redirect_uri");
+      if (clientId !== options.clientId || !back) {
+        response.writeHead(400).end("invalid logout request");
+        return;
+      }
+      logouts.push({ clientId, postLogoutRedirectUri: back });
+      response.writeHead(302, { location: back }).end();
+      return;
+    }
+
+    if (url.pathname === "/__logouts") {
+      if (request.method === "DELETE") logouts = [];
+      json(200, JSON.stringify(logouts));
       return;
     }
 

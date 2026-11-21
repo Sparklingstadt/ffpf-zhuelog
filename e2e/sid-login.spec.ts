@@ -34,6 +34,15 @@ async function sessionCookies(context: BrowserContext) {
   return { session: cookies.find((c) => c.name === "zl_session")?.value };
 }
 
+// The stub's record of /oauth/logout calls (it runs in the e2e server process).
+async function logoutCalls(method: "GET" | "DELETE" = "GET") {
+  const response = await fetch(`${sidIssuerURL}/__logouts`, { method });
+  return (await response.json()) as {
+    clientId: string;
+    postLogoutRedirectUri: string;
+  }[];
+}
+
 const memberRow = (page: Page, name: string) =>
   page.getByRole("listitem", { name });
 
@@ -137,4 +146,44 @@ test("a Sparklingstadt ID user and a password member find and follow each other"
   } finally {
     await taro.close();
   }
+});
+
+test("signing out of Sparklingstadt ID goes through the ID server's logout and back to /signin", async ({
+  page,
+  context,
+  baseURL,
+  db,
+}) => {
+  await logoutCalls("DELETE");
+  await signInWithSid(page, "/");
+  await signOut(page);
+
+  await expect(page).toHaveURL(/\/signin(?:\?|$)/);
+  await expect(
+    page.getByRole("button", { name: "ゲストとして使う" }),
+  ).toBeVisible();
+  expect(await logoutCalls()).toEqual([
+    {
+      clientId: "e2e-sid-client",
+      postLogoutRedirectUri: `${baseURL}/signin`,
+    },
+  ]);
+  expect(await sessionCookies(context)).toEqual({ session: undefined });
+  expect((await db.query('SELECT 1 FROM "Session"')).rows).toEqual([]);
+});
+
+test("a password member's sign-out does not pass through the ID server", async ({
+  page,
+  db,
+}) => {
+  await createMember(db, "hanako", "花子", password);
+  await logoutCalls("DELETE");
+  await asMember(page, "hanako", password, "/");
+  await signOut(page);
+
+  await expect(page).toHaveURL(/\/signin(?:\?|$)/);
+  await expect(
+    page.getByRole("button", { name: "ゲストとして使う" }),
+  ).toBeVisible();
+  expect(await logoutCalls()).toEqual([]);
 });
