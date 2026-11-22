@@ -6,7 +6,6 @@ import { useId, useState } from "react";
 import type { VocabularyEntry } from "@/domain/vocabulary/vocabulary-entry";
 import type { ActionState } from "@/presentation/controllers/action-state";
 import { NoteActionForm } from "@/presentation/components/records/note-action-form";
-import { SpeakButton } from "@/presentation/components/speech/speak-button";
 import { Input } from "@/presentation/components/ui/input";
 import { matchesVocabulary } from "@/presentation/presenters/vocabulary-search";
 
@@ -72,7 +71,6 @@ export function VocabularyList({
                 >
                   {entry.word}
                 </p>
-                <SpeakButton text={entry.word} />
                 <NoteActionForm
                   action={deleteVocabulary}
                   fields={{ id: entry.id }}

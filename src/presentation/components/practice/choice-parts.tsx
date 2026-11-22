@@ -17,7 +17,6 @@ import {
   draftVocabularyAction,
   saveVocabularyAction,
 } from "@/presentation/actions/vocabulary-actions";
-import { SpeakButton } from "@/presentation/components/speech/speak-button";
 import { Button } from "@/presentation/components/ui/button";
 import { VocabularyAddForm } from "@/presentation/components/vocabulary/vocabulary-add-form";
 import { cn } from "@/presentation/lib/utils";
@@ -67,7 +66,6 @@ export function SolvedExample({
       ) : null}
       <p lang="zh-CN" className="text-sm">
         {question.example}
-        <SpeakButton text={question.example} className="ml-1 align-middle" />
       </p>
       <p className="text-sm text-muted-foreground">{question.translation}</p>
       {question.examplePinyin ? (

@@ -21,7 +21,7 @@
 - **練習**：介詞、補語（結果・可能・程度・方向の 8 モード）、量詞、了・过・着の 4 択問題です。HSK 3.0 の級で絞れ、級の決め方は手作りの表と公式の語彙表（11,092 語）を切り替えられます。
 - **単語帳**：例文や学習ノートから語句を入れ、ピンインと意味の下書きを AI が作ります。
 - **AI**：LINE に送った文を添削・翻訳して学習ノートに入れます。「ChatGPT と話す」と「クイック質問」もあります。OpenAI を呼ぶたびにトークン数を記録し、管理者が月ごとの費用を見られます。
-- **読み上げ・テーマ・スマホ**：例文と学習ノートの読み上げ、ライトとダーク、スマホの下のタブがあります。
+- **テーマ・スマホ**：ライトとダーク、スマホの下のタブがあります。
 
 機能ごとの詳しい説明は [docs/features.md](docs/features.md) にあります。
 
@@ -32,7 +32,7 @@
 | Web          | Next.js 16（App Router、Server Components、Server Actions）、React 19、TypeScript、Tailwind CSS 4、shadcn/ui                                                                                                                                                                     |
 | DB           | PostgreSQL 17（本番は Neon）。スキーマとマイグレーションは Prisma 7。Web がすべてのデータを Prisma で読み書きします。Prisma を import してよいのは `src/infrastructure/prisma/` だけです                                                                                         |
 | 認証         | GitHub OAuth（PKCE）、ID とパスワード（scrypt。ハッシュの書き込みも確認も Web）、Sparklingstadt ID（OpenID Connect）、ゲスト。ログインはランダムなトークン（Cookie `zl_session`）のハッシュを DB の `Session` に置きます。期限は 30 日（ゲストは 24 時間）で、使っても延びません |
-| 外部サービス | OpenAI API、LINE Messaging API、Web Speech API（読み上げ）                                                                                                                                                                                                                       |
+| 外部サービス | OpenAI API、LINE Messaging API                                                                                                                                                                                                                                                   |
 | テスト       | Node の test runner、Playwright（PC とスマホの幅）、lefthook                                                                                                                                                                                                                     |
 | デプロイ     | Vercel（Web の 1 プロジェクト）。本番のマイグレーションはビルドで当てます。毎日の定期実行は Vercel Cron（`vercel.json`）                                                                                                                                                         |
 
