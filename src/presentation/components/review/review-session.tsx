@@ -19,7 +19,6 @@ import {
   WrongPickNotice,
 } from "@/presentation/components/practice/choice-parts";
 import { useReviewSession } from "@/presentation/components/review/use-review-session";
-import { SpeakButton } from "@/presentation/components/speech/speak-button";
 import { Badge } from "@/presentation/components/ui/badge";
 import { Button } from "@/presentation/components/ui/button";
 import { Card, CardContent } from "@/presentation/components/ui/card";
@@ -98,10 +97,6 @@ function NoteCardContent({
                 className="text-xl leading-9 font-semibold sm:text-2xl"
               >
                 {entry.correctedText}
-                <SpeakButton
-                  text={entry.correctedText}
-                  className="ml-1 align-middle"
-                />
               </p>
               <p className="text-sm text-muted-foreground">{entry.pinyin}</p>
             </div>
@@ -315,7 +310,6 @@ export function ReviewSession({
                 <div className="space-y-1" aria-live="polite">
                   <p className="flex items-center justify-center gap-1 font-mono text-lg text-muted-foreground">
                     {card.word.pinyin}
-                    <SpeakButton text={card.word.word} />
                   </p>
                   <p className="text-lg">{card.word.meaning}</p>
                 </div>
