@@ -142,7 +142,8 @@ GitHub と Sparklingstadt ID が code を交換するときの `redirect_uri` �
 
 ## 5. 復習
 
-- **計算**：FSRS v4 で次の期日を決めます。Web が `src/domain/review/fsrs.ts`（[go-fsrs](https://github.com/open-spaced-repetition/go-fsrs) を手で移した TypeScript）で計算し、`ReviewItem` と `ReviewLog` も Prisma で直接読み書きします。`tests/fixtures/fsrs-golden.json`（go-fsrs の結果を書いた固定のファイル）と同じ結果になることを、Web のテストで確かめます。定着率 90%、学習中のステップは 1 分と 10 分です。評価は「もう一度・難しい・できた・簡単」の 4 段階です。
+- **計算**：FSRS-6（重みが 21 個の版のアルゴリズム）で次の期日を決めます。Web が `src/domain/review/fsrs.ts`（[go-fsrs](https://github.com/open-spaced-repetition/go-fsrs) v4.0.0 を手で移した TypeScript。v4.0.0 はライブラリの版で、中身のアルゴリズムは FSRS-6）で計算し、`ReviewItem` と `ReviewLog` も Prisma で直接読み書きします。`tests/fixtures/fsrs-golden.json`（go-fsrs の結果を書いた固定のファイル）と同じ結果になることを、Web のテストで確かめます。定着率 90%、学習中のステップは 1 分と 10 分です。評価は「もう一度・難しい・できた・簡単」の 4 段階です。
+- **ライブラリを使わない理由**：npm の [ts-fsrs](https://github.com/open-spaced-repetition/ts-fsrs) 6.0.1 に同じ設定で固定値の 18 ケース（59 回の回答）を通すと、学習中の「難しい」の期日が 30 秒早くなり（3 回。go-fsrs は 5.5 分を 6 分に丸め、ts-fsrs は丸めません）、stability と difficulty は小数 8 桁に丸められます。乱数で作った 50 万回の回答では、この丸めだけで次の期日が 1 日ずれる例が 3 件ありました。本番のカードは丸めのない値で保存してあるので、期日を変えないために手書きのまま残しています。
 - **1 つの列にまとめる**：学習ノート、介詞と補語の練習の間違い、単語帳の語句を、どれも `ReviewItem`（`kind` と `targetId`）として同じ表に置きます。そのため、「今日の復習」は 1 つの列で済みます。FSRS のカードの状態（stability、difficulty、due など）は列に持ち、`(ownerId, due)` の索引で期日の来たものを引きます。
 - **答えの記録**：答えは `ReviewLog` に残します。あとで FSRS のパラメーターを本人の記録に合わせられるようにするためです。
 - **ゴミ箱との関係**：ゴミ箱に入れた学習ノートは、復習の列から外します。
