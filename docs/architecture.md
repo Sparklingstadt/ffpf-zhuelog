@@ -100,13 +100,13 @@ src/
 
 ログインとログアウトは、すべて Web が行います。
 
-| ログイン          | 中身                                                                                                                                                                                                                       |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GitHub OAuth      | PKCE つき。管理者だけ。管理者は GitHub の数字の ID の許可リスト（`AUTH_ALLOWED_GITHUB_IDS`）で決める。code の交換は Web（`AUTH_GITHUB_ID` と `GITHUB_WEB_CLIENT_SECRET`）                                                  |
-| ID とパスワード   | 管理者が発行する会員。パスワードは scrypt（N=2^15, r=8, p=1）で、書き込みも確認も Web（`src/infrastructure/security/scrypt-password-hasher.ts`）。`tests/fixtures/scrypt-golden.json` は、以前の Go が書いた固定のファイル |
-| Sparklingstadt ID | 自作の ID サーバー（sparklingstadt-id）の OpenID Connect。ES256 の署名、iss・aud・nonce・exp を確かめる。code の交換は Web（`SID_CLIENT_SECRET`）。ログアウトでは ID サーバーのログインも消す                              |
-| ゲスト            | データを持たない。練習だけ使える                                                                                                                                                                                           |
-| デモ              | `DEMO_LOGIN_ID` のアカウントに、パスワードなしで入る。全員で 1 つのアカウントを使う                                                                                                                                        |
+| ログイン          | 中身                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GitHub OAuth      | PKCE つき。管理者だけ。管理者は GitHub の数字の ID の許可リスト（`AUTH_ALLOWED_GITHUB_IDS`）で決める。code の交換は Web（`AUTH_GITHUB_ID` と `GITHUB_WEB_CLIENT_SECRET`）                                                                                                                                                                                                     |
+| ID とパスワード   | 管理者が発行する会員。パスワードは scrypt（N=2^15, r=8, p=1）で、書き込みも確認も Web（`src/infrastructure/security/scrypt-password-hasher.ts`）。`tests/fixtures/scrypt-golden.json` は、以前の Go が書いた固定のファイル                                                                                                                                                    |
+| Sparklingstadt ID | 自作の ID サーバー（sparklingstadt-id）の OpenID Connect。ID トークンは `jose` で検証する（ES256 の署名、iss・aud・exp。鍵は ID サーバーの JWKS を 10 分覚え、exp の猶予は 60 秒）。nonce・email_verified・email・sub は Web が確かめる（`src/infrastructure/auth/sid-oidc-client.ts`）。code の交換は Web（`SID_CLIENT_SECRET`）。ログアウトでは ID サーバーのログインも消す |
+| ゲスト            | データを持たない。練習だけ使える                                                                                                                                                                                                                                                                                                                                              |
+| デモ              | `DEMO_LOGIN_ID` のアカウントに、パスワードなしで入る。全員で 1 つのアカウントを使う                                                                                                                                                                                                                                                                                           |
 
 GitHub と Sparklingstadt ID が code を交換するときの `redirect_uri` は、`AUTH_URL` の origin から決まります（GitHub は `/api/auth/callback/github/go`、Sparklingstadt ID は `/api/auth/callback/sid`）。GitHub の OAuth App と Sparklingstadt ID のサーバーに登録した URL と 1 文字でも違うと、ログインできません。
 
@@ -217,7 +217,7 @@ sequenceDiagram
 
 | 種類       | 数                                           | 中身                                                                                                    |
 | ---------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| 単体（TS） | 795 件                                       | ドメインの規則、表示の変換、層の検査、ログインとセッション、サーバーアクションとページ用ガード          |
+| 単体（TS） | 797 件                                       | ドメインの規則、表示の変換、層の検査、ログインとセッション、サーバーアクションとページ用ガード          |
 | E2E        | 269 件（PC 164 件、うち 105 件はスマホでも） | Playwright。Docker の Postgres、Web、OpenAI と LINE と Sparklingstadt ID のスタブを立ち上げて画面を通す |
 
 - **E2E の幅**：PC とスマホ（Pixel 7）の 2 つの幅で走らせます。リダイレクト、入力の検査、権限、HTTP ヘッダーのようにサーバーのふるまいだけを見る 59 件は、幅で結果が変わらないので PC だけで走らせます（`e2e/fixtures.ts` の `anyWidth`）。
