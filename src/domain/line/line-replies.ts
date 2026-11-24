@@ -1,9 +1,8 @@
-// What the LINE bot sends, copied verbatim from Go's line/format.go
-// (services/api/line/format.go). LINE users see these words as they are.
+// What the LINE bot sends. LINE users see these words as they are.
 
 import type { LineLearningKind } from "@/domain/line/line-text";
 
-// Go: the Msg* constants (format.go:13-23).
+// The replies that do not depend on the text sent.
 export const LINE_REPLY = {
   linked:
     "連携しました。これから、このトークに送った文を添削・翻訳して学習ノートに保存します。",
@@ -22,8 +21,7 @@ export const LINE_REPLY = {
   slow: "時間がかかっています。結果は翌朝までにこのトークにお送りします。",
 } as const;
 
-// Go: maxMessageRunes (format.go:10), LINE's limit for one text message,
-// counted in code points.
+// LINE's limit for one text message, counted in code points.
 export const LINE_MESSAGE_MAX_CODE_POINTS = 5000;
 
 // What OpenAI made of a text: the corrected or translated sentence, its
@@ -32,7 +30,7 @@ export type LineGeneration = { text: string; pinyin: string; hints: string[] };
 
 const SAVED_SUFFIX = "\n\n学習ノートに保存しました";
 
-// Go: FormatResult (format.go:31-56). The body is cut so the whole message,
+// The reply for a finished text. The body is cut so the whole message,
 // suffix included, stays one LINE message; never inside a code point.
 export function formatLineResult(
   kind: LineLearningKind,
@@ -57,7 +55,7 @@ export function formatLineResult(
   return body + SAVED_SUFFIX;
 }
 
-// Go: FormatFailure (format.go:60-66).
+// The reply for a text that could not be finished, with the failure's code.
 export function formatLineFailure(
   kind: LineLearningKind,
   code: string,
@@ -69,7 +67,7 @@ export function formatLineFailure(
   return `${head}${failureReason(code)}\n（コード: ${code}）`;
 }
 
-// Go: failureReason (format.go:68-81).
+// The sentence that explains a failure code to the user.
 function failureReason(code: string): string {
   switch (code) {
     case "OPENAI_RATE_LIMITED":
@@ -85,7 +83,7 @@ function failureReason(code: string): string {
   }
 }
 
-// Go: FormatReviewReminder (format.go:85-87).
+// The morning message: how many reviews are due, and where to turn it off.
 export function formatReviewReminder(due: number): string {
   return `今日の復習が ${due} 問あります。Web の「今日の復習」（/review）で答えましょう。\n\nこのお知らせは、Web のアカウント画面（/account/line）で止められます。`;
 }

@@ -32,8 +32,7 @@ test("fitsLimits counts 40 messages and 40000 chars", () => {
   assert.equal(fitsLimits([{ text: "𠀋".repeat(MAX_TOTAL_CHARS) }]), true);
 });
 
-test("chat messages are checked as Go checked them", () => {
-  // Go: chat/chat_test.go TestValidate, plus the shape decodeBody refused.
+test("chat messages are checked for shape, order and length", () => {
   const user = (text: string): ChatTurn => ({ role: "user", text });
   const assistant = (text: string): ChatTurn => ({ role: "assistant", text });
   const alternating = (n: number): ChatTurn[] =>
@@ -112,8 +111,7 @@ function saved(
   };
 }
 
-test("a saved conversation is checked as Go checked it", () => {
-  // Go: httpapi/chat_handlers_test.go TestConversationCRUD.
+test("a saved conversation is checked for shape, dates and length", () => {
   assert.deepEqual(checkConversation(saved()), {
     id: conversationId,
     title: "你好",
@@ -187,8 +185,7 @@ test("a saved conversation is checked as Go checked it", () => {
     assert.notEqual(checkConversation(input), null, name);
   }
 
-  // Go: TestConversationPutAllowsTheLastAnswerOverTheLimit. The answer that
-  // takes a conversation over the limit may still be saved.
+  // The answer that takes a conversation over the limit may still be saved.
   const pair = (question: string, answer: string) =>
     saved({
       ended: true,

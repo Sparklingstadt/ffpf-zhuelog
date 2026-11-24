@@ -11,8 +11,8 @@ import {
   nextFsrsDues,
 } from "../src/domain/review/fsrs";
 
-// Written by Go before its review package was removed (stage 10b; it is now
-// a fixed file): what go-fsrs gives for each answer of each case.
+// Written by the app's former Go implementation before it was removed; it is
+// now a fixed file: what go-fsrs gives for each answer of each case.
 type GoldenCard = {
   due: string;
   stability: number;
@@ -60,7 +60,7 @@ function iso(card: FsrsCard) {
   };
 }
 
-// Go and V8 may differ in the last digit of exp and pow.
+// The golden file and V8 may differ in the last digit of exp and pow.
 function assertClose(actual: number, expected: number, where: string) {
   const error = Math.abs(actual - expected) / Math.abs(expected);
   assert.ok(error <= 1e-9, `${where}: ${actual} is not ${expected}`);
@@ -107,7 +107,7 @@ function graduate(): { card: FsrsCard; at: Date } {
   return { card, at };
 }
 
-test("matches every answer Go scheduled in the golden file", () => {
+test("matches every answer scheduled in the golden file", () => {
   assert.ok(golden.cases.length >= 15);
   for (const c of golden.cases) {
     let card = fromGolden(c.start);
@@ -209,7 +209,7 @@ test("elapsed days follow UTC dates, not Japan dates", () => {
   assert.equal(acrossJst[2].scheduledDays, 1);
 });
 
-test("refuses ratings, states and times Go could not be given", () => {
+test("refuses ratings, states and times outside the scheduler's range", () => {
   const card = nextFsrsCard(newFsrsCard(start), 3, start);
   const later = new Date(start.getTime() + 10 * minute);
   for (const rating of [-1, 2.5, Number.NaN]) {

@@ -342,7 +342,7 @@ test("a code issued on the web page links through the webhook", async ({
 });
 
 test(
-  "an unlinked sender, a sticker and a long text get Go's replies",
+  "an unlinked sender, a sticker and a long text get their fixed replies",
   anyWidth,
   async ({ db }) => {
     const owner = memberOwnerId(

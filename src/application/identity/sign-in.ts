@@ -101,10 +101,9 @@ function failure(reason: SignInFailure): SignInResult {
   return { ok: false, reason };
 }
 
-// Signing in on the web, in the order, keys and numbers of Go's Service
-// (services/api/auth/login.go, demo.go). Every sign-in first counts
-// "route:auth:<client>" (Go's /v1/auth/* route limit). Store and hasher
-// errors are thrown, never turned into "invalid".
+// Signing in. Every kind of sign-in first counts "route:auth:<client>"
+// (AUTH_ROUTE_THROTTLE). Store and hasher errors are thrown, never turned
+// into "invalid".
 export function createSignIn(deps: SignInDeps) {
   async function withinRouteLimit(client: string, now: Date) {
     return deps.throttle.consume(
@@ -126,9 +125,9 @@ export function createSignIn(deps: SignInDeps) {
   }
 
   return {
-    // Go: LoginPassword. Throttled attempts cost no scrypt; every credential
-    // failure (malformed input, unknown loginId, wrong password) costs
-    // exactly one, on at most 128 code points, and answers "invalid".
+    // Throttled attempts cost no scrypt; every credential failure (malformed
+    // input, unknown loginId, wrong password) costs exactly one, on at most
+    // 128 code points, and answers "invalid".
     async withPassword(
       input: { loginId: string; password: string },
       client: string,
@@ -178,17 +177,16 @@ export function createSignIn(deps: SignInDeps) {
       );
     },
 
-    // Go: LoginGuest. No credentials; every guest shares the owner id
-    // "guest" and owns nothing.
+    // No credentials; every guest shares the owner id "guest" and owns
+    // nothing.
     async asGuest(client: string): Promise<SignInResult> {
       const now = deps.now();
       if (!(await withinRouteLimit(client, now))) return failure("throttled");
       return issue({ role: "guest", ownerId: GUEST_OWNER_ID }, now);
     },
 
-    // Go: LoginDemo. Only the account the nightly reset made (its hash is
-    // DEMO_PASSWORD_HASH): if DEMO_LOGIN_ID named a real member, this would
-    // let anyone into it.
+    // Only the account the nightly reset made (its hash is DEMO_PASSWORD_HASH):
+    // if DEMO_LOGIN_ID named a real member, this would let anyone into it.
     async asDemo(client: string): Promise<SignInResult> {
       const now = deps.now();
       if (!(await withinRouteLimit(client, now))) return failure("throttled");
@@ -216,9 +214,9 @@ export function createSignIn(deps: SignInDeps) {
       );
     },
 
-    // Go: LoginGitHub. Administrators only: the numeric GitHub id (never the
-    // login, which its owner can rename and someone else can take) must be
-    // on AUTH_ALLOWED_GITHUB_IDS. The login is kept for display only.
+    // Administrators only: the numeric GitHub id (never the login, which its
+    // owner can rename and someone else can take) must be on
+    // AUTH_ALLOWED_GITHUB_IDS. The login is kept for display only.
     async withGitHub(
       input: { code: string; verifier: string; redirectUri: string },
       client: string,

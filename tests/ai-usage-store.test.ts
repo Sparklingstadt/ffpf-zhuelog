@@ -6,7 +6,7 @@ import {
   aiUsageTotalFromRow,
 } from "../src/infrastructure/prisma/ai-usage-store";
 
-test("aiUsageMonthSql orders people by their tokens as Go did", () => {
+test("aiUsageMonthSql orders people by their tokens in the database", () => {
   const from = new Date("2026-10-31T15:00:00.000Z");
   const to = new Date("2026-11-30T15:00:00.000Z");
   const sql = aiUsageMonthSql(from, to);

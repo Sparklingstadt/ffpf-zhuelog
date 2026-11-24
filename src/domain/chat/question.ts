@@ -19,7 +19,7 @@ export const QUESTION_LIST_LIMIT = 100;
 export const QUESTION_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-// Lengths are counted in code points, as Go counted runes.
+// Lengths are counted in code points, so a character outside the BMP is one.
 function chars(text: string): number {
   return [...text].length;
 }
@@ -33,11 +33,10 @@ function hasOnlyKeys(value: Record<string, unknown>, keys: string[]): boolean {
 }
 
 // The question of a POST /api/quick-question body, untrimmed, or null when
-// the former Go backend would have answered 400: unknown keys refused, exactly
-// one message, role and length rules. See
-// docs/superpowers/plans/2026-11-16-deprecate-go-stage6-go-reference.md.
+// the body is refused with a 400: unknown keys refused, exactly one message,
+// role and length rules.
 export function quickQuestionText(body: unknown): string | null {
-  // Unknown keys are refused at every level, as Go's DisallowUnknownFields.
+  // Unknown keys are refused at every level.
   if (!isRecord(body) || !hasOnlyKeys(body, ["messages"])) return null;
   const messages = body.messages;
   if (!Array.isArray(messages) || messages.length !== 1) return null;
@@ -50,9 +49,7 @@ export function quickQuestionText(body: unknown): string | null {
   return text;
 }
 
-// The note as it is saved (trimmed), or null when Go would have answered
-// 400 or 404 (an id of the wrong shape).
-// Go reference: docs/superpowers/plans/2026-11-16-deprecate-go-stage6-go-reference.md §3.
+// The note as it is saved (trimmed), or null when it must be refused.
 export function checkQuestionNote(
   input: SaveQuestionInput,
 ): SaveQuestionInput | null {

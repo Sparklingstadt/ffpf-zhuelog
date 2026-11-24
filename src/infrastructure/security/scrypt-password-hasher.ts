@@ -1,8 +1,7 @@
-// The password hash format Go verified at sign-in
-// (services/api/auth/password.go). The web writes and verifies every hash:
-// admin accounts, own password changes, sign-in, the e2e fixtures and the
-// local seed. tests/fixtures/scrypt-golden.json is the golden file Go wrote
-// before its auth package was removed (stage 11b); it is now a fixed file.
+// The password hash format. The web writes and verifies every hash: admin
+// accounts, own password changes, sign-in, the e2e fixtures and the local
+// seed. tests/fixtures/scrypt-golden.json pins the format, because the
+// hashes already stored must keep verifying.
 
 import {
   randomBytes,
@@ -11,7 +10,7 @@ import {
   type ScryptOptions,
 } from "node:crypto";
 
-// The parameters Go wrote and the web writes (services/api/auth/password.go).
+// The parameters of every hash the web writes.
 export const SCRYPT_PARAMS = {
   n: 32768,
   r: 8,
@@ -65,7 +64,7 @@ function parse(passwordHash: string) {
 }
 
 // Pure apart from the computation: the hash of password with this salt, in
-// Go's format. hash() is this with a fresh random salt.
+// the stored format. hash() is this with a fresh random salt.
 export async function hashWithSalt(password: string, salt: Buffer) {
   const key = await deriveKey(password, salt, KEY_BYTES, {
     N,
@@ -84,7 +83,7 @@ export async function hashWithSalt(password: string, salt: Buffer) {
 }
 
 // A password to hand out: 15 random bytes as unpadded base64url (20
-// characters). Go: GeneratePassword.
+// characters).
 export function generatePassword() {
   return randomBytes(SCRYPT_PARAMS.generatedBytes).toString("base64url");
 }
@@ -107,9 +106,8 @@ export class ScryptPasswordHasher {
   }
 
   // false for a wrong password, a hash it cannot read, or a failure of the
-  // computation itself, as Go's Verify (services/api/auth/password.go): a
-  // failure must look like a mismatch, or verify and simulate would answer
-  // differently and tell whether an account exists.
+  // computation itself: a failure must look like a mismatch, or verify and
+  // simulate would answer differently and tell whether an account exists.
   async verify(password: string, passwordHash: string) {
     const parsed = parse(passwordHash);
     if (!parsed) return false;
@@ -140,8 +138,8 @@ export class ScryptPasswordHasher {
   }
 
   // Builds the dummy hash now, so the first simulate costs one verify like
-  // the rest (Go: Warm at startup). Never throws; a failure is retried by
-  // simulate. Not called at import: the sign-in page calls it (warmSignIn).
+  // the rest. Never throws; a failure is retried by simulate. Not called at
+  // import: the sign-in page calls it (warmSignIn).
   async warm() {
     try {
       await this.dummy();
@@ -151,8 +149,8 @@ export class ScryptPasswordHasher {
   }
 
   // Spends the work of one verify on a valid hash, for a failure that must
-  // cost as much as a wrong password. Never throws. Go: Simulate. Without a
-  // warm(), the dummy hash is built on the first call.
+  // cost as much as a wrong password. Never throws. Without a warm(), the
+  // dummy hash is built on the first call.
   async simulate(password: string) {
     try {
       await this.verify(password, await this.dummy());

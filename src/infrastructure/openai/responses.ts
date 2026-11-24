@@ -11,9 +11,8 @@ export type OpenAiErrorCode =
   | "OPENAI_INCOMPLETE_RESPONSE";
 
 // A failed call. The message is only the code, so it never carries the API
-// key, the input or the response body. retryable is Go's openai.Error
-// Retryable (services/api/openai/openai.go:61-105): a later attempt may work
-// (a transport failure or a 5xx).
+// key, the input or the response body. retryable says a later attempt may
+// work (a transport failure or a 5xx).
 export class OpenAiError extends Error {
   constructor(
     readonly code: OpenAiErrorCode,

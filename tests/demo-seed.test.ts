@@ -25,9 +25,8 @@ const fixture: unknown = JSON.parse(
   ),
 );
 
-// Written by Go before its demo package was removed (stage 10b; it is now a
-// fixed file): what demo.Seed gave for each reset time, without the random
-// UUIDs.
+// Written by the app's former Go implementation before it was removed; it is
+// now a fixed file: the seed for each reset time, without the random UUIDs.
 const golden: { cases: { now: string; seed: unknown }[] } = JSON.parse(
   readFileSync(
     join(import.meta.dirname, "fixtures", "demo-seed-golden.json"),
@@ -44,13 +43,13 @@ function counter(): () => string {
   return () => `u${++n}`;
 }
 
-// The seed as JSON, the way Go's golden file writes it: dates as ISO strings,
-// no ids and no practice counts (the store computes those in Go).
+// The seed as JSON, the way the golden file writes it: dates as ISO strings,
+// no ids and no practice counts.
 //
-// Whoever changes the seed: Go wrote a round's mode with omitempty, so a
-// complement round with mode "" has no mode in the golden file, while this
+// Whoever changes the seed: the golden file leaves out a round's mode when it
+// is empty, so a complement round with mode "" has no mode there, while this
 // keeps mode: "" and the comparison fails on the keys. Edit the golden file
-// to match what Go would have written.
+// by hand, leaving such a mode out.
 function asGolden(seed: DemoSeed): unknown {
   const plain = JSON.parse(JSON.stringify(seed)) as Record<string, unknown>;
   const omit = (row: Record<string, unknown>, keys: string[]) => {
@@ -73,9 +72,9 @@ function asGolden(seed: DemoSeed): unknown {
   return plain;
 }
 
-// Go and V8 may differ in the last digit of exp and pow (as in
-// tests/review-fsrs.test.ts), so FSRS's stability and difficulty are compared
-// to 1e-9; everything else must be equal.
+// The golden file's numbers may differ from V8's in the last digit of exp and
+// pow (as in tests/review-fsrs.test.ts), so FSRS's stability and difficulty
+// are compared to 1e-9; everything else must be equal.
 function assertSameJson(actual: unknown, expected: unknown, where: string) {
   if (typeof actual === "number" && typeof expected === "number") {
     if (Number.isInteger(expected)) {
@@ -108,7 +107,7 @@ function assertSameJson(actual: unknown, expected: unknown, where: string) {
   assert.equal(actual, expected, where);
 }
 
-test("the seed is Go's (golden file)", () => {
+test("the seed matches the golden file", () => {
   assert.equal(golden.cases.length, 2);
   for (const c of golden.cases) {
     const seed = buildDemoSeed(fixture, new Date(c.now), counter());
@@ -116,7 +115,7 @@ test("the seed is Go's (golden file)", () => {
   }
 });
 
-test("ids are fresh v4 UUIDs drawn in Go's order", () => {
+test("ids are fresh v4 UUIDs drawn in a fixed order", () => {
   const seed = buildDemoSeed(fixture, resetTime, counter());
   assert.deepEqual(
     seed.words.map((w) => w.id),
@@ -209,7 +208,7 @@ function small(overrides: {
   };
 }
 
-test("practice rounds are counted as Go counted them", () => {
+test("practice rounds are counted from their questions", () => {
   const seed = buildDemoSeed(fixture, resetTime, randomUUID);
   const round = seed.prepositionRecords[0];
   const misses = round.questions.map((q) => q.misses.length);

@@ -10,20 +10,20 @@ export type AnswerRequest = {
   instructions: string;
   messages: readonly AnswerTurn[];
   // true: response.incomplete is OPENAI_INCOMPLETE_RESPONSE (quick
-  // questions); false: it ends the answer (the chat, stage 7).
+  // questions); false: it ends the answer (the chat).
   requireComplete: boolean;
 };
 
-// Go: chat/openai.go requestTimeout, for the whole answer.
+// The whole answer may take 60 s.
 const ANSWER_TIMEOUT_MS = 60_000;
-// Go: chat/chat.go maxOutputTokens.
+// The most tokens one answer may be.
 const MAX_OUTPUT_TOKENS = 1600;
 
 // Streams the answer's text pieces. Throws OpenAiError; reports usage
 // through onUsage before it returns or throws. An onUsage that throws is
 // ignored: it never changes the stream's result. Cancelling signal, or
 // returning early from the iteration, aborts the request.
-// Go: chat/openai.go Streamer.Stream. One attempt, no retries.
+// One attempt, no retries.
 export async function* streamAnswer(
   config: OpenAiConfig,
   request: AnswerRequest,
@@ -40,8 +40,7 @@ export async function* streamAnswer(
   const stop = new AbortController();
   const signal = AbortSignal.any([options.signal, timeout, stop.signal]);
 
-  // A deadline is OPENAI_TIMEOUT; the caller's cancel is a failed request,
-  // as Go's TransportError told a deadline from a cancelled context.
+  // A deadline is OPENAI_TIMEOUT; the caller's cancel is a failed request.
   const failure = (error: unknown): OpenAiError => {
     if (error instanceof OpenAiError) return error;
     if (timeout.aborted) return new OpenAiError("OPENAI_TIMEOUT");

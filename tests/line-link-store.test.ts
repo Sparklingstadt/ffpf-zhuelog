@@ -15,7 +15,7 @@ const japanDay = "2026-11-18";
 
 const flat = (text: string) => text.replace(/\s+/g, " ");
 
-test("putLinkCodeSql replaces the owner's code as Go did", () => {
+test("putLinkCodeSql replaces the owner's code in one statement", () => {
   const expiresAt = new Date("2026-11-17T21:10:00.000Z");
   const sql = putLinkCodeSql("password:c1", "member", "h", expiresAt);
   const text = flat(sql.text);

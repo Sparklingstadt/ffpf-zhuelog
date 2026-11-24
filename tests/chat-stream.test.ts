@@ -89,7 +89,7 @@ test("readFailureText reads the relay's string error", async () => {
   );
 });
 
-test("readFailureText reads Go's error message", async () => {
+test("readFailureText reads the message of a nested error object", async () => {
   const response = Response.json(
     { error: { code: "RATE_LIMITED", message: "少し待ってください。" } },
     { status: 429 },

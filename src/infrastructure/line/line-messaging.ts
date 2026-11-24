@@ -1,14 +1,14 @@
 // The LINE Messaging API: replies, pushes and the month's push allowance.
 // Errors never contain the access token, the reply token, the recipient or
-// the text (Go: line/client.go).
+// the text.
 
 import type { LinePushQuota } from "@/domain/line/line-message";
 import {
-  goFieldValues,
-  goString,
+  fieldValues,
+  stringField,
   isJsonObject,
   type JsonObject,
-} from "@/infrastructure/line/go-json";
+} from "@/infrastructure/line/json-fields";
 
 // A failed call. status is the HTTP status LINE answered with; null when the
 // request was not sent, not answered, or its answer could not be read. The
@@ -31,14 +31,13 @@ export type LineMessaging = {
   pushQuota(): Promise<LinePushQuota>;
 };
 
-// Go: main.go's LINE client, 10 s and no redirects.
+// One call may take 10 s.
 const REQUEST_TIMEOUT_MS = 10_000;
-// Go: maxBody (line/client.go:17).
+// The most of an answer that is read: 1 MiB.
 const MAX_BODY_BYTES = 1 << 20;
-// Go: maxMessagesPerCall (line/client.go:19), the Messaging API's limit.
+// The Messaging API's limit of messages in one call.
 const MAX_MESSAGES_PER_CALL = 5;
 
-// Go: line.Client (line/client.go, line/quota.go).
 export function createLineMessaging(
   config: { accessToken: string; apiBaseUrl: string },
   fetchImpl: typeof fetch = fetch,
@@ -66,7 +65,7 @@ export function createLineMessaging(
     return response;
   }
 
-  // Go: Client.send (line/client.go:46-89).
+  // Posts 1 to 5 texts as messages to a reply or push path.
   async function send(
     path: string,
     fields: Record<string, string>,
@@ -89,8 +88,8 @@ export function createLineMessaging(
     await response.body?.cancel().catch(() => {});
   }
 
-  // Go: Client.get (line/quota.go:51-80). The answer's top-level object, or
-  // [] for a JSON null (Go leaves the struct zero).
+  // GETs a JSON answer: its top-level object, or [] for a JSON null (every
+  // field then reads as absent).
   async function get(path: string): Promise<JsonObject[]> {
     const response = await call(path, {
       method: "GET",
@@ -112,21 +111,19 @@ export function createLineMessaging(
   }
 
   return {
-    // Go: Client.Reply (line/client.go:37-39).
     reply: (replyToken, texts) =>
       send("/v2/bot/message/reply", { replyToken }, texts),
-    // Go: Client.Push (line/client.go:42-44).
     push: (to, texts) => send("/v2/bot/message/push", { to }, texts),
-    // Go: Client.PushQuota (line/quota.go:23-48).
+    // The month's limit minus what was used; never below 0.
     async pushQuota() {
       const limit = await get("/v2/bot/message/quota");
-      const type = goString(limit, "type");
+      const type = stringField(limit, "type");
       if (type === "none") return { unlimited: true };
       if (type !== "limited") throw new LineApiError(null);
-      // Go: Value int, 0 when absent; a null leaves it as it was.
-      const value = goInt(limit, "value", false) ?? 0;
-      // Go: TotalUsage *int, an error when absent; a null makes it nil.
-      const used = goInt(
+      // The limit is 0 when absent or null.
+      const value = intField(limit, "value", false) ?? 0;
+      // The usage must be there: absent or null is an error.
+      const used = intField(
         await get("/v2/bot/message/quota/consumption"),
         "totalUsage",
         true,
@@ -137,16 +134,16 @@ export function createLineMessaging(
   };
 }
 
-// An int field (or *int when nullable): the last value, null when there is
-// none, and a decode error when any value is not an integer. A JSON null
-// makes a pointer nil and leaves an int as it was.
-function goInt(
+// An integer field: the last value, null when there is none, and an error
+// when any value is not an integer. A JSON null resets a nullable field to
+// null and leaves any other as it was.
+function intField(
   objects: readonly JsonObject[],
   name: string,
   nullable: boolean,
 ): number | null {
   let out: number | null = null;
-  for (const value of goFieldValues(objects, name)) {
+  for (const value of fieldValues(objects, name)) {
     if (value === null) {
       if (nullable) out = null;
     } else if (typeof value === "number" && Number.isSafeInteger(value))

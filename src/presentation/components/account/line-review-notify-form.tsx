@@ -17,7 +17,7 @@ export function LineReviewNotifyForm({ on }: { on: boolean }) {
     setLineReviewNotifyAction,
     initialState,
   );
-  // The saved state wins until the page reloads with Go's value.
+  // The saved state wins until the page reloads with the saved value.
   const current = state.status === "saved" ? state.on : on;
 
   return (

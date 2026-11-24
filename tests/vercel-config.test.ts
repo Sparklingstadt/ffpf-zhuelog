@@ -9,7 +9,7 @@ const config = JSON.parse(readFileSync("vercel.json", "utf8")) as {
   crons?: { path: string; schedule: string }[];
 };
 
-test("the crons are Go's schedules on the web's routes", () => {
+test("the crons run the two routes at their daily times", () => {
   assert.deepEqual(config.crons, [
     { path: "/api/cron/line-drain", schedule: "0 21 * * *" },
     { path: "/api/cron/demo-reset", schedule: "0 19 * * *" },

@@ -20,7 +20,6 @@ const OUTCOMES: Record<string, "completed" | "incomplete" | "failed"> = {
 // Reads the Responses API's server-sent events. Throws OpenAiError
 // ("OPENAI_INVALID_RESPONSE") for a line over maxLineBytes or bad JSON in a
 // data line; read errors are rethrown as they are (the caller maps them).
-// Go: chat/openai.go Streamer.Stream (the scanner loop).
 export async function* readResponseEvents(
   body: ReadableStream<Uint8Array>,
   maxLineBytes: number = MAX_LINE_BYTES,
@@ -48,7 +47,7 @@ export async function* readResponseEvents(
         throw new OpenAiError("OPENAI_INVALID_RESPONSE");
       if (done) break;
     }
-    // Like Go's scanner, a last line without a line end is still read.
+    // A last line without a line end is still read.
     const event = parseLine(pending, maxLineBytes);
     if (event) yield event;
   } finally {
@@ -73,7 +72,8 @@ function parseLine(
   } catch {
     throw new OpenAiError("OPENAI_INVALID_RESPONSE");
   }
-  // Go decoded into a struct: a number, a string or an array was an error.
+  // An event is an object (or null): a number, a string or an array is an
+  // error.
   if (typeof event !== "object" || Array.isArray(event))
     throw new OpenAiError("OPENAI_INVALID_RESPONSE");
   const { type, delta, response } = (event ?? {}) as {
@@ -94,7 +94,7 @@ function parseLine(
 }
 
 // The token counts of a final event's response; none without a response or
-// usage. Negative counts are 0, as Go's aiusage did.
+// usage. Negative counts are 0.
 function usageOf(
   response: unknown,
 ): { inputTokens: number; outputTokens: number } | undefined {

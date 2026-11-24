@@ -4,7 +4,8 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 // exchanges the code itself (github-oauth-client.ts). The redirect URI must
 // be the same string in the authorize step and in the code exchange, so both
 // build it from requestOrigin -> publicOrigin -> githubRedirectUri. The path
-// keeps the name Go's sign-in gave it, as registered with the OAuth App.
+// is the redirect URL registered with the GitHub OAuth App, so its name is
+// fixed: changing it breaks sign-in until the registration changes too.
 
 export const GITHUB_CALLBACK_PATH = "/api/auth/callback/github/go";
 export const OAUTH_COOKIE_MAX_AGE = 600;

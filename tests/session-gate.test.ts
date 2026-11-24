@@ -83,7 +83,7 @@ test("an empty session cookie is signed out", () => {
   assert.equal(h.seen.length, 0);
 });
 
-test("the old Go cookies alone are signed out", () => {
+test("the legacy cookies alone are signed out", () => {
   const h = harness();
   const response = sessionGate(
     request("/logs", { cookie: "zl_access=a; zl_refresh=r" }),

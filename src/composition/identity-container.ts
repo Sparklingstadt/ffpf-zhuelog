@@ -96,7 +96,8 @@ export async function getRecordOwner(requested: string | undefined): Promise<{
 // redirect() throws NEXT_REDIRECT, so it is never called inside a try block.
 
 // Every sign-in gets a new token: the browser's previous Session row is
-// ended, and zl_act_as and Go's old cookies are cleared with it.
+// ended, and zl_act_as and the cookies an earlier version of this app set
+// are cleared with it.
 async function startSession(session: IssuedSession) {
   await writeCookies(
     await newSessionCookies(
@@ -215,8 +216,8 @@ export async function signInWithSid(redirectTo: string) {
   );
 }
 
-// Whether the sign-in page offers the demo account (Go: GET /v1/auth/demo
-// answered by whether DEMO_LOGIN_ID is set).
+// Whether the sign-in page offers the demo account: whether DEMO_LOGIN_ID is
+// set.
 export function demoAvailable() {
   return Promise.resolve(Boolean(demoLoginId()));
 }

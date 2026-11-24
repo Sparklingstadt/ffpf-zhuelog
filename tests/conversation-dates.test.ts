@@ -16,7 +16,7 @@ const summary = (id: string, createdAt: string): ConversationSummary => ({
   updatedAt: new Date(createdAt),
 });
 
-// Newest first, as Go returns them.
+// Newest first, as the store returns them.
 const items = [
   summary("c", "2026-10-24T02:00:00.000Z"),
   summary("b", "2026-10-23T15:30:00.000Z"), // 10/24 00:30 in Tokyo

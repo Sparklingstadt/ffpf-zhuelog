@@ -8,14 +8,14 @@ import {
   newLinkCode,
 } from "../src/infrastructure/line/link-code-crypto";
 
-test("a new code is one Go's codeShape accepts", () => {
+test("a new code is one readLinkCode accepts", () => {
   for (let i = 0; i < 50; i++) {
     const code = newLinkCode();
     assert.equal(readLinkCode(code), code);
   }
 });
 
-test("the stored hash is Go's hashCode: SHA-256 in lowercase hex", () => {
+test("the stored hash is SHA-256 in lowercase hex", () => {
   assert.equal(
     hashLinkCode("ABCDEFGH"),
     createHash("sha256").update("ABCDEFGH").digest("hex"),

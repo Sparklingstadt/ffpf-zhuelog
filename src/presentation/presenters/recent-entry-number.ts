@@ -1,6 +1,7 @@
 // The home page lists the newest notes first and numbers them down from the
-// total. Go counts before it lists, so total is normally at least the number
-// shown; taking the larger keeps the numbers at 1 or above even if it is not.
+// total. The notes are counted before they are listed, so total is normally
+// at least the number shown; taking the larger keeps the numbers at 1 or
+// above even if it is not.
 export function recentEntriesTotal(total: number, shown: number): number {
   return Math.max(total, shown);
 }

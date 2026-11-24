@@ -116,7 +116,7 @@ test("only admins manage accounts", async () => {
   }
 });
 
-test("create checks loginId, then name, then password, as Go did", async () => {
+test("create checks loginId, then name, then password", async () => {
   // The table of checkNewAccount's failures (tests/password-account.test.ts).
   const cases = [
     [{ loginId: "ab", displayName: "x", password: "" }, "login-id"],

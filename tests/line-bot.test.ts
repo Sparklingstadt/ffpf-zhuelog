@@ -738,7 +738,7 @@ test("logs never carry text, ids or codes", () => {
     assert.equal(logged.includes(secret), false, secret);
 });
 
-test("owners are checked as Go's ownerValid did", async () => {
+test("owners are checked against the admin list or the member accounts", async () => {
   const asked: string[] = [];
   const check = createLineOwnerCheck({
     adminIds: new Set(["10001"]),

@@ -14,7 +14,7 @@ function one(text: unknown, role: unknown = "user") {
   return { messages: [{ role, text }] };
 }
 
-test("a quick question is checked as Go checked it", () => {
+test("a quick question is checked for shape and length", () => {
   const refused: [string, unknown][] = [
     ["no messages", { messages: [] }],
     ["one assistant", { messages: [{ role: "assistant", text: "答え" }] }],
@@ -48,13 +48,13 @@ test("a quick question is checked as Go checked it", () => {
 
   assert.equal(quickQuestionText(one("你好")), "你好");
   assert.equal(quickQuestionText(one("字".repeat(4000))), "字".repeat(4000));
-  // Counted in code points like Go's runes: "𠮷" is two UTF-16 units.
+  // Counted in code points: "𠮷" is two UTF-16 units.
   assert.equal(quickQuestionText(one("𠮷".repeat(4000))), "𠮷".repeat(4000));
   // Sent as written, not trimmed.
   assert.equal(quickQuestionText(one("  了？ ")), "  了？ ");
 });
 
-test("a question note is trimmed and bounded as Go did", () => {
+test("a question note is trimmed and bounded", () => {
   assert.deepEqual(
     checkQuestionNote({
       id: ID,
@@ -86,7 +86,7 @@ test("a question note is trimmed and bounded as Go did", () => {
   }
 });
 
-test("the list limit and id shape match Go", () => {
+test("the list limit is 100 and an id is a lower-case UUID", () => {
   assert.equal(QUESTION_LIST_LIMIT, 100);
   assert.ok(QUESTION_ID.test(ID));
   assert.ok(!QUESTION_ID.test(`${ID}0`));

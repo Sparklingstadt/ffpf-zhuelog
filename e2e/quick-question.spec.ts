@@ -200,7 +200,7 @@ test("an answer OpenAI cuts or refuses is not saved", async ({
   response = answered();
   await input.fill("[fail] 了？");
   await input.press("Enter");
-  // Refused before any text: a 502 with Go's error body.
+  // Refused before any text: a 502 with a JSON error body.
   const refused = await response;
   expect(refused.status()).toBe(502);
   expect(await refused.json()).toEqual({

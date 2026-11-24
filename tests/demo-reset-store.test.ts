@@ -16,11 +16,10 @@ import {
 
 const flat = (text: string) => text.replace(/\s+/g, " ");
 
-// Go: TestDemoResetCoversEveryOwnerTable (store/review_orphans_test.go), read
-// from the schema rather than a migrated database. It only sees columns named
-// ownerId: a table that ties a row to its owner through another column (as
-// Follow does with followerId and followeeId) must be added to the reset by
-// hand. Go's test had the same limit.
+// Read from the schema rather than a migrated database. It only sees columns
+// named ownerId: a table that ties a row to its owner through another column
+// (as Follow does with followerId and followeeId) must be added to the reset
+// by hand.
 test("every owner table is emptied or kept on purpose", () => {
   const schema = readFileSync(
     join(import.meta.dirname, "..", "prisma", "schema.prisma"),
@@ -359,7 +358,7 @@ function smallSeed(): DemoSeed {
         elapsedMs: 42_000,
         startedAt: t("2026-11-06T11:00:00.000Z"),
         createdAt: t("2026-11-06T11:00:42.000Z"),
-        // Go counts these from the questions when it writes (demoScore).
+        // The store counts these from the questions when it writes.
         questionCount: 0,
         firstTryCount: 0,
         missCount: 0,
@@ -399,9 +398,7 @@ function smallSeed(): DemoSeed {
   };
 }
 
-// Go: insertDemoSeed, queueImportBatch, queueHints, queueDemoReview and
-// practiceKind.insert (store/demo.go, entries.go, practice_records.go).
-test("seed rows are Go's rows", () => {
+test("seed rows are built for every table the demo owns", () => {
   let n = 0;
   const seed = smallSeed();
   const rows = demoSeedRows("password:c1", seed, () => `r${++n}`);
@@ -566,7 +563,7 @@ test("seed rows are Go's rows", () => {
       firstTryCount: 1,
       missCount: 2,
       elapsedMs: 42_000,
-      // Go writes PracticeQuestion with `json:"id,omitempty"`.
+      // A question whose id is empty is written without an id.
       questions: [
         { answer: "在", noun: "图书馆", prompt: "我__看书", misses: [] },
         {

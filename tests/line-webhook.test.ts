@@ -13,7 +13,7 @@ const textEvent = {
   message: { type: "text", text: "你好" },
 };
 
-test("deliveries are read as Go's ParseWebhook reads them", () => {
+test("deliveries are read into their message events", () => {
   for (const empty of ['{"events":[]}', "{}", "null", '{"events":null}'])
     assert.deepEqual(parse(empty), [], empty);
 
@@ -68,7 +68,7 @@ test("only message events are kept and unknown fields are ignored", () => {
   assert.equal(events?.[0]?.webhookEventId, "E1");
 });
 
-test("null and missing fields are Go's zero values", () => {
+test("null and missing fields read as empty", () => {
   const body = JSON.stringify({
     events: [
       {
@@ -91,7 +91,7 @@ test("null and missing fields are Go's zero values", () => {
   ]);
 });
 
-test("keys match Go's case-insensitive field names", () => {
+test("keys match field names whatever their case", () => {
   const body =
     '{"EVENTS":[{"Type":"message","webhookeventid":"E2","source":{"TYPE":"user","userID":"U2"},"message":{"type":"text","Text":"hi"}}]}';
   assert.deepEqual(parse(body), [
@@ -104,17 +104,17 @@ test("keys match Go's case-insensitive field names", () => {
       fromUser: true,
     },
   ]);
-  // Go folds U+017F (long s) to S and U+212A (Kelvin sign) to K.
+  // U+017F (long s) folds to S and U+212A (Kelvin sign) to K.
   const folded =
     '{"event\u017f":[{"type":"message","webhoo\u212aEventId":"E3"}]}';
   assert.equal(parse(folded)?.[0]?.webhookEventId, "E3");
-  // The dotted and dotless i do not fold to I in Go.
+  // The dotted and dotless i do not fold to I.
   const notFolded =
     '{"events":[{"type":"message","source":{"user\u0130d":"U","user\u0131d":"V"}}]}';
   assert.equal(parse(notFolded)?.[0]?.userId, "");
   // A null leaves the field as an earlier key set it.
   assert.equal(parse('{"events":[{"type":"message","Type":null}]}')?.length, 1);
-  // Two keys for one struct fill it together.
+  // Two keys for one object fill it together.
   const [merged] =
     parse(
       '{"events":[{"type":"message","source":{"type":"user"},"Source":{"userId":"U4"}}]}',
@@ -128,7 +128,7 @@ test("keys match Go's case-insensitive field names", () => {
   assert.equal(parse('{"events":[],"Events":5}'), null);
 });
 
-test("bodies Go's json.Unmarshal refuses are null", () => {
+test("bodies with a field of the wrong type are null", () => {
   for (const body of [
     "not json",
     "[]",
@@ -141,7 +141,7 @@ test("bodies Go's json.Unmarshal refuses are null", () => {
     '{"events":[{"type":"message","source":"x"}]}',
     '{"events":[{"type":"message","message":{"text":7}}]}',
     '{"events":[{"type":"follow","source":{"userId":1}}]}',
-    // Go does not skip a byte order mark.
+    // A byte order mark is not skipped.
     '\ufeff{"events":[]}',
   ])
     assert.equal(parse(body), null, body);

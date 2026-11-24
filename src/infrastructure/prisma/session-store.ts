@@ -1,7 +1,7 @@
-// Signed-in browsers (stage 11 of the Go retirement). The cookie holds a
-// random token; only its SHA-256 is stored, with what Go's refresh tokens kept
-// (role, login, sessionVersion). The expiry is fixed at sign-in. Expired rows
-// are pruned a bounded batch at a time on each sign-in, as SignInThrottle's.
+// Signed-in browsers. The cookie holds a random token; only its SHA-256 is
+// stored, with the session's owner, role, login and sessionVersion. The
+// expiry is fixed at sign-in. Expired rows are pruned a bounded batch at a
+// time on each sign-in, as SignInThrottle's.
 import { Prisma, type PrismaClient } from "../../generated/prisma/client";
 import {
   sessionTtlMs,

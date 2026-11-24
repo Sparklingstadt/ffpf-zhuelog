@@ -15,8 +15,7 @@ import {
 //
 // Prisma's upsert cannot put a WHERE on its update (it would overwrite the
 // other owner's row, or need a read first that races), so this is raw SQL,
-// with bound parameters only. It is the statement of the retired Go API's
-// store/conversations.go PutConversation (lines 84-106).
+// with bound parameters only.
 export function saveConversationSql(
   ownerId: string,
   conversation: CheckedConversation,
@@ -41,7 +40,7 @@ export function saveConversationSql(
 }
 
 // Pure: the messages column as the domain's messages. Throws when a row
-// holds anything else (a row only this code or Go writes should not).
+// holds anything else (a row only this code writes should not).
 export function readConversationMessages(json: unknown): ConversationMessage[] {
   if (!Array.isArray(json))
     throw new Error("conversation messages: not a list");
@@ -80,9 +79,8 @@ const NEWEST_FIRST = [
   id?: "desc";
 }[];
 
-// Reads and writes the owner's saved conversations the way the retired Go API's
-// store/conversations.go did. Every query names the owner; `now` comes from
-// the caller, read once per request.
+// Reads and writes the owner's saved conversations. Every query names the
+// owner; `now` comes from the caller, read once per request.
 export function createConversationStore(db: () => PrismaClient) {
   return {
     // Without the messages.

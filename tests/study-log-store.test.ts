@@ -6,7 +6,7 @@ import {
   studyLogSql,
 } from "../src/infrastructure/prisma/study-log-store";
 
-test("studyLogSql counts the five kinds as Go did", () => {
+test("studyLogSql counts the five kinds per Japan day", () => {
   const start = new Date("2026-10-26T15:00:00.000Z");
   const end = new Date("2026-12-06T15:00:00.000Z");
   const sql = studyLogSql("password:a", start, end);

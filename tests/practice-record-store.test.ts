@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { checkPracticeRound } from "../src/domain/practice/practice-round";
 import { practiceRecordRow } from "../src/infrastructure/prisma/practice-record-store";
 
-test("practiceRecordRow keeps Go's counts and question JSON", () => {
+test("practiceRecordRow writes the counts and the question JSON", () => {
   const startedAt = new Date("2026-11-16T08:55:00.000Z");
   const now = new Date("2026-11-16T09:00:00.000Z");
   const round = checkPracticeRound("preposition", {
@@ -42,8 +42,7 @@ test("practiceRecordRow keeps Go's counts and question JSON", () => {
   assert.equal(row.createdAt, now);
 
   const raw = JSON.stringify(row.questions);
-  // Only the question with an id names one (Go's
-  // strings.Count(raw, "\"id\"") == 1).
+  // Only the question with an id names one.
   assert.equal(raw.split('"id"').length - 1, 1);
   assert.deepEqual(JSON.parse(raw), [
     {

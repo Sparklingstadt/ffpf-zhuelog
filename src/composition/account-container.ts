@@ -21,8 +21,7 @@ export const memberAccounts = createMemberAccounts({
   now: () => new Date(),
 });
 
-// A member's own password change, counted in SignInThrottle like Go's
-// sign-in.
+// A member's own password change, counted in SignInThrottle like sign-in.
 export const ownPassword = createOwnPassword({
   currentUser: getCachedCurrentUser,
   accounts,

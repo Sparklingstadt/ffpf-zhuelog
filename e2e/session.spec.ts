@@ -99,7 +99,7 @@ test("signing in stores only the token's hash, and signing out deletes the row",
 });
 
 test(
-  "a planted session cookie, an act-as cookie and Go's old cookies are replaced at sign-in",
+  "a planted session cookie, an act-as cookie and the legacy cookies are replaced at sign-in",
   anyWidth,
   async ({ page, context, db, baseURL }) => {
     await createMember(db, "taro", "太郎", password);
@@ -225,7 +225,7 @@ test("a sign-in prunes expired sessions", anyWidth, async ({ page, db }) => {
 });
 
 test(
-  "the old Go cookies alone are signed out",
+  "the legacy cookies alone are signed out",
   anyWidth,
   async ({ page, context, baseURL }) => {
     await context.addCookies(

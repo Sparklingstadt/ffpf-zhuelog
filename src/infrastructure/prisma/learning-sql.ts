@@ -3,8 +3,7 @@ import type { LogDate } from "../../domain/calendar/value-objects/log-date";
 const TOKYO_OFFSET_MS = 9 * 60 * 60 * 1_000;
 
 // The LIKE pattern (used with ESCAPE '\') that matches any text containing
-// term literally: the escape character and the wildcards are escaped, as the
-// retired Go API's likeEscaper did.
+// term literally: the escape character and the wildcards are escaped.
 export function likeContains(term: string): string {
   return `%${term.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
 }

@@ -53,7 +53,7 @@ flowchart LR
 
 **守っている決まり**：Prisma を import してよいのは `src/infrastructure/prisma/` だけで、pg と next-auth は import できません。これを `tests/architecture.test.ts` が検査します。
 
-**消した Go のファイルの読み方**：コメントの `services/api/...` は、消した Go のファイルです。`git show "$(git log -1 --format=%H -- <道>)^:<道>"` で、消す直前の中身を読めます。
+**コードのコメントと Go**：`src/`・`tests/`・`e2e/` のコメントは、いまのコードが何をし、なぜそうするかだけを書いています。消した Go のファイルや関数を基準にした説明はありません。残っているのは、Go が書いた固定のテストデータ（`tests/fixtures/` の `scrypt-golden.json`・`fsrs-golden.json`・`demo-seed-golden.json`）の由来と、復習の計算が従っているライブラリ go-fsrs の名前だけです。Go のどの処理を移したかは、下の表の計画と `*-go-reference.md` に残しています。
 
 **どこを読めば何が分かるか**
 
@@ -71,7 +71,7 @@ flowchart LR
 | LINE と cron                        | `src/app/api/line/webhook/route.ts`・`src/app/api/cron/*/route.ts` → `src/application/line/line-bot.ts`・`src/application/demo/demo-reset.ts`、`vercel.json` の `crons`                |
 | 失敗したときの画面の文言とログ      | `src/presentation/controllers/action-state.ts`・`load-or.ts`                                                                                                                           |
 | 各段階で Go の何をどこへ移したか    | 各段階の計画（`docs/superpowers/plans/2026-11-16-deprecate-go-stage*.md`）と、`*-go-reference.md`（Go の処理の `file:line` の記録）、各 PR の説明の対応表                              |
-| 消した Go のファイルの中身          | コメントの `services/api/...` の道を `git show "$(git log -1 --format=%H -- <道>)^:<道>"` で読む                                                                                       |
+| 消した Go のファイルの中身          | 計画と `*-go-reference.md` に出てくる Go のファイル（`services/api/` の下にありました）を、`git show "$(git log -1 --format=%H -- <道>)^:<道>"` で読む                                 |
 | 本番への反映と、各段階で行った手順  | `docs/deployment.md`（「移行の記録（段階 1〜12）」）                                                                                                                                   |
 
 ## 3. Web の層

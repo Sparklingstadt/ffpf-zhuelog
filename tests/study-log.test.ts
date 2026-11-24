@@ -86,7 +86,7 @@ test("levels and the month's summary", () => {
   );
 });
 
-test("study log ranges are Japan days, as Go read them", () => {
+test("study log ranges are Japan days", () => {
   assert.deepEqual(studyLogRange("2026-10-27", "2026-12-06"), {
     start: new Date("2026-10-26T15:00:00.000Z"),
     end: new Date("2026-12-06T15:00:00.000Z"),

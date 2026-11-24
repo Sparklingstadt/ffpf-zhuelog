@@ -60,8 +60,7 @@ test("the demo reset needs the cron secret", anyWidth, async () => {
   await resetDemo("GET");
 });
 
-// Was Go's TestResetWithTheFixture (services/api/demo/demo_db_test.go, removed in stage 10b).
-test("the reset seeds the demo as Go did", anyWidth, async ({ db }) => {
+test("the reset seeds the demo from the fixture", anyWidth, async ({ db }) => {
   await resetDemo();
   const account = await demoAccount(db);
   expect(account.passwordHash).toBe("demo:no-password");
@@ -112,7 +111,6 @@ test("the reset seeds the demo as Go did", anyWidth, async ({ db }) => {
   ).toBeGreaterThanOrEqual(5);
 });
 
-// Go: TestResetDemoReplacesEverythingTheDemoOwns (store/demo_test.go).
 test("the reset replaces only the demo's data", anyWidth, async ({ db }) => {
   await resetDemo();
   const before = await demoAccount(db);
@@ -229,8 +227,8 @@ test("the reset replaces only the demo's data", anyWidth, async ({ db }) => {
   expect(await count(db, liveNotes, [other])).toBe(1);
 });
 
-// A member whose loginId is DEMO_LOGIN_ID is not overwritten (Go: ON CONFLICT
-// DO NOTHING); the demo sign-in refuses it, as it has a real password.
+// A member whose loginId is DEMO_LOGIN_ID is not overwritten (the insert is ON
+// CONFLICT DO NOTHING); the demo sign-in refuses it, as it has a real password.
 test("an existing account keeps its password", anyWidth, async ({ db }) => {
   const id = await createMember(
     db,

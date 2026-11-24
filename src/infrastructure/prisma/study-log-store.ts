@@ -1,14 +1,12 @@
 import { Prisma, type PrismaClient } from "../../generated/prisma/client";
 import type { StudyDay } from "../../domain/study-log/study-log";
 
-// The study log is Go's StudyLog statement (store/study_log.go:25-40) run as
-// one raw query: five tables joined by UNION ALL and summed by Japan day.
-// Prisma's query API cannot group several tables by a computed day in one
-// round trip, and adding them up in JS would be a second implementation of
-// what Go counted. The columns are TIMESTAMP(3) without a time zone holding
-// UTC, so a Japan day is the column plus 9 hours, cast to a date (Go's jstDay,
-// as reviewedDates does), never AT TIME ZONE. The day comes back as
-// "YYYY-MM-DD" text so it never passes through a JS Date.
+// The study log is one raw query: five tables joined by UNION ALL and summed
+// by Japan day. Prisma's query API cannot group several tables by a computed
+// day in one round trip. The columns are TIMESTAMP(3) without a time zone
+// holding UTC, so a Japan day is the column plus 9 hours, cast to a date (as
+// reviewedDates does), never AT TIME ZONE. The day comes back as "YYYY-MM-DD"
+// text so it never passes through a JS Date.
 
 // Pure: the owner's days with anything in [start, end), oldest first, with
 // reviews (answers), practice questions (the sum of questionCount), notes not

@@ -20,8 +20,7 @@ export type AiUsageSummaryDeps = {
 };
 
 // The admin's monthly summary of OpenAI usage. The admin is checked first,
-// so anyone else is refused before the month is checked, as Go answered 403
-// before 400.
+// so anyone else is refused before the month is checked.
 export function createAiUsageSummary(deps: AiUsageSummaryDeps) {
   return {
     // month: "YYYY-MM" in Japan time; without it, the Japan month of now.

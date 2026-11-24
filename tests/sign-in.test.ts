@@ -1,5 +1,3 @@
-// Mirrors the retired services/api/auth/login_test.go (password, guest, GitHub) and
-// services/api/auth/demo_test.go.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -215,9 +213,9 @@ test('every credential failure is "invalid" after exactly one hash', async () =>
     { name: "space in id", loginId: "al ice", password: "pw" },
     { name: "33 characters", loginId: "a".repeat(33), password: "pw" },
     { name: "empty password", loginId: "alice", password: "" },
-    { name: "129 runes", loginId: "alice", password: "x".repeat(129) },
+    { name: "129 code points", loginId: "alice", password: "x".repeat(129) },
     {
-      name: "129 multibyte runes",
+      name: "129 multibyte code points",
       loginId: "alice",
       password: "パ".repeat(129),
     },
@@ -404,7 +402,6 @@ test('store and hasher errors are thrown, not "invalid"', async () => {
   assert.deepEqual(hashFails.resets, []);
 });
 
-// Go: TestLoginPasswordHasherErrorIsNotUnauthorized.
 test("a hasher failure is an error, not invalid", async () => {
   const f = fixture();
   f.deps.passwords.verify = async () => {

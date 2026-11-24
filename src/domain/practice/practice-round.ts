@@ -1,6 +1,6 @@
 // Checking a finished round before it is saved, the shape it is saved in,
-// and which of its questions go to the review queue. The rules are the ones
-// the Go API had, so rows the Go API wrote earlier read the same.
+// and which of its questions go to the review queue. Rows already saved were
+// written under these rules, so they read the same.
 import {
   COMPLEMENT_ROUND_MODES,
   type ComplementRoundMode,
@@ -46,12 +46,11 @@ export type CheckedRound = {
   questions: ChoiceAnswer[];
 } & RoundScore;
 
-// Lengths are counted in code points, as Go counted runes, so a character
-// outside the BMP (two UTF-16 units) counts once.
+// Lengths are counted in code points, so a character outside the BMP (two
+// UTF-16 units) counts once.
 const length = (s: string) => [...s].length;
 
-// Non-empty and at most max characters (the rule the Go API used to apply;
-// see docs/superpowers/plans/2026-11-16-deprecate-go-stage5-go-reference.md).
+// Non-empty and at most max characters.
 const bounded = (s: string, max: number) => {
   const n = length(s);
   return n > 0 && n <= max;
@@ -61,7 +60,7 @@ function isComplementRoundMode(mode: unknown): mode is ComplementRoundMode {
   return (COMPLEMENT_ROUND_MODES as readonly unknown[]).includes(mode);
 }
 
-// The round's numeric bounds (the rule the Go API used to apply).
+// The round's numeric bounds.
 function validRound(
   maxAnswer: number,
   elapsedMs: number,
@@ -111,9 +110,8 @@ function savedQuestion(q: ChoiceAnswer): ChoiceAnswer {
   return saved;
 }
 
-// The checks on a submitted round and the counting of its questions, as the
-// Go API used to do them (see docs/superpowers/plans/2026-11-16-deprecate-go-stage5-go-reference.md).
-// null when the round must be refused.
+// The checks on a submitted round and the counting of its questions. null
+// when the round must be refused.
 export function checkPracticeRound(
   kind: "preposition",
   round: PracticeRound & { mode?: unknown },
@@ -128,7 +126,7 @@ export function checkPracticeRound(
 ): (CheckedRound & { mode?: ComplementRoundMode }) | null {
   if (!PRACTICE_RECORD_ID.test(round.id)) return null;
   if (Number.isNaN(round.startedAt.getTime())) return null;
-  // A preposition round has no mode: Go refused the key as unknown.
+  // A preposition round has no mode: one that carries the key is refused.
   if (
     kind === "complement"
       ? !isComplementRoundMode(round.mode)
@@ -164,11 +162,10 @@ export type PracticeReviewTarget = {
   targetId: string;
 };
 
-// Which missed questions become review targets (the rule the Go API used to
-// apply; see docs/superpowers/plans/2026-11-16-deprecate-go-stage5-go-reference.md).
-// The missed questions that name their question, once each, sorted by
-// targetId so concurrent saves lock rows in the same order. A preposition's
-// use has several phrases, so its target is the use and the noun ("P001:学校").
+// Which missed questions become review targets: those that name their
+// question, once each, sorted by targetId so concurrent saves lock rows in
+// the same order. A preposition's use has several phrases, so its target is
+// the use and the noun ("P001:学校").
 export function practiceReviewTargets(
   kind: PracticeKind,
   questions: readonly ChoiceAnswer[],
@@ -185,7 +182,8 @@ export function practiceReviewTargets(
 
 const text = (value: unknown) => (typeof value === "string" ? value : "");
 
-// Reads the questions column of a saved row back, as the Go API's scan did.
+// Reads the questions column of a saved row back. A value of the wrong type
+// reads as empty.
 export function choiceAnswersFrom(json: unknown): ChoiceAnswer[] {
   if (!Array.isArray(json)) return [];
   return json.map((item: unknown) => {

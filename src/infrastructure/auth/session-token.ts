@@ -1,6 +1,6 @@
-// The session cookie's token (stage 11 of the Go retirement): 32 bytes from
-// the CSPRNG, base64url without padding. The database keeps only its SHA-256,
-// so a leaked table cannot be replayed as cookies.
+// The session cookie's token: 32 bytes from the CSPRNG, base64url without
+// padding. The database keeps only its SHA-256, so a leaked table cannot be
+// replayed as cookies.
 import { createHash, randomBytes } from "node:crypto";
 
 export const SESSION_TOKEN_BYTES = 32;
@@ -17,7 +17,7 @@ export function isSessionTokenShape(value: string): boolean {
   return TOKEN_SHAPE.test(value);
 }
 
-// SHA-256 in lowercase hex, as Go's refresh tokens were stored.
+// SHA-256 in lowercase hex: what a Session row stores in place of the token.
 export function hashSessionToken(token: string): string {
   return createHash("sha256").update(token, "utf8").digest("hex");
 }

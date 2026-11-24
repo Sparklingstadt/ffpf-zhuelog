@@ -6,7 +6,7 @@ export class DemoResetUnavailableError extends Error {
 }
 
 export type DemoResetDeps = {
-  // DEMO_LOGIN_ID; undefined: no demo (Go registered no reset route then).
+  // DEMO_LOGIN_ID; undefined: no demo (the reset route answers 404 then).
   loginId: string | undefined;
   fixture: unknown;
   store: { reset(loginId: string, seed: DemoSeed, now: Date): Promise<string> };
@@ -14,13 +14,13 @@ export type DemoResetDeps = {
   now: () => Date;
 };
 
-// The nightly demo reset (Go: demo.Resetter, services/api/demo/demo.go):
-// the fixture made relative to now, written over the demo account in one go.
+// The nightly demo reset: the fixture made relative to now, written over the
+// demo account in one go.
 export function createDemoReset(deps: DemoResetDeps) {
   return {
     available: deps.loginId !== undefined,
 
-    // Go: demo.Resetter.Reset.
+    // Throws DemoResetUnavailableError without DEMO_LOGIN_ID.
     async reset(): Promise<void> {
       const loginId = deps.loginId;
       if (loginId === undefined)

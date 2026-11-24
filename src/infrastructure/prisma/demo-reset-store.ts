@@ -1,29 +1,25 @@
-// The nightly demo reset's writes, as Go's store.ResetDemo did them
-// (services/api/store/demo.go: ResetDemo, deleteDemoData, insertDemoSeed,
-// queueDemoReview; reference §13).
+// The nightly demo reset's writes.
 //
 // It is one transaction so a visitor never sees the demo half emptied, and a
 // second reset running at the same time waits on the account row (the
-// SELECT ... FOR UPDATE) instead of inserting the seed twice. The account
-// row stays exactly as Go's sign-in read it before stage 11: the same
-// loginId, DEMO_PASSWORD_HASH, session version 0 and, when the account is
-// already there, no change at all.
+// SELECT ... FOR UPDATE) instead of inserting the seed twice. A missing
+// account is made with the given loginId, DEMO_PASSWORD_HASH and session
+// version 0; an account already there is not changed at all.
 
 import { DEMO_PASSWORD_HASH } from "../../domain/identity/demo-account";
 import type { DemoSeed, DemoCardHistory } from "../../domain/demo/demo-seed";
 import { Prisma, type PrismaClient } from "../../generated/prisma/client";
 import { newId } from "./new-id";
 
-// 5 s to start plus 20 s to run: 25 s in all, Go's demoResetTimeout, and
-// under the route's maxDuration of 30 s.
+// 5 s to start plus 20 s to run: 25 s in all, under the route's maxDuration
+// of 30 s.
 export const DEMO_RESET_TRANSACTION_OPTIONS = {
   maxWait: 5_000,
   timeout: 20_000,
 };
 
-// Owner-scoped tables the reset empties (Go: demoOwnedTables with
-// LearningEntry and ReviewLog). ImportBatch and Follow go too: batches by
-// the demo's notes, follows in both directions.
+// Owner-scoped tables the reset empties. ImportBatch and Follow go too:
+// batches by the demo's notes, follows in both directions.
 export const DEMO_OWNED_TABLES: readonly string[] = [
   "LearningEntry",
   "ReviewItem",
@@ -38,14 +34,13 @@ export const DEMO_OWNED_TABLES: readonly string[] = [
   "LineMessage",
 ];
 
-// Owner-scoped tables the reset keeps on purpose, with the reason
-// (Go: demoKeptTables in store/review_orphans_test.go).
+// Owner-scoped tables the reset keeps on purpose, with the reason.
 export const DEMO_KEPT_TABLES: Readonly<Record<string, string>> = {
   Session: "the demo's sessions survive the nightly reset",
   AiUsage: "the admin's record of OpenAI spend; the demo cannot call OpenAI",
 };
 
-// Go: entryReviewLanguage.
+// The language of the seed's words and review items: Chinese.
 const LANGUAGE = "zh" as const;
 
 type ReviewItemRow = {
@@ -142,11 +137,10 @@ export type DemoSeedRows = {
   complementRecords: (PracticeRow & { mode: string })[];
 };
 
-// Pure: every row the seed inserts for owner (Go: insertDemoSeed). Each note
-// is its own import batch named after its time; a review item's updatedAt is
-// its last review (or its creation), and each answer's log row holds the
-// card from before that answer. Practice counts are taken from the
-// questions, as Go's demoScore does when it writes.
+// Pure: every row the seed inserts for owner. Each note is its own import
+// batch named after its time; a review item's updatedAt is its last review
+// (or its creation), and each answer's log row holds the card from before
+// that answer. Practice counts are taken from the questions.
 export function demoSeedRows(
   ownerId: string,
   seed: DemoSeed,
@@ -164,7 +158,7 @@ export function demoSeedRows(
     complementRecords: [],
   };
 
-  // Go: queueDemoReview.
+  // One review item with its card, and a log row for each answer.
   const review = (
     kind: "entry" | "vocabulary",
     targetId: string,
@@ -207,7 +201,7 @@ export function demoSeedRows(
     }
   };
 
-  // Go: queueImportBatch with one draft, then queueHints.
+  // Each note: its batch, the note, its hints and, if any, its review item.
   const noteIds = seed.notes.map((note) => {
     const batchId = newRowId();
     const entryId = newRowId();
@@ -267,8 +261,8 @@ export function demoSeedRows(
     });
   }
 
-  // Go: practiceKind.insert with demoScore; PracticeQuestion's id is
-  // `json:"id,omitempty"`.
+  // One practice round with its counts. A question without an id is stored
+  // without the key.
   const practice = (round: DemoSeed["prepositionRecords"][number]) => {
     const questions = round.questions.map(
       ({ id, answer, noun, prompt, misses }) => ({
@@ -306,9 +300,9 @@ export function createDemoResetStore(
   newRowId: () => string = newId,
 ) {
   return {
-    // Go: ResetDemo. Makes the account if it is missing, deletes everything
-    // its owner has (but its sessions and AI usage) and inserts the seed.
-    // The demo account's id.
+    // Makes the account if it is missing, deletes everything its owner has
+    // (but its sessions and AI usage) and inserts the seed. The demo
+    // account's id.
     async reset(loginId: string, seed: DemoSeed, now: Date): Promise<string> {
       const at = new Date(Math.trunc(now.getTime()));
       return db().$transaction(async (tx) => {

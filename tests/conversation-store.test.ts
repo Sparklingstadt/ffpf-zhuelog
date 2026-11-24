@@ -70,7 +70,7 @@ test("the saved messages are only id, role and text", () => {
   assert.equal(sql.values[5], '[{"id":"m1","role":"user","text":"你好"}]');
 });
 
-test("readConversationMessages reads Go's rows and refuses others", () => {
+test("readConversationMessages reads saved turns and refuses other shapes", () => {
   const rows = [
     { id: "m1", role: "user", text: "你好" },
     { id: "m2", role: "assistant", text: "你好！" },

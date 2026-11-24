@@ -8,7 +8,7 @@ const sameDate = (a: LogDate, b: LogDate) =>
   a.year === b.year && a.month === b.month && a.day === b.day;
 
 // Days (in Tokyo) that have conversations, newest first. items come newest
-// first from Go.
+// first from the store.
 export function listConversationDates(
   items: ConversationSummary[],
 ): { date: LogDate; count: number }[] {

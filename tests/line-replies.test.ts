@@ -9,7 +9,7 @@ import {
 } from "../src/domain/line/line-replies";
 import { reviewNotifyBudget } from "../src/domain/line/line-message";
 
-test("the reply copy is Go's", () => {
+test("the reply copy is pinned", () => {
   assert.deepEqual(LINE_REPLY, {
     linked:
       "連携しました。これから、このトークに送った文を添削・翻訳して学習ノートに保存します。",
@@ -29,7 +29,7 @@ test("the reply copy is Go's", () => {
   });
 });
 
-test("a result reads like Go's FormatResult", () => {
+test("a result lists the original, the answer, pinyin and hints", () => {
   const generation = {
     text: "我去学校了",
     pinyin: "wǒ qù xuéxiào le",
@@ -90,7 +90,7 @@ test("failures name the reason and the code", () => {
   );
 });
 
-test("the review reminder is Go's", () => {
+test("the review reminder is pinned", () => {
   assert.equal(
     formatReviewReminder(3),
     "今日の復習が 3 問あります。Web の「今日の復習」（/review）で答えましょう。\n\nこのお知らせは、Web のアカウント画面（/account/line）で止められます。",

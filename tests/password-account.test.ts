@@ -12,8 +12,7 @@ import {
   normalizeLoginId,
 } from "../src/domain/identity/password-account";
 
-// Mirrors the retired services/api/auth/validate_test.go and TestAdminCreateAccount*.
-test("login ids, names and passwords follow Go's rules", () => {
+test("login ids, names and passwords follow the account rules", () => {
   const loginIds: [string, string][] = [
     ["alice", "alice"],
     ["  Alice.W_9-x ", "alice.w_9-x"],
@@ -110,7 +109,7 @@ test("checkNewAccount checks loginId, then name, then password", () => {
   );
 });
 
-test("account ids and current passwords are checked like Go", () => {
+test("account ids and current passwords are checked for shape and length", () => {
   assert.equal(isAccountIdShape("cx"), true);
   assert.equal(isAccountIdShape("a".repeat(128)), true);
   assert.equal(isAccountIdShape(""), false);

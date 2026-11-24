@@ -111,7 +111,7 @@ export function summarize(days: readonly StudyDay[]): StudySummary {
   return sum;
 }
 
-// Go: maxStudyLogDays. The longest range one read covers, both ends included.
+// The longest range one read covers, both ends included.
 export const STUDY_LOG_MAX_DAYS = 93;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -135,10 +135,9 @@ function strictDate(value: string): number | null {
   return time;
 }
 
-// [start, end) of the Japan dates from..to as instants, or null when Go
-// would have answered 400: either is not a zero-padded real date of
+// [start, end) of the Japan dates from..to as instants, or null when the
+// range must be refused: either is not a zero-padded real date of
 // 2000..9999, to is before from, or the range is over 93 days.
-// Go: parseLogDate + listStudyLog's checks + LogDate.dayRange.
 export function studyLogRange(
   from: string,
   to: string,

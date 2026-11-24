@@ -23,7 +23,7 @@ const config = {
   apiBaseUrl: "http://127.0.0.1:1/",
 };
 
-test("replies and pushes are Go's requests", async () => {
+test("replies and pushes are Messaging API requests with the bearer token", async () => {
   const { calls, impl } = fakeFetch(() => new Response("{}"));
   const line = createLineMessaging(config, impl);
 
@@ -149,7 +149,7 @@ function quotaFetch(quota: Response, consumption?: Response) {
   });
 }
 
-test("the push quota is Go's PushQuota", async () => {
+test("the push quota is the limit minus this month's usage", async () => {
   const none = quotaFetch(Response.json({ type: "none" }));
   assert.deepEqual(await createLineMessaging(config, none.impl).pushQuota(), {
     unlimited: true,
@@ -189,7 +189,7 @@ test("the push quota is Go's PushQuota", async () => {
   );
 });
 
-test("push quota answers Go cannot read are errors", async () => {
+test("push quota answers of the wrong shape are errors", async () => {
   const limit = () => Response.json({ type: "limited", value: 200 });
   const cases: [string, ReturnType<typeof quotaFetch>, number | null][] = [
     ["other type", quotaFetch(Response.json({ type: "other" })), null],

@@ -171,7 +171,7 @@ const alice = { sub: "cabc123", email: "alice@example.com", name: "ふわ" };
 const invalid = { ok: false, reason: "invalid" };
 const unavailable = { ok: false, reason: "unavailable" };
 
-test("Go's numbers: the JWKS is kept 10 minutes, exp has 60 s of leeway", () => {
+test("the JWKS is kept 10 minutes, exp has 60 s of leeway", () => {
   assert.equal(SID_JWKS_CACHE_MS, 600_000);
   assert.equal(SID_LEEWAY_MS, 60_000);
 });
@@ -242,11 +242,11 @@ test("accepted ID tokens", async () => {
     ["no name", (c) => delete c.name, "alice"],
     ["blank name", (c) => (c.name = "  "), "alice"],
     [
-      "null claims of Go's types",
+      "null claims, and unused claims of any type",
       (c) => Object.assign(c, { name: null, iat: "x", nbf: [] }),
       "alice",
     ],
-    // Go's encoding/json matches claim names to fields ignoring case.
+    // Claim names match whatever their case.
     [
       "claim names in another case",
       (c) => {
@@ -266,7 +266,7 @@ test("accepted ID tokens", async () => {
   }
 });
 
-test("a header typ of null is no typ, as in Go", async () => {
+test("a header typ of null is no typ", async () => {
   const f = fakeSid();
   const key = newKey();
   f.state.jwks = [jwk(key, "k1")];
@@ -278,7 +278,7 @@ test("a header typ of null is no typ, as in Go", async () => {
   assert.deepEqual(await f.exchange(), { ok: true, user: alice });
 });
 
-test("refused ID tokens name Go's reason", async () => {
+test("refused ID tokens log their reason word", async () => {
   const other = newKey();
   const withClaim =
     (name: string, value: unknown) => (_: Key, c: Record<string, unknown>) => {
@@ -359,7 +359,7 @@ test("refused ID tokens name Go's reason", async () => {
       "signature",
     ],
     ["not a JWT", () => "not a jwt", "malformed"],
-    // Beyond Go's table: what golang-jwt and encoding/json refuse.
+    // Edge cases: odd values and encodings, wrong types, the order of checks.
     [
       "a fractional exp 60.1 seconds ago",
       withClaim("exp", now - 61 + 0.9),

@@ -47,7 +47,7 @@ async function codeOf(promise: Promise<unknown>): Promise<string> {
   assert.fail("expected OpenAiError");
 }
 
-test("posts the Responses request Go sends", async () => {
+test("posts the Responses request with a strict JSON schema", async () => {
   let seen: { url: string; init: RequestInit } | undefined;
   const fetchImpl: typeof fetch = async (url, init) => {
     seen = { url: String(url), init: init ?? {} };

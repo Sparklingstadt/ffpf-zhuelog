@@ -52,8 +52,8 @@ test("allowedGitHubIds keeps only numeric ids", () => {
   assert.deepEqual([...allowedGitHubIds()].sort(), ["10001", "2002"]);
 });
 
-test("allowedGitHubIds trims Go's spaces, not String.prototype.trim's", () => {
-  // Go's strings.TrimSpace strips U+0085 but keeps U+FEFF.
+test("allowedGitHubIds trims Unicode White_Space, not String.prototype.trim's set", () => {
+  // White_Space trimming strips U+0085 but keeps U+FEFF.
   process.env.AUTH_ALLOWED_GITHUB_IDS = "\u0085301\u0085,\uFEFF302";
   assert.deepEqual([...allowedGitHubIds()], ["301"]);
 });
@@ -73,7 +73,7 @@ test("demoLoginId is trimmed", () => {
   assert.equal(demoLoginId(), "demo");
 });
 
-test("demoLoginId must already be a login id, as Go's config", () => {
+test("demoLoginId must already be a login id", () => {
   const logged: unknown[][] = [];
   const original = console.error;
   console.error = (...args: unknown[]) => void logged.push(args);
@@ -83,7 +83,7 @@ test("demoLoginId must already be a login id, as Go's config", () => {
       assert.equal(demoLoginId(), id.trim(), id);
     }
     assert.deepEqual(logged, []);
-    // Upper case, too short, a space inside, a character Go refuses, too long.
+    // Upper case, too short, a space inside, a character not allowed, too long.
     for (const id of ["Demo", "ab", "demo user", "demo!", "d".repeat(33)]) {
       process.env.DEMO_LOGIN_ID = id;
       assert.equal(demoLoginId(), undefined, id);
@@ -128,8 +128,9 @@ test("lineConfig needs both LINE values and OpenAI", () => {
   assert.equal(lineConfig(), undefined);
 });
 
-test("lineConfig trims as Go's strings.TrimSpace does", () => {
-  // Go strips U+0085 and keeps U+FEFF; String.prototype.trim does the opposite.
+test("lineConfig trims Unicode White_Space, not String.prototype.trim's set", () => {
+  // White_Space trimming strips U+0085 and keeps U+FEFF; String.prototype.trim
+  // does the opposite.
   setLine({ ...complete, LINE_CHANNEL_SECRET: "\u0085secret\u0085" });
   assert.equal(lineConfig()?.channelSecret, "secret");
   setLine({ ...complete, LINE_CHANNEL_ACCESS_TOKEN: "\ufefftoken" });

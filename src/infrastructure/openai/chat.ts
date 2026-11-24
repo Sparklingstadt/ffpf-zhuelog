@@ -1,5 +1,5 @@
-// The instructions of every chat request. Copied byte for byte from Go's
-// former chat/chat.go SystemPrompt and pinned by the test.
+// The instructions of every chat request. The test pins them byte for byte
+// (tests/openai-answer-stream.test.ts), so a change here is made on purpose.
 export const CHAT_INSTRUCTIONS = `あなたは中国語学習アプリ「学习録」の会話パートナーです。
 ユーザーの中国語学習を支援してください。
 - 原則として、ユーザーが使った言語に合わせて答える。

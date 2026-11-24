@@ -173,7 +173,7 @@ test("a stream that ends without a final event ends the generator", async () => 
     await collect(streamOf([data(delta("半")), "event: response.completed"])),
     [{ type: "delta", text: "半" }],
   );
-  // A last line without a line end is still read, as Go's scanner did.
+  // A last line without a line end is still read.
   assert.deepEqual(
     await collect(streamOf([`data: ${JSON.stringify(delta("尾"))}`])),
     [{ type: "delta", text: "尾" }],

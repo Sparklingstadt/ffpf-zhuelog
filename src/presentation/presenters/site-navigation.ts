@@ -53,7 +53,7 @@ export function mainTabs(role: AppRole): MainTab[] {
 }
 
 // The header's link to the AI questions, after the four main pages: members
-// only, and not the demo account, which Go refuses them.
+// only, and not the demo account, which may not use them.
 export function aiHeaderLink(
   role: AppRole,
   { demo = false }: { demo?: boolean } = {},
@@ -83,8 +83,8 @@ export type BottomTab = {
 };
 
 // The tabs at the bottom of phones and tablets. Guests get only the notes;
-// the demo account has no LINE or AI questions (Go refuses them) but keeps
-// its saved conversations.
+// the demo account has no LINE or AI questions (the server refuses them) but
+// keeps its saved conversations.
 export function bottomTabs(
   role: AppRole,
   { demo = false }: { demo?: boolean } = {},

@@ -1,16 +1,15 @@
-// Password accounts, written with the statements Go's store used
-// (services/api/store/accounts.go; stage 9 reference §4 and §8).
+// Password accounts.
 //
 // Every password change bumps "sessionVersion" in the same UPDATE as the
-// hash. The web's SessionCurrentUserProvider compares it on every request,
-// so that one statement revokes every existing session; the same
-// transaction deletes the owner's Session rows (stage 11).
+// hash. SessionCurrentUserProvider compares it on every request, so that one
+// statement revokes every existing session; the same transaction deletes
+// the owner's Session rows.
 //
 // A member's own change replaces the hash only while it is still the one the
 // member's current password was verified against (compare-and-swap in the
 // WHERE clause). That keeps an admin reset made during the ~0.1 s scrypt from
 // being overwritten, without holding a transaction open across the hash.
-// An admin reset is unconditional, as in Go.
+// An admin reset is unconditional.
 import { Prisma, type PrismaClient } from "../../generated/prisma/client";
 import type { MemberAccount } from "../../domain/identity/member-account";
 import { newId } from "./new-id";
@@ -33,8 +32,8 @@ function toMemberAccount(row: AccountRow): MemberAccount {
   };
 }
 
-// Go's CreatePasswordAccount, with a taken loginId answering no row instead
-// of a unique violation.
+// Inserts a new account. A taken loginId answers no row instead of a unique
+// violation.
 export function createPasswordAccountSql(
   id: string,
   input: { loginId: string; displayName: string; passwordHash: string },
@@ -47,9 +46,9 @@ export function createPasswordAccountSql(
     RETURNING "id", "loginId", "displayName", "createdAt"`;
 }
 
-// Go's SetPassword: the hash and the session version in one statement,
-// returning the loginId. With expectedHash, only while the stored hash is
-// still that one.
+// Sets the hash and bumps the session version in one statement, returning
+// the loginId. With expectedHash, only while the stored hash is still that
+// one.
 export function setPasswordSql(
   id: string,
   passwordHash: string,

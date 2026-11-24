@@ -1,7 +1,7 @@
-// Trades a GitHub OAuth code (PKCE) for the GitHub user, as Go's GitHubClient
-// (services/api/auth/github.go). The caller checks the OAuth state and builds
-// the redirect URI; GitHub itself checks the code_verifier against the
-// code_challenge (S256) sent with the authorize request.
+// Trades a GitHub OAuth code (PKCE) for the GitHub user. The caller checks
+// the OAuth state and builds the redirect URI; GitHub itself checks the
+// code_verifier against the code_challenge (S256) sent with the authorize
+// request.
 //
 // Outcomes: "invalid" when GitHub refuses the code, verifier or token;
 // "unavailable" for transport and upstream failures. Neither the result nor
@@ -21,8 +21,8 @@ import {
 export const GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token";
 export const GITHUB_API_URL = "https://api.github.com";
 
-// GitHub's REST API refuses requests without a User-Agent. Go's net/http sent
-// its own default; the web names itself on both requests.
+// GitHub's REST API refuses requests without a User-Agent, so the web names
+// itself on both requests.
 const USER_AGENT = "ffpf-zhuelog";
 
 type ExchangeFailure = Extract<ExchangeOutcome<never>, { ok: false }>;
@@ -42,8 +42,9 @@ function parseJsonObject(text: string): Record<string, unknown> | undefined {
     : undefined;
 }
 
-// Go decodes into a struct of strings: a field that is present but not a
-// string (null aside) fails the whole decode. null here means "not a string".
+// Every field read from GitHub's answers must be a string: one that is
+// present but not a string (null aside) fails the whole read. null here
+// means "not a string".
 function optionalString(value: unknown): string | null {
   if (value === undefined || value === null) return "";
   return typeof value === "string" ? value : null;
@@ -65,7 +66,7 @@ export function createGitHubOAuthClient(config: {
   const log = config.log ?? consoleOAuthLog;
   const options = { timeoutMs: config.timeoutMs };
 
-  // Go: fetchToken.
+  // Trades the code and verifier for GitHub's access token.
   async function fetchToken(
     code: string,
     verifier: string,
@@ -109,7 +110,7 @@ export function createGitHubOAuthClient(config: {
     return { ok: true, token: accessToken };
   }
 
-  // Go: fetchUser.
+  // Reads the token's GitHub user.
   async function fetchUser(
     token: string,
   ): Promise<ExchangeOutcome<GitHubIdentity>> {
@@ -145,7 +146,7 @@ export function createGitHubOAuthClient(config: {
   }
 
   return {
-    // Go: GitHubClient.Exchange. Empty code or verifier is refused without
+    // Empty code or verifier is refused without
     // calling GitHub.
     async exchange(
       code: string,

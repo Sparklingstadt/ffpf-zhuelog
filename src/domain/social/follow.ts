@@ -22,16 +22,15 @@ export type FollowTimelineItem = {
   ownerName: string;
 };
 
-// What following someone came to. Go: 204, 400 self_follow, 404.
+// What following someone came to.
 export type FollowResult = "followed" | "self" | "not-found";
 
-// The follow page shows one page of shared notes: the newest 100. Go served
-// ?limit=100 and the web never asked for a second page.
+// The follow page shows one page of shared notes: the newest 100.
 export const FOLLOW_TIMELINE_LIMIT = 100;
 
 const MEMBER_OWNER_ID = /^(password|sid):[a-z0-9]{1,64}$/;
 
-// A member's owner id, password or Sparklingstadt ID. Go: memberOwnerIDPattern.
+// A member's owner id, password or Sparklingstadt ID.
 export function isMemberOwnerId(value: string): boolean {
   return MEMBER_OWNER_ID.test(value);
 }

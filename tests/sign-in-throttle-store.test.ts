@@ -19,7 +19,7 @@ test("pruneThrottleSql deletes at most 100 dead rows without waiting", () => {
   assert.deepEqual(sql.values, [now, 100]);
 });
 
-test("consumeThrottleSql counts in one statement as Go did", () => {
+test("consumeThrottleSql counts in one statement", () => {
   const expiresAt = new Date("2026-11-17T03:15:00.000Z");
   const sql = consumeThrottleSql("password-change:cacc1", now, expiresAt);
   const text = sql.text.replace(/\s+/g, " ");

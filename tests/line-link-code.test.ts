@@ -9,7 +9,7 @@ import {
   readLinkCode,
 } from "../src/domain/line/link-code";
 
-test("link codes are read and hashed as Go does", () => {
+test("link codes are normalised before they are read and hashed", () => {
   for (const text of [
     "ABCD2345",
     " abcd2345 ",
@@ -43,7 +43,7 @@ test("a code is one alphabet letter per byte", () => {
   assert.throws(() => linkCodeFromBytes(new Uint8Array(9)), RangeError);
 });
 
-test("the redeem throttle is Go's", () => {
+test("the redeem throttle is 5 an hour per LINE account", () => {
   assert.deepEqual(LINK_REDEEM_THROTTLE, { limit: 5, windowMs: 3600000 });
   assert.equal(lineLinkThrottleKey("U1"), "line-link:U1");
   assert.equal(LINK_CODE_TTL_MS, 600000);

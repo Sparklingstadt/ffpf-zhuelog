@@ -40,9 +40,8 @@ const NEWEST_FIRST = [
   id?: "desc";
 }[];
 
-// Reads and writes the owner's question notes the way the retired Go API's
-// store/questions.go did. Every query names the owner; `now` comes from the
-// caller, read once per request.
+// Reads and writes the owner's question notes. Every query names the owner;
+// `now` comes from the caller, read once per request.
 export function createQuestionStore(db: () => PrismaClient) {
   return {
     // Without the answers.
@@ -77,10 +76,10 @@ export function createQuestionStore(db: () => PrismaClient) {
     // it was, its modelName and createdAt too). false: the id is taken by
     // another owner or by other content, and nothing changed.
     //
-    // Go did this in one INSERT ... ON CONFLICT DO UPDATE (a no-op update)
-    // ... RETURNING. Prisma cannot express that, so this inserts with ON
-    // CONFLICT DO NOTHING and reads the row back by id: the same result, as
-    // a row is never changed once saved.
+    // Prisma cannot insert and get back the row already under the id in one
+    // statement, so this inserts with ON CONFLICT DO NOTHING and reads the
+    // row back by id. That is safe because a row is never changed once
+    // saved.
     async save(
       ownerId: string,
       note: SaveQuestionInput,

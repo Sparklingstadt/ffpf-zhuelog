@@ -5,13 +5,13 @@
 // node:crypto: an ES256 signature by a key of Sparklingstadt ID's JWKS, then iss, aud,
 // exp, nonce, email_verified, email and sub. The access token is not used.
 //
-// The checks run in the order golang-jwt v5.3.1 and Go's verify run them, and
-// every refusal logs Go's reason word. JSON is read as Go's encoding/json
-// reads it into Go's structs: a field of the wrong JSON type fails the whole
-// read, null leaves a string field empty, and keys match fields ignoring case.
-// A duplicate key is the one exception: JSON.parse keeps the last value, while
-// Go also remembers a type error from an earlier one. This is harmless: the
-// token and the JWKS both come from Sparklingstadt ID over TLS, and the token is signed.
+// The checks run in one fixed order (see verify), and every refusal logs the
+// reason word of the first check that failed. JSON is read strictly: a field
+// of the wrong JSON type fails the whole read, null leaves a string field
+// empty, and keys match fields ignoring case. A duplicate key is the one
+// exception: JSON.parse keeps only the last value, so a wrong type in an
+// earlier one is not seen. This is harmless: the token and the JWKS both come
+// from Sparklingstadt ID over TLS, and the token is signed.
 //
 // Outcomes: "invalid" when Sparklingstadt ID refuses the code or the ID token is not
 // acceptable; "unavailable" for transport and upstream failures. Neither the
@@ -29,7 +29,7 @@ import type {
   SidIdentity,
 } from "@/application/identity/sign-in";
 import { SID_SUB_PATTERN, emailLocalPart } from "@/domain/identity/sid-account";
-import { goTrimSpace } from "@/domain/line/go-text";
+import { trimWhiteSpace } from "@/domain/line/white-space";
 
 import {
   type OAuthLog,
@@ -47,8 +47,8 @@ export const SID_LEEWAY_MS = 60_000;
 // One non-empty unpadded base64url segment.
 const JWT_SEGMENT = /^[A-Za-z0-9_-]+$/;
 
-// The algs golang-jwt v5 knows. An unknown alg is refused before the
-// signature segment is decoded, a known one other than ES256 after it.
+// The algs a JWT may name. An unknown alg is refused before the signature
+// segment is decoded, a known one other than ES256 after it.
 const JWT_KNOWN_ALGS = new Set([
   "ES256",
   "ES384",
@@ -76,12 +76,12 @@ const INVALID = { ok: false, reason: "invalid" } as const;
 const UNAVAILABLE = { ok: false, reason: "unavailable" } as const;
 type Failure = typeof INVALID | typeof UNAVAILABLE;
 
-// Go reads bytes as they are: a byte order mark is not dropped, so JSON that
-// starts with one does not parse.
+// The bytes are decoded as they are: a byte order mark is not dropped, so
+// JSON that starts with one does not parse.
 const utf8 = new TextDecoder("utf-8", { ignoreBOM: true });
 
-// Go: base64.RawURLEncoding.Strict(). No padding, and the unused trailing
-// bits zero, so a segment has one spelling only.
+// Strict unpadded base64url: no padding, and the unused trailing bits zero,
+// so a segment has one spelling only.
 function strictBase64Url(text: string): Buffer | null {
   if (!JWT_SEGMENT.test(text)) return null;
   const bytes = Buffer.from(text, "base64url");
@@ -100,37 +100,37 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-// Go's encoding/json folds key and field names alike: ASCII letters by
-// case, plus the four non-ASCII letters whose simple case mapping is ASCII.
-const GO_FOLDS_TO_ASCII: Readonly<Record<string, string>> = {
+// Keys and field names are compared folded: ASCII letters by case, plus the
+// four non-ASCII letters whose simple case mapping is ASCII.
+const FOLDS_TO_ASCII: Readonly<Record<string, string>> = {
   İ: "I", // İ
   ı: "I", // ı
   ſ: "S", // ſ
   K: "K", // Kelvin sign
 };
 
-function goFold(name: string): string {
+function foldName(name: string): string {
   let out = "";
   for (const ch of name) {
-    out += ch < "\u0080" ? ch.toUpperCase() : (GO_FOLDS_TO_ASCII[ch] ?? ch);
+    out += ch < "\u0080" ? ch.toUpperCase() : (FOLDS_TO_ASCII[ch] ?? ch);
   }
   return out;
 }
 
-// The values of the object's keys that Go matches to the field, in order;
-// the last one wins, as Go assigns them in turn.
-function goFieldValues(
+// The values of the object's keys that match the field, in order. The
+// readers below take them in turn, so the last one wins.
+function fieldValues(
   object: Record<string, unknown>,
   field: string,
 ): unknown[] {
-  const folded = goFold(field);
+  const folded = foldName(field);
   return Object.entries(object)
-    .filter(([key]) => goFold(key) === folded)
+    .filter(([key]) => foldName(key) === folded)
     .map(([, value]) => value);
 }
 
-// A Go string field: null leaves it as it was, another type is an error.
-function goString(values: unknown[]): { value: string; bad: boolean } {
+// A string field: null leaves it as it was, another type is an error.
+function stringField(values: unknown[]): { value: string; bad: boolean } {
   let value = "";
   let bad = false;
   for (const v of values) {
@@ -140,9 +140,9 @@ function goString(values: unknown[]): { value: string; bad: boolean } {
   return { value, bad };
 }
 
-// A Go pointer field: null makes it nil (undefined), accept() says which
-// values it can hold.
-function goPointer<T>(
+// An optional field: null makes it undefined, accept() says which values it
+// can hold.
+function optionalField<T>(
   values: unknown[],
   accept: (v: unknown) => v is T,
 ): { value: T | undefined; bad: boolean } {
@@ -157,12 +157,11 @@ function goPointer<T>(
 }
 
 const isString = (v: unknown): v is string => typeof v === "string";
-// Go's float64: a number JSON.parse made infinite does not fit.
+// A number too large for a double (JSON.parse makes it infinite) is refused.
 const isFiniteNumber = (v: unknown): v is number =>
   typeof v === "number" && Number.isFinite(v);
 
-// Go: json.Unmarshal into map[string]any fails on a number that does not fit
-// a float64, after it has made the map.
+// Whether value holds a number too large for a double, at any depth.
 function hasInfiniteNumber(value: unknown): boolean {
   if (typeof value === "number") return !Number.isFinite(value);
   if (Array.isArray(value)) return value.some(hasInfiniteNumber);
@@ -170,9 +169,9 @@ function hasInfiniteNumber(value: unknown): boolean {
   return false;
 }
 
-// golang-jwt's header (map[string]any). null is a nil map: no error, but no
-// alg either. On an error, `made` says whether Go had made the map, which
-// decides the logged reason (sidRejectReason).
+// The JOSE header. A JSON null reads as an empty header: no error, but no alg
+// either. On an error, `made` says whether the JSON was an object at all (it
+// failed only for a number too large), which decides the logged reason.
 function decodeHeader(
   bytes: Buffer,
 ):
@@ -198,9 +197,8 @@ type Claims = {
   name: string;
 };
 
-// jwt.ClaimStrings: a string or an array of strings; null leaves it as it
-// was.
-function goClaimStrings(values: unknown[]): { value: string[]; bad: boolean } {
+// The aud claim: a string or an array of strings; null leaves it as it was.
+function claimStrings(values: unknown[]): { value: string[]; bad: boolean } {
   let value: string[] = [];
   let bad = false;
   for (const v of values) {
@@ -218,14 +216,14 @@ function decodeClaims(bytes: Buffer): Claims | null {
   if (!parsed) return null;
   const object = parsed.value === null ? {} : parsed.value;
   if (!isObject(object)) return null;
-  const field = (name: string) => goFieldValues(object, name);
-  const iss = goString(field("iss"));
-  const aud = goClaimStrings(field("aud"));
-  const exp = goPointer(field("exp"), isFiniteNumber);
-  const nonce = goString(field("nonce"));
-  const sub = goString(field("sub"));
-  const email = goString(field("email"));
-  const name = goString(field("name"));
+  const field = (name: string) => fieldValues(object, name);
+  const iss = stringField(field("iss"));
+  const aud = claimStrings(field("aud"));
+  const exp = optionalField(field("exp"), isFiniteNumber);
+  const nonce = stringField(field("nonce"));
+  const sub = stringField(field("sub"));
+  const email = stringField(field("email"));
+  const name = stringField(field("name"));
   if ([iss, aud, exp, nonce, sub, email, name].some((f) => f.bad)) return null;
   return {
     iss: iss.value,
@@ -234,14 +232,14 @@ function decodeClaims(bytes: Buffer): Claims | null {
     nonce: nonce.value,
     sub: sub.value,
     email: email.value,
-    // Go compares the raw JSON with `true`: only the literal true.
+    // Only the JSON literal true counts.
     emailVerified: field("email_verified").at(-1) === true,
     name: name.value,
   };
 }
 
 // x and y strict base64url of 32 bytes each, and the point
-// on P-256 (ECDH.convertKey checks it, as Go's crypto/ecdh does).
+// on P-256 (ECDH.convertKey checks it).
 function p256Key(x: string, y: string): KeyObject | null {
   const xBytes = strictBase64Url(x);
   const yBytes = strictBase64Url(y);
@@ -272,20 +270,20 @@ function decodeJwk(value: unknown): Jwk | null {
   if (!isObject(object)) return null;
   const jwk = {} as Jwk;
   for (const name of JWK_FIELDS) {
-    const field = goString(goFieldValues(object, name));
+    const field = stringField(fieldValues(object, name));
     if (field.bad) return null;
     jwk[name] = field.value;
   }
   return jwk;
 }
 
-// Go: fetchJWKS's body. null when it is not JSON, has no keys array, or a
+// The JWKS body. null when it is not JSON, has no keys array, or a
 // key's field has the wrong type. Keys other than P-256 EC signing keys with
 // a kid are left out, and only the first key of a kid is kept.
 function decodeJwks(text: string): Map<string, KeyObject> | null {
   const parsed = parseJson(text);
   if (!parsed || !isObject(parsed.value)) return null;
-  const list = goPointer(goFieldValues(parsed.value, "keys"), Array.isArray);
+  const list = optionalField(fieldValues(parsed.value, "keys"), Array.isArray);
   if (list.bad || list.value === undefined) return null;
   const jwks = list.value.map(decodeJwk);
   if (jwks.some((jwk) => jwk === null)) return null;
@@ -306,20 +304,23 @@ function decodeJwks(text: string): Map<string, KeyObject> | null {
   return keys;
 }
 
-// Go: fetchIDToken's success body. The id_token when it is a non-empty
+// The token endpoint's success body. The id_token when it is a non-empty
 // string, else null.
 function decodeIdToken(text: string): string | null {
   const parsed = parseJson(text);
   if (!parsed || !isObject(parsed.value)) return null;
-  const idToken = goPointer(goFieldValues(parsed.value, "id_token"), isString);
+  const idToken = optionalField(
+    fieldValues(parsed.value, "id_token"),
+    isString,
+  );
   return !idToken.bad && idToken.value ? idToken.value : null;
 }
 
-// Go: fetchIDToken's error body; its errors are ignored.
+// The token endpoint's error body: its error code, "" when it has none.
 function decodeErrorCode(text: string): string {
   const parsed = parseJson(text);
   if (!parsed || !isObject(parsed.value)) return "";
-  return goString(goFieldValues(parsed.value, "error")).value;
+  return stringField(fieldValues(parsed.value, "error")).value;
 }
 
 export function createSidOidcClient(config: {
@@ -343,11 +344,11 @@ export function createSidOidcClient(config: {
   ).toString("base64");
 
   // The JWKS by kid and when it was fetched; one per client object, so the
-  // composition makes one client per instance (Go: one per process).
+  // composition makes one client per instance.
   let cachedKeys = new Map<string, KeyObject>();
   let fetchedAt: number | undefined;
 
-  // Go: reject. reason is a fixed word, never request data.
+  // Logs a refusal. reason is a fixed word, never request data.
   function reject(
     reason: string,
     fields: Record<string, string | number> = {},
@@ -356,7 +357,7 @@ export function createSidOidcClient(config: {
     return INVALID;
   }
 
-  // Go: unavailable.
+  // Logs an upstream failure the same way.
   function unavailable(
     reason: string,
     fields: Record<string, string | number> = {},
@@ -365,13 +366,13 @@ export function createSidOidcClient(config: {
     return UNAVAILABLE;
   }
 
-  // Go: fetchIDToken.
+  // Trades the code for the ID token at the token endpoint.
   async function fetchIdToken(
     code: string,
     verifier: string,
     redirectUri: string,
   ): Promise<string | Failure> {
-    // Go: url.Values.Encode, keys sorted.
+    // Form-encoded, with the keys in alphabetical order.
     const body = [
       ["code", code],
       ["code_verifier", verifier],
@@ -405,7 +406,6 @@ export function createSidOidcClient(config: {
     return decodeIdToken(text) ?? reject("id_token");
   }
 
-  // Go: fetchJWKS.
   async function fetchJwks(): Promise<Map<string, KeyObject> | Failure> {
     const response = await fetchLimited(fetchFn, jwksUrl, {
       method: "GET",
@@ -417,10 +417,10 @@ export function createSidOidcClient(config: {
     return decodeJwks(response.text) ?? unavailable("jwks_body");
   }
 
-  // Go: key. The JWKS is fetched when the cache is older than 10 minutes or
-  // lacks kid (Sparklingstadt ID may have rotated), but at most once per ID token. A
-  // failed fetch is unavailable even when a stale key of kid is cached; a
-  // kid the fresh JWKS lacks too is refused.
+  // The key of kid. The JWKS is fetched when the cache is older than 10
+  // minutes or lacks kid (Sparklingstadt ID may have rotated), but at most
+  // once per ID token. A failed fetch is unavailable even when a stale key of
+  // kid is cached; a kid the fresh JWKS lacks too is refused.
   async function keyFor(kid: string): Promise<{ key: KeyObject } | Failure> {
     const cached = cachedKeys.get(kid);
     const fresh =
@@ -435,9 +435,10 @@ export function createSidOidcClient(config: {
     return key ? { key } : reject("kid");
   }
 
-  // Go: verify, with golang-jwt's ParseWithClaims (WithValidMethods ES256,
-  // WithIssuer, WithAudience, WithExpirationRequired, WithLeeway,
-  // WithStrictDecoding) in its order.
+  // Verifies the ID token. The checks run in this order, and the first that
+  // fails is the logged reason: the three segments, the header, the claims'
+  // JSON, alg, the signature segment, typ, kid and its key, the signature,
+  // then iss, aud, exp (required), nonce, email_verified, email and sub.
   async function verify(
     idToken: string,
     nonce: string,
@@ -491,8 +492,7 @@ export function createSidOidcClient(config: {
     )
       return reject("signature");
 
-    // golang-jwt checks exp, aud and iss together; Go names them in the
-    // order iss, aud, exp.
+    // iss, then aud, then exp: the first that fails is the reason logged.
     if (claims.iss !== issuer) return reject("iss");
     const { aud } = claims;
     if (
@@ -506,7 +506,7 @@ export function createSidOidcClient(config: {
       exp === undefined ||
       exp < 0 ||
       exp > MAX_EXP_SECONDS ||
-      // time.Unix(int64(exp)) drops the fraction.
+      // A fractional exp counts as its whole seconds.
       now().getTime() > Math.trunc(exp) * 1000 + SID_LEEWAY_MS
     )
       return reject("exp");
@@ -517,7 +517,7 @@ export function createSidOidcClient(config: {
     if (!SID_SUB_PATTERN.test(claims.sub)) return reject("sub");
     // Sparklingstadt ID's name may be empty; the email's local part stands in. The
     // sign-in trims and shortens it again for the display name.
-    const name = goTrimSpace(claims.name) || emailLocalPart(claims.email);
+    const name = trimWhiteSpace(claims.name) || emailLocalPart(claims.email);
     return { ok: true, user: { sub: claims.sub, email: claims.email, name } };
   }
 

@@ -3,7 +3,7 @@ import type { AiUsageTotal } from "../../domain/ai-usage/monthly-usage";
 import type { OpenAiUsage } from "../../domain/vocabulary/vocabulary-entry";
 import { newId } from "./new-id";
 
-// Records one OpenAI call at `now`, as the retired Go API's RecordAIUsage did.
+// Records one OpenAI call at `now`.
 export async function recordAiUsage(
   db: () => PrismaClient,
   entry: OpenAiUsage & { ownerId: string; feature: string },
@@ -22,15 +22,14 @@ export async function recordAiUsage(
   });
 }
 
-// Pure: Go's AIUsageMonth statement (store/ai_usage.go:51-60), run as one
-// raw query. Prisma's query API cannot join the usage to the two member
-// account tables (there is no relation) nor order people by a window sum, and
-// sorting in JS could disagree with the database's collation, which Go's
-// order follows. Every owner's calls in [from, to) by owner, feature and
-// model, with the member's name ("" for an admin or a deleted account); the
-// owners with the most tokens (input + output) in the range first, ties by
-// ownerId, then each owner's rows by feature and model. The member prefixes
-// are written in the SQL (Go passed them as values; the result is the same).
+// Pure: the month's usage as one raw query. Prisma's query API cannot join
+// the usage to the two member account tables (there is no relation) nor
+// order people by a window sum, and sorting in JS could disagree with the
+// database's collation. Every owner's calls in [from, to) by owner, feature
+// and model, with the member's name ("" for an admin or a deleted account);
+// the owners with the most tokens (input + output) in the range first, ties
+// by ownerId, then each owner's rows by feature and model. The member
+// prefixes are written in the SQL, not bound.
 export function aiUsageMonthSql(from: Date, to: Date): Prisma.Sql {
   return Prisma.sql`SELECT u."ownerId" AS "ownerId",
     coalesce(m."displayName", '') AS "displayName",

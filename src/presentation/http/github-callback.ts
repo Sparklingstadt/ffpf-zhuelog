@@ -43,11 +43,12 @@ const defaultDeps: GitHubCallbackDeps = {
   sessionCookies: newSessionCookies,
 };
 
-// GET /api/auth/callback/github/go (the path Go's sign-in registered with
-// the OAuth App). The state must match the zl_oauth cookie of a GitHub start
-// before anything is signed in; the web exchanges the code with the same
-// redirect URI the authorize step sent. The code, state and tokens never go
-// into a redirect URL or a log, and zl_oauth is cleared on every outcome.
+// GET /api/auth/callback/github/go: the redirect URL registered with the
+// GitHub OAuth App, so the path's name is fixed (changing it breaks sign-in).
+// The state must match the zl_oauth cookie of a GitHub start before anything
+// is signed in; the code is exchanged with the same redirect URI the
+// authorize step sent. The code, state and tokens never go into a redirect
+// URL or a log, and zl_oauth is cleared on every outcome.
 export async function handleGitHubCallback(
   request: NextRequest,
   deps: GitHubCallbackDeps = defaultDeps,

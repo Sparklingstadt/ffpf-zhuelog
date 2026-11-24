@@ -17,8 +17,8 @@ import { genericErrorMessage } from "@/presentation/presenters/generic-error-mes
 
 const invalidRoundMessage = "練習の記録の形式が不正です。";
 
-// The shape only; the practice records check the limits. The id is a
-// lower-case UUID as Go checked it (crypto.randomUUID() always passes).
+// The shape only; the practice records check the limits. The id must be a
+// lower-case UUID (crypto.randomUUID() always passes).
 // Unknown keys are dropped, so they are never saved.
 export const prepositionRoundInput = z.object({
   id: z.string().regex(PRACTICE_RECORD_ID),

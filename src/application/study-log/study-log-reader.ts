@@ -20,11 +20,11 @@ export type StudyLogReaderDeps = {
 
 // The study log, always the signed-in user's own (the member an admin acts
 // as; the demo has its own too). The owner is decided first, so a refused
-// user is refused before the range is checked, as Go answered 403 before 400.
+// user is refused before the range is checked.
 export function createStudyLogReader(deps: StudyLogReaderDeps) {
   return {
     // Japan dates from..to ("YYYY-MM-DD", both included) that have anything,
-    // oldest first. RangeError when Go would have answered 400.
+    // oldest first. RangeError when the range is not valid (studyLogRange).
     async list(from: string, to: string): Promise<StudyDay[]> {
       const user = await deps.currentUser();
       if (!user || !isMemberRole(user.role) || !user.githubId)

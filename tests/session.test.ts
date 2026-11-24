@@ -8,7 +8,7 @@ import {
   toSessionPrincipal,
 } from "../src/domain/identity/session";
 
-test("the session lengths are Go's refresh lengths", () => {
+test("a session lasts 30 days, a guest's 1 day", () => {
   assert.equal(SESSION_TTL_MS, 30 * 24 * 3600 * 1000);
   assert.equal(GUEST_SESSION_TTL_MS, 24 * 3600 * 1000);
   assert.equal(
@@ -25,7 +25,7 @@ test("the session lengths are Go's refresh lengths", () => {
   );
 });
 
-test("toSessionPrincipal keeps only the shapes Go would accept", () => {
+test("toSessionPrincipal keeps only well-formed rows of each role", () => {
   assert.deepEqual(
     toSessionPrincipal({
       ownerId: "10001",

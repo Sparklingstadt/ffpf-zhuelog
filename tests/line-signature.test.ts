@@ -8,7 +8,7 @@ const bytes = (s: string) => new TextEncoder().encode(s);
 const sign = (secret: string, body: Uint8Array) =>
   createHmac("sha256", secret).update(body).digest("base64");
 
-test("the signature is Go's HMAC over the raw bytes", () => {
+test("the signature is HMAC-SHA256 over the raw bytes", () => {
   const secret = "channel-secret";
   const body = bytes('{"events":[]}');
   const signature = sign(secret, body);

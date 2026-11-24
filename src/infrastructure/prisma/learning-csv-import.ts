@@ -10,9 +10,8 @@ const HINT_CHUNK = 5_000;
 
 // Transaction limits for the array-form $transaction. Prisma 7's defaults
 // (maxWait 2 s, timeout 5 s) are too short for the worst case: 1000 notes and
-// 100,000 hints in about 22 statements, possibly after a cold Neon start (Go
-// allowed 4 minutes; stage 2 already found 5 s too short in
-// learning-note-writes.ts). Kept well below the function's maximum duration.
+// 100,000 hints in about 22 statements, possibly after a cold Neon start.
+// Kept well below the function's maximum duration.
 const TRANSACTION_OPTIONS = { maxWait: 5_000, timeout: 60_000 };
 
 // Pure: the rows one import inserts. Entry i is created at now + i ms so that

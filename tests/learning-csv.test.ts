@@ -29,7 +29,7 @@ function errorOf(text: string): string {
   assert.fail("expected a CsvValidationError");
 }
 
-test("matches every fixture the Go parser was checked against", async () => {
+test("matches every fixture in tests/fixtures/learning-csv", async () => {
   const dir = join(import.meta.dirname, "fixtures", "learning-csv");
   const expected = JSON.parse(
     readFileSync(join(dir, "expected.json"), "utf8"),
@@ -112,7 +112,7 @@ test("enforces the row, cell and column limits", () => {
   }
 });
 
-test("checks run in Go's order", () => {
+test("checks run in a fixed order", () => {
   // The row count is checked before any row.
   assert.equal(
     errorOf("a,b\n" + "a,b,c\n".repeat(1000)),

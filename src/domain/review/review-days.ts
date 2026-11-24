@@ -31,7 +31,7 @@ export function japanMidnightBefore(today: string, daysBack: number): Date {
 
 // Days in a row with a review, ending today or yesterday; 0 otherwise. A
 // streak whose last day is yesterday still counts, so it does not drop to 0
-// until a whole day goes by without a review (Go's streakFrom).
+// until a whole day goes by without a review.
 export function reviewStreak(
   today: string,
   reviewed: readonly string[],

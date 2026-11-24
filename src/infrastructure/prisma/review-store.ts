@@ -18,7 +18,7 @@ const LANGUAGE = "zh";
 const REVIEW_KIND_ENTRY = "entry";
 const REVIEW_KIND_VOCABULARY = "vocabulary";
 
-// The most items one due list may hold (Go's reviewDueMaxLimit).
+// The most items one due list may hold.
 const MAX_DUE_LIMIT = 100;
 
 export type StoredReviewItem = {
@@ -67,10 +67,10 @@ function toCard(row: ItemRow): FsrsCard {
 
 // The owner's items due at or before now, on the alias-less "ReviewItem".
 // An "entry" item is left out while its note is in the trash and comes back
-// on restore; an item whose note or word no longer exists is still due (Go's
-// notTrashedEntry). Prisma's query API cannot say NOT EXISTS over a table
-// without a relation (the item has no foreign key to its target), so every
-// due read is raw SQL built on this one condition.
+// on restore; an item whose note or word no longer exists is still due.
+// Prisma's query API cannot say NOT EXISTS over a table without a relation
+// (the item has no foreign key to its target), so every due read is raw SQL
+// built on this one condition.
 function dueCondition(ownerId: string, now: Date): Prisma.Sql {
   return Prisma.sql`"ownerId" = ${ownerId} AND "due" <= ${now}
     AND NOT EXISTS (SELECT 1 FROM "LearningEntry" e
@@ -116,12 +116,11 @@ export function reviewLogRow(input: {
   };
 }
 
-// The one statement that puts practice mistakes in the owner's queue at now
-// (one statement for the whole round; the retired Go API's per-target version was
-// described in docs/superpowers/plans/2026-11-16-deprecate-go-stage5-go-reference.md): a new
-// target becomes a New card due now; a target due later is brought forward
-// to now with its FSRS columns kept; a target already due is left as it is,
-// updatedAt included. null when there are no targets.
+// The one statement that puts a whole round's practice mistakes in the
+// owner's queue at now: a new target becomes a New card due now; a target
+// due later is brought forward to now with its FSRS columns kept; a target
+// already due is left as it is, updatedAt included. null when there are no
+// targets.
 //
 // Prisma's upsert cannot put a WHERE on its update, so this is raw SQL. It
 // must stay one INSERT … ON CONFLICT DO UPDATE rather than a read and a
@@ -168,7 +167,7 @@ export async function enqueueReviewItems(
 
 // Locks the owner's live note until the transaction ends; false when there is
 // none. The note cannot be trashed (and so not purged) meanwhile, so no item
-// is left behind by a write racing a purge (Go's lockOwnEntry).
+// is left behind by a write racing a purge.
 async function lockOwnEntry(
   tx: Prisma.TransactionClient,
   ownerId: string,
@@ -182,9 +181,8 @@ async function lockOwnEntry(
   return rows.length > 0;
 }
 
-// Reads and writes the owner's review queue the way the Go API's store did.
-// Every query names the owner; `now` comes from the caller, read once per
-// request.
+// Reads and writes the owner's review queue. Every query names the owner;
+// `now` comes from the caller, read once per request.
 export function createReviewStore(db: () => PrismaClient) {
   return {
     async countDue(ownerId: string, now: Date): Promise<number> {
@@ -332,7 +330,7 @@ export function createReviewStore(db: () => PrismaClient) {
             state: next.state,
             remainingSteps: next.remainingSteps,
             lastReview: next.lastReview,
-            // Set here rather than left to @updatedAt, as Go did.
+            // Set to the answer's `now` rather than left to @updatedAt.
             updatedAt: now,
           },
         });

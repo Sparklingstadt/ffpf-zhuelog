@@ -57,7 +57,7 @@ const identity = () => import("../src/composition/identity-container");
 const session = { token: "new-token", maxAgeSeconds: 2_592_000 };
 const signedIn: SignInResult = { ok: true, session };
 const MONTH = 2_592_000;
-// What a new sign-in writes: the token, and zl_act_as and Go's cookies gone.
+// A new sign-in writes the token and clears zl_act_as, zl_access, zl_refresh.
 const newSessionCookies = [
   ["zl_session", "new-token", MONTH],
   ["zl_act_as", "", 0],

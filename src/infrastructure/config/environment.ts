@@ -1,5 +1,5 @@
 import { normalizeLoginId } from "@/domain/identity/password-account";
-import { goTrimSpace } from "@/domain/line/go-text";
+import { trimWhiteSpace } from "@/domain/line/white-space";
 import { normalizeLineOfficialAccountId } from "@/domain/line/official-account";
 
 // Secrets travel to these URLs (the Sparklingstadt ID issuer), so they must be HTTPS
@@ -27,20 +27,21 @@ export function sidConfig():
   { issuer: string; clientId: string; clientSecret: string } | undefined {
   const issuer = process.env.SID_ISSUER?.trim().replace(/\/+$/, "");
   const clientId = process.env.SID_CLIENT_ID?.trim();
-  const clientSecret = goTrimSpace(process.env.SID_CLIENT_SECRET ?? "");
+  const clientSecret = trimWhiteSpace(process.env.SID_CLIENT_SECRET ?? "");
   if (!issuer || !clientId || !clientSecret || !isHttpsOrLoopbackUrl(issuer))
     return undefined;
   return { issuer, clientId, clientSecret };
 }
 
 // The web's GitHub OAuth App for the code exchange: AUTH_GITHUB_ID (the id
-// the authorize URL already uses) and GITHUB_WEB_CLIENT_SECRET (the value Go
-// has today). Both trimmed as Go's strings.TrimSpace and non-empty, else
-// undefined.
+// the authorize URL also uses) and GITHUB_WEB_CLIENT_SECRET. Both trimmed of
+// Unicode White_Space and non-empty, else undefined.
 export function githubOAuthConfig():
   { clientId: string; clientSecret: string } | undefined {
-  const clientId = goTrimSpace(process.env.AUTH_GITHUB_ID ?? "");
-  const clientSecret = goTrimSpace(process.env.GITHUB_WEB_CLIENT_SECRET ?? "");
+  const clientId = trimWhiteSpace(process.env.AUTH_GITHUB_ID ?? "");
+  const clientSecret = trimWhiteSpace(
+    process.env.GITHUB_WEB_CLIENT_SECRET ?? "",
+  );
   if (!clientId || !clientSecret) return undefined;
   return { clientId, clientSecret };
 }
@@ -80,25 +81,24 @@ export function siteUrl(): string {
 }
 
 // GitHub account ids allowed to act as administrator: comma separated,
-// trimmed as Go's strings.TrimSpace, digits only. Empty means no
-// administrator gets through.
+// trimmed of Unicode White_Space, digits only. Empty means no administrator
+// gets through.
 export function allowedGitHubIds(): ReadonlySet<string> {
   const ids = (process.env.AUTH_ALLOWED_GITHUB_IDS ?? "")
     .split(",")
-    .map((id) => goTrimSpace(id))
+    .map((id) => trimWhiteSpace(id))
     .filter((id) => /^[0-9]+$/.test(id));
   return new Set(ids);
 }
 
 let demoLoginIdReported = false;
 
-// Login id of the demo password account, when one is configured. As Go's
-// config (services/api/config.go:127-133), it must already be a login id:
-// trimmed, then unchanged by normalizeLoginId (3 to 32 of a-z, 0-9, '.', '_'
-// and '-'). Go refused to start otherwise; the web cannot, so it offers no
-// demo and says so once, without the value.
+// Login id of the demo password account, when one is configured. It must
+// already be a login id: trimmed, then unchanged by normalizeLoginId (3 to 32
+// of a-z, 0-9, '.', '_' and '-'). The web cannot refuse to start over a bad
+// value, so it offers no demo and says so once, without the value.
 export function demoLoginId(): string | undefined {
-  const raw = goTrimSpace(process.env.DEMO_LOGIN_ID ?? "");
+  const raw = trimWhiteSpace(process.env.DEMO_LOGIN_ID ?? "");
   if (!raw) return undefined;
   if (normalizeLoginId(raw) === raw) return raw;
   if (!demoLoginIdReported) {
@@ -119,12 +119,11 @@ export type OpenAiConfig = {
 
 const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com";
 const DEFAULT_LEARNING_MODEL = "gpt-5-mini";
-// Go: config.go defaultChatModel.
 const DEFAULT_CHAT_MODEL = "gpt-6.1-sol";
 
 // The API key travels to the base URL, so an override must be an http(s)
-// loopback URL (for tests), as in the retired Go API. Without a key, or with any
-// other override, OpenAI is treated as not configured.
+// loopback URL (for tests). Without a key, or with any other override,
+// OpenAI is treated as not configured.
 export function openAiConfig(): OpenAiConfig | undefined {
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) return undefined;
@@ -154,17 +153,17 @@ export type LineConfig = {
 
 const DEFAULT_LINE_API_BASE_URL = "https://api.line.me";
 
-// Go: LoadConfig's LINE values (config.go:154-184) and LineEnabled. LINE works
-// only with both LINE values and OpenAI configured; Go refused to start with
-// a partial set, the web only turns LINE off. Values are trimmed as Go's
-// strings.TrimSpace does. LINE_API_BASE_URL is for tests: the access token
-// travels to it, so it must be an http(s) loopback URL; anything else means
-// not configured.
+// LINE works only with both LINE values and OpenAI configured; a partial set
+// turns LINE off. Values are trimmed of Unicode White_Space.
+// LINE_API_BASE_URL is for tests: the access token travels to it, so it must
+// be an http(s) loopback URL; anything else means not configured.
 export function lineConfig(): LineConfig | undefined {
-  const channelSecret = goTrimSpace(process.env.LINE_CHANNEL_SECRET ?? "");
-  const accessToken = goTrimSpace(process.env.LINE_CHANNEL_ACCESS_TOKEN ?? "");
+  const channelSecret = trimWhiteSpace(process.env.LINE_CHANNEL_SECRET ?? "");
+  const accessToken = trimWhiteSpace(
+    process.env.LINE_CHANNEL_ACCESS_TOKEN ?? "",
+  );
   if (!channelSecret || !accessToken || !openAiConfig()) return undefined;
-  const override = goTrimSpace(process.env.LINE_API_BASE_URL ?? "");
+  const override = trimWhiteSpace(process.env.LINE_API_BASE_URL ?? "");
   if (override && !isLoopbackHttpUrl(override)) return undefined;
   return {
     channelSecret,
@@ -173,10 +172,10 @@ export function lineConfig(): LineConfig | undefined {
   };
 }
 
-// The secret Vercel Cron presents (Go: CRON_SECRET, trimmed); undefined when
+// The secret Vercel Cron presents (CRON_SECRET, trimmed); undefined when
 // unset, and every cron call is then refused.
 export function cronSecret(): string | undefined {
-  const secret = goTrimSpace(process.env.CRON_SECRET ?? "");
+  const secret = trimWhiteSpace(process.env.CRON_SECRET ?? "");
   return secret ? secret : undefined;
 }
 

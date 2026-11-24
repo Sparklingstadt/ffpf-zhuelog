@@ -66,7 +66,7 @@ test("a word added to the book comes up as a flashcard and can be removed", asyn
   expect(rows).toEqual([{ n: 0 }]);
 });
 
-test("the same word twice is refused with Go's message", async ({
+test("the same word twice is refused with the already-saved message", async ({
   page,
   db,
 }) => {

@@ -24,7 +24,7 @@ export function chatPerson(user: AuthenticatedUser | null): ChatPerson | null {
 
 export type AskRefusal = "signed-out" | "forbidden" | "demo" | "unavailable";
 
-// Why the user may not ask, checked in Go's order: signed in, a member or
+// Why the user may not ask, checked in this order: signed in, a member or
 // admin, not the demo. null: may ask (OpenAI is the caller's to check).
 export function askRefusal(
   user: AuthenticatedUser | null,
@@ -36,13 +36,12 @@ export function askRefusal(
   return null;
 }
 
-// The answer's pieces. The usage is recorded before the answer ends or fails
-// (Go wrote it before the last line), and also when the caller stops early;
-// each write waits at most recordTimeoutMs and a failed or late one is only
-// logged, so it never changes what the user gets. A failure is logged as
-// failureCode with OpenAI's code, unless the browser stopped the answer.
-// Callers pass only fixed codes and error names to logError, never the
-// question or the answer.
+// The answer's pieces. The usage is recorded before the answer ends or
+// fails, and also when the caller stops early; each write waits at most
+// recordTimeoutMs and a failed or late one is only logged, so it never
+// changes what the user gets. A failure is logged as failureCode with
+// OpenAI's code, unless the browser stopped the answer. Callers pass only
+// fixed codes and error names to logError, never the question or the answer.
 export async function* meteredAnswer(
   answer: (onUsage: (usage: OpenAiUsage) => void) => AsyncIterable<string>,
   options: {

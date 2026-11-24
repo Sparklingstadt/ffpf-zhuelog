@@ -1,5 +1,5 @@
 import type { ThrottleRule } from "../../domain/identity/sign-in-throttle";
-import { goTrimSpace } from "../../domain/line/go-text";
+import { trimWhiteSpace } from "../../domain/line/white-space";
 import {
   type GenerationFailure,
   LINE_DRAIN_BATCH,
@@ -111,14 +111,13 @@ type SaveResult =
   | { status: "failed"; failure: GenerationFailure }
   | { status: "settled" };
 
-// The LINE bot (Go: services/api/linebot): one webhook event at a time, and
-// the daily pass that finishes stale messages and sends the morning review
-// message. Go's order of operations, time windows and retries are kept.
+// The LINE bot: one webhook event at a time, and the daily pass that
+// finishes stale messages and sends the morning review message.
 export function createLineBot(deps: LineBotDeps) {
   const { links, messages } = deps;
 
-  // Go: reply. A failure is logged with the event id and thrown; it never
-  // changes stored state.
+  // Sends a reply. A failure is logged with the event id and thrown; it
+  // never changes stored state.
   async function reply(event: LineEvent, text: string): Promise<void> {
     try {
       await deps.messenger.reply(event.replyToken, [text]);
@@ -128,7 +127,7 @@ export function createLineBot(deps: LineBotDeps) {
     }
   }
 
-  // Go: push. A failure is logged with the message id and thrown.
+  // Sends a push. A failure is logged with the message id and thrown.
   async function push(row: LineMessage, text: string): Promise<void> {
     try {
       await deps.messenger.push(row.lineUserId, [text]);
@@ -138,15 +137,15 @@ export function createLineBot(deps: LineBotDeps) {
     }
   }
 
-  // Go: failMessage. Marks the row failed, then logs why.
+  // Marks the row failed, then logs why.
   async function failMessage(id: string, code: string): Promise<void> {
     await messages.fail(id, deps.now());
     deps.log("LINE_MESSAGE_FAILED", { messageId: id, code });
   }
 
-  // Go: generateAndSave. The tokens are recorded under the row's owner once
-  // OpenAI answered, even when the answer is unusable. A store failure is
-  // thrown.
+  // One OpenAI call, and the note saved when it worked. The tokens are
+  // recorded under the row's owner once OpenAI answered, even when the answer
+  // is unusable. A store failure is thrown.
   async function generateAndSave(
     id: string,
     ownerId: string,
@@ -178,7 +177,7 @@ export function createLineBot(deps: LineBotDeps) {
     return { status: "saved", generation: outcome.generation };
   }
 
-  // Go: redeem. Every attempt counts against the LINE account's hour.
+  // Redeems a link code. Every attempt counts against the LINE account's hour.
   async function redeem(event: LineEvent, code: string): Promise<void> {
     const key = lineLinkThrottleKey(event.userId);
     if (!(await deps.throttle.consume(key, LINK_REDEEM_THROTTLE, deps.now())))
@@ -201,7 +200,7 @@ export function createLineBot(deps: LineBotDeps) {
     );
   }
 
-  // Go: process. Saves the text, generates and saves the note, and replies.
+  // Saves the text, generates and saves the note, and replies.
   async function process(
     event: LineEvent,
     link: LineLink,
@@ -255,7 +254,7 @@ export function createLineBot(deps: LineBotDeps) {
     return reply(event, formatLineResult(kind, text, result.generation));
   }
 
-  // Go: drainRow. Store failures and failed pushes are thrown.
+  // Finishes one stale row. Store failures and failed pushes are thrown.
   async function drainRow(row: LineMessage): Promise<void> {
     // The link decides whether the note may still be saved.
     const link = await links.find(row.lineUserId);
@@ -292,8 +291,8 @@ export function createLineBot(deps: LineBotDeps) {
     );
   }
 
-  // Go: Drain. Prunes first, then finishes the oldest stale rows; a row
-  // with attempts left is not started with less than minTimeLeft to go.
+  // Prunes first, then finishes the oldest stale rows; a row with attempts
+  // left is not started with less than minTimeLeftMs to go.
   async function drain(deadline: Date, errors: unknown[]): Promise<void> {
     try {
       await messages.prune(deps.now());
@@ -323,8 +322,8 @@ export function createLineBot(deps: LineBotDeps) {
     }
   }
 
-  // Go: NotifyDueReviews. At most once per owner and JST day, within the
-  // month's push allowance minus the reserve.
+  // The morning review messages. At most once per owner and JST day, within
+  // the month's push allowance minus the reserve.
   async function notify(deadline: Date, errors: unknown[]): Promise<void> {
     let targets: ReviewNotifyTarget[];
     try {
@@ -385,12 +384,12 @@ export function createLineBot(deps: LineBotDeps) {
   }
 
   return {
-    // Go: HandleEvent. Throws a store failure, or a reply failure when
+    // One webhook event. Throws a store failure, or a reply failure when
     // nothing else failed; the caller logs the event id and goes on.
     async handleEvent(event: LineEvent, deadline: Date): Promise<void> {
       // userId is also filled for group and room events: gate on the source.
       if (!event.fromUser || event.userId === "") return;
-      const text = goTrimSpace(event.text);
+      const text = trimWhiteSpace(event.text);
 
       if (event.isText) {
         const code = readLinkCode(text);
@@ -412,8 +411,8 @@ export function createLineBot(deps: LineBotDeps) {
       return process(event, link, route, text, deadline);
     },
 
-    // Go: Drain, then NotifyDueReviews even when the drain failed. Throws an
-    // AggregateError of what failed, after both passes.
+    // The drain, then the review messages even when the drain failed. Throws
+    // an AggregateError of what failed, after both passes.
     async runDailyPass(deadline: Date): Promise<void> {
       const errors: unknown[] = [];
       await drain(deadline, errors);
@@ -424,8 +423,8 @@ export function createLineBot(deps: LineBotDeps) {
   };
 }
 
-// Go: main.go ownerValid. Admins must still be on the allowlist; members
-// must still exist; any other role never may.
+// Whether an owner may still use LINE. Admins must still be on the
+// allowlist; members must still exist; any other role never may.
 export function createLineOwnerCheck(deps: {
   adminIds: ReadonlySet<string>;
   memberExists(ownerId: string): Promise<boolean>;
