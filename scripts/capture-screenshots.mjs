@@ -4,7 +4,9 @@ import { chromium } from "@playwright/test";
 // Captures the README's screenshots (docs/images/) from a running local app
 // with the sample members (docs/development.md). Signs in as "demo".
 // Usage: docker compose up -d --wait, pnpm run db:deploy, pnpm run db:seed:sample,
-//   pnpm run dev, then
+//   pnpm run dev (with DEMO_LOGIN_ID=demo and a CRON_SECRET), then fill "demo"
+//   with the demo's notes, reviews and words:
+//   curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/demo-reset
 //   BASE_URL=http://localhost:3000 node scripts/capture-screenshots.mjs
 const base = process.env.BASE_URL ?? "http://localhost:3000";
 const out = "docs/images";
@@ -45,7 +47,9 @@ try {
     console.log(`wrote ${out}/${name}.png`);
   };
 
-  await shot("notes-desktop", "/", desktop);
+  // Narrowed to corrections, so the first note shows the diff the README's
+  // caption names (the newest sample note is a translation).
+  await shot("notes-desktop", "/?kind=correction", desktop);
   await shot("review-desktop", "/review", desktop);
   await shot("vocabulary-desktop", "/vocabulary", desktop);
   // A solved preposition question on a phone: the choices, the example and
