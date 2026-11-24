@@ -4,7 +4,7 @@
 
 ## AI の利用量
 
-OpenAI を呼ぶ 4 つの機能（LINE の添削・翻訳、ChatGPT と話す、クイック質問、単語帳の下書き）は、呼ぶたびに入出力のトークン数を `AiUsage` に記録します（4 つとも Web が記録します）。管理者はメニューの「AI 利用量」（`/admin/ai-usage`）で、日本時間の月ごとに、人・機能・モデル別の回数とトークン数を見られます。入力した文や答えは記録しません。admin が会員として操作しているときの分は admin に数えます。AI の費用を測るための記録です。集計は Web が DB から直接読みます。測った数字の使い道は [就職までのロードマップ](job-hunting-roadmap.md) の J5 にあります。
+OpenAI を呼ぶ 4 つの機能（LINE の添削・翻訳、ChatGPT と話す、クイック質問、単語帳の下書き）は、呼ぶたびに入出力のトークン数を `AiUsage` に記録します（4 つとも Web が記録します）。管理者はメニューの「AI 利用量」（`/admin/ai-usage`）で、日本時間の月ごとに、人・機能・モデル別の回数とトークン数を見られます。入力した文や答えは記録しません。admin が会員として操作しているときの分は admin に数えます。AI の費用を測るための記録です。集計は Web が DB から直接読みます。
 
 ## デモアカウント
 
@@ -39,11 +39,11 @@ OpenAI を呼ぶ 4 つの機能（LINE の添削・翻訳、ChatGPT と話す、
 
 ブラウザーの保存が制限されている場合でも、その画面での切り替えは利用できます。初期配色はCSP nonce付きの固定スクリプトで本文表示前に適用し、ライト画面が一瞬表示されるのを防ぎます。
 
-## OGP・サイトマップ・X 投稿
+## OGP・サイトマップ
 
 リンクを X・LINE などに貼ったときのカード（OGP）は `src/app/layout.tsx` の `metadata` と `src/app/opengraph-image.png` で、検索エンジン向けの `sitemap.xml`・`robots.txt` は `src/app/sitemap.ts`・`src/app/robots.ts` で出しています。絶対 URL の元は `AUTH_URL` です（無ければ Vercel の本番ドメイン）。これらのファイルはログインなしで読める公開ルートです（`isMetadataFile`）。サイトマップに載せているのは、クローラーが読める唯一のページ `/signin` だけです。
 
-OGP 画像は `scripts/og-image/opengraph-image.html` から `pnpm run og:render` で作り直します。X に投稿する文の草案と、カードの確認のしかたは [docs/x-posts.md](x-posts.md) にあります。
+OGP 画像は `scripts/og-image/opengraph-image.html` から `pnpm run og:render` で作り直します。
 
 ## 学習ノートの公開範囲
 

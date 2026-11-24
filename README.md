@@ -70,16 +70,15 @@ pnpm run dev
 
 ## 文書
 
-| 文書                                                       | 中身                                     |
-| ---------------------------------------------------------- | ---------------------------------------- |
-| [docs/architecture.md](docs/architecture.md)               | 全体の設計と、選んだ理由                 |
-| [docs/features.md](docs/features.md)                       | 機能ごとの説明                           |
-| [docs/quality.md](docs/quality.md)                         | 表示速度とアクセシビリティの記録         |
-| [docs/development.md](docs/development.md)                 | 手元での動かし方、認証の設定、テスト     |
-| [docs/deployment.md](docs/deployment.md)                   | 本番への反映                             |
-| [docs/releases/](docs/releases/)                           | リリースノート                           |
-| [docs/roadmap.md](docs/roadmap.md)                         | これから取り組むこと                     |
-| [docs/job-hunting-roadmap.md](docs/job-hunting-roadmap.md) | このアプリをポートフォリオに仕上げる計画 |
+| 文書                                         | 中身                                 |
+| -------------------------------------------- | ------------------------------------ |
+| [docs/architecture.md](docs/architecture.md) | 全体の設計と、選んだ理由             |
+| [docs/features.md](docs/features.md)         | 機能ごとの説明                       |
+| [docs/quality.md](docs/quality.md)           | 表示速度とアクセシビリティの記録     |
+| [docs/development.md](docs/development.md)   | 手元での動かし方、認証の設定、テスト |
+| [docs/deployment.md](docs/deployment.md)     | 本番への反映                         |
+| [docs/releases/](docs/releases/)             | リリースノート                       |
+| [docs/roadmap.md](docs/roadmap.md)           | これから取り組むこと                 |
 
 ## ライセンス
 
