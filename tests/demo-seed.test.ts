@@ -72,16 +72,16 @@ function asGolden(seed: DemoSeed): unknown {
   return plain;
 }
 
-// The golden file's numbers may differ from V8's in the last digit of exp and
-// pow (as in tests/review-fsrs.test.ts), so FSRS's stability and difficulty
-// are compared to 1e-9; everything else must be equal.
+// ts-fsrs rounds FSRS's stability and difficulty to 8 decimals, where the
+// golden file's go-fsrs did not (as in tests/review-fsrs.test.ts), so they
+// are compared to 1e-7; everything else must be equal.
 function assertSameJson(actual: unknown, expected: unknown, where: string) {
   if (typeof actual === "number" && typeof expected === "number") {
     if (Number.isInteger(expected)) {
       assert.equal(actual, expected, where);
     } else {
       const error = Math.abs(actual - expected) / Math.abs(expected);
-      assert.ok(error <= 1e-9, `${where}: ${actual} is not ${expected}`);
+      assert.ok(error <= 1e-7, `${where}: ${actual} is not ${expected}`);
     }
     return;
   }

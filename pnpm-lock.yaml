@@ -61,6 +61,9 @@ importers:
       react-dom:
         specifier: 19.3.1
         version: 19.3.1(react@19.3.1)
+      ts-fsrs:
+        specifier: 6.0.1
+        version: 6.0.1
       tw-animate-css:
         specifier: ^1.4.0
         version: 1.4.0
@@ -727,6 +730,10 @@ packages:
   '@nolyfill/is-core-module@1.0.39':
     resolution: {integrity: sha512-nn5ozdjYQpUCZlWGuxcJY/KpxkWQs4DcbMCmKojjyrYDEAGy4Ce19NN4v5MduafTwJlbKc99UA8YhSVqq9yPZA==}
     engines: {node: '>=12.4.0'}
+
+  '@open-spaced-repetition/srs-kit@1.0.1':
+    resolution: {integrity: sha512-3lByXcLQjnsfoovEQabKLrGQVmjEDjbJMF7f8/d8Zeak/kqCSLtPBKrmYdT8ZxDTqBIZ37lYBbKRcStse57a5Q==}
+    engines: {node: '>=20.0.0'}
 
   '@opentelemetry/api@1.10.0':
     resolution: {integrity: sha512-lMkyes8iHrG+mk6WH7X70MdCLI2RS0FwNBY1PyQ8UemaijE2m5mv5A0Niy3HtbYTFrgkUEQjFMXmSAk2hQDuPQ==}
@@ -4138,6 +4145,10 @@ packages:
     peerDependencies:
       typescript: '>=4.8.4'
 
+  ts-fsrs@6.0.1:
+    resolution: {integrity: sha512-0p24HPUDf1THvanl/pyq2p0jfst111BKl9lB9p7NiByHhwkEPtNOkBUd6YV2jxiucI8cD/X9DnrQs1PbcrOFmQ==}
+    engines: {node: '>=24.0.0'}
+
   tsconfig-paths@3.15.0:
     resolution: {integrity: sha512-2Ac2RgzDe/cn48GvOe3M+o82pEFewD3UPbyoUHHdKasHwJKjds4fLXWf/Ux5kATBKN20oaFGu+jbElp1pos0mg==}
 
@@ -4832,6 +4843,8 @@ snapshots:
       fastq: 1.20.3
 
   '@nolyfill/is-core-module@1.0.39': {}
+
+  '@open-spaced-repetition/srs-kit@1.0.1': {}
 
   '@opentelemetry/api@1.10.0': {}
 
@@ -8507,6 +8520,10 @@ snapshots:
   ts-api-utils@2.5.0(typescript@6.0.3):
     dependencies:
       typescript: 6.0.3
+
+  ts-fsrs@6.0.1:
+    dependencies:
+      '@open-spaced-repetition/srs-kit': 1.0.1
 
   tsconfig-paths@3.15.0:
     dependencies:
