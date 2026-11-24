@@ -33,7 +33,7 @@
 | DB           | PostgreSQL 17（本番は Neon）。スキーマとマイグレーションは Prisma 7。Web がすべてのデータを Prisma で読み書きします。Prisma を import してよいのは `src/infrastructure/prisma/` だけです                                                                                         |
 | 認証         | GitHub OAuth（PKCE）、ID とパスワード（scrypt。ハッシュの書き込みも確認も Web）、Sparklingstadt ID（OpenID Connect）、ゲスト。ログインはランダムなトークン（Cookie `zl_session`）のハッシュを DB の `Session` に置きます。期限は 30 日（ゲストは 24 時間）で、使っても延びません |
 | 外部サービス | OpenAI API、LINE Messaging API                                                                                                                                                                                                                                                   |
-| テスト       | Node の test runner、Playwright（PC とスマホの幅）、lefthook                                                                                                                                                                                                                     |
+| テスト       | Node の test runner、Playwright（PC とスマホの幅）、lefthook、GitHub Actions                                                                                                                                                                                                     |
 | デプロイ     | Vercel（Web の 1 プロジェクト）。本番のマイグレーションはビルドで当てます。毎日の定期実行は Vercel Cron（`vercel.json`）                                                                                                                                                         |
 
 ## 設計の要点
@@ -51,6 +51,7 @@
 - 単体テスト 799 件（TypeScript）、E2E 273 件（Playwright。PC の幅で 166 件、そのうち画面幅で結果が変わりうる 107 件はスマホの幅でも実行）があります。
 - E2E は、Docker の Postgres、Web、OpenAI と LINE と Sparklingstadt ID のスタブを立ち上げて、本物の画面を通して確かめます。
 - commit の前に format・lint・型チェック、push の前に単体テストと E2E を lefthook が走らせます。
+- プルリクエストと main では、GitHub Actions の `verify` が同じ検査に `pnpm audit` と本番ビルドを足して走らせます。version を上げたマージは、`release` がタグと GitHub Release を作り、`deploy` が本番を切り替えます。
 - 本番の Lighthouse（6 ページとも性能・ベストプラクティス・SEO が 100）とアクセシビリティの記録は [docs/quality.md](docs/quality.md) にあります。
 
 ## 手元で動かす

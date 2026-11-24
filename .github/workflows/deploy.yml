@@ -1,0 +1,150 @@
+name: deploy
+
+# Switches the custom domain to the Vercel production build of one commit
+# (vercel promote). Vercel builds every push to main by itself and applies
+# the pending Prisma migrations in that build, but the domain moves only on
+# a promote; see docs/deployment.md.
+#
+# release.yml calls this after it publishes a release. Run it by hand to
+# promote another commit of main, or to go back to an older one.
+#
+# Needs the secret VERCEL_TOKEN and the variables VERCEL_ORG_ID and
+# VERCEL_PROJECT_ID (docs/deployment.md, "GitHub Actions の設定").
+
+on:
+  workflow_call:
+    inputs:
+      sha:
+        description: The commit of main whose production build goes live.
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 本番に出すコミットの SHA（40 桁。空なら main の先頭）
+        required: false
+        type: string
+      allow_older:
+        description: いま本番にあるものより古いビルドに戻すことを許す
+        required: false
+        type: boolean
+        default: false
+
+permissions: {}
+
+# One promotion at a time, and a waiting one is never dropped.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  PRODUCTION_URL: https://ffpf-zhuelog.sparklingstadt.com
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: Production
+      url: ${{ env.PRODUCTION_URL }}
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+      SHA: ${{ inputs.sha || github.sha }}
+      ALLOW_OLDER: ${{ inputs.allow_older || false }}
+    steps:
+      - name: Check the settings
+        run: |
+          missing=""
+          [ -n "$VERCEL_TOKEN" ] || missing="$missing VERCEL_TOKEN(secret)"
+          [ -n "$VERCEL_ORG_ID" ] || missing="$missing VERCEL_ORG_ID(variable)"
+          [ -n "$VERCEL_PROJECT_ID" ] || missing="$missing VERCEL_PROJECT_ID(variable)"
+          if [ -n "$missing" ]; then
+            echo "::error::Not set:$missing. See docs/deployment.md."
+            exit 1
+          fi
+          if ! [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::sha must be a full 40-character commit SHA."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      # The flags and the JSON read below were checked against this version.
+      - run: npm install --global vercel@62.7.0
+
+      - name: Wait for the production build of the commit
+        id: build
+        run: |
+          set -euo pipefail
+          # Vercel starts the build on the push; allow it 10 minutes.
+          for attempt in $(seq 1 40); do
+            # The CLI's filter is checked again here: the builds of any other
+            # commit are dropped before one is chosen.
+            builds=$(vercel list --meta "githubCommitSha=$SHA" \
+              --environment production --format json --yes \
+              --token "$VERCEL_TOKEN" |
+              jq -c --arg sha "$SHA" \
+                '[.deployments[]? | select(.meta.githubCommitSha == $sha)]')
+            ready=$(jq -c '[.[] | select(.state == "READY")][0] // empty' <<<"$builds")
+            if [ -n "$ready" ]; then
+              echo "url=$(jq -r .url <<<"$ready")" >> "$GITHUB_OUTPUT"
+              echo "created=$(jq -r .createdAt <<<"$ready")" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            states=$(jq -r '[.[].state] | join(",")' <<<"$builds")
+            if [ -n "$states" ] && ! grep -qE 'QUEUED|INITIALIZING|BUILDING' <<<"$states"; then
+              echo "::error::The production build of $SHA did not become ready ($states)."
+              exit 1
+            fi
+            echo "Attempt $attempt: ${states:-no build yet}"
+            sleep 15
+          done
+          echo "::error::No ready production build of $SHA after 10 minutes."
+          exit 1
+
+      - name: Promote
+        env:
+          BUILD_URL: ${{ steps.build.outputs.url }}
+          BUILD_CREATED: ${{ steps.build.outputs.created }}
+        run: |
+          set -euo pipefail
+          live=$(vercel inspect "$PRODUCTION_URL" --format json \
+            --token "$VERCEL_TOKEN")
+          if [ "$(jq -r .url <<<"$live")" = "$BUILD_URL" ]; then
+            echo "::notice::$BUILD_URL is already live."
+            exit 0
+          fi
+          # A release never moves production back: a newer build may have
+          # been promoted by hand in the meantime.
+          if [ "$(jq -r .createdAt <<<"$live")" -gt "$BUILD_CREATED" ] && [ "$ALLOW_OLDER" != "true" ]; then
+            echo "::error::Production already runs a newer build ($(jq -r .url <<<"$live")). Run this workflow by hand with allow_older to go back."
+            exit 1
+          fi
+          vercel promote "https://$BUILD_URL" --yes --timeout 5m \
+            --token "$VERCEL_TOKEN"
+
+      - name: Check production
+        env:
+          BUILD_URL: ${{ steps.build.outputs.url }}
+        run: |
+          set -euo pipefail
+          # The domain should now point at the build, and the sign-in page
+          # should answer.
+          for attempt in $(seq 1 12); do
+            live=$(vercel inspect "$PRODUCTION_URL" --format json \
+              --token "$VERCEL_TOKEN" | jq -r .url)
+            [ "$live" = "$BUILD_URL" ] && break
+            echo "Attempt $attempt: the domain still serves $live"
+            sleep 10
+          done
+          if [ "$live" != "$BUILD_URL" ]; then
+            echo "::error::$PRODUCTION_URL serves $live, not $BUILD_URL."
+            exit 1
+          fi
+          curl --fail --silent --show-error --location --output /dev/null \
+            --retry 3 --retry-delay 5 "$PRODUCTION_URL/signin"
+          echo "::notice::$PRODUCTION_URL now serves $BUILD_URL ($SHA)."

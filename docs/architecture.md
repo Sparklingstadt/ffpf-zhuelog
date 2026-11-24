@@ -222,11 +222,13 @@ sequenceDiagram
 - **E2E の幅**：PC とスマホ（Pixel 7）の 2 つの幅で走らせます。リダイレクト、入力の検査、権限、HTTP ヘッダーのようにサーバーのふるまいだけを見る 59 件は、幅で結果が変わらないので PC だけで走らせます（`e2e/fixtures.ts` の `anyWidth`）。
 - **E2E の土台**：`e2e/server.ts` が、マイグレーション、`next build`、スタブの起動を行います。ログインは Web の `Session` で行い、テストの側が行を書いて `zl_session` を作ります。テストのたびに表を空にします。
 - **CSV のパースの検証**：CSV の取り込みを Web に戻したので、約 45 件の CSV の見本は `tests/fixtures/learning-csv/` にあり、TS のパーサー（csv-parse）がその見本と同じ結果を返すことを確かめています。
-- **lefthook**：commit の前に format・lint・型チェック、push の前に単体と E2E を走らせます。GitHub Actions の CI は置いていないので、このローカルの確認が関門です。
+- **lefthook**：commit の前に format・lint・型チェック、push の前に単体と E2E を走らせます。
+- **CI**：GitHub Actions の `verify`（`.github/workflows/verify.yml`）が、プルリクエストと main で、`pnpm audit`・型チェック・lint・単体・本番ビルド・E2E を走らせます。lefthook と同じ検査に、手元では走らせていない `pnpm audit` と本番ビルドを足したものです。
 
 ## 10. デプロイ
 
 - **1 つのプロジェクト**：Vercel に Web の 1 つのプロジェクトがあります。main にマージすると本番のビルドが走り、Ready になったら `vercel promote` で切り替えます。毎日の定期実行は Vercel Cron（`vercel.json`）です。手順は [deployment.md](deployment.md) にあります。
+- **リリースと切り替え**：main で `verify` が通り、そのマージが `package.json` の version を変えていれば、`release`（`.github/workflows/release.yml`）がタグと GitHub Release を作り、続けて `deploy`（`deploy.yml`）がそのコミットの本番ビルドを `vercel promote` で切り替えます。version を変えないマージは、ビルドされるだけで本番には出ません。
 - **マイグレーション**：本番のマイグレーションは、Web の本番ビルド（`scripts/vercel-build.sh`）が `prisma migrate deploy` で当てます。切り替えるまでは前のデプロイが新しいスキーマの上で動くので、マイグレーションは前のデプロイのコードと両立する形（表の追加、null を許す列の追加）にします。表や列の削除は 2 回のリリースに分けます。
 - **DB**：Neon のプール接続を使い、ローカル以外では TLS の検証（`verify-full`）を強制します。
 
@@ -235,5 +237,4 @@ sequenceDiagram
 - **Go の古い Cookie を消す処理が残っている**：`LEGACY_SESSION_COOKIES`（Go の古い Cookie の `zl_access`・`zl_refresh` を、ログインとログアウトのたびに消す処理）は、11b の切り替えから 30 日たてば要りません。2026 年 12 月の末を過ぎたら消してよいです。
 - **セッションは延びない**：Web のセッションは、30 日（ゲストは 24 時間）で必ず切れます。使っていても延ばしません。長く使う人は、月に 1 回ログインし直します。
 - **外部キーがない**：管理者は DB に行を持たないので、`ownerId` に外部キーがありません。持ち主の整合性はコードで守っています（フォローは、相手のアカウントがあるときだけ行を足す 1 つの SQL）。
-- **CI がない**：GitHub Actions の CI は外しました。確認は lefthook のローカルの検査だけで、`pnpm audit` と `pnpm run build` は自動では走りません。
 - **層の検査に抜けがある**：`presentation` から `infrastructure` への import は、まだ制限していません。
