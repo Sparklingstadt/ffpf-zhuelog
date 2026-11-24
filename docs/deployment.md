@@ -1,8 +1,46 @@
 # 本番への反映（Vercel）
 
-Web（Next.js）を Vercel の 1 つのプロジェクトで動かします。main にマージすると本番のビルドが走り、未適用の Prisma のマイグレーションを当ててからビルドします（`scripts/vercel-build.sh`）。Web の本番は、Ready になったあと `vercel promote` で切り替えます。
+Web（Next.js）を Vercel の 1 つのプロジェクトで動かします。main にマージすると本番のビルドが走り、未適用の Prisma のマイグレーションを当ててからビルドします（`scripts/vercel-build.sh`）。Web の本番は、Ready になったあと `vercel promote` で切り替えます。切り替えは、リリースのときに GitHub Actions が行います（下の「リリースと本番への切り替え（GitHub Actions）」）。
 
 以前の名前は `docs/api-deployment.md` です（段階 12 で改名）。Go の API のプロジェクトは、段階 12 の 12a のあとに、利用者が消します（手順は「段階12（後片付け）のマージの前と後」）。
+
+## リリースと本番への切り替え（GitHub Actions）
+
+`.github/workflows/` に 3 つのワークフローがあります。
+
+| 名前      | いつ動くか                                         | すること                                                                                                       |
+| --------- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `verify`  | プルリクエストと、main への push                   | `pnpm audit`・型チェック・lint・単体テスト・本番ビルド・E2E                                                    |
+| `release` | main の `verify` が通ったあと                      | そのマージが `package.json` の version を変えていれば、タグ `vX.Y.Z` と GitHub Release を作り、`deploy` を呼ぶ |
+| `deploy`  | `release` から呼ばれたとき、または手で起動したとき | そのコミットの本番ビルドを `vercel promote` でカスタムドメインに切り替え、応答を確かめる                       |
+
+**リリースの手順**
+
+1. `package.json` の version を上げ、`docs/releases/vX.Y.Z.md` を書きます（1 行目は `# vX.Y.Z — 題`）。この 2 つを同じプルリクエストに入れます。
+2. main にマージします。Vercel が本番のビルドを始め、`verify` が走ります。
+3. `verify` が通ると、`release` がそのコミットにタグを打ち、リリースノートを本文にした GitHub Release を作ります。
+4. 続けて `deploy` が、そのコミットの本番ビルドが Ready になるのを待って `vercel promote` し、カスタムドメインがそのビルドを指していることと、`/signin` が応答することを確かめます。
+
+version を変えないマージは、Vercel がビルドするだけで、本番には出ません。ただし、マイグレーションはそのビルドで当たります（下の「マイグレーションの制約」）。
+
+**手で起動するとき**（GitHub の Actions の画面の「Run workflow」）
+
+- `release`：version を上げたコミットで `verify` が落ち、あとのコミットで通ったときは、自動では作られません。手で起動すると、main の先頭でリリースを作ります。
+- `deploy`：version を上げずに本番へ出したいときや、前のビルドに戻したいときに使います。コミットの SHA（40 桁）を入れます。空なら main の先頭です。いま本番にあるものより古いビルドは、`allow_older` にチェックを入れたときだけ切り替えます。
+
+**GitHub Actions の設定**
+
+`deploy` は、次の 3 つがリポジトリの Settings → Secrets and variables → Actions に入っているときだけ動きます。入っていなければ、最初のステップで止まります。
+
+| 名前                | 種類     | 内容                                                                                 |
+| ------------------- | -------- | ------------------------------------------------------------------------------------ |
+| `VERCEL_TOKEN`      | Secret   | Vercel のアカウントの Settings → Tokens で作るトークン。チームのスコープに限ります。 |
+| `VERCEL_ORG_ID`     | Variable | チームの ID（`team_` で始まる値）                                                    |
+| `VERCEL_PROJECT_ID` | Variable | プロジェクトの ID（`prj_` で始まる値）                                               |
+
+2 つの ID は、Vercel の画面で見られます。チームの ID は Team Settings → General の「Team ID」、プロジェクトの ID はプロジェクトの Settings → General の「Project ID」です。`vercel link` を済ませたフォルダーなら、`.vercel/project.json` の `orgId` と `projectId` にも同じ値があります（このファイルは Git に入れていないので、GitHub や、別に切ったワークツリーにはありません）。
+
+`deploy` のジョブは GitHub の Environment「Production」で動きます。`VERCEL_TOKEN` は、リポジトリの Secret の代わりに、この Environment の Secret に入れてもかまいません。Environment に承認者（Required reviewers）を設定すると、切り替えの前に承認を求めるようになります。
 
 ## 1. 本番の DB とマイグレーション
 

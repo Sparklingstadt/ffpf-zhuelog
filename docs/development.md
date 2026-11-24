@@ -232,5 +232,5 @@ GitHub OAuthの外部ログインは、このE2Eの対象外です。
 
 ## pnpm移行の回帰テスト
 
-`pnpm install --frozen-lockfile` 後、`pnpm run test:regression` で既存機能の検証を実行します。GitHub Actions の CI はありません。`package.json` の `engines` は `24.x` です（Vercel はまだ Node 26 に対応していないため）。
+`pnpm install --frozen-lockfile` 後、`pnpm run test:regression` で既存機能の検証を実行します。同じ検査は、GitHub Actions の `verify`（`.github/workflows/verify.yml`）がプルリクエストと main でも走らせます（`pnpm audit` も足しています）。`package.json` の `engines` は `24.x` です（Vercel はまだ Node 26 に対応していないため）。
 ブラウザーテストの前に `pnpm exec playwright install chromium` を実行してください。Webの回帰テストは本番ビルドを使い、既存サーバーを再利用しません。
