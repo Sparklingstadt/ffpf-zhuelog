@@ -48,7 +48,7 @@
 
 ## 品質
 
-- 単体テスト 799 件（TypeScript）、E2E 273 件（Playwright。PC の幅で 166 件、そのうち画面幅で結果が変わりうる 107 件はスマホの幅でも実行）があります。
+- 単体テスト 795 件（TypeScript）、E2E 269 件（Playwright。PC の幅で 164 件、そのうち画面幅で結果が変わりうる 105 件はスマホの幅でも実行）があります。
 - E2E は、Docker の Postgres、Web、OpenAI と LINE と Sparklingstadt ID のスタブを立ち上げて、本物の画面を通して確かめます。
 - commit の前に format・lint・型チェック、push の前に単体テストと E2E を lefthook が走らせます。
 - プルリクエストと main では、GitHub Actions の `verify` が同じ検査に `pnpm audit` と本番ビルドを足して走らせます。version を上げたマージは、`release` がタグと GitHub Release を作り、`deploy` が本番を切り替えます。
@@ -71,16 +71,15 @@ pnpm run dev
 
 ## 文書
 
-| 文書                                                       | 中身                                     |
-| ---------------------------------------------------------- | ---------------------------------------- |
-| [docs/architecture.md](docs/architecture.md)               | 全体の設計と、選んだ理由                 |
-| [docs/features.md](docs/features.md)                       | 機能ごとの説明                           |
-| [docs/quality.md](docs/quality.md)                         | 表示速度とアクセシビリティの記録         |
-| [docs/development.md](docs/development.md)                 | 手元での動かし方、認証の設定、テスト     |
-| [docs/deployment.md](docs/deployment.md)                   | 本番への反映                             |
-| [docs/releases/](docs/releases/)                           | リリースノート                           |
-| [docs/roadmap.md](docs/roadmap.md)                         | これから取り組むこと                     |
-| [docs/job-hunting-roadmap.md](docs/job-hunting-roadmap.md) | このアプリをポートフォリオに仕上げる計画 |
+| 文書                                         | 中身                                 |
+| -------------------------------------------- | ------------------------------------ |
+| [docs/architecture.md](docs/architecture.md) | 全体の設計と、選んだ理由             |
+| [docs/features.md](docs/features.md)         | 機能ごとの説明                       |
+| [docs/quality.md](docs/quality.md)           | 表示速度とアクセシビリティの記録     |
+| [docs/development.md](docs/development.md)   | 手元での動かし方、認証の設定、テスト |
+| [docs/deployment.md](docs/deployment.md)     | 本番への反映                         |
+| [docs/releases/](docs/releases/)             | リリースノート                       |
+| [docs/roadmap.md](docs/roadmap.md)           | これから取り組むこと                 |
 
 ## ライセンス
 
