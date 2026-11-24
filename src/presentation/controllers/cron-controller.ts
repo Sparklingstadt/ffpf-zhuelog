@@ -3,10 +3,9 @@ import { errorName } from "./load-or";
 
 const noStore = { "Cache-Control": "no-store" };
 
-// A Vercel Cron call: the secret, then the job; 204 when it worked.
-// Go: lineDrain and demoReset (httpapi/line_handlers.go:168-186,
-// demo.go:78-93). A missing or empty secret refuses every call. A failure is
-// logged by its fixed code and the error's name only.
+// A Vercel Cron call: the secret, then the job; 204 when it worked. A
+// missing or empty secret refuses every call. A failure is logged by its
+// fixed code and the error's name only.
 export async function handleCronRequest(
   request: Request,
   deps: {

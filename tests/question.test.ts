@@ -48,7 +48,7 @@ test("a quick question is checked for shape and length", () => {
 
   assert.equal(quickQuestionText(one("你好")), "你好");
   assert.equal(quickQuestionText(one("字".repeat(4000))), "字".repeat(4000));
-  // Counted in code points like Go's runes: "𠮷" is two UTF-16 units.
+  // Counted in code points: "𠮷" is two UTF-16 units.
   assert.equal(quickQuestionText(one("𠮷".repeat(4000))), "𠮷".repeat(4000));
   // Sent as written, not trimmed.
   assert.equal(quickQuestionText(one("  了？ ")), "  了？ ");

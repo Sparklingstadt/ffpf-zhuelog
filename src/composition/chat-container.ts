@@ -12,7 +12,7 @@ const openAi = openAiConfig();
 
 // The signed-in user's saved conversations, kept in the database, and chats
 // answered by OpenAI when it is configured. An answer cut at the token limit
-// still ends normally (requireComplete: false), as Go's did.
+// still ends normally (requireComplete: false).
 export const conversationNotes = createConversationNotes({
   currentUser: getCachedCurrentUser,
   store: createConversationStore(prisma),

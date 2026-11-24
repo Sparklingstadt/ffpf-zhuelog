@@ -1,8 +1,6 @@
-// The demo account's data, built from the fixture (demo-fixture.json, a copy
-// of Go's former services/api/demo/seed.json) with its dates made relative to
-// the reset, as Go's demo package built it. The golden file Go wrote before
-// that package was removed (stage 10b; tests/fixtures/demo-seed-golden.json,
-// now a fixed file) holds it to the same seed.
+// The demo account's data, built from the fixture (demo-fixture.json) with
+// its dates made relative to the reset. The seed it makes is pinned by
+// tests/fixtures/demo-seed-golden.json.
 
 import { type FsrsCard, newFsrsCard, nextFsrsCard } from "../review/fsrs";
 
@@ -73,20 +71,20 @@ export type DemoSeed = {
   complementRecords: (DemoRound & { mode: string })[];
 };
 
-// Go: wordDelay (demo.go:118). How long after its note a word is picked.
+// How long after its note a word is picked.
 export const DEMO_WORD_DELAY_MS = 300_000;
 
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 // Japan has no summer time: JST is always UTC+9.
 const JST_OFFSET_HOURS = 9;
-// demo.go:262 and :265: "today" is due an hour ago; "later" is two days on.
+// "today" is due an hour ago; "later" is two days on.
 const DUE_TODAY_MS = HOUR_MS;
 const DUE_LATER_MS = 48 * HOUR_MS;
 
-// Go: builder.at (demo.go:218-230). The JST date `day` days before now's JST
-// date, at time (HH:MM, JST); a moment after now becomes a minute before now.
-// null when day is negative or not an integer, or time is not HH:MM.
+// The JST date `day` days before now's JST date, at time (HH:MM, JST); a
+// moment after now becomes a minute before now. null when day is negative or
+// not an integer, or time is not HH:MM.
 export function demoFixtureTime(
   now: Date,
   day: number,
@@ -114,9 +112,9 @@ export function demoFixtureTime(
   return at;
 }
 
-// Reading the fixture. Go decodes it with json.DisallowUnknownFields
-// (demo.go:122-127): a key it does not know is an error, a missing key or a
-// null is the zero value, and a value of the wrong type is an error.
+// Reading the fixture: a key that is not expected is an error, a missing or
+// null text, number or list reads as "", 0 or [], and a value of the wrong
+// type is an error.
 
 type Json = Record<string, unknown>;
 
@@ -160,7 +158,7 @@ function texts(value: unknown, where: string): string[] {
   return list(value, where).map((v, i) => text(v, `${where}[${i}]`));
 }
 
-// The row's day and time (fixtureTime in Go) as a moment before now.
+// The row's day and time as a moment before now.
 function at(now: Date, row: Json, where: string): Date {
   const day = integer(row.day, `${where}.day`);
   const time = text(row.time, `${where}.time`);
@@ -171,7 +169,7 @@ function at(now: Date, row: Json, where: string): Date {
   return moment;
 }
 
-// Go: builder.review (demo.go:241-271). A new card made at created, answered
+// A note's or word's review history: a new card made at created, answered
 // as the fixture says with FSRS; then "today" makes it due an hour before
 // now, and "later" moves it two days past now when FSRS has it due already.
 function history(
@@ -222,8 +220,8 @@ function history(
   return { card, answers };
 }
 
-// Go: the practice rounds of Seed (demo.go:173-196) and builder.round
-// (:233-236), with the counts the store writes (store/demo.go demoScore).
+// One practice round of the fixture, with the counts its row keeps:
+// questions, those right the first time, and misses.
 function round(
   now: Date,
   value: unknown,
@@ -261,8 +259,8 @@ function round(
 }
 
 const TIME_KEYS = ["day", "time"] as const;
-// Go reads both kinds of round into one struct, so a preposition round may
-// carry a mode too; only complement rounds keep it.
+// Both kinds of round are read with the same keys, so a preposition round
+// may carry a mode too; only complement rounds keep it.
 const ROUND_KEYS = [
   ...TIME_KEYS,
   "mode",
@@ -270,9 +268,9 @@ const ROUND_KEYS = [
   "questions",
 ] as const;
 
-// Go: demo.Seed (demo.go:121-201). Throws DemoFixtureError naming the first
-// problem. UUIDs are drawn in Go's order: words, each conversation then its
-// messages, preposition rounds, complement rounds.
+// The seed the fixture makes at `now`. Throws DemoFixtureError naming the
+// first problem. UUIDs are drawn in this order: words, each conversation then
+// its messages, preposition rounds, complement rounds.
 export function buildDemoSeed(
   fixture: unknown,
   now: Date,
@@ -286,8 +284,7 @@ export function buildDemoSeed(
     "prepositionRecords",
     "complementRecords",
   ]);
-  // Every list is checked to be one before anything is built, as Go decodes
-  // the whole fixture first.
+  // Every list is checked to be one before anything is built.
   const noteRows = list(root.notes, "notes");
   const wordRows = list(root.words, "words");
   const conversationRows = list(root.conversations, "conversations");

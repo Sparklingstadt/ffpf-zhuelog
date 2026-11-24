@@ -1,7 +1,7 @@
 import type { IssuedSession } from "@/application/identity/sign-in";
 
-// The web's own session cookies (stage 11 of the Go retirement). This module
-// stays free of next/headers so the proxy can import its names.
+// The session cookies. This module stays free of next/headers so the proxy
+// can import its names.
 
 // Holds the random token whose SHA-256 is a Session row.
 export const SESSION_COOKIE = "zl_session";
@@ -10,7 +10,8 @@ export const SESSION_COOKIE = "zl_session";
 export const ACT_AS_COOKIE = "zl_act_as";
 // The OAuth state, PKCE verifier and nonce between sign-in and callback.
 export const OAUTH_COOKIE = "zl_oauth";
-// Go's cookies before stage 11; cleared at every sign-in and sign-out.
+// Cookies an earlier version of this app set; cleared at every sign-in and
+// sign-out. Needed until the end of December 2026 (docs/architecture.md, 11).
 export const LEGACY_SESSION_COOKIES = ["zl_access", "zl_refresh"] as const;
 // As long as a member's or admin's session.
 export const ACT_AS_MAX_AGE = 2_592_000;
@@ -46,7 +47,7 @@ function cleared(name: string, secure: boolean): CookieWrite {
   return cookieWrite(name, "", 0, secure);
 }
 
-// A new sign-in never starts out acting as someone, and Go's cookies go.
+// A new sign-in never starts out acting as someone, and the legacy cookies go.
 export function signedInCookieWrites(
   session: IssuedSession,
   secure: boolean,

@@ -42,8 +42,7 @@ test("practiceRecordRow writes the counts and the question JSON", () => {
   assert.equal(row.createdAt, now);
 
   const raw = JSON.stringify(row.questions);
-  // Only the question with an id names one (Go's
-  // strings.Count(raw, "\"id\"") == 1).
+  // Only the question with an id names one.
   assert.equal(raw.split('"id"').length - 1, 1);
   assert.deepEqual(JSON.parse(raw), [
     {

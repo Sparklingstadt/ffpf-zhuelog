@@ -1,5 +1,4 @@
-// Mirrors the retired services/api/auth/login_test.go (login display name) and the
-// Sparklingstadt ID display-name rule.
+// The Sparklingstadt ID display-name rule and the form of a sub.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 

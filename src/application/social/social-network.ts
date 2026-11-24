@@ -32,7 +32,7 @@ export type SocialNetworkDeps = {
 // Follows, the member list and the shared-notes timeline, always the
 // signed-in user's own (the member an admin acts as), never an owner from a
 // form. The user is decided first, so a refused user is refused before the
-// followee is checked, as Go answered 403 before 400 and 404.
+// followee is checked.
 export function createSocialNetwork(deps: SocialNetworkDeps) {
   async function me(): Promise<string> {
     const user = await deps.currentUser();
@@ -66,7 +66,7 @@ export function createSocialNetwork(deps: SocialNetworkDeps) {
 
     // A malformed id matches no follow, so nothing is removed (the controller
     // refuses it before calling). Your own id is passed on like any other
-    // and succeeds, as Go answered 204.
+    // and succeeds.
     async unfollow(followeeId: string): Promise<void> {
       const followerId = await me();
       if (!isMemberOwnerId(followeeId)) return;

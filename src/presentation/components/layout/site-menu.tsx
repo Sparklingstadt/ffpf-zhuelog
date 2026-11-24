@@ -32,7 +32,7 @@ export function SiteMenu({
   tabClassName,
 }: {
   role: AppRole;
-  // The demo account, whose menu leaves out what Go refuses it.
+  // The demo account, whose menu leaves out what it may not use.
   demo?: boolean;
   name: string;
   roleLabel: string;

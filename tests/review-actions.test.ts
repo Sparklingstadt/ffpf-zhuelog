@@ -53,7 +53,7 @@ test("an answer without permission is not allowed", async () => {
 test("an answer of the wrong shape is refused", async () => {
   const never = async () => assert.fail("answer must not be called");
   for (const bad of [
-    // z.uuid() lets an upper-case id through; Go's pattern does not.
+    // z.uuid() lets an upper-case id through; the lower-case pattern does not.
     { ...input, logId: logId.toUpperCase() },
     { ...input, logId: "{0b7e3f5a-1c2d-4e5f-8a9b-0c1d2e3f4a5b}" },
     { ...input, logId: "not-a-uuid" },

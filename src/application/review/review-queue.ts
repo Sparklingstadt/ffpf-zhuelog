@@ -26,7 +26,7 @@ export class ReviewForbiddenError extends Error {
   override name = "ReviewForbiddenError";
 }
 
-// The most items one due list may hold (Go's reviewDueMaxLimit).
+// The most items one due list may hold.
 const MAX_DUE_LIMIT = 100;
 
 // An item as the store reads it: the FSRS card and, for a word or a note,

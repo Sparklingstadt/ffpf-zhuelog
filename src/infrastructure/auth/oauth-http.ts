@@ -17,7 +17,7 @@ export const consoleOAuthLog: OAuthLog = (code, fields) => {
 
 const OAUTH_ERROR_CODE = /^[a-z_]{1,64}$/;
 
-// Go: loggableOAuthErrorCode. The code when it matches ^[a-z_]{1,64}$, else
+// The code when it matches ^[a-z_]{1,64}$, else
 // "unrecognized", so an answer that echoes a secret never reaches the log.
 export function loggableOAuthErrorCode(code: unknown): string {
   return typeof code === "string" && OAUTH_ERROR_CODE.test(code)
@@ -39,8 +39,8 @@ function isUnreserved(byte: number): boolean {
   );
 }
 
-// Go: url.QueryEscape (unreserved kept, space as "+", everything else %XX
-// upper case), over the UTF-8 bytes.
+// application/x-www-form-urlencoded: unreserved characters kept, space as
+// "+", everything else %XX in upper case, over the UTF-8 bytes.
 export function formUrlEncode(value: string): string {
   let out = "";
   for (const byte of new TextEncoder().encode(value)) {
@@ -51,8 +51,8 @@ export function formUrlEncode(value: string): string {
   return out;
 }
 
-// Go reads the body as it is: a byte order mark is kept, so a JSON body that
-// starts with one does not parse.
+// The body is decoded as it is: a byte order mark is kept, so a JSON body
+// that starts with one does not parse.
 const utf8 = new TextDecoder("utf-8", { ignoreBOM: true });
 
 // Rejects once signal aborts. A fetch is not bound to abort its body stream
@@ -97,18 +97,17 @@ async function readLimited(
     }
   } finally {
     aborted.dispose();
-    // The rest is dropped, as Go's io.LimitReader leaves it unread.
+    // The rest is dropped unread.
     reader.cancel().catch(() => {});
   }
   return out.subarray(0, length);
 }
 
 // One request that never follows redirects (a 3xx comes back as the
-// response), times out after timeoutMs (the body read included, as Go's
-// http.Client.Timeout), and reads at most maxBytes of the body (the rest is
-// dropped, as Go's LimitReader). "unavailable" for a network error, a timeout
-// or a body read error; the cause is never kept, as it can carry request
-// details.
+// response), times out after timeoutMs (the body read included), and reads
+// at most maxBytes of the body (the rest is dropped). "unavailable" for a
+// network error, a timeout or a body read error; the cause is never kept, as
+// it can carry request details.
 export async function fetchLimited(
   fetchFn: typeof fetch,
   url: string,

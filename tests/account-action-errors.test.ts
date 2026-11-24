@@ -8,8 +8,6 @@ import {
 } from "../src/presentation/presenters/account-action-errors";
 import { genericErrorMessage } from "../src/presentation/presenters/generic-error-message";
 
-// The texts Go's 400 and 409 answers carried (services/api/auth/validate.go,
-// services/api/httpapi/admin_handlers.go, auth/password_change.go).
 test("account input errors read as their fixed messages", () => {
   assert.equal(
     accountInputMessage("login-id"),

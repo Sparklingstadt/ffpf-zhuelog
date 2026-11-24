@@ -1,15 +1,13 @@
-// Attempt counts in SignInThrottle, with the two statements Go's
-// ConsumeThrottle runs (services/api/store/throttle.go; stage 9 reference §8).
-// The web's sign-in and route limits took over Go's table and keys in stage 11,
-// so the statements count exactly as Go's did.
+// Attempt counts in SignInThrottle. Each attempt runs two statements: one
+// deletes a batch of dead rows, the other counts the attempt under its key.
 import { Prisma, type PrismaClient } from "../../generated/prisma/client";
 import type { ThrottleRule } from "../../domain/identity/sign-in-throttle";
 
-// How many dead rows one attempt deletes, as Go's pruneThrottleBatch.
+// How many dead rows one attempt deletes.
 export const THROTTLE_PRUNE_BATCH = 100;
 
-// Go's prune of dead rows (store/throttle.go:21-26). SKIP LOCKED: concurrent
-// attempts never wait on, or deadlock over, each other's cleanup.
+// Deletes a batch of dead rows. SKIP LOCKED: concurrent attempts never wait
+// on, or deadlock over, each other's cleanup.
 export function pruneThrottleSql(now: Date): Prisma.Sql {
   return Prisma.sql`
     DELETE FROM "SignInThrottle" WHERE "key" IN (
@@ -18,9 +16,9 @@ export function pruneThrottleSql(now: Date): Prisma.Sql {
        LIMIT ${THROTTLE_PRUNE_BATCH} FOR UPDATE SKIP LOCKED)`;
 }
 
-// Go's count (store/throttle.go:32-38): one statement, so concurrent attempts
-// cannot read the same count. The first attempt, or the first after the
-// window ended, starts a new window ending at expiresAt.
+// Counts one attempt in one statement, so concurrent attempts cannot read
+// the same count. The first attempt, or the first after the window ended,
+// starts a new window ending at expiresAt.
 export function consumeThrottleSql(
   key: string,
   now: Date,

@@ -30,10 +30,10 @@ export type Conversation = ConversationSummary & {
 export type ChatTurn = { role: ChatRole; text: string };
 
 export const MAX_MESSAGES = 40;
-// Counted in characters (code points), as Go counts runes.
+// Counted in characters (code points).
 export const MAX_TOTAL_CHARS = 40_000;
 // How long one message typed into the chat may be. Only the input box limits
-// it; Go checks the total above.
+// it; the server checks the total above.
 export const MAX_INPUT_CHARS = 4_000;
 const MAX_TITLE_CHARS = 80;
 export const CONVERSATION_LIST_LIMIT = 100;
@@ -74,7 +74,7 @@ export function fitsLimits(messages: { text: string }[]): boolean {
   return messages.length <= MAX_MESSAGES && total <= MAX_TOTAL_CHARS;
 }
 
-// Lengths are counted in code points, as Go counted runes.
+// Lengths are counted in code points, so a character outside the BMP is one.
 function chars(text: string): number {
   return [...text].length;
 }
@@ -91,11 +91,10 @@ function isRole(role: unknown): role is ChatRole {
   return role === "user" || role === "assistant";
 }
 
-// The turns of a POST /api/chat body, untrimmed, or null when Go would have
-// answered 400 (decodeBody plus chat.Validate).
-// Go: httpapi/chat_handlers.go streamChat and chat/chat.go Validate.
+// The turns of a POST /api/chat body, untrimmed, or null when the body is
+// refused with a 400.
 export function chatTurns(body: unknown): ChatTurn[] | null {
-  // Unknown keys are refused at every level, as Go's DisallowUnknownFields.
+  // Unknown keys are refused at every level.
   if (!isRecord(body) || !hasOnlyKeys(body, ["messages"])) return null;
   const messages = body.messages;
   if (!Array.isArray(messages)) return null;
@@ -108,7 +107,7 @@ export function chatTurns(body: unknown): ChatTurn[] | null {
     const { role, text } = message;
     if (!isRole(role) || typeof text !== "string") return null;
     if (text.trim() === "") return null;
-    // Counted before trimming, as Go counted them.
+    // Counted before trimming.
     total += chars(text);
     turns.push({ role, text });
   }
@@ -117,9 +116,7 @@ export function chatTurns(body: unknown): ChatTurn[] | null {
   return turns;
 }
 
-// The conversation as it is saved, or null when Go would have answered 400
-// or 404 (an id of the wrong shape).
-// Go: httpapi/chat_handlers.go putConversation and validConversation.
+// The conversation as it is saved, or null when it must be refused.
 export function checkConversation(
   input: SaveConversationInput,
 ): CheckedConversation | null {
@@ -131,7 +128,7 @@ export function checkConversation(
   if (!ISO_DATE_TIME.test(input.createdAt)) return null;
   const createdAt = new Date(input.createdAt);
   if (Number.isNaN(createdAt.getTime())) return null;
-  // Date rolls 2026-02-30 and T24:00:00 over; Go's time.Parse refused them.
+  // Date rolls 2026-02-30 and T24:00:00 over; such a createdAt is refused.
   if (createdAt.toISOString().slice(0, 19) !== input.createdAt.slice(0, 19))
     return null;
 

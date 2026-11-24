@@ -11,8 +11,8 @@ import {
   nextFsrsDues,
 } from "../src/domain/review/fsrs";
 
-// Written by Go before its review package was removed (stage 10b; it is now
-// a fixed file): what go-fsrs gives for each answer of each case.
+// Written by the app's former Go implementation before it was removed; it is
+// now a fixed file: what go-fsrs gives for each answer of each case.
 type GoldenCard = {
   due: string;
   stability: number;
@@ -60,7 +60,7 @@ function iso(card: FsrsCard) {
   };
 }
 
-// Go and V8 may differ in the last digit of exp and pow.
+// The golden file and V8 may differ in the last digit of exp and pow.
 function assertClose(actual: number, expected: number, where: string) {
   const error = Math.abs(actual - expected) / Math.abs(expected);
   assert.ok(error <= 1e-9, `${where}: ${actual} is not ${expected}`);

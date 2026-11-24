@@ -1,6 +1,4 @@
-// Mirrors the retired services/api/auth/github_test.go (TestExchangeSuccess,
-// TestExchangeUnavailable, TestExchangeTokenErrorLogOmitsSecrets,
-// TestExchangeErrorsOmitSecrets) with a fake fetch; github.com is never called.
+// The GitHub code exchange, with a fake fetch; github.com is never called.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -107,8 +105,8 @@ test("the code exchange posts the PKCE form and reads the user with the API head
 });
 
 test("both GitHub requests name the app in User-Agent", async () => {
-  // GitHub's REST API refuses requests without a User-Agent; Go's net/http
-  // sent its own default, so the web names itself explicitly.
+  // GitHub's REST API refuses requests without a User-Agent, so the web names
+  // itself explicitly.
   const f = fakeGitHub();
   await f.exchange();
   assert.equal(f.calls.length, 2);

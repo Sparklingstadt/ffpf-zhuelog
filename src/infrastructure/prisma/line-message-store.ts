@@ -1,10 +1,8 @@
-// LineMessage, with the statements of Go's store/line.go (stage 10 reference
-// section 12). Go and the web share the table while LINE moves to the web
-// (plan decision 4, reference section 20): Go's drain finishes rows the web
-// left pending and the web's drain finishes Go's. So every write keeps Go's
-// meaning: one row per webhookEventId, statuses pending/done/failed, at most
-// LINE_MAX_ATTEMPTS attempts, and the text cleared once done or failed. Each
-// write names the state it expects and is decided by the rows it changed.
+// LineMessage: the texts the LINE bot accepted for correction or
+// translation. One row per webhookEventId, statuses pending/done/failed, at
+// most LINE_MAX_ATTEMPTS attempts, and the text cleared once done or failed.
+// The webhook and the drain may work on the same row, so each write names the
+// state it expects and is decided by the rows it changed.
 import { Prisma, type PrismaClient } from "../../generated/prisma/client";
 import {
   LINE_MAX_ATTEMPTS,
@@ -25,11 +23,11 @@ type NewLineMessage = {
   text: string;
 };
 
-// Go: lineMessageColumns (line.go:51).
+// The columns every raw statement returns; a cleared text reads as "".
 const COLUMNS = Prisma.sql`"id", "webhookEventId", "lineUserId", "ownerId", "kind", COALESCE("text", '') AS "text", "status", "attempts", "createdAt"`;
 
-// Pure: Go's InsertLineMessage insert (line.go:170-198). A second delivery of
-// the same event returns no row.
+// Pure: inserts a pending message. A second delivery of the same event
+// returns no row.
 export function insertLineMessageSql(
   id: string,
   message: NewLineMessage,
@@ -42,8 +40,8 @@ export function insertLineMessageSql(
     RETURNING ${COLUMNS}`;
 }
 
-// Pure: Go's StartLineMessageAttempt (line.go:203-216). One conditional
-// UPDATE, so two passes cannot both take the last attempt.
+// Pure: counts one attempt on a pending message. One conditional UPDATE, so
+// two passes cannot both take the last attempt.
 export function startAttemptSql(id: string, now: Date): Prisma.Sql {
   return Prisma.sql`
     UPDATE "LineMessage" SET "attempts" = "attempts" + 1, "updatedAt" = CAST(${now} AS TIMESTAMP(3))
@@ -87,18 +85,17 @@ function toLineMessage(row: LineMessageRow): LineMessage {
   };
 }
 
-// Callers read `now` once and pass it truncated to milliseconds, as Go's
-// dbTime does.
+// Callers read `now` once and pass it truncated to milliseconds: the columns
+// are TIMESTAMP(3).
 export function createLineMessageStore(
   db: () => PrismaClient,
   newRowId: () => string = newId,
 ) {
   return {
-    // Go: InsertLineMessage. created false: the event was delivered before;
-    // the stored row comes back. Go ran both statements in one transaction;
-    // none is needed: ON CONFLICT DO NOTHING waits for a concurrent insert
-    // of the same event to commit, and the next statement (READ COMMITTED)
-    // sees that row.
+    // Stores an accepted text. created false: the event was delivered before;
+    // the stored row comes back. The two statements need no transaction: ON
+    // CONFLICT DO NOTHING waits for a concurrent insert of the same event to
+    // commit, and the next statement (READ COMMITTED) sees that row.
     async insert(
       message: NewLineMessage,
       now: Date,
@@ -116,8 +113,7 @@ export function createLineMessageStore(
       return { message: toLineMessage(stored), created: false };
     },
 
-    // Go: StartLineMessageAttempt. null: unknown, no longer pending, or out
-    // of attempts.
+    // Starts an attempt. null: unknown, no longer pending, or out of attempts.
     async startAttempt(id: string, now: Date): Promise<LineMessage | null> {
       const rows = await db().$queryRaw<LineMessageRow[]>(
         startAttemptSql(id, now),
@@ -125,9 +121,9 @@ export function createLineMessageStore(
       return rows.length > 0 ? toLineMessage(rows[0]) : null;
     },
 
-    // Go: CompleteLineMessage. Saves the note (a "LINE" import batch, as
-    // Go's queueImportBatch) and marks the message done, in one transaction.
-    // false (nothing saved): not the owner's pending message.
+    // Saves the note (in its own import batch, named "LINE") and marks the
+    // message done, in one transaction. false (nothing saved): not the
+    // owner's pending message.
     async complete(
       id: string,
       ownerId: string,
@@ -185,7 +181,7 @@ export function createLineMessageStore(
       }
     },
 
-    // Go: FailLineMessage.
+    // Marks a pending message failed and clears its text.
     async fail(id: string, now: Date): Promise<void> {
       await db().lineMessage.updateMany({
         where: { id, status: "pending" },
@@ -193,7 +189,7 @@ export function createLineMessageStore(
       });
     },
 
-    // Go: ListStaleLineMessages.
+    // Pending messages created before createdBefore, oldest first.
     async listStale(
       createdBefore: Date,
       limit: number,
@@ -206,8 +202,7 @@ export function createLineMessageStore(
       return rows.map(toLineMessage);
     },
 
-    // Go: PruneLine. Done and failed messages older than 7 days, and expired
-    // codes.
+    // Deletes done and failed messages older than 7 days, and expired codes.
     async prune(now: Date): Promise<void> {
       await db().lineMessage.deleteMany({
         where: {

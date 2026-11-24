@@ -5,7 +5,7 @@ import { cn } from "@/presentation/lib/utils";
 
 // The left column of the AI pages on wide screens: the two ways to ask
 // (quick questions and the chat) as tabs, then that way's saved notes. The
-// demo account, which Go refuses the AI, gets no tabs.
+// demo account may not use the AI (the server refuses it) and gets no tabs.
 export function AiSideNav({
   current,
   showTabs,

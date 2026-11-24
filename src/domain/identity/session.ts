@@ -1,12 +1,11 @@
-// Who a signed-in browser is (stage 11 of the Go retirement). A session keeps
-// what Go's refresh token kept (services/api/auth/token.go), so the check on
-// every request stays the one Go's refresh tokens (ApiRefreshToken, dropped in
-// stage 12b) had.
+// Who a signed-in browser is. A session keeps the owner id, the role, and an
+// admin's login or a member's session version; the check on every request
+// reads them back as a SessionPrincipal.
 
 export const GUEST_OWNER_ID = "guest";
 
-// Go: RefreshTTL and GuestRefreshTTL (auth/token.go:14-17). Fixed from
-// sign-in; a session is never extended.
+// 30 days, and 1 day for a guest. Fixed from sign-in; a session is never
+// extended.
 export const SESSION_TTL_MS = 2_592_000_000;
 export const GUEST_SESSION_TTL_MS = 86_400_000;
 
@@ -19,10 +18,10 @@ export function sessionTtlMs(principal: SessionPrincipal): number {
   return principal.role === "guest" ? GUEST_SESSION_TTL_MS : SESSION_TTL_MS;
 }
 
-// Go: Signer.Verify's role rules (auth/token.go:126-145). null for a row the
-// check must never accept: an empty ownerId, an unknown role, an admin
-// without a login, a member without a non-negative integer version, a guest
-// whose ownerId is not "guest".
+// The principal of a session row. null for a row the check must never
+// accept: an empty ownerId, an unknown role, an admin without a login, a
+// member without a non-negative integer version, a guest whose ownerId is
+// not "guest".
 export function toSessionPrincipal(row: {
   ownerId: string;
   role: string;

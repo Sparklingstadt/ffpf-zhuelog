@@ -6,7 +6,8 @@ const LENGTH = 24;
 // above it are dropped so every letter is equally likely (no modulo bias).
 const LIMIT = 256 - (256 % ALPHABET.length);
 
-// An id shaped like the retired Go API's: "c" and 24 of a-z0-9, from crypto random.
+// A new row id: "c" and 24 of a-z0-9 (the shape REVIEW_ITEM_ID accepts), from
+// crypto random.
 export function newId(): string {
   let out = "c";
   while (out.length < LENGTH + 1) {

@@ -246,7 +246,7 @@ test("accepted ID tokens", async () => {
       (c) => Object.assign(c, { name: null, iat: "x", nbf: [] }),
       "alice",
     ],
-    // Go's encoding/json matches claim names to fields ignoring case.
+    // Claim names match whatever their case.
     [
       "claim names in another case",
       (c) => {
@@ -359,7 +359,7 @@ test("refused ID tokens log their reason word", async () => {
       "signature",
     ],
     ["not a JWT", () => "not a jwt", "malformed"],
-    // Beyond Go's table: what golang-jwt and encoding/json refuse.
+    // Edge cases: odd values and encodings, wrong types, the order of checks.
     [
       "a fractional exp 60.1 seconds ago",
       withClaim("exp", now - 61 + 0.9),

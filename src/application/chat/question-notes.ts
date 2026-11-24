@@ -132,8 +132,8 @@ export function createQuestionNotes(deps: QuestionNotesDeps) {
       return saved ? "saved" : "conflict";
     },
 
-    // A way to ask, or why there is none. Checked in Go's order: signed in,
-    // a member or admin, not the demo, OpenAI configured.
+    // A way to ask, or why there is none. Checked in this order: signed
+    // in, a member or admin, not the demo, OpenAI configured.
     async asker(): Promise<
       { ok: true; asker: Asker } | { ok: false; reason: AskRefusal }
     > {

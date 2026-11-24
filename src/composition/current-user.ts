@@ -14,9 +14,9 @@ import { prismaIdentityAccounts } from "@/infrastructure/prisma/identity-account
 import { sessionStore } from "./sign-in-container";
 
 // The allowlist (AUTH_ALLOWED_GITHUB_IDS) and the demo login id are read
-// once, when this module loads, as before: a change to them needs a
-// redeploy (Vercel needs one for any env change anyway). Everything else
-// (the Session row, sessionVersion, zl_act_as) is checked on every request.
+// once, when this module loads: a change to them needs a redeploy (Vercel
+// needs one for any env change anyway). Everything else (the Session row,
+// sessionVersion, zl_act_as) is checked on every request.
 const provider = new SessionCurrentUserProvider(
   readSessionToken,
   readActAsCookie,

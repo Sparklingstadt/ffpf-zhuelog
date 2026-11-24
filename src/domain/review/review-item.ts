@@ -1,11 +1,11 @@
 import type { LearningEntry } from "@/domain/learning/entities/learning-entry";
 import type { VocabularyCard } from "@/domain/vocabulary/vocabulary-entry";
 
-// A ReviewItem id as Go and newId make them; anything else is not looked up.
+// A ReviewItem id as newId makes them; anything else is not looked up.
 export const REVIEW_ITEM_ID = /^c[a-z0-9]{24}$/;
 
-// The id of one answer (ReviewLog) as Go checked it: a lower-case UUID
-// (crypto.randomUUID() always passes).
+// The id of one answer (ReviewLog): a lower-case UUID (crypto.randomUUID()
+// always passes).
 export const REVIEW_LOG_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 

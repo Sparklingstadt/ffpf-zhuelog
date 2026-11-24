@@ -3,13 +3,13 @@ import { lineConfig } from "@/infrastructure/config/environment";
 import { handleLineWebhook } from "@/presentation/controllers/line-webhook-controller";
 
 export const dynamic = "force-dynamic";
-// Events stop starting after 55 s (Go: webhookEventsTimeout); 60 is Go's
-// lineWriteTimeout.
+// Events stop starting after 55 s (LINE_TIMING.webhookEventsTimeoutMs); 60
+// leaves room for the last one and the answer.
 export const maxDuration = 60;
 
 const channelSecret = lineConfig()?.channelSecret;
 
-// LINE's webhook: answered after the events are handled, as Go did.
+// LINE's webhook: answered after the events are handled.
 export async function POST(request: Request): Promise<Response> {
   return handleLineWebhook(request, {
     channelSecret,

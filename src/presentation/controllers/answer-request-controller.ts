@@ -3,17 +3,19 @@ import { answerStreamResponse } from "../http/answer-stream-response";
 import { BodyTooLarge, readLimitedBody } from "../http/limited-body";
 import { isSameOriginRequest } from "../http/same-origin";
 
-// Go's limit on a chat body (httpapi maxChatBodyBytes).
+// The most bytes a chat body may have (256 KiB).
 const MAX_BODY_BYTES = 262_144;
 
 const noStore = { "Cache-Control": "no-store" };
 
-// The errors the old relay made itself: {"error": message}.
+// The errors about how the request was sent (its page, content type, size,
+// or a body that cannot be read): {"error": message}.
 const relayError = (message: string, status: number) =>
   Response.json({ error: message }, { status, headers: noStore });
 
-// The errors Go made: {"error": {"code", "message"}}. The browser and the
-// demo e2e read error.message.
+// The errors about who asks and what: {"error": {"code", "message"}}. The
+// browser's chat client reads either shape (readFailureText); the demo e2e
+// reads error.message.
 const jsonError = (code: string, message: string, status: number) =>
   Response.json({ error: { code, message } }, { status, headers: noStore });
 
@@ -25,7 +27,7 @@ const refusals: Record<AskRefusal, () => Response> = {
   unavailable: () => jsonError("not_found", "見つかりません。", 404),
 };
 
-// Go's msgChatInvalid.
+// The 400 for a body that is not JSON or that `read` refuses.
 const invalidBody = () =>
   jsonError(
     "invalid_request",
@@ -33,9 +35,9 @@ const invalidBody = () =>
     400,
   );
 
-// The checks of POST /api/quick-question and /api/chat, in the order the
-// relay and Go made them (the page, JSON, who may ask, the body's size, the
-// body), then the answer streamed back as NDJSON.
+// The checks of POST /api/quick-question and /api/chat, in this order: the
+// page, JSON, who may ask, the body's size, the body. Then the answer is
+// streamed back as NDJSON.
 export async function handleAnswerRequest<T>(
   request: Request,
   deps: {
@@ -46,7 +48,7 @@ export async function handleAnswerRequest<T>(
         }
       | { ok: false; reason: AskRefusal }
     >;
-    // null: the 400 of Go's msgChatInvalid.
+    // null: the body is refused with a 400 (invalidBody).
     read: (body: unknown) => T | null;
   },
 ): Promise<Response> {

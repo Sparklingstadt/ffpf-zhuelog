@@ -20,8 +20,7 @@ export type CreateAccountResult =
   | { ok: true; issued: IssuedPassword }
   | { ok: false; reason: AccountInputError | "login-id-taken" };
 
-// "not-found" covers an id no account could have, as Go's validID answered
-// 404 like a missing account.
+// "not-found" is a missing account, and also an id no account could have.
 export type ResetPasswordResult =
   | { ok: true; issued: IssuedPassword }
   | { ok: false; reason: "password" | "not-found" };
@@ -48,10 +47,9 @@ export type MemberAccountsDeps = {
   now: () => Date;
 };
 
-// Password accounts as Go's admin account routes managed them
-// (services/api/httpapi/admin_handlers.go): the caller is checked first (Go's
-// requireAdmin ran before any input check), then the input in Go's order.
-// The plain password leaves only in `issued`, for the admin to hand over once.
+// The admin's management of password accounts: the caller is checked first
+// (requireAdmin runs before any input check), then the input. The plain
+// password leaves only in `issued`, for the admin to hand over once.
 export function createMemberAccounts(deps: MemberAccountsDeps) {
   async function requireAdmin(): Promise<void> {
     const user = await deps.currentUser();
@@ -95,10 +93,10 @@ export function createMemberAccounts(deps: MemberAccountsDeps) {
       };
     },
 
-    // The password is checked before the id, as Go did. A missing account
-    // costs no hash. Nothing refuses the demo's account or the member the
-    // admin acts as, as in Go. The id is bound into a server action, so the
-    // client can send any value: a non-string is an id no account could have.
+    // The password is checked before the id. A missing account costs no
+    // hash. Nothing refuses the demo's account or the member the admin acts
+    // as. The id is bound into a server action, so the client can send any
+    // value: a non-string is an id no account could have.
     async resetPassword(
       accountId: string,
       rawPassword: string,

@@ -22,7 +22,7 @@ export type VocabularyCard = Pick<
 // The reading and meaning AI suggests, for the user to edit before saving.
 export type VocabularyDraft = { pinyin: string; meaning: string };
 
-// The lengths Go accepts, in characters.
+// The longest each field may be, in characters.
 export const VOCABULARY_LIMITS = {
   word: 20,
   pinyin: 100,

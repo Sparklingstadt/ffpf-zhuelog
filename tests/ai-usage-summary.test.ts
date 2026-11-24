@@ -115,7 +115,6 @@ test("a month is read as Japan time", async () => {
 });
 
 test("a bad month never reaches the store", async () => {
-  // Go: TestAIUsageSummaryRejectsABadMonth.
   for (const bad of [
     "2026-13",
     "2026-00",

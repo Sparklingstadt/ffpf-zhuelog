@@ -1,12 +1,12 @@
-// The LINE bot's records and numbers, with Go's meanings: Go and the web share
-// the LineLink and LineMessage tables while LINE moves to the web
-// (services/api/store/line.go, services/api/linebot).
+// The LINE bot's records and numbers: the rows of the LineLink and
+// LineMessage tables, a webhook event, and the limits the webhook, the daily
+// pass and the stores keep.
 
 import type { LineLearningKind } from "@/domain/line/line-text";
 
 export type LineMessageStatus = "pending" | "done" | "failed";
 
-// A text the bot accepted for correction or translation. Go: store.LineMessage.
+// A text the bot accepted for correction or translation.
 export type LineMessage = {
   id: string;
   webhookEventId: string;
@@ -20,7 +20,7 @@ export type LineMessage = {
   createdAt: Date;
 };
 
-// Go: store.LineLink.
+// A LINE account linked to a web account: the owner and the owner's role.
 export type LineLink = {
   lineUserId: string;
   ownerId: string;
@@ -28,8 +28,7 @@ export type LineLink = {
   createdAt: Date;
 };
 
-// One message event of a webhook delivery. Go: line.Event
-// (services/api/line/webhook.go).
+// One message event of a webhook delivery.
 export type LineEvent = {
   webhookEventId: string;
   replyToken: string;
@@ -41,7 +40,7 @@ export type LineEvent = {
 };
 
 // A linked account that asked for the morning review message and has
-// reviews due. Go: store.ReviewNotifyTarget.
+// reviews due.
 export type ReviewNotifyTarget = {
   lineUserId: string;
   ownerId: string;
@@ -49,32 +48,32 @@ export type ReviewNotifyTarget = {
   due: number;
 };
 
-// The channel's push allowance for the month. Go: line.Quota.
+// The channel's push allowance for the month.
 export type LinePushQuota =
   { unlimited: true } | { unlimited: false; remaining: number };
 
 // A failed generation: the OpenAI code, and whether a later attempt may work.
 export type GenerationFailure = { code: string; retryable: boolean };
 
-// Go: store.LineMaxAttempts (store/line.go:20).
+// The most generation attempts one message gets.
 export const LINE_MAX_ATTEMPTS = 2;
-// Go: drainBatch (linebot/drain.go:18).
+// The most stale messages one drain pass finishes.
 export const LINE_DRAIN_BATCH = 20;
-// Go: lineRetention (store/line.go:24), 7 days for done and failed rows.
+// How long done and failed rows are kept: 7 days.
 export const LINE_RETENTION_MS = 604_800_000;
-// Go: exhaustedCode (linebot/drain.go:30).
+// The code a row is failed with when its attempts ran out with no answer.
 export const LINE_EXHAUSTED_CODE = "OPENAI_TIMEOUT";
-// Go: the code a row is failed with when its link is gone (linebot/drain.go:80).
+// The code a row is failed with when its link is gone.
 export const LINE_LINK_GONE_CODE = "LINK_GONE";
-// Go: notifyBatch (linebot/notify.go:14).
+// The most accounts one pass lists for the morning review message.
 export const REVIEW_NOTIFY_BATCH = 100;
-// Go: notifyPushReserve (linebot/notify.go:17).
+// Pushes of the month's allowance the review message never uses.
 export const REVIEW_NOTIFY_PUSH_RESERVE = 30;
 
-// Go: webhookDeliveryBudget and webhookEventsTimeout
-// (httpapi/line_handlers.go:43-48), drainBudget (:40), minTimeLeft = generation
-// budget + reply margin, staleAfter (linebot/drain.go:16-27), pushMargin
-// (linebot/notify.go:19).
+// The deadline an event's work gets from the start of its delivery, and when
+// a delivery stops taking further events; how long the daily pass runs; the
+// least time left to start a generation (its budget plus a reply margin); how
+// old a pending row is before the drain takes it; the least time left to push.
 export const LINE_TIMING = {
   webhookDeliveryBudgetMs: 45_000,
   webhookEventsTimeoutMs: 55_000,
@@ -84,8 +83,8 @@ export const LINE_TIMING = {
   pushMarginMs: 3_000,
 } as const;
 
-// Go: NotifyDueReviews' budget (linebot/notify.go:45-106). min(targets,
-// remaining - 30) when limited, never below 0.
+// How many review messages one pass may push: min(targets, remaining - 30)
+// when limited, never below 0.
 export function reviewNotifyBudget(
   targets: number,
   quota: LinePushQuota,

@@ -91,7 +91,7 @@ export function summarizeAiUsage(totals: AiUsageTotal[]): {
 
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
-// [from, to) of the Japan month "YYYY-MM" as instants. Go: AIUsageMonth.
+// [from, to) of the Japan month "YYYY-MM" as instants.
 // Throws a RangeError when isAiUsageMonth(month) is false.
 export function aiUsageMonthRange(month: string): { from: Date; to: Date } {
   if (!isAiUsageMonth(month)) throw new RangeError("not a month");
@@ -102,7 +102,7 @@ export function aiUsageMonthRange(month: string): { from: Date; to: Date } {
   };
 }
 
-// The Japan month of an instant as "YYYY-MM". Go: parseMonth("").
+// The Japan month of an instant as "YYYY-MM".
 export function aiUsageMonthOf(now: Date): string {
   const jst = new Date(now.getTime() + JST_OFFSET_MS);
   return `${jst.getUTCFullYear()}-${String(jst.getUTCMonth() + 1).padStart(2, "0")}`;

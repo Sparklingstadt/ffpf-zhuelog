@@ -3,15 +3,14 @@ import type { AccountInputError } from "@/domain/identity/password-account";
 import { genericErrorMessage } from "@/presentation/presenters/generic-error-message";
 
 // Shown when an admin resets the password of an account that does not exist
-// (or an id no account could have). The web decides this text; it is the one
-// Go's 404 carried.
+// (or an id no account could have).
 export const accountNotFoundMessage = "アカウントが見つかりません。";
 
 // The account actions' "not allowed" text.
 export const accountForbiddenMessage =
   "この操作を行う権限がありません。再度ログインしてください。";
 
-// The texts Go's 400 and 409 answers carried, unchanged on screen.
+// The texts for input the account actions refuse.
 const loginIdMessage =
   "ログインIDは英小文字・数字・. _ - の3〜32文字にしてください。";
 const displayNameMessage = "表示名は1〜50文字にしてください。";

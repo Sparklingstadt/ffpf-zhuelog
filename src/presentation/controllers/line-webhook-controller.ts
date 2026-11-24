@@ -3,23 +3,22 @@ import { verifyLineSignature } from "@/infrastructure/line/line-signature";
 import { parseLineWebhook } from "@/infrastructure/line/line-webhook";
 import { BodyTooLarge, readLimitedBody } from "../http/limited-body";
 
-// Go: httpapi maxBodyBytes.
+// The most bytes a webhook body may have (1 MiB).
 export const LINE_WEBHOOK_MAX_BODY_BYTES = 1_048_576;
 
 const noStore = { "Cache-Control": "no-store" };
 
-// The errors Go made: {"error": {"code", "message"}}.
+// The JSON error body: {"error": {"code", "message"}}.
 const jsonError = (code: string, message: string, status: number) =>
   Response.json({ error: { code, message } }, { status, headers: noStore });
 
-// Go: lineWebhook (httpapi/line_handlers.go:71-101). The body is read under
-// Go's 1 MiB limit, its signature checked on the raw bytes, then every
-// message event is handled inline, one after another, before the answer:
-// each gets the same delivery deadline (start + 45 s), and none is started
-// once 55 s have passed. The request's signal is not passed on: LINE
-// dropping the connection must not stop the work (Go: WithoutCancel). An
-// event's failure is logged by its id only, and the answer is 200 whatever
-// happened, so LINE never redelivers.
+// LINE's webhook. The body is read under the 1 MiB limit, its signature
+// checked on the raw bytes, then every message event is handled inline, one
+// after another, before the answer: each gets the same delivery deadline
+// (start + 45 s), and none is started once 55 s have passed. The request's
+// signal is not passed on: LINE dropping the connection must not stop the
+// work. An event's failure is logged by its id only, and the answer is 200
+// whatever happened, so LINE never redelivers.
 export async function handleLineWebhook(
   request: Request,
   deps: {

@@ -17,8 +17,7 @@ import { jstDayRange, likeContains } from "./learning-sql";
 // The trash page lists one page of notes.
 const TRASH_LIST_LIMIT = 100;
 
-// The export reads at most as many notes as it did through Go (100 pages of
-// 100).
+// The most notes one export reads.
 const EXPORT_LIMIT = 10_000;
 
 type EntryRow = {
@@ -50,11 +49,11 @@ export function toKind(kind: string): LearningKind {
   throw new Error("invalid learning entry kind in the database");
 }
 
-// The search's conditions on the alias-less "LearningEntry", ANDed, as the
-// retired Go API's entryFilterSQL wrote them. The lowering is done by the database (its
-// ctype decides non-ASCII letters) and LIKE over lower(...) lets the trigram
-// indexes serve it. The query's ids come from a UNION, not an OR with an
-// EXISTS, so the planner can combine those indexes.
+// The search's conditions on the alias-less "LearningEntry", ANDed. The
+// lowering is done by the database (its ctype decides non-ASCII letters) and
+// LIKE over lower(...) lets the trigram indexes serve it. The query's ids
+// come from a UNION, not an OR with an EXISTS, so the planner can combine
+// those indexes.
 function searchCondition(search: EntrySearch | undefined): Prisma.Sql {
   if (!search) return Prisma.empty;
   const conditions: Prisma.Sql[] = [];
@@ -128,9 +127,8 @@ export async function liveEntriesById(
   );
 }
 
-// Reads the owner's learning notes the way the retired Go API's store did. Every
-// list is ordered in SQL, so ties on time are broken by the database's id
-// order.
+// Reads the owner's learning notes. Every list is ordered in SQL, so ties on
+// time are broken by the database's id order.
 export function createLearningNoteReads(db: () => PrismaClient) {
   // The hints of all rows in one query, each entry's by position; [] when an
   // entry has none.
@@ -154,7 +152,7 @@ export function createLearningNoteReads(db: () => PrismaClient) {
 
   return {
     // The newest live notes, or with a search only those it matches; total
-    // counts every live note the search matches. Counted first, as Go does.
+    // counts every live note the search matches. The count is read first.
     async listRecent(
       ownerId: string,
       limit: number,
@@ -218,7 +216,7 @@ export function createLearningNoteReads(db: () => PrismaClient) {
 
     // The number-th (1-based) live note of a Japan date, oldest first, and
     // how many that date has; null when there is no such note. Counted
-    // first, as Go does: a note removed in between is not found.
+    // first: a note removed in between is not found.
     async getDailyEntry(
       ownerId: string,
       date: LogDate,
@@ -243,7 +241,7 @@ export function createLearningNoteReads(db: () => PrismaClient) {
     },
 
     // The newest of the owner's trash first, at most one page; total counts
-    // the whole trash. Counted first, as Go does.
+    // the whole trash. The count is read first.
     async listTrashed(ownerId: string): Promise<TrashedLearningEntries> {
       const where = { ownerId, deletedAt: { not: null } };
       const total = await db().learningEntry.count({ where });

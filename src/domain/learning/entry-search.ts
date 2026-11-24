@@ -9,7 +9,7 @@ export type EntrySearch = {
   hint: string;
 };
 
-// Go's limit for query and hint.
+// The longest query and hint, in code points.
 export const ENTRY_SEARCH_MAX_LENGTH = 100;
 
 const EMPTY: EntrySearch = { query: "", kind: null, hint: "" };
@@ -26,7 +26,7 @@ function text(value: unknown): string {
 }
 
 // Reads ?q=, ?kind= and ?hint= of a page. Unknown kinds are ignored and long
-// texts are cut to Go's limit, so a hand-edited URL still searches.
+// texts are cut to the limit, so a hand-edited URL still searches.
 export function parseEntrySearch(params: {
   q?: unknown;
   kind?: unknown;
@@ -50,7 +50,7 @@ export function isEntrySearchEmpty(search: EntrySearch): boolean {
   );
 }
 
-// The query string Go and the page both read, without the leading "?".
+// The search as the query string a page reads, without the leading "?".
 export function entrySearchQuery(search: EntrySearch): string {
   const params = new URLSearchParams();
   if (search.query) params.set("q", search.query);

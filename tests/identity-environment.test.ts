@@ -53,7 +53,7 @@ test("allowedGitHubIds keeps only numeric ids", () => {
 });
 
 test("allowedGitHubIds trims Unicode White_Space, not String.prototype.trim's set", () => {
-  // Go's strings.TrimSpace strips U+0085 but keeps U+FEFF.
+  // White_Space trimming strips U+0085 but keeps U+FEFF.
   process.env.AUTH_ALLOWED_GITHUB_IDS = "\u0085301\u0085,\uFEFF302";
   assert.deepEqual([...allowedGitHubIds()], ["301"]);
 });
@@ -83,7 +83,7 @@ test("demoLoginId must already be a login id", () => {
       assert.equal(demoLoginId(), id.trim(), id);
     }
     assert.deepEqual(logged, []);
-    // Upper case, too short, a space inside, a character Go refuses, too long.
+    // Upper case, too short, a space inside, a character not allowed, too long.
     for (const id of ["Demo", "ab", "demo user", "demo!", "d".repeat(33)]) {
       process.env.DEMO_LOGIN_ID = id;
       assert.equal(demoLoginId(), undefined, id);
@@ -129,7 +129,8 @@ test("lineConfig needs both LINE values and OpenAI", () => {
 });
 
 test("lineConfig trims Unicode White_Space, not String.prototype.trim's set", () => {
-  // Go strips U+0085 and keeps U+FEFF; String.prototype.trim does the opposite.
+  // White_Space trimming strips U+0085 and keeps U+FEFF; String.prototype.trim
+  // does the opposite.
   setLine({ ...complete, LINE_CHANNEL_SECRET: "\u0085secret\u0085" });
   assert.equal(lineConfig()?.channelSecret, "secret");
   setLine({ ...complete, LINE_CHANNEL_ACCESS_TOKEN: "\ufefftoken" });

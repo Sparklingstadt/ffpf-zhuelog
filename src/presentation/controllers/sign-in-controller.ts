@@ -1,8 +1,8 @@
 import type { SignInFailure } from "@/application/identity/sign-in";
 
-// Where a failed sign-in goes, with the sign-in page's error keys (the same
-// URLs as when Go signed in). The input is never echoed back, and nothing
-// but the key and the page to come back to goes into the URL.
+// Where a failed sign-in goes, with the sign-in page's error keys. The input
+// is never echoed back, and nothing but the key and the page to come back to
+// goes into the URL.
 
 function signInUrl(error: string, redirectTo: string): string {
   return `/signin?error=${error}&callbackUrl=${encodeURIComponent(redirectTo)}`;

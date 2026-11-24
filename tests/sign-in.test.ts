@@ -1,5 +1,3 @@
-// Mirrors the retired services/api/auth/login_test.go (password, guest, GitHub) and
-// services/api/auth/demo_test.go.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -404,7 +402,6 @@ test('store and hasher errors are thrown, not "invalid"', async () => {
   assert.deepEqual(hashFails.resets, []);
 });
 
-// Go: TestLoginPasswordHasherErrorIsNotUnauthorized.
 test("a hasher failure is an error, not invalid", async () => {
   const f = fixture();
   f.deps.passwords.verify = async () => {

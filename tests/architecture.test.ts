@@ -58,9 +58,9 @@ test("application ports never expose HTTP types", () => {
   assert.deepEqual(http, []);
 });
 
-// The web reaches the database only through infrastructure/prisma (the Go
-// API being moved here feature by feature): no Prisma outside it, no Postgres
-// driver and no Auth.js anywhere in src (the generated client aside).
+// The web reaches the database only through infrastructure/prisma: no Prisma
+// outside it, no Postgres driver and no Auth.js anywhere in src (the generated
+// client aside).
 const prismaModule = (specifier: string) =>
   /^@\/generated\/prisma(\/|$)/.test(specifier) ||
   /(^|\/)generated\/prisma(\/|$)/.test(specifier) ||

@@ -37,14 +37,14 @@ const SID_PREFIX = "sid:";
 export const ACT_AS_PATTERN = /^password:[a-z0-9]{1,64}$/;
 
 // Decides who is signed in from the zl_session cookie's Session row and the
-// account tables, following the retired Go API's Authenticate and Me
-// (services/api/auth). findSession answers null for an unknown, expired,
-// deleted or malformed session. Every rule below runs on every request, so a
-// change to an account's sessionVersion or to zl_act_as applies at once. The
-// allowlist and the demo login id come in through config, which the caller
-// reads once when its module loads, so a change to them applies after a
-// redeploy. The caller wraps this in React's cache() so a request resolves the
-// user at most once.
+// account tables: a guest, an admin (as themselves or acting as a member), a
+// revoked admin, a member, or null. findSession answers null for an unknown,
+// expired, deleted or malformed session. Every rule below runs on every
+// request, so a change to an account's sessionVersion or to zl_act_as applies
+// at once. The allowlist and the demo login id come in through config, which
+// the caller reads once when its module loads, so a change to them applies
+// after a redeploy. The caller wraps this in React's cache() so a request
+// resolves the user at most once.
 export class SessionCurrentUserProvider implements CurrentUserProvider {
   constructor(
     private readonly readSessionToken: () => Promise<string | undefined>,

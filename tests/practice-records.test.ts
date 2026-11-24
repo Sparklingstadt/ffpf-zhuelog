@@ -68,7 +68,7 @@ const round: PracticeRound = {
   ],
 };
 const complementRound: ComplementRound = { ...round, mode: "result" };
-// Two misses that are the same choice: Go refused it.
+// Two misses that are the same choice: the round is refused.
 const badRound: PracticeRound = {
   ...round,
   questions: [{ ...round.questions[0], misses: ["对", "对"] }],

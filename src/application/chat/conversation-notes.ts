@@ -122,7 +122,7 @@ export function createConversationNotes(deps: ConversationNotesDeps) {
     },
 
     // Saves the whole conversation the browser sent, title trimmed, under
-    // the model name it sent (as Go did). Another owner's id is a conflict.
+    // the model name it sent. Another owner's id is a conflict.
     async save(input: SaveConversationInput): Promise<SaveConversationResult> {
       const ownerId = await owner();
       const conversation = checkConversation(input);
@@ -139,7 +139,7 @@ export function createConversationNotes(deps: ConversationNotesDeps) {
       return deps.store.remove(ownerId, id);
     },
 
-    // A way to chat, or why there is none. Checked in Go's order: signed
+    // A way to chat, or why there is none. Checked in this order: signed
     // in, a member or admin, not the demo, OpenAI configured.
     async chatter(): Promise<
       { ok: true; asker: Chatter } | { ok: false; reason: AskRefusal }

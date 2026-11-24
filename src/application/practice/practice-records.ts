@@ -65,7 +65,7 @@ export type PracticeRecordsDeps = {
 // Preposition and complement rounds, always the signed-in user's own (the
 // member an admin acts as; the demo has its own too), never an owner from a
 // form. The owner is decided first, so a refused user is refused before the
-// round is checked, as Go answered 403 before 400.
+// round is checked.
 export function createPracticeRecords(deps: PracticeRecordsDeps) {
   async function owner(): Promise<string> {
     const user = await deps.currentUser();

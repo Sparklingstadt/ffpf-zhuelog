@@ -31,9 +31,10 @@ const config = lineConfig();
 const openAi = openAiConfig();
 const links = createLineLinkStore(prisma);
 
-// The bot's log codes that Go logged at Warn. They go to console.error, as
-// Go's other warnings do in the web (the unrecorded AI usage, for one); the
-// others are routine (Go's Info) and go to console.info.
+// The bot's log codes that go to console.error: a failed send or throttle
+// reset, an event without an id, a row settled elsewhere, review messages
+// held back. Every other code (a message deferred, retried or failed, the
+// count sent) goes to console.info.
 const WARNING_CODES = new Set([
   "LINE_REPLY_FAILED",
   "LINE_PUSH_FAILED",

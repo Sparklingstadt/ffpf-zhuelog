@@ -22,18 +22,18 @@ import { createSignInThrottleStore } from "@/infrastructure/prisma/sign-in-throt
 import { ScryptPasswordHasher } from "@/infrastructure/security/scrypt-password-hasher";
 import { errorName } from "@/presentation/controllers/sign-in-controller";
 
-// Signing in on the web, built once per server instance: the Sparklingstadt ID client
+// Signing in, built once per server instance: the Sparklingstadt ID client
 // (and so its JWKS cache) and the hasher's dummy hash live here. The
 // environment (the OAuth apps, the allowlist, the demo login id) is read
-// once, when this module loads: as before, a change needs a redeploy.
+// once, when this module loads: a change needs a redeploy.
 
 const passwords = new ScryptPasswordHasher();
 
 // Builds the dummy hash, so the first unknown login costs one verify like the
-// rest (Go: Warm at startup). Not done at import: every page imports this
-// module (through current-user), and a cold start must not pay a scrypt. The
-// sign-in page calls it while it renders, before anyone can submit a
-// password. Never throws.
+// rest. Not done at import: every page imports this module (through
+// current-user), and a cold start must not pay a scrypt. The sign-in page
+// calls it while it renders, before anyone can submit a password. Never
+// throws.
 export function warmSignIn(): Promise<void> {
   return passwords.warm();
 }

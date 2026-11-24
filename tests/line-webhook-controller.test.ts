@@ -14,7 +14,7 @@ const START = new Date("2026-11-17T00:00:00.000Z");
 const sign = (body: string | Uint8Array) =>
   createHmac("sha256", SECRET).update(body).digest("base64");
 
-// Go's line_handlers_test twoEventBody: two text messages from users.
+// Two text messages from users.
 const twoEventBody = JSON.stringify({
   destination: "x",
   events: ["E1", "E2"].map((id) => ({

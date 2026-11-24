@@ -90,9 +90,8 @@ function toRecord(row: RecordRow): PracticeRecord {
 // The table's CHECK constraint keeps mode to the round modes.
 const modeOf = (row: { mode: string }) => row.mode as ComplementRoundMode;
 
-// Reads and writes the owner's preposition and complement rounds the way the
-// Go API's store did. Every query names the owner; `now` comes from the
-// caller, read once per request.
+// Reads and writes the owner's preposition and complement rounds. Every
+// query names the owner; `now` comes from the caller, read once per request.
 export function createPracticeRecordStore(db: () => PrismaClient) {
   // Saves the row unless its id is taken, reads back the row saved under the
   // id for this owner, and queues that row's misses, in one transaction so a

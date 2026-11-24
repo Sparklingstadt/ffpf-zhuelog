@@ -44,8 +44,8 @@ export async function readChatStream(
   }
 }
 
-// Reads the error text of a failed chat relay response: the relay's
-// {error: string} or Go's {error: {message}}. Anything else gives fallback.
+// Reads the error text of a failed chat relay response, which has one of two
+// shapes: {error: string} or {error: {message}}. Anything else gives fallback.
 export async function readFailureText(
   response: Response,
   fallback: string,

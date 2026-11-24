@@ -11,8 +11,8 @@ import {
 } from "@/presentation/controllers/action-state";
 import { accountForbiddenMessage } from "@/presentation/presenters/account-action-errors";
 
-// The shape only; the review queue checks the item and the owner. logId is a
-// lower-case UUID as Go checked it (crypto.randomUUID() always passes).
+// The shape only; the review queue checks the item and the owner. logId must
+// be a lower-case UUID (crypto.randomUUID() always passes).
 const answerInput = z.object({
   itemId: z.string().min(1),
   logId: z.string().regex(REVIEW_LOG_ID),

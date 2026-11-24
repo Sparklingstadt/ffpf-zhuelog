@@ -33,7 +33,6 @@ test("fitsLimits counts 40 messages and 40000 chars", () => {
 });
 
 test("chat messages are checked for shape, order and length", () => {
-  // Go: chat/chat_test.go TestValidate, plus the shape decodeBody refused.
   const user = (text: string): ChatTurn => ({ role: "user", text });
   const assistant = (text: string): ChatTurn => ({ role: "assistant", text });
   const alternating = (n: number): ChatTurn[] =>
@@ -113,7 +112,6 @@ function saved(
 }
 
 test("a saved conversation is checked for shape, dates and length", () => {
-  // Go: httpapi/chat_handlers_test.go TestConversationCRUD.
   assert.deepEqual(checkConversation(saved()), {
     id: conversationId,
     title: "你好",
@@ -187,8 +185,7 @@ test("a saved conversation is checked for shape, dates and length", () => {
     assert.notEqual(checkConversation(input), null, name);
   }
 
-  // Go: TestConversationPutAllowsTheLastAnswerOverTheLimit. The answer that
-  // takes a conversation over the limit may still be saved.
+  // The answer that takes a conversation over the limit may still be saved.
   const pair = (question: string, answer: string) =>
     saved({
       ended: true,

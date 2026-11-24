@@ -102,8 +102,8 @@ function options(
 }
 
 test("QUICK_QUESTION_INSTRUCTIONS is pinned byte for byte", () => {
-  // Copied from services/api/chat/chat.go QuickQuestionPrompt. A change to
-  // either side must be deliberate.
+  // The instructions are repeated here: a change to either side must be
+  // deliberate.
   const pinnedPrompt =
     "あなたは中国語学習アプリ「学习録」の質問アシスタントです。\n" +
     "中国語学習についての1回だけの質問に、まず要点から簡潔に答えてください。\n" +
@@ -141,9 +141,8 @@ test("the quick question request carries the model, the instructions and store f
 });
 
 test("the chat request carries the model, the instructions and store false", async () => {
-  // Go: chat/openai_test.go TestStreamSendsModelPromptAndStoreFalse, and the
-  // instructions copied from chat/chat.go SystemPrompt. A change to either
-  // side must be deliberate.
+  // The instructions are repeated here: a change to either side must be
+  // deliberate.
   const pinnedPrompt =
     "あなたは中国語学習アプリ「学习録」の会話パートナーです。\n" +
     "ユーザーの中国語学習を支援してください。\n" +

@@ -1,4 +1,3 @@
-// Mirrors the retired services/api/auth/password_change_test.go.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -351,9 +350,8 @@ test("a hash replaced meanwhile is a wrong current password", async () => {
   assert.deepEqual(named(calls, "reset"), []);
 });
 
-// The real hasher rethrows a scrypt failure (Go returns it as an error): the
-// change fails as an error, never as a wrong current password, and nothing
-// is replaced or reset.
+// The real hasher rethrows a scrypt failure: the change fails as an error,
+// never as a wrong current password, and nothing is replaced or reset.
 test("a hasher failure is thrown, not invalid-current-password", async () => {
   const { ownPassword, calls } = fakeDeps(member, {
     verifyError: new RangeError("scrypt"),

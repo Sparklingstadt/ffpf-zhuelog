@@ -1,4 +1,4 @@
-// Go: aiusage recordTimeout. A usage write may take at most this long.
+// A usage write may take at most this long.
 export const RECORD_TIMEOUT_MS = 5_000;
 
 class TimeoutError extends Error {
