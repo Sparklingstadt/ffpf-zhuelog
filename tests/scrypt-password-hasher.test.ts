@@ -54,7 +54,7 @@ test("verify treats malformed hashes as a mismatch without throwing", async () =
   }
 });
 
-test("a scrypt failure is false, as in Go", async () => {
+test("a scrypt failure is false", async () => {
   // A hash parse() accepts cannot make the real scrypt fail (N, r and p are
   // capped), so the computation is swapped for one that fails.
   const stored = await hasher.hash("correct horse battery");
@@ -72,7 +72,7 @@ test("verify refuses stored parameters that would exhaust memory", async () => {
   assert.equal(await hasher.verify("correct horse battery", hostile), false);
 });
 
-test("hashes and verifies exactly as Go does (golden file)", async () => {
+test("hashes and verifies exactly as the golden file records", async () => {
   assert.deepEqual(golden.params, SCRYPT_PARAMS);
   assert.equal(golden.hashes.length, 8);
   assert.equal(golden.verify.length, 16);

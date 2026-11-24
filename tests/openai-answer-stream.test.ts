@@ -101,20 +101,20 @@ function options(
   };
 }
 
-test("QUICK_QUESTION_INSTRUCTIONS is Go's QuickQuestionPrompt, byte for byte", () => {
+test("QUICK_QUESTION_INSTRUCTIONS is pinned byte for byte", () => {
   // Copied from services/api/chat/chat.go QuickQuestionPrompt. A change to
   // either side must be deliberate.
-  const goPrompt =
+  const pinnedPrompt =
     "あなたは中国語学習アプリ「学习録」の質問アシスタントです。\n" +
     "中国語学習についての1回だけの質問に、まず要点から簡潔に答えてください。\n" +
     "- ユーザーが使った言語に合わせて答える。\n" +
     "- 必要に応じて中国語の例文、ピンイン、自然な日本語訳、短い理由を添える。\n" +
     "- 会話の続きや追加の練習を促す質問で締めくくらない。\n" +
     "- 不明点があれば前提を示し、確信がない内容は断定しない。";
-  assert.equal(QUICK_QUESTION_INSTRUCTIONS, goPrompt);
+  assert.equal(QUICK_QUESTION_INSTRUCTIONS, pinnedPrompt);
 });
 
-test("the request is the one Go sent", async () => {
+test("the quick question request carries the model, the instructions and store false", async () => {
   let seen: { url: string; init: RequestInit } | undefined;
   const fetchImpl = serve([completed()], 200, (url, init) => {
     seen = { url, init };
@@ -140,11 +140,11 @@ test("the request is the one Go sent", async () => {
   });
 });
 
-test("the chat request is the one Go sent", async () => {
+test("the chat request carries the model, the instructions and store false", async () => {
   // Go: chat/openai_test.go TestStreamSendsModelPromptAndStoreFalse, and the
   // instructions copied from chat/chat.go SystemPrompt. A change to either
   // side must be deliberate.
-  const goPrompt =
+  const pinnedPrompt =
     "あなたは中国語学習アプリ「学习録」の会話パートナーです。\n" +
     "ユーザーの中国語学習を支援してください。\n" +
     "- 原則として、ユーザーが使った言語に合わせて答える。\n" +
@@ -153,7 +153,7 @@ test("the chat request is the one Go sent", async () => {
     "- 会話練習では細かい訂正で流れを止めすぎず、会話を続けてから要点を整理する。\n" +
     "- 確信がない内容を断定しない。\n" +
     "- 回答は学習しやすい長さにまとめる。";
-  assert.equal(CHAT_INSTRUCTIONS, goPrompt);
+  assert.equal(CHAT_INSTRUCTIONS, pinnedPrompt);
 
   let body: unknown;
   const fetchImpl = serve(

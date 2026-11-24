@@ -401,7 +401,7 @@ function smallSeed(): DemoSeed {
 
 // Go: insertDemoSeed, queueImportBatch, queueHints, queueDemoReview and
 // practiceKind.insert (store/demo.go, entries.go, practice_records.go).
-test("seed rows are Go's rows", () => {
+test("seed rows are built for every table the demo owns", () => {
   let n = 0;
   const seed = smallSeed();
   const rows = demoSeedRows("password:c1", seed, () => `r${++n}`);

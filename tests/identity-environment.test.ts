@@ -52,7 +52,7 @@ test("allowedGitHubIds keeps only numeric ids", () => {
   assert.deepEqual([...allowedGitHubIds()].sort(), ["10001", "2002"]);
 });
 
-test("allowedGitHubIds trims Go's spaces, not String.prototype.trim's", () => {
+test("allowedGitHubIds trims Unicode White_Space, not String.prototype.trim's set", () => {
   // Go's strings.TrimSpace strips U+0085 but keeps U+FEFF.
   process.env.AUTH_ALLOWED_GITHUB_IDS = "\u0085301\u0085,\uFEFF302";
   assert.deepEqual([...allowedGitHubIds()], ["301"]);
@@ -73,7 +73,7 @@ test("demoLoginId is trimmed", () => {
   assert.equal(demoLoginId(), "demo");
 });
 
-test("demoLoginId must already be a login id, as Go's config", () => {
+test("demoLoginId must already be a login id", () => {
   const logged: unknown[][] = [];
   const original = console.error;
   console.error = (...args: unknown[]) => void logged.push(args);
@@ -128,7 +128,7 @@ test("lineConfig needs both LINE values and OpenAI", () => {
   assert.equal(lineConfig(), undefined);
 });
 
-test("lineConfig trims as Go's strings.TrimSpace does", () => {
+test("lineConfig trims Unicode White_Space, not String.prototype.trim's set", () => {
   // Go strips U+0085 and keeps U+FEFF; String.prototype.trim does the opposite.
   setLine({ ...complete, LINE_CHANNEL_SECRET: "\u0085secret\u0085" });
   assert.equal(lineConfig()?.channelSecret, "secret");

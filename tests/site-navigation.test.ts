@@ -175,7 +175,7 @@ test("the menu names the person by role", () => {
   );
 });
 
-test("the demo menu leaves out what Go refuses the demo", () => {
+test("the demo menu leaves out what the demo account may not use", () => {
   const demo = menuSections("member", { demo: true }).flatMap((section) =>
     section.links.map((link) => link.href),
   );

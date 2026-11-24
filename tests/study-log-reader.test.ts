@@ -99,7 +99,7 @@ test("others have no study log", async () => {
   assert.equal(calls.length, 0);
 });
 
-test("a range Go refused never reaches the store", async () => {
+test("a malformed or too-long range never reaches the store", async () => {
   const { log, calls } = reader(member);
   await assert.rejects(log.list("2026-01-01", "2026-04-04"), RangeError);
   await assert.rejects(log.list("2026-11-1", "2026-11-30"), RangeError);

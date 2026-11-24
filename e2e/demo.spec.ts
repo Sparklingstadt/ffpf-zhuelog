@@ -61,7 +61,7 @@ test("the demo reset needs the cron secret", anyWidth, async () => {
 });
 
 // Was Go's TestResetWithTheFixture (services/api/demo/demo_db_test.go, removed in stage 10b).
-test("the reset seeds the demo as Go did", anyWidth, async ({ db }) => {
+test("the reset seeds the demo from the fixture", anyWidth, async ({ db }) => {
   await resetDemo();
   const account = await demoAccount(db);
   expect(account.passwordHash).toBe("demo:no-password");

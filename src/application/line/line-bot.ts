@@ -1,5 +1,5 @@
 import type { ThrottleRule } from "../../domain/identity/sign-in-throttle";
-import { goTrimSpace } from "../../domain/line/go-text";
+import { trimWhiteSpace } from "../../domain/line/white-space";
 import {
   type GenerationFailure,
   LINE_DRAIN_BATCH,
@@ -390,7 +390,7 @@ export function createLineBot(deps: LineBotDeps) {
     async handleEvent(event: LineEvent, deadline: Date): Promise<void> {
       // userId is also filled for group and room events: gate on the source.
       if (!event.fromUser || event.userId === "") return;
-      const text = goTrimSpace(event.text);
+      const text = trimWhiteSpace(event.text);
 
       if (event.isText) {
         const code = readLinkCode(text);

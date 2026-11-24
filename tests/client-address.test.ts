@@ -5,7 +5,7 @@ import {
   normaliseClientAddress,
 } from "../src/infrastructure/auth/client-address";
 
-test("client addresses normalise like the Go API's auth.ClientAddress", () => {
+test("client addresses normalise to the form the throttle keys hold", () => {
   for (const [raw, want] of [
     ["203.0.113.7", "203.0.113.7"],
     [" 203.0.113.7 ", "203.0.113.7"],

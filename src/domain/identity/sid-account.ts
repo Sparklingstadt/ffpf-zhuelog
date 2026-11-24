@@ -1,6 +1,6 @@
 // Sparklingstadt ID members (served by sparklingstadt-id). Their owner id is
 // sid:<sub>; there is no allowlist.
-import { goTrimSpace } from "../line/go-text";
+import { trimWhiteSpace } from "../line/white-space";
 import { firstCodePoints } from "./password-account";
 
 // The sub becomes the owner id sid:<sub>.
@@ -20,7 +20,7 @@ export function emailLocalPart(email: string): string {
 // email before its first "@", at most 50 code points.
 export function sidDisplayName(name: string, email: string): string {
   const trimmed = firstCodePoints(
-    goTrimSpace(name),
+    trimWhiteSpace(name),
     SID_DISPLAY_NAME_MAX_CODE_POINTS,
   );
   if (trimmed !== "") return trimmed;

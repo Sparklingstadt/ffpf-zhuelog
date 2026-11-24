@@ -30,7 +30,7 @@ const preposition = (r: PracticeRound & { mode?: unknown }) =>
 const complement = (r: PracticeRound, mode: unknown = "result") =>
   checkPracticeRound("complement", { ...r, mode });
 
-test("a round is checked as Go checked it", () => {
+test("a round is checked for its bounds and its questions", () => {
   const many = Array.from({ length: PRACTICE_ROUND_LIMITS.questions + 1 }, () =>
     question("在"),
   );

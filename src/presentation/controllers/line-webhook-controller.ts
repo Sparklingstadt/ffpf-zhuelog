@@ -9,7 +9,7 @@ export const LINE_WEBHOOK_MAX_BODY_BYTES = 1_048_576;
 const noStore = { "Cache-Control": "no-store" };
 
 // The errors Go made: {"error": {"code", "message"}}.
-const goError = (code: string, message: string, status: number) =>
+const jsonError = (code: string, message: string, status: number) =>
   Response.json({ error: { code, message } }, { status, headers: noStore });
 
 // Go: lineWebhook (httpapi/line_handlers.go:71-101). The body is read under
@@ -33,7 +33,7 @@ export async function handleLineWebhook(
 ): Promise<Response> {
   const { channelSecret, bot } = deps;
   if (!bot || !channelSecret)
-    return goError("not_found", "見つかりません。", 404);
+    return jsonError("not_found", "見つかりません。", 404);
   const start = deps.now().getTime();
 
   let body: Uint8Array;
@@ -41,8 +41,8 @@ export async function handleLineWebhook(
     body = await readLimitedBody(request, LINE_WEBHOOK_MAX_BODY_BYTES);
   } catch (error) {
     if (error instanceof BodyTooLarge)
-      return goError("too_large", "リクエストが大きすぎます。", 413);
-    return goError("invalid_request", "リクエストが不正です。", 400);
+      return jsonError("too_large", "リクエストが大きすぎます。", 413);
+    return jsonError("invalid_request", "リクエストが不正です。", 400);
   }
 
   if (
@@ -52,11 +52,11 @@ export async function handleLineWebhook(
       request.headers.get("x-line-signature"),
     )
   )
-    return goError("unauthorized", "認証が必要です。", 401);
+    return jsonError("unauthorized", "認証が必要です。", 401);
 
   const events = parseLineWebhook(body);
   if (events === null)
-    return goError("invalid_request", "リクエストが不正です。", 400);
+    return jsonError("invalid_request", "リクエストが不正です。", 400);
 
   const deadline = new Date(start + LINE_TIMING.webhookDeliveryBudgetMs);
   for (const [index, event] of events.entries()) {

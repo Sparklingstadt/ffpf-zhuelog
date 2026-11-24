@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import { newId } from "../src/infrastructure/prisma/new-id";
 
-test("review item ids look like Go's", () => {
+test("review item ids are c and 24 of a-z0-9", () => {
   const seen = new Set<string>();
   for (let i = 0; i < 1000; i += 1) {
     const id = newId();

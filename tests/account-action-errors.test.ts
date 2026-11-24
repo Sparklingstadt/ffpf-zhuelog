@@ -10,7 +10,7 @@ import { genericErrorMessage } from "../src/presentation/presenters/generic-erro
 
 // The texts Go's 400 and 409 answers carried (services/api/auth/validate.go,
 // services/api/httpapi/admin_handlers.go, auth/password_change.go).
-test("account input errors read as Go's messages", () => {
+test("account input errors read as their fixed messages", () => {
   assert.equal(
     accountInputMessage("login-id"),
     "ログインIDは英小文字・数字・. _ - の3〜32文字にしてください。",

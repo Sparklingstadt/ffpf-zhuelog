@@ -37,7 +37,7 @@ export function isJsonObject(value: unknown): value is JsonObject {
 
 // Every value, null included, that Go would decode into the struct field
 // `name`, in order: the keys that match it case-insensitively (Go's fold).
-export function goFieldValues(
+export function fieldValues(
   objects: readonly JsonObject[],
   name: string,
 ): unknown[] {
@@ -51,12 +51,12 @@ export function goFieldValues(
 
 // A string field: the last value (a JSON null leaves it as it was), "" when
 // there is none, and null (a decode error) when any value is not a string.
-export function goString(
+export function stringField(
   objects: readonly JsonObject[],
   name: string,
 ): string | null {
   let out = "";
-  for (const value of goFieldValues(objects, name)) {
+  for (const value of fieldValues(objects, name)) {
     if (value === null) continue;
     if (typeof value !== "string") return null;
     out = value;
@@ -66,12 +66,12 @@ export function goString(
 
 // A nested struct field: the objects that fill it (none when absent or null),
 // or null (a decode error) when any value is not an object.
-export function goStruct(
+export function objectField(
   objects: readonly JsonObject[],
   name: string,
 ): JsonObject[] | null {
   const out: JsonObject[] = [];
-  for (const value of goFieldValues(objects, name)) {
+  for (const value of fieldValues(objects, name)) {
     if (value === null) continue;
     if (!isJsonObject(value)) return null;
     out.push(value);

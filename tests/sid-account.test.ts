@@ -9,7 +9,7 @@ import {
   sidDisplayName,
 } from "../src/domain/identity/sid-account";
 
-test("Go's numbers and sub form", () => {
+test("the display name limit and the sub form", () => {
   assert.equal(SID_DISPLAY_NAME_MAX_CODE_POINTS, 50);
   for (const sub of ["cabc123", "a", "0".repeat(64)]) {
     assert.ok(SID_SUB_PATTERN.test(sub), sub);

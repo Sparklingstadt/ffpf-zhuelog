@@ -1,4 +1,4 @@
-import { goTrimSpace } from "@/domain/line/go-text";
+import { trimWhiteSpace } from "@/domain/line/white-space";
 import type { LineGeneration } from "@/domain/line/line-replies";
 import type { LineLearningKind } from "@/domain/line/line-text";
 import {
@@ -109,7 +109,7 @@ export function parseLineLearning(
 // null unless it is 1..limit code points.
 function clean(s: unknown, limit: number): string | null {
   if (typeof s !== "string") return null;
-  const trimmed = goTrimSpace(s);
+  const trimmed = trimWhiteSpace(s);
   const length = [...trimmed].length;
   return length >= 1 && length <= limit ? trimmed : null;
 }

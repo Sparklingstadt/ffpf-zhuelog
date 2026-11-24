@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { checkPracticeRound } from "../src/domain/practice/practice-round";
 import { practiceRecordRow } from "../src/infrastructure/prisma/practice-record-store";
 
-test("practiceRecordRow keeps Go's counts and question JSON", () => {
+test("practiceRecordRow writes the counts and the question JSON", () => {
   const startedAt = new Date("2026-11-16T08:55:00.000Z");
   const now = new Date("2026-11-16T09:00:00.000Z");
   const round = checkPracticeRound("preposition", {

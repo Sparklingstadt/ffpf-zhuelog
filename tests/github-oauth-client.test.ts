@@ -67,7 +67,7 @@ test("the real endpoints are GitHub's", () => {
   assert.equal(GITHUB_API_URL, "https://api.github.com");
 });
 
-test("the code exchange posts Go's form and reads the user with Go's headers", async () => {
+test("the code exchange posts the PKCE form and reads the user with the API headers", async () => {
   const f = fakeGitHub();
   assert.deepEqual(await f.exchange(), {
     ok: true,

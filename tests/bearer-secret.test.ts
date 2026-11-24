@@ -32,7 +32,7 @@ test('only "Bearer <CRON_SECRET>" passes', () => {
   }
 });
 
-test("a header carries bytes, as Go reads them", () => {
+test("a header is compared as the bytes it carries", () => {
   // Node gives header values as one character per byte; the UTF-8 bytes of
   // the secret match it, as in Go.
   const secret = "秘密";

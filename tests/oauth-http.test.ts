@@ -10,7 +10,7 @@ import {
   loggableOAuthErrorCode,
 } from "../src/infrastructure/auth/oauth-http";
 
-test("Go's numbers: 10 s and 1 MiB", () => {
+test("the limits are 10 s and 1 MiB", () => {
   assert.equal(OAUTH_TIMEOUT_MS, 10_000);
   assert.equal(OAUTH_MAX_BODY_BYTES, 1_048_576);
 });
@@ -26,7 +26,7 @@ test("only code-shaped OAuth errors are logged as is", () => {
   }
 });
 
-test("formUrlEncode is Go's url.QueryEscape", () => {
+test("formUrlEncode keeps unreserved characters and writes a space as +", () => {
   assert.equal(formUrlEncode("a b"), "a+b");
   assert.equal(formUrlEncode("a+b"), "a%2Bb");
   assert.equal(formUrlEncode("x!'()*~"), "x%21%27%28%29%2A~");
@@ -116,7 +116,7 @@ test("fetchLimited cuts the body at maxBytes", async () => {
     assert.equal(result.text.length, OAUTH_MAX_BODY_BYTES);
 });
 
-test("fetchLimited keeps a byte order mark, as Go reads the bytes as they are", async () => {
+test("fetchLimited keeps a byte order mark", async () => {
   const { fetchFn } = recordingFetch(
     () => new Response(new Uint8Array([0xef, 0xbb, 0xbf, 0x7b, 0x7d])),
   );
@@ -180,7 +180,7 @@ test('fetchLimited turns a network error or a timeout into "unavailable"', async
 });
 
 test(
-  "fetchLimited times out a body that stalls after the headers, as Go's Client.Timeout",
+  "fetchLimited times out a body that stalls after the headers",
   { timeout: 5_000 },
   async () => {
     // The headers arrive at once; the body sends two bytes and then nothing,

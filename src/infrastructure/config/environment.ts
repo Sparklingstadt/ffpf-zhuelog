@@ -1,5 +1,5 @@
 import { normalizeLoginId } from "@/domain/identity/password-account";
-import { goTrimSpace } from "@/domain/line/go-text";
+import { trimWhiteSpace } from "@/domain/line/white-space";
 import { normalizeLineOfficialAccountId } from "@/domain/line/official-account";
 
 // Secrets travel to these URLs (the Sparklingstadt ID issuer), so they must be HTTPS
@@ -27,7 +27,7 @@ export function sidConfig():
   { issuer: string; clientId: string; clientSecret: string } | undefined {
   const issuer = process.env.SID_ISSUER?.trim().replace(/\/+$/, "");
   const clientId = process.env.SID_CLIENT_ID?.trim();
-  const clientSecret = goTrimSpace(process.env.SID_CLIENT_SECRET ?? "");
+  const clientSecret = trimWhiteSpace(process.env.SID_CLIENT_SECRET ?? "");
   if (!issuer || !clientId || !clientSecret || !isHttpsOrLoopbackUrl(issuer))
     return undefined;
   return { issuer, clientId, clientSecret };
@@ -39,8 +39,10 @@ export function sidConfig():
 // undefined.
 export function githubOAuthConfig():
   { clientId: string; clientSecret: string } | undefined {
-  const clientId = goTrimSpace(process.env.AUTH_GITHUB_ID ?? "");
-  const clientSecret = goTrimSpace(process.env.GITHUB_WEB_CLIENT_SECRET ?? "");
+  const clientId = trimWhiteSpace(process.env.AUTH_GITHUB_ID ?? "");
+  const clientSecret = trimWhiteSpace(
+    process.env.GITHUB_WEB_CLIENT_SECRET ?? "",
+  );
   if (!clientId || !clientSecret) return undefined;
   return { clientId, clientSecret };
 }
@@ -85,7 +87,7 @@ export function siteUrl(): string {
 export function allowedGitHubIds(): ReadonlySet<string> {
   const ids = (process.env.AUTH_ALLOWED_GITHUB_IDS ?? "")
     .split(",")
-    .map((id) => goTrimSpace(id))
+    .map((id) => trimWhiteSpace(id))
     .filter((id) => /^[0-9]+$/.test(id));
   return new Set(ids);
 }
@@ -98,7 +100,7 @@ let demoLoginIdReported = false;
 // and '-'). Go refused to start otherwise; the web cannot, so it offers no
 // demo and says so once, without the value.
 export function demoLoginId(): string | undefined {
-  const raw = goTrimSpace(process.env.DEMO_LOGIN_ID ?? "");
+  const raw = trimWhiteSpace(process.env.DEMO_LOGIN_ID ?? "");
   if (!raw) return undefined;
   if (normalizeLoginId(raw) === raw) return raw;
   if (!demoLoginIdReported) {
@@ -161,10 +163,12 @@ const DEFAULT_LINE_API_BASE_URL = "https://api.line.me";
 // travels to it, so it must be an http(s) loopback URL; anything else means
 // not configured.
 export function lineConfig(): LineConfig | undefined {
-  const channelSecret = goTrimSpace(process.env.LINE_CHANNEL_SECRET ?? "");
-  const accessToken = goTrimSpace(process.env.LINE_CHANNEL_ACCESS_TOKEN ?? "");
+  const channelSecret = trimWhiteSpace(process.env.LINE_CHANNEL_SECRET ?? "");
+  const accessToken = trimWhiteSpace(
+    process.env.LINE_CHANNEL_ACCESS_TOKEN ?? "",
+  );
   if (!channelSecret || !accessToken || !openAiConfig()) return undefined;
-  const override = goTrimSpace(process.env.LINE_API_BASE_URL ?? "");
+  const override = trimWhiteSpace(process.env.LINE_API_BASE_URL ?? "");
   if (override && !isLoopbackHttpUrl(override)) return undefined;
   return {
     channelSecret,
@@ -176,7 +180,7 @@ export function lineConfig(): LineConfig | undefined {
 // The secret Vercel Cron presents (Go: CRON_SECRET, trimmed); undefined when
 // unset, and every cron call is then refused.
 export function cronSecret(): string | undefined {
-  const secret = goTrimSpace(process.env.CRON_SECRET ?? "");
+  const secret = trimWhiteSpace(process.env.CRON_SECRET ?? "");
   return secret ? secret : undefined;
 }
 

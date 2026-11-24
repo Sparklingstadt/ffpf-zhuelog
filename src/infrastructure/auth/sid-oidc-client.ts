@@ -29,7 +29,7 @@ import type {
   SidIdentity,
 } from "@/application/identity/sign-in";
 import { SID_SUB_PATTERN, emailLocalPart } from "@/domain/identity/sid-account";
-import { goTrimSpace } from "@/domain/line/go-text";
+import { trimWhiteSpace } from "@/domain/line/white-space";
 
 import {
   type OAuthLog,
@@ -102,35 +102,35 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 // Go's encoding/json folds key and field names alike: ASCII letters by
 // case, plus the four non-ASCII letters whose simple case mapping is ASCII.
-const GO_FOLDS_TO_ASCII: Readonly<Record<string, string>> = {
+const FOLDS_TO_ASCII: Readonly<Record<string, string>> = {
   İ: "I", // İ
   ı: "I", // ı
   ſ: "S", // ſ
   K: "K", // Kelvin sign
 };
 
-function goFold(name: string): string {
+function foldName(name: string): string {
   let out = "";
   for (const ch of name) {
-    out += ch < "\u0080" ? ch.toUpperCase() : (GO_FOLDS_TO_ASCII[ch] ?? ch);
+    out += ch < "\u0080" ? ch.toUpperCase() : (FOLDS_TO_ASCII[ch] ?? ch);
   }
   return out;
 }
 
 // The values of the object's keys that Go matches to the field, in order;
 // the last one wins, as Go assigns them in turn.
-function goFieldValues(
+function fieldValues(
   object: Record<string, unknown>,
   field: string,
 ): unknown[] {
-  const folded = goFold(field);
+  const folded = foldName(field);
   return Object.entries(object)
-    .filter(([key]) => goFold(key) === folded)
+    .filter(([key]) => foldName(key) === folded)
     .map(([, value]) => value);
 }
 
 // A Go string field: null leaves it as it was, another type is an error.
-function goString(values: unknown[]): { value: string; bad: boolean } {
+function stringField(values: unknown[]): { value: string; bad: boolean } {
   let value = "";
   let bad = false;
   for (const v of values) {
@@ -142,7 +142,7 @@ function goString(values: unknown[]): { value: string; bad: boolean } {
 
 // A Go pointer field: null makes it nil (undefined), accept() says which
 // values it can hold.
-function goPointer<T>(
+function optionalField<T>(
   values: unknown[],
   accept: (v: unknown) => v is T,
 ): { value: T | undefined; bad: boolean } {
@@ -200,7 +200,7 @@ type Claims = {
 
 // jwt.ClaimStrings: a string or an array of strings; null leaves it as it
 // was.
-function goClaimStrings(values: unknown[]): { value: string[]; bad: boolean } {
+function claimStrings(values: unknown[]): { value: string[]; bad: boolean } {
   let value: string[] = [];
   let bad = false;
   for (const v of values) {
@@ -218,14 +218,14 @@ function decodeClaims(bytes: Buffer): Claims | null {
   if (!parsed) return null;
   const object = parsed.value === null ? {} : parsed.value;
   if (!isObject(object)) return null;
-  const field = (name: string) => goFieldValues(object, name);
-  const iss = goString(field("iss"));
-  const aud = goClaimStrings(field("aud"));
-  const exp = goPointer(field("exp"), isFiniteNumber);
-  const nonce = goString(field("nonce"));
-  const sub = goString(field("sub"));
-  const email = goString(field("email"));
-  const name = goString(field("name"));
+  const field = (name: string) => fieldValues(object, name);
+  const iss = stringField(field("iss"));
+  const aud = claimStrings(field("aud"));
+  const exp = optionalField(field("exp"), isFiniteNumber);
+  const nonce = stringField(field("nonce"));
+  const sub = stringField(field("sub"));
+  const email = stringField(field("email"));
+  const name = stringField(field("name"));
   if ([iss, aud, exp, nonce, sub, email, name].some((f) => f.bad)) return null;
   return {
     iss: iss.value,
@@ -272,7 +272,7 @@ function decodeJwk(value: unknown): Jwk | null {
   if (!isObject(object)) return null;
   const jwk = {} as Jwk;
   for (const name of JWK_FIELDS) {
-    const field = goString(goFieldValues(object, name));
+    const field = stringField(fieldValues(object, name));
     if (field.bad) return null;
     jwk[name] = field.value;
   }
@@ -285,7 +285,7 @@ function decodeJwk(value: unknown): Jwk | null {
 function decodeJwks(text: string): Map<string, KeyObject> | null {
   const parsed = parseJson(text);
   if (!parsed || !isObject(parsed.value)) return null;
-  const list = goPointer(goFieldValues(parsed.value, "keys"), Array.isArray);
+  const list = optionalField(fieldValues(parsed.value, "keys"), Array.isArray);
   if (list.bad || list.value === undefined) return null;
   const jwks = list.value.map(decodeJwk);
   if (jwks.some((jwk) => jwk === null)) return null;
@@ -311,7 +311,10 @@ function decodeJwks(text: string): Map<string, KeyObject> | null {
 function decodeIdToken(text: string): string | null {
   const parsed = parseJson(text);
   if (!parsed || !isObject(parsed.value)) return null;
-  const idToken = goPointer(goFieldValues(parsed.value, "id_token"), isString);
+  const idToken = optionalField(
+    fieldValues(parsed.value, "id_token"),
+    isString,
+  );
   return !idToken.bad && idToken.value ? idToken.value : null;
 }
 
@@ -319,7 +322,7 @@ function decodeIdToken(text: string): string | null {
 function decodeErrorCode(text: string): string {
   const parsed = parseJson(text);
   if (!parsed || !isObject(parsed.value)) return "";
-  return goString(goFieldValues(parsed.value, "error")).value;
+  return stringField(fieldValues(parsed.value, "error")).value;
 }
 
 export function createSidOidcClient(config: {
@@ -517,7 +520,7 @@ export function createSidOidcClient(config: {
     if (!SID_SUB_PATTERN.test(claims.sub)) return reject("sub");
     // Sparklingstadt ID's name may be empty; the email's local part stands in. The
     // sign-in trims and shortens it again for the display name.
-    const name = goTrimSpace(claims.name) || emailLocalPart(claims.email);
+    const name = trimWhiteSpace(claims.name) || emailLocalPart(claims.email);
     return { ok: true, user: { sub: claims.sub, email: claims.email, name } };
   }
 

@@ -6,7 +6,7 @@ import {
   classifyLineText,
 } from "../src/domain/line/line-text";
 
-test("the route is Go's Classify", () => {
+test("a text is routed by its script: correction, translation or unsupported", () => {
   assert.equal(LINE_TEXT_MAX_CODE_POINTS, 500);
   assert.equal(classifyLineText("我喜欢学习"), "correction");
   assert.equal(classifyLineText("今日は雨"), "translation");

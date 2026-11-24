@@ -13,7 +13,7 @@ const textEvent = {
   message: { type: "text", text: "你好" },
 };
 
-test("deliveries are read as Go's ParseWebhook reads them", () => {
+test("deliveries are read into their message events", () => {
   for (const empty of ['{"events":[]}', "{}", "null", '{"events":null}'])
     assert.deepEqual(parse(empty), [], empty);
 
@@ -68,7 +68,7 @@ test("only message events are kept and unknown fields are ignored", () => {
   assert.equal(events?.[0]?.webhookEventId, "E1");
 });
 
-test("null and missing fields are Go's zero values", () => {
+test("null and missing fields read as empty", () => {
   const body = JSON.stringify({
     events: [
       {
@@ -91,7 +91,7 @@ test("null and missing fields are Go's zero values", () => {
   ]);
 });
 
-test("keys match Go's case-insensitive field names", () => {
+test("keys match field names whatever their case", () => {
   const body =
     '{"EVENTS":[{"Type":"message","webhookeventid":"E2","source":{"TYPE":"user","userID":"U2"},"message":{"type":"text","Text":"hi"}}]}';
   assert.deepEqual(parse(body), [
@@ -128,7 +128,7 @@ test("keys match Go's case-insensitive field names", () => {
   assert.equal(parse('{"events":[],"Events":5}'), null);
 });
 
-test("bodies Go's json.Unmarshal refuses are null", () => {
+test("bodies with a field of the wrong type are null", () => {
   for (const body of [
     "not json",
     "[]",

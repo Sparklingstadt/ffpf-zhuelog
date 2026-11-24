@@ -27,7 +27,7 @@ test("the cookie names stay the ones the browser already has", () => {
   assert.deepEqual(LEGACY_SESSION_COOKIES, ["zl_access", "zl_refresh"]);
 });
 
-test("a signed-in browser gets zl_session and loses the act-as and Go cookies", () => {
+test("a signed-in browser gets zl_session and loses the act-as and legacy cookies", () => {
   const token = "T".repeat(43);
   assert.deepEqual(
     signedInCookieWrites({ token, maxAgeSeconds: 2_592_000 }, true),

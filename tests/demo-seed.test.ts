@@ -108,7 +108,7 @@ function assertSameJson(actual: unknown, expected: unknown, where: string) {
   assert.equal(actual, expected, where);
 }
 
-test("the seed is Go's (golden file)", () => {
+test("the seed matches the golden file", () => {
   assert.equal(golden.cases.length, 2);
   for (const c of golden.cases) {
     const seed = buildDemoSeed(fixture, new Date(c.now), counter());
@@ -116,7 +116,7 @@ test("the seed is Go's (golden file)", () => {
   }
 });
 
-test("ids are fresh v4 UUIDs drawn in Go's order", () => {
+test("ids are fresh v4 UUIDs drawn in a fixed order", () => {
   const seed = buildDemoSeed(fixture, resetTime, counter());
   assert.deepEqual(
     seed.words.map((w) => w.id),
@@ -209,7 +209,7 @@ function small(overrides: {
   };
 }
 
-test("practice rounds are counted as Go counted them", () => {
+test("practice rounds are counted from their questions", () => {
   const seed = buildDemoSeed(fixture, resetTime, randomUUID);
   const round = seed.prepositionRecords[0];
   const misses = round.questions.map((q) => q.misses.length);

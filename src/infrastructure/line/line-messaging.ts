@@ -4,11 +4,11 @@
 
 import type { LinePushQuota } from "@/domain/line/line-message";
 import {
-  goFieldValues,
-  goString,
+  fieldValues,
+  stringField,
   isJsonObject,
   type JsonObject,
-} from "@/infrastructure/line/go-json";
+} from "@/infrastructure/line/json-fields";
 
 // A failed call. status is the HTTP status LINE answered with; null when the
 // request was not sent, not answered, or its answer could not be read. The
@@ -120,13 +120,13 @@ export function createLineMessaging(
     // Go: Client.PushQuota (line/quota.go:23-48).
     async pushQuota() {
       const limit = await get("/v2/bot/message/quota");
-      const type = goString(limit, "type");
+      const type = stringField(limit, "type");
       if (type === "none") return { unlimited: true };
       if (type !== "limited") throw new LineApiError(null);
       // Go: Value int, 0 when absent; a null leaves it as it was.
-      const value = goInt(limit, "value", false) ?? 0;
+      const value = intField(limit, "value", false) ?? 0;
       // Go: TotalUsage *int, an error when absent; a null makes it nil.
-      const used = goInt(
+      const used = intField(
         await get("/v2/bot/message/quota/consumption"),
         "totalUsage",
         true,
@@ -140,13 +140,13 @@ export function createLineMessaging(
 // An int field (or *int when nullable): the last value, null when there is
 // none, and a decode error when any value is not an integer. A JSON null
 // makes a pointer nil and leaves an int as it was.
-function goInt(
+function intField(
   objects: readonly JsonObject[],
   name: string,
   nullable: boolean,
 ): number | null {
   let out: number | null = null;
-  for (const value of goFieldValues(objects, name)) {
+  for (const value of fieldValues(objects, name)) {
     if (value === null) {
       if (nullable) out = null;
     } else if (typeof value === "number" && Number.isSafeInteger(value))

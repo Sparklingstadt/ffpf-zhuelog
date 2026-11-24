@@ -1,11 +1,11 @@
 import type { LineEvent } from "@/domain/line/line-message";
 import {
-  goFieldValues,
-  goString,
-  goStruct,
+  fieldValues,
+  stringField,
+  objectField,
   isJsonObject,
   type JsonObject,
-} from "@/infrastructure/line/go-json";
+} from "@/infrastructure/line/json-fields";
 
 // Go: line.ParseWebhook (line/webhook.go:34-57). The message events of a
 // delivery, in order; null when Go's json.Unmarshal would have refused the
@@ -35,7 +35,7 @@ export function parseLineWebhook(body: Uint8Array): LineEvent[] | null {
 
   // A null "events" empties the slice in Go; an array replaces it.
   let events: readonly unknown[] = [];
-  for (const value of goFieldValues([payload], "events")) {
+  for (const value of fieldValues([payload], "events")) {
     if (value === null) events = [];
     else if (Array.isArray(value)) events = value;
     else return null;
@@ -58,11 +58,11 @@ export function parseLineWebhook(body: Uint8Array): LineEvent[] | null {
 // the event's type, as Go decodes the whole body first.
 function readEvent(element: JsonObject): LineEvent | "skip" | null {
   const raw = [element];
-  const type = goString(raw, "type");
-  const webhookEventId = goString(raw, "webhookEventId");
-  const replyToken = goString(raw, "replyToken");
-  const source = goStruct(raw, "source");
-  const message = goStruct(raw, "message");
+  const type = stringField(raw, "type");
+  const webhookEventId = stringField(raw, "webhookEventId");
+  const replyToken = stringField(raw, "replyToken");
+  const source = objectField(raw, "source");
+  const message = objectField(raw, "message");
   if (
     type === null ||
     webhookEventId === null ||
@@ -72,10 +72,10 @@ function readEvent(element: JsonObject): LineEvent | "skip" | null {
   )
     return null;
 
-  const sourceType = goString(source, "type");
-  const userId = goString(source, "userId");
-  const messageType = goString(message, "type");
-  const text = goString(message, "text");
+  const sourceType = stringField(source, "type");
+  const userId = stringField(source, "userId");
+  const messageType = stringField(message, "type");
+  const text = stringField(message, "text");
   if (
     sourceType === null ||
     userId === null ||

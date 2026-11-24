@@ -65,7 +65,7 @@ function harness(
   };
 }
 
-async function assertGoError(
+async function assertJsonError(
   response: Response,
   status: number,
   code: string,
@@ -84,7 +84,7 @@ test("without LINE the webhook does not exist", async () => {
       ...h.deps,
       ...missing,
     });
-    await assertGoError(response, 404, "not_found", "見つかりません。");
+    await assertJsonError(response, 404, "not_found", "見つかりません。");
     assert.equal(read(), false);
     assert.equal(h.calls.length, 0);
   }
@@ -95,7 +95,7 @@ test("an unsigned or wrongly signed webhook is refused after its body is read bu
     const h = harness();
     const { request } = webhook(twoEventBody, signature);
     const response = await handleLineWebhook(request, h.deps);
-    await assertGoError(response, 401, "unauthorized", "認証が必要です。");
+    await assertJsonError(response, 401, "unauthorized", "認証が必要です。");
     assert.equal(h.calls.length, 0);
   }
 });
@@ -104,13 +104,13 @@ test("an oversized body is 413 and a malformed one 400", async () => {
   const big = new Uint8Array(LINE_WEBHOOK_MAX_BODY_BYTES + 1).fill(0x20);
   assert.equal(big.byteLength, 1_048_577);
   const h = harness();
-  await assertGoError(
+  await assertJsonError(
     await handleLineWebhook(webhook(big).request, h.deps),
     413,
     "too_large",
     "リクエストが大きすぎます。",
   );
-  await assertGoError(
+  await assertJsonError(
     await handleLineWebhook(webhook("not json").request, h.deps),
     400,
     "invalid_request",

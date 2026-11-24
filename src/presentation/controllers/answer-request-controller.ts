@@ -14,20 +14,20 @@ const relayError = (message: string, status: number) =>
 
 // The errors Go made: {"error": {"code", "message"}}. The browser and the
 // demo e2e read error.message.
-const goError = (code: string, message: string, status: number) =>
+const jsonError = (code: string, message: string, status: number) =>
   Response.json({ error: { code, message } }, { status, headers: noStore });
 
 const refusals: Record<AskRefusal, () => Response> = {
-  "signed-out": () => goError("unauthorized", "認証が必要です。", 401),
+  "signed-out": () => jsonError("unauthorized", "認証が必要です。", 401),
   forbidden: () =>
-    goError("forbidden", "このアカウントは利用できません。", 403),
-  demo: () => goError("forbidden", "デモでは使えません。", 403),
-  unavailable: () => goError("not_found", "見つかりません。", 404),
+    jsonError("forbidden", "このアカウントは利用できません。", 403),
+  demo: () => jsonError("forbidden", "デモでは使えません。", 403),
+  unavailable: () => jsonError("not_found", "見つかりません。", 404),
 };
 
 // Go's msgChatInvalid.
 const invalidBody = () =>
-  goError(
+  jsonError(
     "invalid_request",
     "会話内容が上限を超えているか、形式が不正です。",
     400,

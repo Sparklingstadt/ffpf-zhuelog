@@ -23,7 +23,7 @@ afterEach(() => {
   else process.env.AUTH_URL = originalAuthUrl;
 });
 
-test("the redirect URI is the Go callback path on the origin", () => {
+test("the redirect URI is the registered callback path on the origin", () => {
   assert.equal(
     githubRedirectUri("https://example.com"),
     "https://example.com/api/auth/callback/github/go",
@@ -192,7 +192,7 @@ function quietConsole() {
   };
 }
 
-test("a successful callback sets zl_session, clears the act-as and Go cookies and goes to the saved path", async () => {
+test("a successful callback sets zl_session, clears the act-as and legacy cookies and goes to the saved path", async () => {
   process.env.AUTH_URL = "https://zhuelog.test";
   const start = createOAuthStart("/notes?x=1");
   const { calls, deps: d } = deps({ ok: true, session: issued });

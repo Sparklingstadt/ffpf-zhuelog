@@ -14,7 +14,7 @@ function flat(sql: { text: string }): string {
   return sql.text.replace(/\s+/g, " ");
 }
 
-test("memberDirectorySql lists the members as Go did", () => {
+test("memberDirectorySql lists every member but the viewer", () => {
   const sql = memberDirectorySql("password:me");
   const text = flat(sql);
   for (const part of [
@@ -38,7 +38,7 @@ test("memberDirectorySql lists the members as Go did", () => {
   assert.deepEqual(count.values, ["password:me"]);
 });
 
-test("directoryFromRows counts as Go did", () => {
+test("directoryFromRows counts follows in both directions", () => {
   const rows = [
     {
       ownerId: "password:a",
@@ -85,7 +85,7 @@ test("directoryFromRows counts as Go did", () => {
   });
 });
 
-test("timelineSql reads the shared notes as Go did", () => {
+test("timelineSql reads the shared notes of the people the viewer follows", () => {
   const sql = timelineSql("password:me", 100);
   const text = flat(sql);
   for (const part of [

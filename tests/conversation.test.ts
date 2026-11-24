@@ -32,7 +32,7 @@ test("fitsLimits counts 40 messages and 40000 chars", () => {
   assert.equal(fitsLimits([{ text: "𠀋".repeat(MAX_TOTAL_CHARS) }]), true);
 });
 
-test("chat messages are checked as Go checked them", () => {
+test("chat messages are checked for shape, order and length", () => {
   // Go: chat/chat_test.go TestValidate, plus the shape decodeBody refused.
   const user = (text: string): ChatTurn => ({ role: "user", text });
   const assistant = (text: string): ChatTurn => ({ role: "assistant", text });
@@ -112,7 +112,7 @@ function saved(
   };
 }
 
-test("a saved conversation is checked as Go checked it", () => {
+test("a saved conversation is checked for shape, dates and length", () => {
   // Go: httpapi/chat_handlers_test.go TestConversationCRUD.
   assert.deepEqual(checkConversation(saved()), {
     id: conversationId,

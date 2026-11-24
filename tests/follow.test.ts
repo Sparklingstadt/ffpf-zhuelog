@@ -6,7 +6,7 @@ import {
   isMemberOwnerId,
 } from "../src/domain/social/follow";
 
-test("member owner ids are Go's", () => {
+test("member owner ids are password: or sid: ids", () => {
   for (const id of ["password:abc", "sid:cabc", "password:" + "a".repeat(64)]) {
     assert.equal(isMemberOwnerId(id), true, id);
   }
