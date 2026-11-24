@@ -35,8 +35,10 @@ version を変えないマージは、Vercel がビルドするだけで、本�
 | 名前                | 種類     | 内容                                                                                 |
 | ------------------- | -------- | ------------------------------------------------------------------------------------ |
 | `VERCEL_TOKEN`      | Secret   | Vercel のアカウントの Settings → Tokens で作るトークン。チームのスコープに限ります。 |
-| `VERCEL_ORG_ID`     | Variable | `.vercel/project.json` の `orgId`                                                    |
-| `VERCEL_PROJECT_ID` | Variable | `.vercel/project.json` の `projectId`                                                |
+| `VERCEL_ORG_ID`     | Variable | チームの ID（`team_` で始まる値）                                                    |
+| `VERCEL_PROJECT_ID` | Variable | プロジェクトの ID（`prj_` で始まる値）                                               |
+
+2 つの ID は、Vercel の画面で見られます。チームの ID は Team Settings → General の「Team ID」、プロジェクトの ID はプロジェクトの Settings → General の「Project ID」です。`vercel link` を済ませたフォルダーなら、`.vercel/project.json` の `orgId` と `projectId` にも同じ値があります（このファイルは Git に入れていないので、GitHub や、別に切ったワークツリーにはありません）。
 
 `deploy` のジョブは GitHub の Environment「Production」で動きます。`VERCEL_TOKEN` は、リポジトリの Secret の代わりに、この Environment の Secret に入れてもかまいません。Environment に承認者（Required reviewers）を設定すると、切り替えの前に承認を求めるようになります。
 
