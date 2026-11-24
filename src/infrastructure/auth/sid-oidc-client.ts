@@ -1,28 +1,27 @@
-// "Sign in with Sparklingstadt ID": the OpenID Connect provider run by sparklingstadt-id,
-// with the authorization code flow and PKCE. Endpoints are built from the issuer (no
-// discovery). The client secret goes only to the token endpoint, as HTTP
-// Basic credentials (client_secret_basic). The ID token is verified here with
-// node:crypto: an ES256 signature by a key of Sparklingstadt ID's JWKS, then iss, aud,
-// exp, nonce, email_verified, email and sub. The access token is not used.
+// "Sign in with Sparklingstadt ID": the OpenID Connect provider run by
+// sparklingstadt-id, with the authorization code flow and PKCE. Endpoints are
+// built from the issuer (no discovery). The client secret goes only to the
+// token endpoint, as HTTP Basic credentials (client_secret_basic). The access
+// token is not used.
 //
-// The checks run in one fixed order (see verify), and every refusal logs the
-// reason word of the first check that failed. JSON is read strictly: a field
-// of the wrong JSON type fails the whole read, null leaves a string field
-// empty, and keys match fields ignoring case. A duplicate key is the one
-// exception: JSON.parse keeps only the last value, so a wrong type in an
-// earlier one is not seen. This is harmless: the token and the JWKS both come
-// from Sparklingstadt ID over TLS, and the token is signed.
+// The ID token is verified with jose: an ES256 signature by a key of
+// Sparklingstadt ID's JWKS, then iss, aud and exp. typ, nonce,
+// email_verified, email and sub are checked here. Both requests go through
+// fetchLimited (no redirects, 10 s, 1 MiB), so jose is given the JWKS as a
+// local key set and never fetches anything itself.
 //
-// Outcomes: "invalid" when Sparklingstadt ID refuses the code or the ID token is not
-// acceptable; "unavailable" for transport and upstream failures. Neither the
-// result nor the log ever carries the code, verifier, nonce, client secret,
-// a token or a claim.
+// Outcomes: "invalid" when Sparklingstadt ID refuses the code or the ID token
+// is not acceptable; "unavailable" for transport and upstream failures.
+// Neither the result nor the log ever carries the code, verifier, nonce,
+// client secret, a token or a claim.
 import {
-  ECDH,
-  createPublicKey,
-  verify as verifySignature,
-  type KeyObject,
-} from "node:crypto";
+  type JSONWebKeySet,
+  type JWTVerifyGetKey,
+  type LocalJWKSet,
+  createLocalJWKSet,
+  errors,
+  jwtVerify,
+} from "jose";
 
 import type {
   ExchangeOutcome,
@@ -41,286 +40,50 @@ import {
 
 // A key Sparklingstadt ID drops is still accepted this long.
 export const SID_JWKS_CACHE_MS = 600_000;
-// An ID token is accepted up to and including exp + 60 s.
+// An ID token is accepted until 60 s after its exp.
 export const SID_LEEWAY_MS = 60_000;
-
-// One non-empty unpadded base64url segment.
-const JWT_SEGMENT = /^[A-Za-z0-9_-]+$/;
-
-// The algs a JWT may name. An unknown alg is refused before the signature
-// segment is decoded, a known one other than ES256 after it.
-const JWT_KNOWN_ALGS = new Set([
-  "ES256",
-  "ES384",
-  "ES512",
-  "EdDSA",
-  "HS256",
-  "HS384",
-  "HS512",
-  "RS256",
-  "RS384",
-  "RS512",
-  "PS256",
-  "PS384",
-  "PS512",
-  "none",
-]);
-
-// exp outside 0..2^53 seconds is refused.
-const MAX_EXP_SECONDS = 2 ** 53;
-
-const P256_COORDINATE_BYTES = 32;
-const ES256_SIGNATURE_BYTES = 64;
 
 const INVALID = { ok: false, reason: "invalid" } as const;
 const UNAVAILABLE = { ok: false, reason: "unavailable" } as const;
 type Failure = typeof INVALID | typeof UNAVAILABLE;
 
-// The bytes are decoded as they are: a byte order mark is not dropped, so
-// JSON that starts with one does not parse.
-const utf8 = new TextDecoder("utf-8", { ignoreBOM: true });
+// Thrown inside jose's key lookup when the JWKS cannot be fetched or read.
+// The reason is logged where it is thrown.
+class JwksUnavailable extends Error {}
 
-// Strict unpadded base64url: no padding, and the unused trailing bits zero,
-// so a segment has one spelling only.
-function strictBase64Url(text: string): Buffer | null {
-  if (!JWT_SEGMENT.test(text)) return null;
-  const bytes = Buffer.from(text, "base64url");
-  return bytes.toString("base64url") === text ? bytes : null;
-}
+// The claims jose checks; a refusal over one of them logs its name.
+const JOSE_CHECKED_CLAIMS = new Set(["iss", "aud", "exp", "nbf", "iat"]);
 
-function parseJson(text: string): { value: unknown } | null {
-  try {
-    return { value: JSON.parse(text) };
-  } catch {
-    return null;
-  }
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-// Keys and field names are compared folded: ASCII letters by case, plus the
-// four non-ASCII letters whose simple case mapping is ASCII.
-const FOLDS_TO_ASCII: Readonly<Record<string, string>> = {
-  İ: "I", // İ
-  ı: "I", // ı
-  ſ: "S", // ſ
-  K: "K", // Kelvin sign
-};
-
-function foldName(name: string): string {
-  let out = "";
-  for (const ch of name) {
-    out += ch < "\u0080" ? ch.toUpperCase() : (FOLDS_TO_ASCII[ch] ?? ch);
-  }
-  return out;
-}
-
-// The values of the object's keys that match the field, in order. The
-// readers below take them in turn, so the last one wins.
-function fieldValues(
-  object: Record<string, unknown>,
-  field: string,
-): unknown[] {
-  const folded = foldName(field);
-  return Object.entries(object)
-    .filter(([key]) => foldName(key) === folded)
-    .map(([, value]) => value);
-}
-
-// A string field: null leaves it as it was, another type is an error.
-function stringField(values: unknown[]): { value: string; bad: boolean } {
-  let value = "";
-  let bad = false;
-  for (const v of values) {
-    if (typeof v === "string") value = v;
-    else if (v !== null) bad = true;
-  }
-  return { value, bad };
-}
-
-// An optional field: null makes it undefined, accept() says which values it
-// can hold.
-function optionalField<T>(
-  values: unknown[],
-  accept: (v: unknown) => v is T,
-): { value: T | undefined; bad: boolean } {
-  let value: T | undefined;
-  let bad = false;
-  for (const v of values) {
-    if (v === null) value = undefined;
-    else if (accept(v)) value = v;
-    else bad = true;
-  }
-  return { value, bad };
-}
-
-const isString = (v: unknown): v is string => typeof v === "string";
-// A number too large for a double (JSON.parse makes it infinite) is refused.
-const isFiniteNumber = (v: unknown): v is number =>
-  typeof v === "number" && Number.isFinite(v);
-
-// Whether value holds a number too large for a double, at any depth.
-function hasInfiniteNumber(value: unknown): boolean {
-  if (typeof value === "number") return !Number.isFinite(value);
-  if (Array.isArray(value)) return value.some(hasInfiniteNumber);
-  if (isObject(value)) return Object.values(value).some(hasInfiniteNumber);
-  return false;
-}
-
-// The JOSE header. A JSON null reads as an empty header: no error, but no alg
-// either. On an error, `made` says whether the JSON was an object at all (it
-// failed only for a number too large), which decides the logged reason.
-function decodeHeader(
-  bytes: Buffer,
-):
-  | { ok: true; header: Record<string, unknown> | null }
-  | { ok: false; made: boolean } {
-  const parsed = parseJson(utf8.decode(bytes));
-  if (!parsed) return { ok: false, made: false };
-  if (parsed.value === null) return { ok: true, header: null };
-  if (!isObject(parsed.value)) return { ok: false, made: false };
-  if (hasInfiniteNumber(parsed.value)) return { ok: false, made: true };
-  return { ok: true, header: parsed.value };
-}
-
-// The claims read from the ID token. iat and nbf are not read.
-type Claims = {
-  iss: string;
-  aud: string[];
-  exp: number | undefined;
-  nonce: string;
-  sub: string;
-  email: string;
-  emailVerified: boolean;
-  name: string;
-};
-
-// The aud claim: a string or an array of strings; null leaves it as it was.
-function claimStrings(values: unknown[]): { value: string[]; bad: boolean } {
-  let value: string[] = [];
-  let bad = false;
-  for (const v of values) {
-    if (v === null) continue;
-    if (typeof v === "string") value = [v];
-    else if (Array.isArray(v) && v.every(isString)) value = v;
-    else bad = true;
-  }
-  return { value, bad };
-}
-
-// null when the ID token payload is not a JSON object or a claim has the wrong type.
-function decodeClaims(bytes: Buffer): Claims | null {
-  const parsed = parseJson(utf8.decode(bytes));
-  if (!parsed) return null;
-  const object = parsed.value === null ? {} : parsed.value;
-  if (!isObject(object)) return null;
-  const field = (name: string) => fieldValues(object, name);
-  const iss = stringField(field("iss"));
-  const aud = claimStrings(field("aud"));
-  const exp = optionalField(field("exp"), isFiniteNumber);
-  const nonce = stringField(field("nonce"));
-  const sub = stringField(field("sub"));
-  const email = stringField(field("email"));
-  const name = stringField(field("name"));
-  if ([iss, aud, exp, nonce, sub, email, name].some((f) => f.bad)) return null;
-  return {
-    iss: iss.value,
-    aud: aud.value,
-    exp: exp.value,
-    nonce: nonce.value,
-    sub: sub.value,
-    email: email.value,
-    // Only the JSON literal true counts.
-    emailVerified: field("email_verified").at(-1) === true,
-    name: name.value,
-  };
-}
-
-// x and y strict base64url of 32 bytes each, and the point
-// on P-256 (ECDH.convertKey checks it).
-function p256Key(x: string, y: string): KeyObject | null {
-  const xBytes = strictBase64Url(x);
-  const yBytes = strictBase64Url(y);
+// The logged word for an ID token jose refused. Always one of these fixed
+// words: jose's own messages and the token's contents are never logged.
+function refusalReason(error: unknown): string {
+  if (error instanceof errors.JOSEAlgNotAllowed) return "alg";
   if (
-    xBytes?.length !== P256_COORDINATE_BYTES ||
-    yBytes?.length !== P256_COORDINATE_BYTES
+    error instanceof errors.JWKSNoMatchingKey ||
+    error instanceof errors.JWKSMultipleMatchingKeys
   )
-    return null;
+    return "kid";
+  if (error instanceof errors.JWSSignatureVerificationFailed)
+    return "signature";
+  if (error instanceof errors.JWTExpired) return "exp";
+  if (error instanceof errors.JWTClaimValidationFailed)
+    return JOSE_CHECKED_CLAIMS.has(error.claim) ? error.claim : "claims";
+  if (error instanceof errors.JWSInvalid || error instanceof errors.JWTInvalid)
+    return "malformed";
+  // A key of the JWKS that cannot be used, or a header jose does not support.
+  return "unverifiable";
+}
+
+// The members of a JSON object; none when text is anything else.
+function jsonObject(text: string): Record<string, unknown> {
   try {
-    ECDH.convertKey(
-      Buffer.concat([Buffer.from([0x04]), xBytes, yBytes]),
-      "prime256v1",
-    );
-    return createPublicKey({
-      key: { kty: "EC", crv: "P-256", x, y },
-      format: "jwk",
-    });
+    const value: unknown = JSON.parse(text);
+    return typeof value === "object" && value !== null
+      ? (value as Record<string, unknown>)
+      : {};
   } catch {
-    return null;
+    return {};
   }
-}
-
-const JWK_FIELDS = ["kty", "crv", "use", "kid", "x", "y"] as const;
-type Jwk = Record<(typeof JWK_FIELDS)[number], string>;
-
-function decodeJwk(value: unknown): Jwk | null {
-  const object = value === null ? {} : value;
-  if (!isObject(object)) return null;
-  const jwk = {} as Jwk;
-  for (const name of JWK_FIELDS) {
-    const field = stringField(fieldValues(object, name));
-    if (field.bad) return null;
-    jwk[name] = field.value;
-  }
-  return jwk;
-}
-
-// The JWKS body. null when it is not JSON, has no keys array, or a
-// key's field has the wrong type. Keys other than P-256 EC signing keys with
-// a kid are left out, and only the first key of a kid is kept.
-function decodeJwks(text: string): Map<string, KeyObject> | null {
-  const parsed = parseJson(text);
-  if (!parsed || !isObject(parsed.value)) return null;
-  const list = optionalField(fieldValues(parsed.value, "keys"), Array.isArray);
-  if (list.bad || list.value === undefined) return null;
-  const jwks = list.value.map(decodeJwk);
-  if (jwks.some((jwk) => jwk === null)) return null;
-
-  const keys = new Map<string, KeyObject>();
-  for (const jwk of jwks as Jwk[]) {
-    if (
-      jwk.kty !== "EC" ||
-      jwk.crv !== "P-256" ||
-      jwk.kid === "" ||
-      (jwk.use !== "" && jwk.use !== "sig") ||
-      keys.has(jwk.kid)
-    )
-      continue;
-    const key = p256Key(jwk.x, jwk.y);
-    if (key) keys.set(jwk.kid, key);
-  }
-  return keys;
-}
-
-// The token endpoint's success body. The id_token when it is a non-empty
-// string, else null.
-function decodeIdToken(text: string): string | null {
-  const parsed = parseJson(text);
-  if (!parsed || !isObject(parsed.value)) return null;
-  const idToken = optionalField(
-    fieldValues(parsed.value, "id_token"),
-    isString,
-  );
-  return !idToken.bad && idToken.value ? idToken.value : null;
-}
-
-// The token endpoint's error body: its error code, "" when it has none.
-function decodeErrorCode(text: string): string {
-  const parsed = parseJson(text);
-  if (!parsed || !isObject(parsed.value)) return "";
-  return stringField(fieldValues(parsed.value, "error")).value;
 }
 
 export function createSidOidcClient(config: {
@@ -343,10 +106,9 @@ export function createSidOidcClient(config: {
     `${formUrlEncode(config.clientId)}:${formUrlEncode(config.clientSecret)}`,
   ).toString("base64");
 
-  // The JWKS by kid and when it was fetched; one per client object, so the
+  // The JWKS and when it was fetched; one per client object, so the
   // composition makes one client per instance.
-  let cachedKeys = new Map<string, KeyObject>();
-  let fetchedAt: number | undefined;
+  let jwks: { keySet: LocalJWKSet; fetchedAt: number } | undefined;
 
   // Logs a refusal. reason is a fixed word, never request data.
   function reject(
@@ -397,128 +159,101 @@ export function createSidOidcClient(config: {
       // one, so an answer that echoes the request never reaches the log.
       return reject("token_endpoint", {
         status,
-        sid_error: loggableOAuthErrorCode(decodeErrorCode(text)),
+        sid_error: loggableOAuthErrorCode(jsonObject(text).error),
       });
     }
     // 3xx included: redirects are never followed.
     if (status < 200 || status > 299)
       return unavailable("token_status", { status });
-    return decodeIdToken(text) ?? reject("id_token");
+    const idToken = jsonObject(text).id_token;
+    return typeof idToken === "string" && idToken !== ""
+      ? idToken
+      : reject("id_token");
   }
 
-  async function fetchJwks(): Promise<Map<string, KeyObject> | Failure> {
+  // Fetches the JWKS and hands it to jose as a local key set.
+  async function fetchJwks(): Promise<LocalJWKSet> {
+    const failed = (
+      reason: string,
+      fields: Record<string, string | number> = {},
+    ) => {
+      unavailable(reason, fields);
+      return new JwksUnavailable();
+    };
     const response = await fetchLimited(fetchFn, jwksUrl, {
       method: "GET",
       headers: { Accept: "application/json" },
     });
-    if (response === "unavailable") return unavailable("transport");
+    if (response === "unavailable") throw failed("transport");
     if (response.status !== 200)
-      return unavailable("jwks_status", { status: response.status });
-    return decodeJwks(response.text) ?? unavailable("jwks_body");
+      throw failed("jwks_status", { status: response.status });
+    try {
+      // jose refuses anything but an object with a keys array of objects.
+      return createLocalJWKSet(JSON.parse(response.text) as JSONWebKeySet);
+    } catch {
+      throw failed("jwks_body");
+    }
   }
 
-  // The key of kid. The JWKS is fetched when the cache is older than 10
-  // minutes or lacks kid (Sparklingstadt ID may have rotated), but at most
-  // once per ID token. A failed fetch is unavailable even when a stale key of
-  // kid is cached; a kid the fresh JWKS lacks too is refused.
-  async function keyFor(kid: string): Promise<{ key: KeyObject } | Failure> {
-    const cached = cachedKeys.get(kid);
-    const fresh =
-      fetchedAt !== undefined &&
-      now().getTime() - fetchedAt < SID_JWKS_CACHE_MS;
-    if (cached && fresh) return { key: cached };
-    const keys = await fetchJwks();
-    if (!(keys instanceof Map)) return keys;
-    cachedKeys = keys;
-    fetchedAt = now().getTime();
-    const key = keys.get(kid);
-    return key ? { key } : reject("kid");
-  }
+  // The key for an ID token's header. The JWKS is fetched when the cache is
+  // older than 10 minutes or has no key for the kid (Sparklingstadt ID may
+  // have rotated), but at most once per ID token. A failed fetch is
+  // unavailable even when a stale key of the kid is cached; a kid the fresh
+  // JWKS lacks too is refused.
+  const keyFor: JWTVerifyGetKey = async (header, token) => {
+    // A kid is required: without one jose would take the JWKS's only key.
+    if (typeof header.kid !== "string" || header.kid === "")
+      throw new errors.JWKSNoMatchingKey();
+    if (jwks && now().getTime() - jwks.fetchedAt < SID_JWKS_CACHE_MS) {
+      try {
+        return await jwks.keySet(header, token);
+      } catch (error) {
+        if (!(error instanceof errors.JWKSNoMatchingKey)) throw error;
+      }
+    }
+    jwks = { keySet: await fetchJwks(), fetchedAt: now().getTime() };
+    return jwks.keySet(header, token);
+  };
 
-  // Verifies the ID token. The checks run in this order, and the first that
-  // fails is the logged reason: the three segments, the header, the claims'
-  // JSON, alg, the signature segment, typ, kid and its key, the signature,
-  // then iss, aud, exp (required), nonce, email_verified, email and sub.
+  // Verifies the ID token and reads the user from it. jose checks alg before
+  // it asks for a key, so a token of another alg never causes a JWKS fetch.
   async function verify(
     idToken: string,
     nonce: string,
   ): Promise<ExchangeOutcome<SidIdentity>> {
-    // Three non-empty base64url segments, so an unsigned "header.claims."
-    // is malformed rather than a wrong alg.
-    const segments = idToken.split(".");
-    if (
-      segments.length !== 3 ||
-      !segments.every((segment) => JWT_SEGMENT.test(segment))
-    )
-      return reject("malformed");
-    const [headerSegment, claimsSegment, signatureSegment] = segments as [
-      string,
-      string,
-      string,
-    ];
-
-    const headerBytes = strictBase64Url(headerSegment);
-    if (!headerBytes) return reject("malformed");
-    const decodedHeader = decodeHeader(headerBytes);
-    if (!decodedHeader.ok)
-      return reject(decodedHeader.made ? "claims" : "header");
-    const header = decodedHeader.header ?? {};
-
-    const claimsBytes = strictBase64Url(claimsSegment);
-    if (!claimsBytes) return reject("malformed");
-    const claims = decodeClaims(claimsBytes);
-    if (!claims)
-      return reject(decodedHeader.header === null ? "header" : "claims");
-
-    const { alg, typ, kid } = header;
-    if (typeof alg !== "string" || !JWT_KNOWN_ALGS.has(alg))
-      return reject("alg");
-    const signature = strictBase64Url(signatureSegment);
-    if (!signature) return reject("malformed");
-    // Neither "none" nor an HMAC keyed with the public key gets in.
-    if (alg !== "ES256") return reject("alg");
-
-    if (typ !== undefined && typ !== null && typ !== "JWT")
+    let verified;
+    try {
+      verified = await jwtVerify(idToken, keyFor, {
+        // Neither "none" nor an HMAC keyed with the public key gets in.
+        algorithms: ["ES256"],
+        issuer,
+        audience: config.clientId,
+        requiredClaims: ["exp"],
+        clockTolerance: SID_LEEWAY_MS / 1000,
+        currentDate: now(),
+      });
+    } catch (error) {
+      if (error instanceof JwksUnavailable) return UNAVAILABLE;
+      return reject(refusalReason(error));
+    }
+    const { payload, protectedHeader } = verified;
+    // typ may be left out, but another kind of JWT signed with the same key
+    // is not an ID token.
+    if (protectedHeader.typ !== undefined && protectedHeader.typ !== "JWT")
       return reject("typ");
-    if (typeof kid !== "string" || kid === "") return reject("kid");
-    const found = await keyFor(kid);
-    if (!("key" in found)) return found;
-
-    // ES256: ECDSA P-256 over SHA-256 of header.claims, r‖s of 32 bytes
-    // each.
-    if (
-      signature.length !== ES256_SIGNATURE_BYTES ||
-      !verifyEs256(`${headerSegment}.${claimsSegment}`, found.key, signature)
-    )
-      return reject("signature");
-
-    // iss, then aud, then exp: the first that fails is the reason logged.
-    if (claims.iss !== issuer) return reject("iss");
-    const { aud } = claims;
-    if (
-      aud.length === 0 ||
-      (aud.length === 1 && aud[0] === "") ||
-      !aud.includes(config.clientId)
-    )
-      return reject("aud");
-    const { exp } = claims;
-    if (
-      exp === undefined ||
-      exp < 0 ||
-      exp > MAX_EXP_SECONDS ||
-      // A fractional exp counts as its whole seconds.
-      now().getTime() > Math.trunc(exp) * 1000 + SID_LEEWAY_MS
-    )
-      return reject("exp");
-
-    if (claims.nonce !== nonce) return reject("nonce");
-    if (!claims.emailVerified) return reject("email_verified");
-    if (claims.email === "") return reject("email");
-    if (!SID_SUB_PATTERN.test(claims.sub)) return reject("sub");
-    // Sparklingstadt ID's name may be empty; the email's local part stands in. The
-    // sign-in trims and shortens it again for the display name.
-    const name = trimWhiteSpace(claims.name) || emailLocalPart(claims.email);
-    return { ok: true, user: { sub: claims.sub, email: claims.email, name } };
+    if (payload.nonce !== nonce) return reject("nonce");
+    // Only the JSON literal true counts.
+    if (payload.email_verified !== true) return reject("email_verified");
+    const { sub, email, name } = payload;
+    if (typeof email !== "string" || email === "") return reject("email");
+    if (typeof sub !== "string" || !SID_SUB_PATTERN.test(sub))
+      return reject("sub");
+    // Sparklingstadt ID's name may be empty; the email's local part stands
+    // in. The sign-in trims and shortens it again for the display name.
+    const displayName =
+      (typeof name === "string" && trimWhiteSpace(name)) ||
+      emailLocalPart(email);
+    return { ok: true, user: { sub, email, name: displayName } };
   }
 
   return {
@@ -537,21 +272,4 @@ export function createSidOidcClient(config: {
       return verify(idToken, nonce);
     },
   };
-}
-
-function verifyEs256(
-  signingInput: string,
-  key: KeyObject,
-  signature: Buffer,
-): boolean {
-  try {
-    return verifySignature(
-      "sha256",
-      Buffer.from(signingInput, "ascii"),
-      { key, dsaEncoding: "ieee-p1363" },
-      signature,
-    );
-  } catch {
-    return false;
-  }
 }

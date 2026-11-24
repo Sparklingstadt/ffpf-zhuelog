@@ -128,6 +128,25 @@ test("the import check catches each forbidden form", () => {
   ]);
 });
 
+// JWT verification is a detail of the sign-in clients: jose is imported only
+// under infrastructure.
+test("only infrastructure imports jose", () => {
+  const files = readdirSync(root, { recursive: true, encoding: "utf8" })
+    .map((path) => path.replaceAll("\\", "/"))
+    .filter((path) => /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(path))
+    .filter((path) => !path.startsWith("generated/"));
+  const importers = files.filter((path) =>
+    moduleSpecifiers(readFileSync(`${root}${path}`, "utf8")).some((specifier) =>
+      /^jose(\/|$)/.test(specifier),
+    ),
+  );
+  assert.ok(importers.length > 0);
+  assert.deepEqual(
+    importers.filter((path) => !path.startsWith("infrastructure/")),
+    [],
+  );
+});
+
 // UI components take nothing from infrastructure; browser-side stores come
 // through composition/browser-preferences.ts (eslint.config.mjs agrees).
 test("UI components never import infrastructure", () => {
