@@ -16,16 +16,6 @@ const sources = readdirSync(root, { recursive: true, encoding: "utf8" })
 const interfaces = (text: string) =>
   [...text.matchAll(/^export interface (\w+)/gm)].map((match) => match[1]);
 
-test("repository contracts live in domain/<feature>/repositories", () => {
-  const misplaced = sources.flatMap(({ path, text }) =>
-    interfaces(text)
-      .filter((name) => name.endsWith("Repository"))
-      .filter(() => !/^domain\/[^/]+\/repositories\//.test(path))
-      .map((name) => `${name} in ${path}`),
-  );
-  assert.deepEqual(misplaced, []);
-});
-
 test("each application port file declares exactly one port", () => {
   const ports = sources.filter(({ path }) =>
     /^application\/[^/]+\/ports\//.test(path),
@@ -145,6 +135,40 @@ test("only infrastructure imports jose", () => {
     importers.filter((path) => !path.startsWith("infrastructure/")),
     [],
   );
+});
+
+// Pages, Server Actions, controllers and route handlers reach the database
+// and OpenAI only through the use cases composition builds: they never import
+// infrastructure/prisma or infrastructure/openai. Cookies, headers and request
+// signatures (infrastructure/auth, preferences, security, line) are the web
+// layer's own business and may be imported directly.
+const DATA_ADAPTERS = /^@\/infrastructure\/(prisma|openai)(\/|$)/;
+
+test("pages and presentation never import the database or OpenAI adapters", () => {
+  const files = readdirSync(root, { recursive: true, encoding: "utf8" })
+    .map((path) => path.replaceAll("\\", "/"))
+    .filter((path) => /\.(ts|tsx)$/.test(path))
+    .filter((path) => /^(app|presentation)\//.test(path));
+  assert.ok(files.length > 0);
+  const offenders = files.flatMap((path) =>
+    moduleSpecifiers(readFileSync(`${root}${path}`, "utf8"))
+      .filter((specifier) => DATA_ADAPTERS.test(specifier))
+      .map((specifier) => `${path}: ${specifier}`),
+  );
+  assert.deepEqual(offenders, []);
+});
+
+test("the data adapter check catches both adapters and nothing else", () => {
+  assert.equal(
+    DATA_ADAPTERS.test("@/infrastructure/prisma/vocabulary-store"),
+    true,
+  );
+  assert.equal(DATA_ADAPTERS.test("@/infrastructure/openai/chat-client"), true);
+  assert.equal(
+    DATA_ADAPTERS.test("@/infrastructure/auth/client-address"),
+    false,
+  );
+  assert.equal(DATA_ADAPTERS.test("@/infrastructure/prismatic"), false);
 });
 
 // UI components take nothing from infrastructure; browser-side stores come

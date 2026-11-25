@@ -18,6 +18,15 @@ export class VocabularyForbiddenError extends Error {
   override name = "VocabularyForbiddenError";
 }
 
+// The store throws these: no word of the owner's under that id, or the owner
+// already has the word.
+export class VocabularyNotFoundError extends Error {
+  override name = "VocabularyNotFoundError";
+}
+export class VocabularyExistsError extends Error {
+  override name = "VocabularyExistsError";
+}
+
 export type VocabularyBookDeps = {
   currentUser: () => Promise<AuthenticatedUser | null>;
   store: {
