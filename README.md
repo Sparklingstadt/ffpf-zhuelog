@@ -42,13 +42,19 @@
 - **層を分ける**：Web のコードは `domain`・`application`・`infrastructure`・`presentation`・`composition` に分け、内側の層が Next.js や React に依存しないことを ESLint とテストで検査します。
 - **復習を 1 つの列にする**：学習ノート、練習の間違い、単語帳の語句を、同じ FSRS のカードとして 1 つの「今日の復習」に並べます。
 - **AI の費用を測ってから考える**：OpenAI を呼ぶ 4 か所のトークン数を記録し、料金や無料枠はその数字を見てから考える順にしました。
-- **Go をやめて Next.js 1 つにした**：以前は Go の API を別に持っていましたが、自分で読んで処理を追えるように、2026 年 11 月に機能ごとに Next.js へ移し、Go を消しました（段階 0〜12）。経緯は [docs/architecture.md](docs/architecture.md) の 2. にあります。
+- **Go をやめて Next.js 1 つにした**：以前は Go の API を別に持っていましたが、AI のサブスクリプションをやめても自分で保守できるように、2026 年 11 月に機能ごとに Next.js へ移し、Go を消しました（段階 0〜12）。Go を学ぶよりも Next.js を深く理解することを優先し、このアプリをその教材にしています。経緯は [docs/architecture.md](docs/architecture.md) の 2. にあります。
 
 全体の図、認証の流れ、選んだ理由と捨てた案は [docs/architecture.md](docs/architecture.md) にまとめています。
 
+## AI との分担
+
+- **自分で決めたこと**：機能とデザイン、練習の出題とその出し方、LINE 連携やチャットなど、何を作り、どう見せるか。
+- **AI を使ったこと**：その実装。AI と書いたコミットには `Co-Authored-By` が付いています。
+- **確かめ方**：実装は、下の「品質」にある単体テスト・E2E・CI で確かめています。
+
 ## 品質
 
-- 単体テスト 797 件（TypeScript）、E2E 269 件（Playwright。PC の幅で 164 件、そのうち画面幅で結果が変わりうる 105 件はスマホの幅でも実行）があります。
+- 単体テスト 799 件（TypeScript）、E2E 269 件（Playwright。PC の幅で 164 件、そのうち画面幅で結果が変わりうる 105 件はスマホの幅でも実行）があります。
 - E2E は、Docker の Postgres、Web、OpenAI と LINE と Sparklingstadt ID のスタブを立ち上げて、本物の画面を通して確かめます。
 - commit の前に format・lint・型チェック、push の前に単体テストと E2E を lefthook が走らせます。
 - プルリクエストと main では、GitHub Actions の `verify` が同じ検査に `pnpm audit` と本番ビルドを足して走らせます。version を上げたマージは、`release` がタグと GitHub Release を作り、`deploy` が本番を切り替えます。
