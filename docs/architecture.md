@@ -142,8 +142,12 @@ GitHub と Sparklingstadt ID が code を交換するときの `redirect_uri` �
 
 ## 5. 復習
 
-- **計算**：FSRS-6（重みが 21 個の版のアルゴリズム）で次の期日を決めます。Web が `src/domain/review/fsrs.ts`（[go-fsrs](https://github.com/open-spaced-repetition/go-fsrs) v4.0.0 を手で移した TypeScript。v4.0.0 はライブラリの版で、中身のアルゴリズムは FSRS-6）で計算し、`ReviewItem` と `ReviewLog` も Prisma で直接読み書きします。`tests/fixtures/fsrs-golden.json`（go-fsrs の結果を書いた固定のファイル）と同じ結果になることを、Web のテストで確かめます。定着率 90%、学習中のステップは 1 分と 10 分です。評価は「もう一度・難しい・できた・簡単」の 4 段階です。
-- **ライブラリを使わない理由**：npm の [ts-fsrs](https://github.com/open-spaced-repetition/ts-fsrs) 6.0.1 に同じ設定で固定値の 18 ケース（59 回の回答）を通すと、学習中の「難しい」の期日が 30 秒早くなり（3 回。go-fsrs は 5.5 分を 6 分に丸め、ts-fsrs は丸めません）、stability と difficulty は小数 8 桁に丸められます。乱数で作った 50 万回の回答では、この丸めだけで次の期日が 1 日ずれる例が 3 件ありました。本番のカードは丸めのない値で保存してあるので、期日を変えないために手書きのまま残しています。
+- **計算**：FSRS-6（重みが 21 個の版のアルゴリズム）で次の期日を決めます。計算は npm の [ts-fsrs](https://github.com/open-spaced-repetition/ts-fsrs) 6.0.1 が行い、`src/domain/review/fsrs.ts` は、`ReviewItem` の列とライブラリのカードの形を変換するだけです。定着率 90%、学習中のステップは 1 分と 10 分、再学習のステップは 10 分、ばらつき（fuzz）はなしです。評価は「もう一度・難しい・できた・簡単」の 4 段階です。
+- **ライブラリの組み立て方**：ts-fsrs の `DefaultScheduler({ version: "FSRS-6" })` はモデルを非同期で読み込むので、同じ部品（モデルと、定着率・学習ステップ・最大間隔などの決まり）を同じ順に `defineScheduler` で組み立て、同期の関数のまま呼べるようにしています。`DefaultScheduler` と同じ答えになることを `tests/review-fsrs.test.ts` で確かめています。6.0 で非推奨になった `fsrs()` は使いません。
+- **以前の計算との違い**：2026 年 11 月まで、計算は [go-fsrs](https://github.com/open-spaced-repetition/go-fsrs) v4.0.0 を手で移した TypeScript でした。そのころに保存したカードは、そのまま続きから計算できます（状態・回数・残りのステップは変わりません）。期日が変わるのは次の場合だけで、`tests/fixtures/fsrs-golden.json`（go-fsrs の結果を書いた固定のファイル）でこの範囲に収まることを確かめています。
+  - 新しいカードと学習中のカードの「難しい」は 5.5 分後です（以前は 6 分に丸めていました）。
+  - 学習中・再学習中の「簡単」は、「できた」より必ず 1 日以上あとになります。そのため、以前より 1 日遅くなることがあります。
+  - stability と difficulty は小数 8 桁に丸めます。乱数で作った 50 万回の回答では、復習中のカードの期日が 1 日ずれたのが 7 回でした。
 - **1 つの列にまとめる**：学習ノート、介詞と補語の練習の間違い、単語帳の語句を、どれも `ReviewItem`（`kind` と `targetId`）として同じ表に置きます。そのため、「今日の復習」は 1 つの列で済みます。FSRS のカードの状態（stability、difficulty、due など）は列に持ち、`(ownerId, due)` の索引で期日の来たものを引きます。
 - **答えの記録**：答えは `ReviewLog` に残します。あとで FSRS のパラメーターを本人の記録に合わせられるようにするためです。
 - **ゴミ箱との関係**：ゴミ箱に入れた学習ノートは、復習の列から外します。
