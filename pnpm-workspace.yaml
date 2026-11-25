@@ -4,6 +4,11 @@ overrides:
   # （Schema.TemplateLiteral の ReDoS）に当たるので、直った最初の版に上げる。
   # Prisma が 3.22.1 以上を使うようになったら削除する。
   "effect": "3.22.1"
+  # minimatch 10 以下は GHSA-g3hv-75wg-m249（globparts による DoS）に当たり、
+  # 直った版は 11.0.1 以上だけ。@typescript-eslint/typescript-estree が ^10 を
+  # 求めているが、使うのは minimatch() 1 つで、v11 でも同じ形なので上げる。
+  # typescript-eslint が v11 を使うようになったら削除する。
+  "minimatch@>=7 <11.0.1": "11.0.9"
   "mysql2": "3.24.4"
 allowBuilds:
   # sass が使うファイル監視。OS ごとのビルド済みバイナリが optionalDependencies で
@@ -15,9 +20,3 @@ allowBuilds:
   "lefthook": true
   "prisma": true
   "unrs-resolver": true
-auditConfig:
-  ignoreGhsas:
-    # minimatch <11.0.1: 修正版は v11 のみで、v3／v10 系には出ていない。eslint と
-    # typescript-eslint 経由の開発時のみの依存で、アプリの実行時には読み込まれない。
-    # 依存元が v11 に対応したら削除する。
-    - GHSA-g3hv-75wg-m249
