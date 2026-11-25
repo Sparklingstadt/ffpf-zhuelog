@@ -1,3 +1,7 @@
+import {
+  VocabularyExistsError,
+  VocabularyNotFoundError,
+} from "../../application/vocabulary/vocabulary-book";
 import type { PrismaClient } from "../../generated/prisma/client";
 import type {
   VocabularyEntry,
@@ -8,13 +12,6 @@ import { newId } from "./new-id";
 const LANGUAGE = "zh";
 const REVIEW_KIND = "vocabulary";
 const LIST_LIMIT = 1000;
-
-export class VocabularyNotFoundError extends Error {
-  override name = "VocabularyNotFoundError";
-}
-export class VocabularyExistsError extends Error {
-  override name = "VocabularyExistsError";
-}
 
 // What to do with a save, given who owns the row already stored under the id
 // (null when there is none).

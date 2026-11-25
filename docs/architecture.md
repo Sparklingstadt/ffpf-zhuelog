@@ -78,8 +78,8 @@ flowchart LR
 
 ```text
 src/
-├── domain/          # エンティティ、値オブジェクト、リポジトリの契約（Next.js・React に依存しない）
-├── application/     # ユースケースと外部サービスのポート
+├── domain/          # エンティティ、値オブジェクト、規則（Next.js・React に依存しない）
+├── application/     # ユースケース。使う store や外部サービスの形を、引数の型として持つ
 ├── infrastructure/  # Prisma、Cookie とセッション、OAuth、OpenAI、設定の実装
 ├── presentation/    # 画面部品、Server Action、コントローラー、表示用の変換
 ├── composition/     # 実装を組み立ててユースケースを公開
@@ -92,6 +92,10 @@ src/
 - `domain` から `application` を import しない。
 - ポートには `Request`・`Response`・`Headers` を使わない。
 - `domain`・`application` で `console` を使わない。
+- `app`・`presentation` から、DB と OpenAI の部品（`infrastructure/prisma`・`infrastructure/openai`）を import しない。DB と OpenAI には、`composition` が組み立てたユースケースを通して届く。
+- 画面部品（`presentation/components`）から `infrastructure` を import しない。ブラウザーの設定は `composition/browser-preferences.ts` を通す。
+
+`presentation` と `app` は、Cookie・ヘッダー・署名の処理（`infrastructure` の `auth`・`preferences`・`security`・`line`・`config`）は直接 import してよいことにしています。どれも HTTP のやり取りそのもので、`composition` から転送し直しても名前が増えるだけだからです。
 
 - **ログインの切れ目**：Cookie `zl_session` が無いときは Proxy が、行が無い・期限切れのときは各ページと Server Action が、ログイン画面へ送ります。
 - **接続元の IP**：`x-real-ip` / `x-forwarded-for` から Web が自分で決め、ログインの試行回数に使います。
@@ -242,4 +246,3 @@ sequenceDiagram
 - **Go の古い Cookie を消す処理が残っている**：`LEGACY_SESSION_COOKIES`（Go の古い Cookie の `zl_access`・`zl_refresh` を、ログインとログアウトのたびに消す処理）は、11b の切り替えから 30 日たてば要りません。2026 年 12 月の末を過ぎたら消してよいです。
 - **セッションは延びない**：Web のセッションは、30 日（ゲストは 24 時間）で必ず切れます。使っていても延ばしません。長く使う人は、月に 1 回ログインし直します。
 - **外部キーがない**：管理者は DB に行を持たないので、`ownerId` に外部キーがありません。持ち主の整合性はコードで守っています（フォローは、相手のアカウントがあるときだけ行を足す 1 つの SQL）。
-- **層の検査に抜けがある**：`presentation` から `infrastructure` への import は、まだ制限していません。

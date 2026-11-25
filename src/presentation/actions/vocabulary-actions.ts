@@ -5,17 +5,15 @@ import { unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 
 import {
+  VocabularyExistsError,
   VocabularyForbiddenError,
+  VocabularyNotFoundError,
   type DraftOutcome,
 } from "@/application/vocabulary/vocabulary-book";
 import { getCurrentViewerUser } from "@/composition/identity-container";
 import { vocabulary } from "@/composition/vocabulary-container";
 import { isMemberRole } from "@/domain/identity/entities/authenticated-user";
 import { VOCABULARY_LIMITS } from "@/domain/vocabulary/vocabulary-entry";
-import {
-  VocabularyExistsError,
-  VocabularyNotFoundError,
-} from "@/infrastructure/prisma/vocabulary-store";
 import {
   actionSuccess,
   actionUnauthorized,

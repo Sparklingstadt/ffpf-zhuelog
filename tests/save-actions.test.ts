@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { beforeEach, test, type TestContext } from "node:test";
 
-import { VocabularyForbiddenError } from "../src/application/vocabulary/vocabulary-book";
-import type { AuthenticatedUser } from "../src/domain/identity/entities/authenticated-user";
-import { VOCABULARY_LIMITS } from "../src/domain/vocabulary/vocabulary-entry";
 import {
   VocabularyExistsError,
+  VocabularyForbiddenError,
   VocabularyNotFoundError,
-} from "../src/infrastructure/prisma/vocabulary-store";
+} from "../src/application/vocabulary/vocabulary-book";
+import type { AuthenticatedUser } from "../src/domain/identity/entities/authenticated-user";
+import { VOCABULARY_LIMITS } from "../src/domain/vocabulary/vocabulary-entry";
 import { actionUnauthorized } from "../src/presentation/controllers/action-state";
 import { accountForbiddenMessage } from "../src/presentation/presenters/account-action-errors";
 import { genericErrorMessage } from "../src/presentation/presenters/generic-error-message";
