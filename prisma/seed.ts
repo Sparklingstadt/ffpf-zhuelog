@@ -193,7 +193,7 @@ async function main() {
           await tx.learningEntry.create({
             data: {
               id: entry.id,
-              ownerId: SEED_OWNER_ID,
+              userId: SEED_OWNER_ID,
               batchId: batch.id,
               createdAt: new Date(entry.createdAt),
               originalText: entry.originalText,

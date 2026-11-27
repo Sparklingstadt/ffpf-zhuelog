@@ -58,8 +58,8 @@ function harness(
       async unlinkOwner(ownerId) {
         calls.push(["unlinkOwner", ownerId]);
       },
-      async putCode(ownerId, role, codeHash, expiresAt) {
-        calls.push(["putCode", ownerId, role, codeHash, expiresAt]);
+      async putCode(ownerId, codeHash, expiresAt) {
+        calls.push(["putCode", ownerId, codeHash, expiresAt]);
       },
     },
     newCode: () => "ABCD2345",
@@ -109,13 +109,13 @@ test("a code is issued for ten minutes and only its hash is stored", async () =>
   let h = harness(member);
   assert.deepEqual(await h.link.issueCode(), { code: "ABCD2345", expiresAt });
   assert.deepEqual(h.calls, [
-    ["putCode", "password:c1", "member", "hash(ABCD2345)", expiresAt],
+    ["putCode", "password:c1", "hash(ABCD2345)", expiresAt],
   ]);
 
   h = harness(admin);
   await h.link.issueCode();
   assert.deepEqual(h.calls, [
-    ["putCode", "10001", "admin", "hash(ABCD2345)", expiresAt],
+    ["putCode", "10001", "hash(ABCD2345)", expiresAt],
   ]);
 });
 

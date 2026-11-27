@@ -71,12 +71,12 @@ function toCard(row: ItemRow): FsrsCard {
 // Prisma's query API cannot say NOT EXISTS over a table without a relation
 // (the item has no foreign key to its target), so every due read is raw SQL
 // built on this one condition.
-function dueCondition(ownerId: string, now: Date): Prisma.Sql {
-  return Prisma.sql`"ownerId" = ${ownerId} AND "due" <= ${now}
+function dueCondition(userId: string, now: Date): Prisma.Sql {
+  return Prisma.sql`"userId" = ${userId} AND "due" <= ${now}
     AND NOT EXISTS (SELECT 1 FROM "LearningEntry" e
      WHERE "ReviewItem"."kind" = ${REVIEW_KIND_ENTRY}
        AND e."id" = "ReviewItem"."targetId"
-       AND e."ownerId" = "ReviewItem"."ownerId"
+       AND e."userId" = "ReviewItem"."userId"
        AND e."deletedAt" IS NOT NULL)`;
 }
 
@@ -84,14 +84,14 @@ function dueCondition(ownerId: string, now: Date): Prisma.Sql {
 // FSRS parameters can later be fitted to the owner's history.
 export function reviewLogRow(input: {
   logId: string;
-  ownerId: string;
+  userId: string;
   itemId: string;
   rating: number;
   before: FsrsCard;
   reviewedAt: Date;
 }): {
   id: string;
-  ownerId: string;
+  userId: string;
   itemId: string;
   rating: number;
   state: number;
@@ -104,7 +104,7 @@ export function reviewLogRow(input: {
   const { before } = input;
   return {
     id: input.logId,
-    ownerId: input.ownerId,
+    userId: input.userId,
     itemId: input.itemId,
     rating: input.rating,
     state: before.state,
@@ -134,7 +134,7 @@ export function reviewLogRow(input: {
 // bound parameter: 9 per target, so the largest round (50 questions) binds
 // 450, far below Postgres's 65,535.
 export function enqueueReviewItemsSql(
-  ownerId: string,
+  userId: string,
   targets: readonly PracticeReviewTarget[],
   now: Date,
   newItemId: () => string = newId,
@@ -142,12 +142,12 @@ export function enqueueReviewItemsSql(
   if (targets.length === 0) return null;
   const rows = targets.map(
     (target) =>
-      Prisma.sql`(${newItemId()}, ${ownerId}, ${target.language}, ${target.kind}, ${target.targetId}, ${now}, ${0}, ${now}, ${now})`,
+      Prisma.sql`(${newItemId()}, ${userId}, ${target.language}, ${target.kind}, ${target.targetId}, ${now}, ${0}, ${now}, ${now})`,
   );
   return Prisma.sql`
-    INSERT INTO "ReviewItem" ("id", "ownerId", "language", "kind", "targetId", "due", "state", "createdAt", "updatedAt")
+    INSERT INTO "ReviewItem" ("id", "userId", "language", "kind", "targetId", "due", "state", "createdAt", "updatedAt")
     VALUES ${Prisma.join(rows)}
-    ON CONFLICT ("ownerId", "language", "kind", "targetId") DO UPDATE
+    ON CONFLICT ("userId", "language", "kind", "targetId") DO UPDATE
     SET "due" = EXCLUDED."due", "updatedAt" = EXCLUDED."updatedAt"
     WHERE "ReviewItem"."due" > EXCLUDED."due"`;
 }
@@ -156,11 +156,11 @@ export function enqueueReviewItemsSql(
 // items added or brought forward.
 export async function enqueueReviewItems(
   tx: Prisma.TransactionClient,
-  ownerId: string,
+  userId: string,
   targets: readonly PracticeReviewTarget[],
   now: Date,
 ): Promise<number> {
-  const sql = enqueueReviewItemsSql(ownerId, targets, now);
+  const sql = enqueueReviewItemsSql(userId, targets, now);
   if (sql === null) return 0;
   return tx.$executeRaw(sql);
 }
@@ -170,12 +170,12 @@ export async function enqueueReviewItems(
 // is left behind by a write racing a purge.
 async function lockOwnEntry(
   tx: Prisma.TransactionClient,
-  ownerId: string,
+  userId: string,
   entryId: string,
 ): Promise<boolean> {
   const rows = await tx.$queryRaw<{ one: number }[]>`
     SELECT 1 AS one FROM "LearningEntry"
-     WHERE "id" = ${entryId} AND "ownerId" = ${ownerId}
+     WHERE "id" = ${entryId} AND "userId" = ${userId}
        AND "deletedAt" IS NULL
        FOR SHARE`;
   return rows.length > 0;
@@ -185,21 +185,21 @@ async function lockOwnEntry(
 // `now` comes from the caller, read once per request.
 export function createReviewStore(db: () => PrismaClient) {
   return {
-    async countDue(ownerId: string, now: Date): Promise<number> {
+    async countDue(userId: string, now: Date): Promise<number> {
       const [{ count }] = await db().$queryRaw<[{ count: bigint }]>`
         SELECT count(*) AS count FROM "ReviewItem"
-         WHERE ${dueCondition(ownerId, now)}`;
+         WHERE ${dueCondition(userId, now)}`;
       return Number(count);
     },
 
     // Kinds with nothing due are absent.
     async countDueByKind(
-      ownerId: string,
+      userId: string,
       now: Date,
     ): Promise<Record<string, number>> {
       const rows = await db().$queryRaw<{ kind: string; count: bigint }[]>`
         SELECT "kind", count(*) AS count FROM "ReviewItem"
-         WHERE ${dueCondition(ownerId, now)}
+         WHERE ${dueCondition(userId, now)}
          GROUP BY "kind"`;
       return Object.fromEntries(
         rows.map(({ kind, count }) => [kind, Number(count)]),
@@ -212,7 +212,7 @@ export function createReviewStore(db: () => PrismaClient) {
     // meanwhile is either left out or comes with its note. (Prisma has no
     // read-only transaction option; nothing here writes.)
     async listDue(
-      ownerId: string,
+      userId: string,
       now: Date,
       limit: number,
     ): Promise<StoredReviewItem[]> {
@@ -223,7 +223,7 @@ export function createReviewStore(db: () => PrismaClient) {
         async (tx) => {
           const rows = await tx.$queryRaw<ItemRow[]>`
             SELECT ${ITEM_COLUMNS} FROM "ReviewItem"
-             WHERE ${dueCondition(ownerId, now)}
+             WHERE ${dueCondition(userId, now)}
              ORDER BY "due", "id"
              LIMIT ${limit}`;
           const targets = (kind: string) =>
@@ -233,13 +233,13 @@ export function createReviewStore(db: () => PrismaClient) {
             wordIds.length === 0
               ? []
               : await tx.vocabularyEntry.findMany({
-                  where: { ownerId, id: { in: wordIds } },
+                  where: { userId, id: { in: wordIds } },
                   select: { id: true, word: true, pinyin: true, meaning: true },
                 });
           const wordById = new Map(words.map((word) => [word.id, word]));
           const notes = await liveEntriesById(
             tx,
-            ownerId,
+            userId,
             targets(REVIEW_KIND_ENTRY),
           );
           return rows.map((row) => ({
@@ -268,13 +268,13 @@ export function createReviewStore(db: () => PrismaClient) {
     // Distinct Japan dates of the owner's answers at or after `since`. The
     // column holds UTC without a time zone, so 9 hours are added rather than
     // AT TIME ZONE.
-    async reviewedDates(ownerId: string, since: Date): Promise<string[]> {
+    async reviewedDates(userId: string, since: Date): Promise<string[]> {
       const rows = await db().$queryRaw<{ day: string }[]>`
         SELECT DISTINCT
                to_char(("reviewedAt" + interval '9 hours')::date, 'YYYY-MM-DD')
                  AS day
           FROM "ReviewLog"
-         WHERE "ownerId" = ${ownerId} AND "reviewedAt" >= ${since}`;
+         WHERE "userId" = ${userId} AND "reviewedAt" >= ${since}`;
       return rows.map((row) => row.day);
     },
 
@@ -284,7 +284,7 @@ export function createReviewStore(db: () => PrismaClient) {
     // at all), or logId already used for another item. An FsrsError from
     // the scheduler is thrown as it is.
     async answer(
-      ownerId: string,
+      userId: string,
       itemId: string,
       logId: string,
       rating: number,
@@ -296,22 +296,22 @@ export function createReviewStore(db: () => PrismaClient) {
         // included, take turns.
         const [item] = await tx.$queryRaw<ItemRow[]>`
           SELECT ${ITEM_COLUMNS} FROM "ReviewItem"
-           WHERE "id" = ${itemId} AND "ownerId" = ${ownerId}
+           WHERE "id" = ${itemId} AND "userId" = ${userId}
              FOR UPDATE`;
         if (!item) return false;
         const logged = await tx.reviewLog.findUnique({
           where: { id: logId },
-          select: { itemId: true, ownerId: true },
+          select: { itemId: true, userId: true },
         });
         if (logged) {
-          return logged.itemId === itemId && logged.ownerId === ownerId;
+          return logged.itemId === itemId && logged.userId === userId;
         }
         const before = toCard(item);
         const next = nextFsrsCard(before, rating, now);
         await tx.reviewLog.create({
           data: reviewLogRow({
             logId,
-            ownerId,
+            userId,
             itemId,
             rating,
             before,
@@ -319,7 +319,7 @@ export function createReviewStore(db: () => PrismaClient) {
           }),
         });
         const { count } = await tx.reviewItem.updateMany({
-          where: { id: itemId, ownerId },
+          where: { id: itemId, userId },
           data: {
             due: next.due,
             stability: next.stability,
@@ -340,28 +340,28 @@ export function createReviewStore(db: () => PrismaClient) {
 
     // The ids of the owner's live notes in review; trashed notes are left
     // out.
-    async entryIdsInReview(ownerId: string): Promise<Set<string>> {
+    async entryIdsInReview(userId: string): Promise<Set<string>> {
       const rows = await db().$queryRaw<{ targetId: string }[]>`
         SELECT r."targetId" FROM "ReviewItem" r
           JOIN "LearningEntry" e
-            ON e."id" = r."targetId" AND e."ownerId" = r."ownerId"
+            ON e."id" = r."targetId" AND e."userId" = r."userId"
            AND e."deletedAt" IS NULL
-         WHERE r."ownerId" = ${ownerId} AND r."kind" = ${REVIEW_KIND_ENTRY}`;
+         WHERE r."userId" = ${userId} AND r."kind" = ${REVIEW_KIND_ENTRY}`;
       return new Set(rows.map((row) => row.targetId));
     },
 
     // null: not the owner's live note.
     async isEntryInReview(
-      ownerId: string,
+      userId: string,
       entryId: string,
     ): Promise<boolean | null> {
       const entry = await db().learningEntry.findFirst({
-        where: { id: entryId, ownerId, deletedAt: null },
+        where: { id: entryId, userId, deletedAt: null },
         select: { id: true },
       });
       if (!entry) return null;
       const count = await db().reviewItem.count({
-        where: { ownerId, kind: REVIEW_KIND_ENTRY, targetId: entryId },
+        where: { userId, kind: REVIEW_KIND_ENTRY, targetId: entryId },
       });
       return count > 0;
     },
@@ -369,17 +369,17 @@ export function createReviewStore(db: () => PrismaClient) {
     // Puts the owner's live note in review as a new card due now; a note
     // already there keeps its card. false: not the owner's live note.
     async addEntry(
-      ownerId: string,
+      userId: string,
       entryId: string,
       now: Date,
     ): Promise<boolean> {
       return db().$transaction(async (tx) => {
-        if (!(await lockOwnEntry(tx, ownerId, entryId))) return false;
+        if (!(await lockOwnEntry(tx, userId, entryId))) return false;
         await tx.reviewItem.createMany({
           data: [
             {
               id: newId(),
-              ownerId,
+              userId,
               language: LANGUAGE,
               kind: REVIEW_KIND_ENTRY,
               targetId: entryId,
@@ -398,11 +398,11 @@ export function createReviewStore(db: () => PrismaClient) {
     // Takes the owner's live note out of review; its card's log goes with it
     // through the schema's cascade. A note not in review succeeds too.
     // false: not the owner's live note.
-    async removeEntry(ownerId: string, entryId: string): Promise<boolean> {
+    async removeEntry(userId: string, entryId: string): Promise<boolean> {
       return db().$transaction(async (tx) => {
-        if (!(await lockOwnEntry(tx, ownerId, entryId))) return false;
+        if (!(await lockOwnEntry(tx, userId, entryId))) return false;
         await tx.reviewItem.deleteMany({
-          where: reviewItemsToDelete(ownerId, [entryId]),
+          where: reviewItemsToDelete(userId, [entryId]),
         });
         return true;
       }, TRANSACTION_OPTIONS);

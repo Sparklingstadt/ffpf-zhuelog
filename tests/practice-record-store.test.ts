@@ -33,7 +33,7 @@ test("practiceRecordRow writes the counts and the question JSON", () => {
 
   const row = practiceRecordRow("github:1", round, now);
   assert.equal(row.id, "0b6c3f2e-1d4a-4c8e-9f00-123456789abc");
-  assert.equal(row.ownerId, "github:1");
+  assert.equal(row.userId, "github:1");
   assert.equal(row.questionCount, 3);
   assert.equal(row.firstTryCount, 2);
   assert.equal(row.missCount, 2);

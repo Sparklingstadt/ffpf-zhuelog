@@ -9,13 +9,13 @@ import {
 // Pure: the row a checked (trimmed) note is saved as. modelName is the
 // server's chat model, never the browser's; createdAt is now.
 export function questionNoteRow(
-  ownerId: string,
+  userId: string,
   note: SaveQuestionInput,
   modelName: string,
   now: Date,
 ): {
   id: string;
-  ownerId: string;
+  userId: string;
   question: string;
   answer: string;
   modelName: string;
@@ -23,7 +23,7 @@ export function questionNoteRow(
 } {
   return {
     id: note.id,
-    ownerId,
+    userId,
     question: note.question,
     answer: note.answer,
     modelName,
@@ -45,9 +45,9 @@ const NEWEST_FIRST = [
 export function createQuestionStore(db: () => PrismaClient) {
   return {
     // Without the answers.
-    async list(ownerId: string, limit: number): Promise<QuestionSummary[]> {
+    async list(userId: string, limit: number): Promise<QuestionSummary[]> {
       return db().quickQuestion.findMany({
-        where: { ownerId },
+        where: { userId },
         orderBy: NEWEST_FIRST,
         take: limit,
         select: { id: true, question: true, modelName: true, createdAt: true },
@@ -55,11 +55,11 @@ export function createQuestionStore(db: () => PrismaClient) {
     },
 
     // null: not the owner's note (or not a note id at all).
-    async get(ownerId: string, id: string): Promise<QuestionNote | null> {
+    async get(userId: string, id: string): Promise<QuestionNote | null> {
       if (!QUESTION_ID.test(id)) return null;
       // The table's only unique key is id, so the owner is a plain filter.
       const row = await db().quickQuestion.findFirst({
-        where: { id, ownerId },
+        where: { id, userId },
         select: {
           id: true,
           question: true,
@@ -81,22 +81,22 @@ export function createQuestionStore(db: () => PrismaClient) {
     // row back by id. That is safe because a row is never changed once
     // saved.
     async save(
-      ownerId: string,
+      userId: string,
       note: SaveQuestionInput,
       modelName: string,
       now: Date,
     ): Promise<boolean> {
       await db().quickQuestion.createMany({
-        data: [questionNoteRow(ownerId, note, modelName, now)],
+        data: [questionNoteRow(userId, note, modelName, now)],
         skipDuplicates: true,
       });
       const saved = await db().quickQuestion.findUnique({
         where: { id: note.id },
-        select: { ownerId: true, question: true, answer: true },
+        select: { userId: true, question: true, answer: true },
       });
       return (
         saved !== null &&
-        saved.ownerId === ownerId &&
+        saved.userId === userId &&
         saved.question === note.question &&
         saved.answer === note.answer
       );

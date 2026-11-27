@@ -68,9 +68,9 @@ async function main() {
     console.log(`${existing ? "kept" : "created"} member ${member.loginId}`);
   }
 
-  const friendOwner = `password:${ids["friend"]}`;
+  const friendOwner = ids["friend"];
   const already = await prisma.learningEntry.count({
-    where: { ownerId: friendOwner },
+    where: { userId: friendOwner },
   });
   if (already > 0) {
     console.log("kept friend's notes");
@@ -83,7 +83,7 @@ async function main() {
       rowCount: friendNotes.length,
       entries: {
         create: friendNotes.map((note) => ({
-          ownerId: friendOwner,
+          userId: friendOwner,
           originalText: note.originalText,
           correctedText: note.correctedText,
           pinyin: note.pinyin,

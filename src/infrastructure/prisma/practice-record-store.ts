@@ -21,12 +21,12 @@ import { enqueueReviewItems } from "./review-store";
 // Pure: the row a checked round is saved as. The counts are the round's
 // (counted from its questions when it was checked); createdAt is now.
 export function practiceRecordRow(
-  ownerId: string,
+  userId: string,
   round: CheckedRound,
   now: Date,
 ): {
   id: string;
-  ownerId: string;
+  userId: string;
   questionCount: number;
   firstTryCount: number;
   missCount: number;
@@ -37,7 +37,7 @@ export function practiceRecordRow(
 } {
   return {
     id: round.id,
-    ownerId,
+    userId,
     questionCount: round.questionCount,
     firstTryCount: round.firstTryCount,
     missCount: round.missCount,
@@ -99,7 +99,7 @@ export function createPracticeRecordStore(db: () => PrismaClient) {
   // and queues the first save's misses again. null: the id is another
   // owner's, and nothing changed or was queued.
   async function save<Row extends RecordRow>(
-    ownerId: string,
+    userId: string,
     kind: "preposition" | "complement",
     now: Date,
     insert: (tx: Prisma.TransactionClient) => Promise<unknown>,
@@ -112,7 +112,7 @@ export function createPracticeRecordStore(db: () => PrismaClient) {
       if (!saved) return null;
       await enqueueReviewItems(
         tx,
-        ownerId,
+        userId,
         practiceReviewTargets(kind, choiceAnswersFrom(saved.questions)),
         now,
       );
@@ -122,11 +122,11 @@ export function createPracticeRecordStore(db: () => PrismaClient) {
 
   return {
     async listPrepositions(
-      ownerId: string,
+      userId: string,
       limit: number,
     ): Promise<PracticeRecordSummary[]> {
       const rows = await db().prepositionPracticeRecord.findMany({
-        where: { ownerId },
+        where: { userId },
         orderBy: NEWEST_FIRST,
         take: limit,
         select: SUMMARY,
@@ -135,11 +135,11 @@ export function createPracticeRecordStore(db: () => PrismaClient) {
     },
 
     async listComplements(
-      ownerId: string,
+      userId: string,
       limit: number,
     ): Promise<ComplementRecordSummary[]> {
       const rows = await db().complementPracticeRecord.findMany({
-        where: { ownerId },
+        where: { userId },
         orderBy: NEWEST_FIRST,
         take: limit,
         select: { ...SUMMARY, mode: true },
@@ -149,23 +149,23 @@ export function createPracticeRecordStore(db: () => PrismaClient) {
 
     // null: not the owner's round (or not a round id at all).
     async getPreposition(
-      ownerId: string,
+      userId: string,
       id: string,
     ): Promise<PracticeRecord | null> {
       if (!PRACTICE_RECORD_ID.test(id)) return null;
       const row = await db().prepositionPracticeRecord.findUnique({
-        where: { id_ownerId: { id, ownerId } },
+        where: { id_userId: { id, userId } },
       });
       return row ? toRecord(row) : null;
     },
 
     async getComplement(
-      ownerId: string,
+      userId: string,
       id: string,
     ): Promise<ComplementRecord | null> {
       if (!PRACTICE_RECORD_ID.test(id)) return null;
       const row = await db().complementPracticeRecord.findUnique({
-        where: { id_ownerId: { id, ownerId } },
+        where: { id_userId: { id, userId } },
       });
       return row ? { ...toRecord(row), mode: modeOf(row) } : null;
     },
@@ -174,13 +174,13 @@ export function createPracticeRecordStore(db: () => PrismaClient) {
     // misses, in one transaction. null: the id is another owner's (nothing
     // changed, nothing queued).
     async savePreposition(
-      ownerId: string,
+      userId: string,
       round: CheckedRound,
       now: Date,
     ): Promise<PracticeRecord | null> {
-      const row = practiceRecordRow(ownerId, round, now);
+      const row = practiceRecordRow(userId, round, now);
       const saved = await save(
-        ownerId,
+        userId,
         "preposition",
         now,
         (tx) =>
@@ -190,23 +190,23 @@ export function createPracticeRecordStore(db: () => PrismaClient) {
           }),
         (tx) =>
           tx.prepositionPracticeRecord.findUnique({
-            where: { id_ownerId: { id: round.id, ownerId } },
+            where: { id_userId: { id: round.id, userId } },
           }),
       );
       return saved ? toRecord(saved) : null;
     },
 
     async saveComplement(
-      ownerId: string,
+      userId: string,
       round: CheckedRound & { mode: ComplementRoundMode },
       now: Date,
     ): Promise<ComplementRecord | null> {
       const row = {
-        ...practiceRecordRow(ownerId, round, now),
+        ...practiceRecordRow(userId, round, now),
         mode: round.mode,
       };
       const saved = await save(
-        ownerId,
+        userId,
         "complement",
         now,
         (tx) =>
@@ -216,7 +216,7 @@ export function createPracticeRecordStore(db: () => PrismaClient) {
           }),
         (tx) =>
           tx.complementPracticeRecord.findUnique({
-            where: { id_ownerId: { id: round.id, ownerId } },
+            where: { id_userId: { id: round.id, userId } },
           }),
       );
       return saved ? { ...toRecord(saved), mode: modeOf(saved) } : null;

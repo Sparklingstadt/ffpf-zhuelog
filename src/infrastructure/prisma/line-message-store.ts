@@ -18,13 +18,13 @@ import { newId } from "./new-id";
 type NewLineMessage = {
   webhookEventId: string;
   lineUserId: string;
-  ownerId: string;
+  userId: string;
   kind: LineLearningKind;
   text: string;
 };
 
 // The columns every raw statement returns; a cleared text reads as "".
-const COLUMNS = Prisma.sql`"id", "webhookEventId", "lineUserId", "ownerId", "kind", COALESCE("text", '') AS "text", "status", "attempts", "createdAt"`;
+const COLUMNS = Prisma.sql`"id", "webhookEventId", "lineUserId", "userId", "kind", COALESCE("text", '') AS "text", "status", "attempts", "createdAt"`;
 
 // Pure: inserts a pending message. A second delivery of the same event
 // returns no row.
@@ -34,8 +34,8 @@ export function insertLineMessageSql(
   now: Date,
 ): Prisma.Sql {
   return Prisma.sql`
-    INSERT INTO "LineMessage" ("id", "webhookEventId", "lineUserId", "ownerId", "kind", "text", "status", "attempts", "createdAt", "updatedAt")
-    VALUES (${id}, ${message.webhookEventId}, ${message.lineUserId}, ${message.ownerId}, ${message.kind}, ${message.text}, 'pending', 0, CAST(${now} AS TIMESTAMP(3)), CAST(${now} AS TIMESTAMP(3)))
+    INSERT INTO "LineMessage" ("id", "webhookEventId", "lineUserId", "userId", "kind", "text", "status", "attempts", "createdAt", "updatedAt")
+    VALUES (${id}, ${message.webhookEventId}, ${message.lineUserId}, ${message.userId}, ${message.kind}, ${message.text}, 'pending', 0, CAST(${now} AS TIMESTAMP(3)), CAST(${now} AS TIMESTAMP(3)))
     ON CONFLICT ("webhookEventId") DO NOTHING
     RETURNING ${COLUMNS}`;
 }
@@ -63,7 +63,7 @@ type LineMessageRow = {
   id: string;
   webhookEventId: string;
   lineUserId: string;
-  ownerId: string;
+  userId: string;
   kind: string;
   text: string | null;
   status: string;
@@ -76,7 +76,7 @@ function toLineMessage(row: LineMessageRow): LineMessage {
     id: row.id,
     webhookEventId: row.webhookEventId,
     lineUserId: row.lineUserId,
-    ownerId: row.ownerId,
+    ownerId: row.userId,
     kind: row.kind as LineLearningKind,
     text: row.text ?? "",
     status: row.status as LineMessageStatus,
@@ -126,7 +126,7 @@ export function createLineMessageStore(
     // owner's pending message.
     async complete(
       id: string,
-      ownerId: string,
+      userId: string,
       note: {
         kind: LineLearningKind;
         originalText: string;
@@ -154,7 +154,7 @@ export function createLineMessageStore(
               correctedText: note.generation.text,
               pinyin: note.generation.pinyin,
               createdAt: now,
-              ownerId,
+              userId,
               batchId,
             },
           });
@@ -169,7 +169,7 @@ export function createLineMessageStore(
             });
           }
           const { count } = await tx.lineMessage.updateMany({
-            where: { id, ownerId, status: "pending" },
+            where: { id, userId, status: "pending" },
             data: { status: "done", entryId, text: null, updatedAt: now },
           });
           if (count === 0) throw new NotPendingError();

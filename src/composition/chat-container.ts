@@ -30,7 +30,8 @@ export const conversationNotes = createConversationNotes({
           { signal, onUsage },
         )
     : undefined,
-  recordUsage: (entry) => recordAiUsage(prisma, entry),
+  recordUsage: ({ ownerId, ...entry }) =>
+    recordAiUsage(prisma, { ...entry, userId: ownerId }),
   logError: (code, ...details) => console.error(code, ...details),
   now: () => new Date(),
 });

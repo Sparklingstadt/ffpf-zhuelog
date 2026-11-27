@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "next dev",
     "test:unit": "node scripts/test-unit.mjs",
+    "test:migration": "docker compose -f compose.e2e.yaml up -d --wait && node scripts/test-migration.mjs",
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint --max-warnings 0",

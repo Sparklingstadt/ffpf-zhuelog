@@ -14,7 +14,7 @@ test("questionNoteRow keeps the trimmed note, the server's model and now", () =>
   assert.ok(note);
   assert.deepEqual(questionNoteRow("10001", note, "gpt-6.1-sol", now), {
     id: "0b6c3f2e-1d4a-4c8e-9f00-123456789abc",
-    ownerId: "10001",
+    userId: "10001",
     question: "了の使い方は？",
     answer: "完了を表します。",
     modelName: "gpt-6.1-sol",

@@ -17,7 +17,7 @@ import {
 // other owner's row, or need a read first that races), so this is raw SQL,
 // with bound parameters only.
 export function saveConversationSql(
-  ownerId: string,
+  userId: string,
   conversation: CheckedConversation,
   now: Date,
 ): Prisma.Sql {
@@ -27,8 +27,8 @@ export function saveConversationSql(
   );
   return Prisma.sql`
     INSERT INTO "ChatConversation"
-      ("id", "ownerId", "title", "modelName", "ended", "messages", "createdAt", "updatedAt")
-    VALUES (${conversation.id}, ${ownerId}, ${conversation.title}, ${conversation.modelName},
+      ("id", "userId", "title", "modelName", "ended", "messages", "createdAt", "updatedAt")
+    VALUES (${conversation.id}, ${userId}, ${conversation.title}, ${conversation.modelName},
       ${conversation.ended}, ${messages}::jsonb, ${conversation.createdAt}, ${now})
     ON CONFLICT ("id") DO UPDATE SET
       "title" = EXCLUDED."title",
@@ -36,7 +36,7 @@ export function saveConversationSql(
       "ended" = EXCLUDED."ended",
       "messages" = EXCLUDED."messages",
       "updatedAt" = EXCLUDED."updatedAt"
-    WHERE "ChatConversation"."ownerId" = EXCLUDED."ownerId"`;
+    WHERE "ChatConversation"."userId" = EXCLUDED."userId"`;
 }
 
 // Pure: the messages column as the domain's messages. Throws when a row
@@ -84,9 +84,9 @@ const NEWEST_FIRST = [
 export function createConversationStore(db: () => PrismaClient) {
   return {
     // Without the messages.
-    async list(ownerId: string, limit: number): Promise<ConversationSummary[]> {
+    async list(userId: string, limit: number): Promise<ConversationSummary[]> {
       return db().chatConversation.findMany({
-        where: { ownerId },
+        where: { userId },
         orderBy: NEWEST_FIRST,
         take: limit,
         select: SUMMARY_SELECT,
@@ -94,10 +94,10 @@ export function createConversationStore(db: () => PrismaClient) {
     },
 
     // null: not the owner's conversation (or not a conversation id at all).
-    async get(ownerId: string, id: string): Promise<Conversation | null> {
+    async get(userId: string, id: string): Promise<Conversation | null> {
       if (!CONVERSATION_ID.test(id)) return null;
       const row = await db().chatConversation.findUnique({
-        where: { id_ownerId: { id, ownerId } },
+        where: { id_userId: { id, userId } },
         select: { ...SUMMARY_SELECT, messages: true },
       });
       if (!row) return null;
@@ -108,20 +108,20 @@ export function createConversationStore(db: () => PrismaClient) {
     // true: saved (new, or the owner's own updated). false: the id is
     // another owner's, and nothing was written. See saveConversationSql.
     async save(
-      ownerId: string,
+      userId: string,
       conversation: CheckedConversation,
       now: Date,
     ): Promise<boolean> {
       const affected = await db().$executeRaw(
-        saveConversationSql(ownerId, conversation, now),
+        saveConversationSql(userId, conversation, now),
       );
       return affected === 1;
     },
 
     // false: the owner has no such conversation.
-    async remove(ownerId: string, id: string): Promise<boolean> {
+    async remove(userId: string, id: string): Promise<boolean> {
       const { count } = await db().chatConversation.deleteMany({
-        where: { id, ownerId },
+        where: { id, userId },
       });
       return count > 0;
     },

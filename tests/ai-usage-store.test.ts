@@ -13,20 +13,17 @@ test("aiUsageMonthSql orders people by their tokens in the database", () => {
   // `text` numbers the values as Postgres does ($1, $2, ...); `sql` uses "?".
   const text = sql.text.replace(/\s+/g, " ");
   for (const part of [
-    `coalesce(m."displayName", '')`,
-    `'password:' || p."id"`,
-    `'sid:' || f."id"`,
-    "LEFT JOIN",
-    'AS "ownerId"',
-    `AS "displayName"`,
+    `CASE WHEN coalesce(u."role", 'user') <> 'admin' AND NOT coalesce(u."isAnonymous", false) THEN u."name" ELSE '' END AS "displayName"`,
+    'JOIN "user" u ON u."id" = a."userId"',
+    'AS "userId"',
     'AS "feature"',
     'AS "model"',
     'AS "requests"',
     'AS "inputTokens"',
     'AS "outputTokens"',
-    'WHERE u."createdAt" >= $1 AND u."createdAt" < $2',
-    'GROUP BY u."ownerId", m."displayName", u."feature", u."model"',
-    'ORDER BY sum(sum(u."inputTokens" + u."outputTokens")) OVER (PARTITION BY u."ownerId") DESC, u."ownerId", u."feature", u."model"',
+    'WHERE a."createdAt" >= $1 AND a."createdAt" < $2',
+    'GROUP BY a."userId", u."name", u."role", u."isAnonymous", a."feature", a."model"',
+    'ORDER BY sum(sum(a."inputTokens" + a."outputTokens")) OVER (PARTITION BY a."userId") DESC, a."userId", a."feature", a."model"',
   ]) {
     assert.ok(text.includes(part), `${part}\n${text}`);
   }
@@ -36,7 +33,7 @@ test("aiUsageMonthSql orders people by their tokens in the database", () => {
 test("aiUsageTotalFromRow turns the sums into numbers", () => {
   assert.deepEqual(
     aiUsageTotalFromRow({
-      ownerId: "password:a",
+      userId: "u-a",
       displayName: "花子",
       feature: "line",
       model: "gpt-5-mini",
@@ -45,7 +42,7 @@ test("aiUsageTotalFromRow turns the sums into numbers", () => {
       outputTokens: BigInt(120),
     }),
     {
-      ownerId: "password:a",
+      ownerId: "u-a",
       displayName: "花子",
       feature: "line",
       model: "gpt-5-mini",

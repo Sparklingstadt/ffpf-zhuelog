@@ -2,8 +2,8 @@ import type { PrismaClient } from "../../generated/prisma/client";
 
 // The where clause that deletes the owner's review items of the given notes.
 // Only kind "entry": vocabulary cards share the table and must stay.
-export function reviewItemsToDelete(ownerId: string, ids: string[]) {
-  return { ownerId, kind: "entry" as const, targetId: { in: ids } };
+export function reviewItemsToDelete(userId: string, ids: string[]) {
+  return { userId, kind: "entry" as const, targetId: { in: ids } };
 }
 
 // Interactive transaction limits for the purge writes. Prisma's default is a
@@ -22,18 +22,18 @@ export function createLearningNoteWrites(
 
   return {
     // live -> trashed. False when it is not the owner's live note.
-    async trash(ownerId: string, id: string): Promise<boolean> {
+    async trash(userId: string, id: string): Promise<boolean> {
       const { count } = await db().learningEntry.updateMany({
-        where: { id, ownerId, deletedAt: null },
+        where: { id, userId, deletedAt: null },
         data: { deletedAt: takeNow() },
       });
       return count > 0;
     },
 
     // trashed -> live; sharedAt is left as it was.
-    async restore(ownerId: string, id: string): Promise<boolean> {
+    async restore(userId: string, id: string): Promise<boolean> {
       const { count } = await db().learningEntry.updateMany({
-        where: { id, ownerId, deletedAt: { not: null } },
+        where: { id, userId, deletedAt: { not: null } },
         data: { deletedAt: null },
       });
       return count > 0;
@@ -41,14 +41,14 @@ export function createLearningNoteWrites(
 
     // Deletes a trashed note (hints and logs cascade) and its entry review
     // items, in one transaction. See TRANSACTION_OPTIONS for the limits.
-    async purge(ownerId: string, id: string): Promise<boolean> {
+    async purge(userId: string, id: string): Promise<boolean> {
       return db().$transaction(async (tx) => {
         const { count } = await tx.learningEntry.deleteMany({
-          where: { id, ownerId, deletedAt: { not: null } },
+          where: { id, userId, deletedAt: { not: null } },
         });
         if (count === 0) return false;
         await tx.reviewItem.deleteMany({
-          where: reviewItemsToDelete(ownerId, [id]),
+          where: reviewItemsToDelete(userId, [id]),
         });
         return true;
       }, TRANSACTION_OPTIONS);
@@ -56,16 +56,16 @@ export function createLearningNoteWrites(
 
     // Deletes all the owner's trashed notes and their entry review items in
     // one transaction, using the ids the DELETE itself returned.
-    async emptyTrash(ownerId: string): Promise<number> {
+    async emptyTrash(userId: string): Promise<number> {
       return db().$transaction(async (tx) => {
         const rows = await tx.$queryRaw<{ id: string }[]>`
           DELETE FROM "LearningEntry"
-           WHERE "ownerId" = ${ownerId} AND "deletedAt" IS NOT NULL
+           WHERE "userId" = ${userId} AND "deletedAt" IS NOT NULL
           RETURNING "id"`;
         if (rows.length === 0) return 0;
         await tx.reviewItem.deleteMany({
           where: reviewItemsToDelete(
-            ownerId,
+            userId,
             rows.map((r) => r.id),
           ),
         });
@@ -76,13 +76,13 @@ export function createLearningNoteWrites(
     // Live notes only. Sharing keeps the first sharedAt; unsharing an
     // unshared note succeeds.
     async setShared(
-      ownerId: string,
+      userId: string,
       id: string,
       shared: boolean,
     ): Promise<boolean> {
       if (!shared) {
         const { count } = await db().learningEntry.updateMany({
-          where: { id, ownerId, deletedAt: null },
+          where: { id, userId, deletedAt: null },
           data: { sharedAt: null },
         });
         return count > 0;
@@ -90,7 +90,7 @@ export function createLearningNoteWrites(
       const at = takeNow();
       const count = await db().$executeRaw`
         UPDATE "LearningEntry" SET "sharedAt" = COALESCE("sharedAt", ${at})
-         WHERE "id" = ${id} AND "ownerId" = ${ownerId} AND "deletedAt" IS NULL`;
+         WHERE "id" = ${id} AND "userId" = ${userId} AND "deletedAt" IS NULL`;
       return count > 0;
     },
   };

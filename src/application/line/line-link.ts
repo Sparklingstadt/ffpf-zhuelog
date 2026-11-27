@@ -18,12 +18,7 @@ export type LineLinkDeps = {
     // false: no LINE account is linked.
     setReviewNotify(ownerId: string, on: boolean): Promise<boolean>;
     unlinkOwner(ownerId: string): Promise<void>;
-    putCode(
-      ownerId: string,
-      role: "member" | "admin",
-      codeHash: string,
-      expiresAt: Date,
-    ): Promise<void>;
+    putCode(ownerId: string, codeHash: string, expiresAt: Date): Promise<void>;
   };
   newCode: () => string;
   hashCode: (code: string) => string;
@@ -34,10 +29,7 @@ export type LineLinkDeps = {
 // The user is decided first, so a refused user is refused even when LINE is
 // off.
 export function createLineLink(deps: LineLinkDeps) {
-  async function owner(): Promise<{
-    ownerId: string;
-    role: "member" | "admin";
-  }> {
+  async function owner(): Promise<{ ownerId: string }> {
     const user = await deps.currentUser();
     if (
       !user ||
@@ -47,7 +39,7 @@ export function createLineLink(deps: LineLinkDeps) {
       !user.githubId
     )
       throw new LineLinkForbiddenError();
-    return { ownerId: user.githubId, role: user.role };
+    return { ownerId: user.githubId };
   }
 
   return {
@@ -66,11 +58,11 @@ export function createLineLink(deps: LineLinkDeps) {
 
     // Replaces the owner's previous code; only the code's hash is stored.
     async issueCode(): Promise<{ code: string; expiresAt: Date }> {
-      const { ownerId, role } = await owner();
+      const { ownerId } = await owner();
       if (!deps.enabled) throw new Error("LINE_UNAVAILABLE");
       const code = deps.newCode();
       const expiresAt = new Date(deps.now().getTime() + LINK_CODE_TTL_MS);
-      await deps.store.putCode(ownerId, role, deps.hashCode(code), expiresAt);
+      await deps.store.putCode(ownerId, deps.hashCode(code), expiresAt);
       return { code, expiresAt };
     },
 

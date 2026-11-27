@@ -17,7 +17,7 @@ import {
 const flat = (text: string) => text.replace(/\s+/g, " ");
 
 // Read from the schema rather than a migrated database. It only sees columns
-// named ownerId: a table that ties a row to its owner through another column
+// named userId: a table that ties a row to its user through another column
 // (as Follow does with followerId and followeeId) must be added to the reset
 // by hand.
 test("every owner table is emptied or kept on purpose", () => {
@@ -26,7 +26,7 @@ test("every owner table is emptied or kept on purpose", () => {
     "utf8",
   );
   const models = [...schema.matchAll(/^model (\w+) \{([\s\S]*?)^\}/gm)].map(
-    ([, name, body]) => ({ name, owned: /^\s+ownerId\s/m.test(body) }),
+    ([, name, body]) => ({ name, owned: /^\s+userId\s/m.test(body) }),
   );
   assert.ok(models.length > 0, "no models in prisma/schema.prisma");
   const ownerTables = models.filter((m) => m.owned).map((m) => m.name);
@@ -35,7 +35,7 @@ test("every owner table is emptied or kept on purpose", () => {
   for (const table of ownerTables) {
     assert.ok(
       DEMO_OWNED_TABLES.includes(table) || kept.includes(table),
-      `table ${table} has an ownerId column but the demo reset does not delete its rows: ` +
+      `table ${table} has a userId column but the demo reset does not delete its rows: ` +
         "add it to DEMO_OWNED_TABLES in src/infrastructure/prisma/demo-reset-store.ts " +
         "(or, if the reset must keep it, to DEMO_KEPT_TABLES with the reason)",
     );
@@ -43,7 +43,7 @@ test("every owner table is emptied or kept on purpose", () => {
   for (const table of [...DEMO_OWNED_TABLES, ...kept]) {
     assert.ok(
       ownerTables.includes(table),
-      `table ${table} is listed for the demo reset but has no ownerId column`,
+      `table ${table} is listed for the demo reset but has no userId column`,
     );
   }
   assert.deepEqual(
@@ -56,7 +56,7 @@ test("every owner table is emptied or kept on purpose", () => {
 type Call = { model: string; method: string; args: unknown[] };
 
 // A fake client whose transaction records every call. The SELECT ... FOR
-// UPDATE answers with the demo account's id.
+// UPDATE answers with the demo user's id.
 function fakeDb(accountId = "cdemo") {
   const calls: Call[] = [];
   let options: unknown;
@@ -125,17 +125,17 @@ test("the reset empties exactly those tables, in one transaction", async () => {
   const [insert, select, batches] = raw.map(sqlOf);
   assert.equal(raw.length, 3);
   assert.ok(
-    flat(insert.text).includes('ON CONFLICT ("loginId") DO NOTHING'),
+    flat(insert.text).includes('ON CONFLICT ("username") DO NOTHING'),
     insert.text,
   );
   assert.ok(flat(select.text).includes("FOR UPDATE"), select.text);
   assert.ok(
     flat(batches.text).includes(
-      'DELETE FROM "ImportBatch" WHERE "id" IN (SELECT "batchId" FROM "LearningEntry" WHERE "ownerId" =',
+      'DELETE FROM "ImportBatch" WHERE "id" IN (SELECT "batchId" FROM "LearningEntry" WHERE "userId" =',
     ),
     batches.text,
   );
-  assert.deepEqual(batches.values, ["password:cdemo"]);
+  assert.deepEqual(batches.values, ["cdemo"]);
 
   const lower = (name: string) => name[0].toLowerCase() + name.slice(1);
   const deletes = calls.filter((c) => c.method === "deleteMany");
@@ -144,7 +144,7 @@ test("the reset empties exactly those tables, in one transaction", async () => {
     DEMO_OWNED_TABLES.map((table) => ({
       model: lower(table),
       method: "deleteMany",
-      args: [{ where: { ownerId: "password:cdemo" } }],
+      args: [{ where: { userId: "cdemo" } }],
     })),
   );
   assert.deepEqual(
@@ -156,17 +156,14 @@ test("the reset empties exactly those tables, in one transaction", async () => {
         args: [
           {
             where: {
-              OR: [
-                { followerId: "password:cdemo" },
-                { followeeId: "password:cdemo" },
-              ],
+              OR: [{ followerId: "cdemo" }, { followeeId: "cdemo" }],
             },
           },
         ],
       },
     ],
   );
-  for (const model of ["aiUsage", "session", "passwordAccount"])
+  for (const model of ["aiUsage", "session", "account", "user"])
     assert.deepEqual(
       calls.filter((c) => c.model === model),
       [],
@@ -179,16 +176,17 @@ test("the reset empties exactly those tables, in one transaction", async () => {
   );
 });
 
-// What the reset writes to the account the web's demo sign-in reads: the
-// demo's loginId, the hash no password matches, session version 0 and now for
-// both times, and nothing at all when the account is there (its password, name
-// and session version stay). Members carry no role column: the demo sign-in
-// makes the demo a member from this row (and DEMO_PASSWORD_HASH marks it).
-test("the account is the demo account", async () => {
+// What the reset writes for the demo user: the demo's loginId as its
+// username, its member mail address, the hash no password matches in a
+// credential account and now for every time, and nothing at all when the user
+// is there (its account, name and password stay). The account is made only
+// together with the user.
+test("the user is the demo user", async () => {
   const { db, calls } = fakeDb();
+  let n = 0;
   const store = createDemoResetStore(
     () => db,
-    () => "cnewaccount",
+    () => `cnew${++n}`,
   );
   await store.reset("demo", emptySeed, now);
   const [insert, select] = calls
@@ -197,21 +195,28 @@ test("the account is the demo account", async () => {
 
   assert.equal(
     flat(insert.text).trim(),
-    'INSERT INTO "PasswordAccount" ("id", "loginId", "displayName", "passwordHash", "sessionVersion", "createdAt", "updatedAt") ' +
-      "VALUES ($1, $2, $3, $4, 0, CAST($5 AS TIMESTAMP(3)), CAST($6 AS TIMESTAMP(3))) " +
-      'ON CONFLICT ("loginId") DO NOTHING',
+    'WITH "made" AS ( INSERT INTO "user" ("id", "name", "email", "emailVerified", "username", "displayUsername", "isAnonymous", "role", "banned", "createdAt", "updatedAt") ' +
+      "VALUES ($1, $2, $3, false, $4, $5, false, 'user', false, CAST($6 AS TIMESTAMP(3)), CAST($7 AS TIMESTAMP(3))) " +
+      'ON CONFLICT ("username") DO NOTHING RETURNING "id") ' +
+      'INSERT INTO "account" ("id", "accountId", "providerId", "userId", "password", "createdAt", "updatedAt") ' +
+      `SELECT $8, "id", 'credential', "id", $9, CAST($10 AS TIMESTAMP(3)), CAST($11 AS TIMESTAMP(3)) FROM "made"`,
   );
   assert.deepEqual(insert.values, [
-    "cnewaccount",
-    "demo",
+    "cnew1",
     "デモ",
+    "demo@members.zhuelog.invalid",
+    "demo",
+    "demo",
+    now,
+    now,
+    "cnew2",
     "demo:no-password",
     now,
     now,
   ]);
   assert.equal(
     flat(select.text).trim(),
-    'SELECT "id" FROM "PasswordAccount" WHERE "loginId" = $1 FOR UPDATE',
+    'SELECT "id" FROM "user" WHERE "username" = $1 FOR UPDATE',
   );
   assert.deepEqual(select.values, ["demo"]);
 });
@@ -401,8 +406,8 @@ function smallSeed(): DemoSeed {
 test("seed rows are built for every table the demo owns", () => {
   let n = 0;
   const seed = smallSeed();
-  const rows = demoSeedRows("password:c1", seed, () => `r${++n}`);
-  const owner = "password:c1";
+  const rows = demoSeedRows("c1", seed, () => `r${++n}`);
+  const owner = "c1";
 
   assert.equal(rows.importBatches.length, 2);
   assert.deepEqual(rows.importBatches[0], {
@@ -419,7 +424,7 @@ test("seed rows are built for every table the demo owns", () => {
     correctedText: "我昨天去学校了。",
     pinyin: "wǒ zuótiān qù xuéxiào le.",
     createdAt: note0At,
-    ownerId: owner,
+    userId: owner,
     batchId: rows.importBatches[0].id,
   });
   assert.equal(rows.learningEntries[1].kind, "translation");
@@ -448,7 +453,7 @@ test("seed rows are built for every table the demo owns", () => {
   assert.deepEqual(rows.vocabularyEntries, [
     {
       id: "w-uuid",
-      ownerId: owner,
+      userId: owner,
       language: "zh",
       word: "学校",
       pinyin: "xuéxiào",
@@ -464,7 +469,7 @@ test("seed rows are built for every table the demo owns", () => {
   const noteCard = seed.notes[0].review!.card;
   assert.deepEqual(noteItem, {
     id: noteItem.id,
-    ownerId: owner,
+    userId: owner,
     language: "zh",
     kind: "entry",
     targetId: rows.learningEntries[0].id,
@@ -507,7 +512,7 @@ test("seed rows are built for every table the demo owns", () => {
   const [noteLog, wordLog1, wordLog2] = rows.reviewLogs;
   assert.deepEqual(noteLog, {
     id: noteLog.id,
-    ownerId: owner,
+    userId: owner,
     itemId: noteItem.id,
     rating: 3,
     state: 0,
@@ -542,7 +547,7 @@ test("seed rows are built for every table the demo owns", () => {
   assert.deepEqual(rows.conversations, [
     {
       id: "conv-uuid",
-      ownerId: owner,
+      userId: owner,
       title: "週末の予定",
       modelName: "gpt-x",
       ended: true,
@@ -558,7 +563,7 @@ test("seed rows are built for every table the demo owns", () => {
   assert.deepEqual(rows.prepositionRecords, [
     {
       id: "p-uuid",
-      ownerId: owner,
+      userId: owner,
       questionCount: 2,
       firstTryCount: 1,
       missCount: 2,
@@ -582,7 +587,7 @@ test("seed rows are built for every table the demo owns", () => {
   assert.deepEqual(rows.complementRecords, [
     {
       id: "c-uuid",
-      ownerId: owner,
+      userId: owner,
       mode: "result",
       questionCount: 1,
       firstTryCount: 1,

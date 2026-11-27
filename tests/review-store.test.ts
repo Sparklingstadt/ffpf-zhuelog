@@ -28,7 +28,7 @@ test("reviewLogRow keeps the card as it stood before the answer", () => {
 
   const row = reviewLogRow({
     logId: "0b6c3f2e-1d4a-4c8e-9f00-123456789abc",
-    ownerId: "github:1",
+    userId: "github:1",
     itemId: "cabcdefghijklmnopqrstuvwx",
     rating: 3,
     before,
@@ -36,7 +36,7 @@ test("reviewLogRow keeps the card as it stood before the answer", () => {
   });
   assert.deepEqual(row, {
     id: "0b6c3f2e-1d4a-4c8e-9f00-123456789abc",
-    ownerId: "github:1",
+    userId: "github:1",
     itemId: "cabcdefghijklmnopqrstuvwx",
     rating: 3,
     state: 2,
@@ -74,13 +74,13 @@ test("enqueueReviewItemsSql brings a card forward in one statement", () => {
   const text = sql.sql.replace(/\s+/g, " ");
   assert.ok(
     text.includes(
-      'INSERT INTO "ReviewItem" ("id", "ownerId", "language", "kind", "targetId", "due", "state", "createdAt", "updatedAt")',
+      'INSERT INTO "ReviewItem" ("id", "userId", "language", "kind", "targetId", "due", "state", "createdAt", "updatedAt")',
     ),
     text,
   );
   assert.ok(
     text.includes(
-      'ON CONFLICT ("ownerId", "language", "kind", "targetId") DO UPDATE SET "due" = EXCLUDED."due", "updatedAt" = EXCLUDED."updatedAt" WHERE "ReviewItem"."due" > EXCLUDED."due"',
+      'ON CONFLICT ("userId", "language", "kind", "targetId") DO UPDATE SET "due" = EXCLUDED."due", "updatedAt" = EXCLUDED."updatedAt" WHERE "ReviewItem"."due" > EXCLUDED."due"',
     ),
     text,
   );

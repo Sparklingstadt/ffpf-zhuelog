@@ -29,6 +29,7 @@ export const vocabulary = createVocabularyBook({
           sentence,
         )
     : undefined,
-  recordUsage: (entry) => recordAiUsage(prisma, entry),
+  recordUsage: ({ ownerId, ...entry }) =>
+    recordAiUsage(prisma, { ...entry, userId: ownerId }),
   logError: (code, ...details) => console.error(code, ...details),
 });

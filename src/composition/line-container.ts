@@ -61,9 +61,14 @@ export const lineBot =
   config && openAi
     ? (() => {
         const messaging = createLineMessaging(config);
+        const messages = createLineMessageStore(prisma);
         return createLineBot({
           links,
-          messages: createLineMessageStore(prisma),
+          messages: {
+            ...messages,
+            insert: ({ ownerId, ...message }, now) =>
+              messages.insert({ ...message, userId: ownerId }, now),
+          },
           throttle: createSignInThrottleStore(prisma),
           async generate(kind, text, onUsage) {
             try {
@@ -86,7 +91,11 @@ export const lineBot =
           recordUsage: (ownerId, usage) =>
             recordWithin(
               () =>
-                recordAiUsage(prisma, { ...usage, ownerId, feature: "line" }),
+                recordAiUsage(prisma, {
+                  ...usage,
+                  userId: ownerId,
+                  feature: "line",
+                }),
               RECORD_TIMEOUT_MS,
               (code, name) => console.error(code, name),
             ),
