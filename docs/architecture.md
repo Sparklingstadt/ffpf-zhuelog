@@ -133,12 +133,19 @@ src/
 - 以前の、接続元とログイン ID の組で数える自前の制限はありません。アカウントそのものはロックしません。ほかの場所からの失敗で、本人が締め出されないようにするためです。
 - `SignInThrottle` の表は残していますが、ログインでは使いません。LINE の連携コードの入力の試行回数（`line-link:<LINE のユーザー ID>`、1 時間に 5 回まで）だけが使います。
 
-**自前で足したもの**：Better Auth に任せずに足したのは、次の 4 つの `hooks.before` と設定です（`better-auth.ts`）。
+**自前で足したもの**：Better Auth に任せずに足したのは、1 つの `hooks.before`（中で 3 つに分かれます）と、アプリ側の LINE の確かめと、`disabledPaths` です（`better-auth.ts`）。
 
-- **デモのパスワード変更を断る**：`/change-password` で、`username` が `DEMO_LOGIN_ID` の人を断ります。デモのパスワードが変わると、その日はほかの人がデモに入れないためです。なりすまし中の `/change-password` も断ります（会員のパスワードは管理者が変えるものではなく、変えるとなりすましの外の普通のセッションを管理者が得るため）。`/update-user` は `disabledPaths` で閉じています（名前とログイン ID を変えられると、デモが壊れるため。今も会員が自分の名前や ID を変える画面はありません）。
-- **ゲストへのなりすましを断る**：`/admin/impersonate-user` で、相手が `isAnonymous` の `user` なら断ります。呼んだ人が管理者かを先に確かめ、管理者でなければ admin プラグインの 401/403 のままにします（相手の id がゲストのものかを、管理者以外に知らせないため）。管理者になりすますのは、プラグインの既定で断られます。
-- **なりすまし中は LINE の連携を使えない**：`session.impersonatedBy` があるとき、連携の画面（`/account/line`）と Server Action は `/` に戻します。管理者の LINE が会員に結び付くのを防ぐためです。
-- **古いセッション Cookie を落とす（better-auth 1.7.28 の不具合の回避）**：`/sign-in/username`・`/sign-in/anonymous`・`/callback/*` へのリクエストから、ブラウザーの前のセッション Cookie（`better-auth.session_token`・`better-auth.session_data`）を外します。anonymous プラグインの after-hook が、期限切れや別の場所で消えた Cookie の `getSession` で Cookie の削除を起こし、そのとき、いま作ったばかりのセッションの `Set-Cookie` まで消してしまい、ログインが 200 で終わるのにブラウザーはログインしていない状態になるためです。**Better Auth の側が直ったら消します。** 副作用として、ゲストが会員でログインしても、ゲストの `user` はつなぎません（毎日の掃除が消します）。
+- **デモのパスワード変更を断る**：`/change-password` で、`username` が `DEMO_LOGIN_ID` の人を断ります。デモのパスワードが変わると、その日はほかの人がデモに入れないためです。なりすまし中の `/change-password` も断ります（会員のパスワードは管理者が変えるものではなく、変えるとなりすましの外の普通のセッションを管理者が得るため）。`hooks.before` の 1 つめの分かれです。
+- **ゲストへのなりすましを断る**：`/admin/impersonate-user` で、相手が `isAnonymous` の `user` なら断ります。呼んだ人が管理者かを先に確かめ、管理者でなければ admin プラグインの 401/403 のままにします（相手の id がゲストのものかを、管理者以外に知らせないため）。管理者になりすますのは、プラグインの既定で断られます。`hooks.before` の 2 つめの分かれです。
+- **なりすまし中は LINE の連携を使えない**：`session.impersonatedBy` があるとき、連携の画面（`/account/line`）と Server Action は `/` に戻します。管理者の LINE が会員に結び付くのを防ぐためです。これは Better Auth の hook ではなく、アプリの側で確かめています。
+- **古いセッション Cookie を落とす（better-auth 1.7.28 の不具合の回避）**：`/sign-in/username`・`/sign-in/anonymous`・`/callback/*` へのリクエストから、ブラウザーの前のセッション Cookie（`better-auth.session_token`・`better-auth.session_data`）を外します。anonymous プラグインの after-hook が、期限切れや別の場所で消えた Cookie の `getSession` で Cookie の削除を起こし、そのとき、いま作ったばかりのセッションの `Set-Cookie` まで消してしまい、ログインが 200 で終わるのにブラウザーはログインしていない状態になるためです。**Better Auth の側が直ったら消します。** 副作用として、ゲストが会員でログインしても、ゲストの `user` はつなぎません（毎日の掃除が消します）。`hooks.before` の 3 つめの分かれです。
+- **使わないルートを閉じる（`disabledPaths`）**：次の `/api/auth/*` は、HTTP では `404` です。サーバーから `auth.api.*` で呼ぶ処理や、ほかのルートの中の処理（ログアウト、`changePassword` の `revokeOtherSessions`、管理者の `revokeUserSessions`）には影響しません。
+  - `/update-user`：名前とログイン ID を変えられると、デモが壊れるため。今も会員が自分の名前や ID を変える画面はありません。
+  - `/sign-in/email`：会員のメールアドレス（`memberEmail`）は推測でき、`/sign-in/username` より緩いレート制限になるため。
+  - `/list-sessions`・`/revoke-session`・`/revoke-sessions`・`/revoke-other-sessions`：デモは全員で 1 人の `user` なので、一覧はほかの訪問者のセッションのトークン・IP・ブラウザーを見せ、取り消しは全員をログアウトさせるため。アプリは使っていません。
+  - `/is-username-available`：誰でもログイン ID の有無を調べられるため。会員の作成は `auth.api.createUser` で、使っていません。
+  - `/get-access-token`・`/refresh-token`・`/account-info`：Sparklingstadt ID の会員になりすました管理者が、その会員の ID サーバーのトークンを得られるため。アプリは使っていません。あわせて、ID サーバーの access token と refresh token は暗号化して保存します（`encryptOAuthTokens`）。ID トークンはログアウトの `id_token_hint` に使うので、そのままです。
+- **管理者は admin プラグインを直接呼べる**：管理者は、画面を通さずに admin プラグインの `/api/auth/admin/*` を呼べます（役割の変更・利用停止など、画面に無い操作も含みます）。管理者は信頼する人なので、閉じていません。
 
 **会員として操作（なりすまし）**：管理者は、`admin` プラグインの `impersonateUser` で会員になりすまし、その会員としてログインしているのと同じ画面を見ます。会員だけがなりすませます（ゲストと管理者にはなれません）。長さは 1 時間（プラグインの既定）で、バナー（`acting-banner.tsx`）の「戻る」が `stopImpersonating` を呼びます。なりすましの間は、管理画面と AI の利用量は使えず、AI の利用量は会員のほうに数えます。なりすましの間にログアウトすると、先になりすましを終えてから、管理者をログアウトします（会員の ID サーバーのログアウトへは送りません）。
 

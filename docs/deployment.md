@@ -21,7 +21,7 @@ Web（Next.js）を Vercel の 1 つのプロジェクトで動かします。ma
 3. `verify` が通ると、`release` がそのコミットにタグを打ち、リリースノートを本文にした GitHub Release を作ります。
 4. 続けて `deploy` が、そのコミットの本番ビルドが Ready になるのを待って `vercel promote` し、カスタムドメインがそのビルドを指していることと、`/signin` が応答することを確かめます。
 
-version を変えないマージは、Vercel がビルドするだけで、本番には出ません。ただし、マイグレーションはそのビルドで当たります（下の「マイグレーションの制約」）。
+version を変えないマージは、Vercel がビルドするだけで、本番には出ません。ただし、マイグレーションはそのビルドで当たります（下の「マイグレーションの制約」）。前のコードと両立しないマイグレーションを、version を変えずにマージすると、本番は切り替わらないまま壊れます。
 
 **手で起動するとき**（GitHub の Actions の画面の「Run workflow」）
 
@@ -46,7 +46,7 @@ version を変えないマージは、Vercel がビルドするだけで、本�
 
 スキーマは Prisma のマイグレーションで管理します。ログインは Better Auth の表（`user`・`session`・`account`・`verification`・`rateLimit`）です。`SignInThrottle` は、LINE の連携コードの入力の試行回数だけに残しています。`ApiRefreshToken` は段階 12b で消しました（末尾の「移行の記録」の「段階12（後片付け）のマージの前と後」）。マイグレーションは、Web の **本番ビルド** が自動で適用します。`vercel.json` の `buildCommand` が `scripts/vercel-build.sh` を動かし、`VERCEL_ENV=production` のときだけ `prisma migrate deploy` を実行してから `next build` します（Preview のビルドは自分の Neon ブランチを使い、マイグレーションは当てません）。そのため、Web の Production には `DATABASE_URL` が必要です。無い・つながらない・DDL が失敗すると、本番の Web のデプロイが失敗します（失敗したビルドの本番は、前のバージョンのままです）。
 
-**マイグレーションの制約**: 本番のビルドがマイグレーションを当ててから `vercel promote` で切り替えるまでは、前のデプロイの Web が新しいスキーマの上で動きます。そのため、マイグレーションは前のデプロイのコードとそのまま両立する形にします。足してよいのは、表の追加と、null を許す列（または既定値のある列）の追加だけです。列・表の削除や名前の変更、型の変更、NOT NULL の追加のような壊す変更は、2 回のリリースに分けます（1 回目で新しい形を足してコードを切り替え、2 回目のリリースで古い形を削除します）。
+**マイグレーションの制約**: 本番のビルドがマイグレーションを当ててから `vercel promote` で切り替えるまでは、前のデプロイの Web が新しいスキーマの上で動きます。そのため、マイグレーションは前のデプロイのコードとそのまま両立する形にします。足してよいのは、表の追加と、null を許す列（または既定値のある列）の追加だけです。列・表の削除や名前の変更、型の変更、NOT NULL の追加のような壊す変更は、2 回のリリースに分けます（1 回目で新しい形を足してコードを切り替え、2 回目のリリースで古い形を削除します）。この制約を破ったのは、v0.34.0 の Better Auth への切り替えだけです（末尾の「移行の記録」の「Better Auth への切り替え」。止まる時間を取って出しました）。
 
 マイグレーションが当たったことの確認と、自動で当たらなかったときの手動の適用は、次のとおりです。`migrate status` で未適用が無いこと（「Database schema is up to date!」）を確かめます。
 
@@ -225,7 +225,7 @@ Sparklingstadt ID（sparklingstadt-id が提供する OpenID Connect のプロ�
 - データ：デモを試す全員で 1 つのアカウントを共有します。毎晩 04:00（日本時間）ごろに、Web の `vercel.json` の Cron（`0 19 * * *`、UTC）が `GET /api/cron/demo-reset` を呼び、1 つのトランザクションで、デモのパスワードを `DEMO_PASSWORD` に入れ直し、デモの持ち物（学習ノートとヒント、CSV の取り込みの記録、復習の項目と記録、単語帳、会話ノート、クイック質問、練習の記録（介詞・補語）、フォロー（デモがしたものと、デモをフォローしているもの）、LINE の連携・連携コード・受け取った文）を消してから、`src/domain/demo/demo-fixture.json` の内容を、Web の FSRS で復習の項目にして入れ直します（例のデータは、以前の Go が最後に作った内容と同じであることを `tests/fixtures/demo-seed-golden.json` で確かめています）。消さないものは、AI の利用量（`AiUsage`。管理者が費用を見る記録）とログインのセッション（`session`）です。日付は「リセットの何日前か」で書いてあるので、いつ見ても直近 7 日の記録に見えます。ログイン中のセッションは消しません（デモに入っている人は、リセットのあとも続けて使えます）。
 - **ゲストの掃除**：同じ毎日の実行が、作ってから 24 時間たったゲストの `user` を消します（`session` は外部キーで一緒に消えます）。`DEMO_LOGIN_ID` と `DEMO_PASSWORD` のどちらかが無いと、cron が `404` なので、この掃除も動きません。
 - **`DEMO_LOGIN_ID` に、実在の会員や管理者のログイン ID を入れないでください。** 毎晩のリセットが、その `user` のデータをすべて消し、パスワードを `DEMO_PASSWORD` に替えます。
-- 使えないもの：OpenAI を呼ぶルート（Web の `POST /api/chat` と `POST /api/quick-question`）は、デモには `403`（「デモでは使えません。」）です。Web の LINE 連携の画面（`/account/line`）は `/` に戻します。パスワードの変更も、デモには使えません（Better Auth の `/change-password` を、`hooks.before` がデモの `username` に対して断ります。`/update-user` も `disabledPaths` で閉じています）。フォロー・会員の一覧・タイムライン・共有（ほかの会員に届くため）は、Web が断ります（`/follow` は `/` に戻し、フォローや共有を直接送ると画面には「ログインし直してください。」と出ます）。Web の AI のルート（単語帳の下書き・クイック質問・ChatGPT と話す）は、Web が自分でデモかどうかを確かめて断ります。Web は、ログイン ID が `DEMO_LOGIN_ID` と同じ会員をデモと決め、すべてのページに「デモアカウントです。…」を出し、メニューから使えない機能を外します。
+- 使えないもの：OpenAI を呼ぶルート（Web の `POST /api/chat` と `POST /api/quick-question`）は、デモには `403`（「デモでは使えません。」）です。Web の LINE 連携の画面（`/account/line`）は `/` に戻します。パスワードの変更も、デモには使えません（Better Auth の `/change-password` を、`hooks.before` がデモの `username` に対して断ります。`/update-user` も `disabledPaths` で閉じています）。デモは全員で 1 人なので、セッションの一覧と取り消し（`/list-sessions`・`/revoke-session`・`/revoke-sessions`・`/revoke-other-sessions`）も `disabledPaths` で閉じています（ほかの訪問者のセッションが見え、全員をログアウトさせられるため）。フォロー・会員の一覧・タイムライン・共有（ほかの会員に届くため）は、Web が断ります（`/follow` は `/` に戻し、フォローや共有を直接送ると画面には「ログインし直してください。」と出ます）。Web の AI のルート（単語帳の下書き・クイック質問・ChatGPT と話す）は、Web が自分でデモかどうかを確かめて断ります。Web は、ログイン ID が `DEMO_LOGIN_ID` と同じ会員をデモと決め、すべてのページに「デモアカウントです。…」を出し、メニューから使えない機能を外します。
 - リセットは Web が行います（`DEMO_LOGIN_ID` か `DEMO_PASSWORD` が空なら、Web のルートは `404` です）。Hobby の Cron は時刻が 1 時間単位なので、04:00 から最大 59 分遅れることがあります。Vercel が `Authorization: Bearer <CRON_SECRET>` を付けて呼ぶので、Web の Production に `CRON_SECRET` が要ります。`maxDuration` は route に 30 秒と書いてあります。すぐ戻したいときは、下の `curl` で手でリセットします。
 - 手でリセットする：`curl -i -X POST https://ffpf-zhuelog.sparklingstadt.com/api/cron/demo-reset -H "Authorization: Bearer $CRON_SECRET"` が `204` を返します（`GET` でも同じです）。`CRON_SECRET` を知っている人だけが呼べます。`$CRON_SECRET` は Web の Production の値です。
 - マイグレーションは要りません（既存の表だけを使います）。Vercel Hobby の Cron は 1 つのプロジェクトに 100 個まで、どれも 1 日 1 回までなので、LINE の拾い直しとこのリセットの 2 つ（どちらも 1 日 1 回）は収まります（どちらも Web の `vercel.json` にあります）。
@@ -803,10 +803,24 @@ Preview には入れません。プレビューの URL は、GitHub と FFPF ID 
 **何が起きるか**
 
 - マイグレーション `20261127090000_better_auth_tables` が Better Auth の表を足し、`20261127100000_owner_to_user` が、すべての `ownerId`（と `Follow` の 2 つの列）を `userId`（`user.id` への外部キー）に付け替えます。`PasswordAccount` は `user`＋`account`（`credential`）に、`SidAccount` は `user`＋`account`（`sid`）に、管理者は前もって用意した 1 行から `user`（`role` は `admin`）＋`account`（`sid`、`accountId` は管理者の `sub`）になります。そのあと、古い `PasswordAccount`・`SidAccount`・`Session`・`FfpfAccount` を落とします。
-- **付け替えができない `ownerId` が 1 つでもあると、マイグレーションは止まり**、デプロイは失敗します（黙って消しません）。マイグレーションは 1 つの明示的なトランザクション（`BEGIN`〜`COMMIT`）なので、止まったら DB は元のままで、本番は前のバージョンのままです。
+- **付け替えができない `ownerId` が 1 つでもあると、マイグレーションは止まり**、デプロイは失敗します（黙って消しません）。マイグレーションは 1 つの明示的なトランザクション（`BEGIN`〜`COMMIT`）なので、マイグレーションが止まったときに限り、DB は元のままで、本番は前のバージョンのまま動きます。
 - `SignInThrottle` の表は残します（LINE の連携コードの入力の試行回数だけが使います）。
 
 **戻せません**：古い表を落とすので、切り替えのあと前のデプロイへ Instant Rollback しても、前のコードは動きません。問題が出たら、直して出し直します。マージの直前に Neon のブランチを 1 つ切っておくと、データを見直せます。
+
+**止まる時間がある（2 回のリリースに分けていない）**：このリリース（v0.34.0）は、「1. 本番の DB とマイグレーション」の「マイグレーションの制約」（壊す変更は 2 回のリリースに分ける）を、わかったうえで破っています。古い表と `ownerId` の列を、1 回で落とすためです。
+
+- 本番のビルド（`scripts/vercel-build.sh`）が `prisma migrate deploy` を当てた時点から、`vercel promote` で新しいビルドに切り替わるまで、本番は前のコード（v0.33.0）のまま新しいスキーマの上で動き、ログインも学習ノートもエラーになります。LINE の webhook と Cron も同じです。
+- いつもの流れ（Vercel のビルド → `verify` → `release` → `deploy`）のままだと、`verify`（本番ビルドと E2E）が終わるまで切り替わらず、その間ずっと止まります。そのため、下の手順 5 では、ビルドが Ready になったらすぐ `deploy` を手で起動します。
+- 止まる時間を、利用の少ない時間に枠として取っておきます（メンテナンスの枠）。毎日 04:00（日本時間）ごろのデモのリセットの Cron（「6. デモアカウント」）の前後は避けます。
+- `package.json` の version を 0.34.0 に上げ、`docs/releases/v0.34.0.md` を同じプルリクエストに入れます。version を上げないと、マイグレーションだけが当たり、`release` も `deploy` も動かず、本番は壊れたまま切り替わりません。
+
+**マイグレーションは当たったのに、ビルドが失敗したとき**（`prisma migrate deploy` のあとの `next build` が落ちたときなど）：DB は新しいスキーマになり、本番は前のコードのままなので、止まったままです。Instant Rollback では直りません（前のコードは新しいスキーマで動かないため）。
+
+1. 原因を直したコミットを main に入れます（直して進める）。version は 0.34.0 のままでかまいません。次の本番のビルドは、当たったマイグレーションを飛ばして `next build` だけをします。
+2. そのコミットの本番のビルドが Ready になったら、`deploy` を手で起動し、そのコミットの SHA を入れて切り替えます。
+3. タグ `v0.34.0` と GitHub Release は、最初のマージのコミットの `verify` が通っていれば、そのコミットに作られています（そのままでかまいません。そのとき `release` が呼んだ `deploy` は、ビルドが失敗しているので失敗します）。`verify` が落ちて作られていなければ、直したあとで `release` を手で起動します。
+4. どうしても直せないときの最後の手段は、Neon の機能で本番の DB をマージの直前の時点に戻すことです（スキーマもデータも、マイグレーションの記録も、その時点に戻ります）。前のコードがまた動くようになります。止まっている間に書かれたデータはほぼありませんが、戻した時点より後のデータは消えます。
 
 **手順（本番はこの順）**
 
@@ -825,7 +839,21 @@ Preview には入れません。プレビューの URL は、GitHub と FFPF ID 
 
    報告の「1. Owner values with no mapping」「2. Email collisions」「3. Admin sidSub equal to a SidAccount id」がすべて `none` で、`OK` と出ることを確かめます（出ないときは、終了コードが 0 でなく、そのままマージするとマイグレーションが止まります）。GitHub の ID を持ち主とするデータは、管理者 1 人ぶんだけです。ほかの数字の持ち主が見つかったら、止まります。
 
-5. **マージ**：本番のビルドが、マイグレーションを当ててからビルドします。止まったらデプロイは失敗し、本番は前のバージョンのままです。マージのあと、`vercel promote`（リリースのとき）で切り替わります。
+   「2. Email collisions」が出たときの直し方：`user` の `email` は重ならない値でなければならないので、マイグレーションの前に `SidAccount` の `email` を直します。`SidAccount` の `id` は Sparklingstadt ID の `sub` で、データの持ち主は `email` ではなく `id` で決まるので、`email` を変えてもデータは移ります。
+
+   - 「SidAccount rows share the email …」（同じメールアドレスの `SidAccount` が 2 行以上）：どの行を残すか決めます。ふつうは、ノートなどのデータを持ち、最近ログインしている行です。残さない行の `email` を、ほかと重ならない値に変えます。
+   - 「SidAccount … has the admin's email …」（管理者のメールアドレスと同じ `SidAccount`）：管理者の `user` がそのメールアドレスを使うので、その `SidAccount` の `email` を変えます。
+
+   ```sql
+   UPDATE "SidAccount" SET "email" = "id" || '@sid.zhuelog.invalid' WHERE "id" = '<残さないほうの id>';
+   ```
+
+   変えた会員のメールアドレスは、切り替えのあと、この仮の値のままです（Better Auth は、2 回目からのログインで `user` のメールアドレスを書き換えません）。直したら、もう一度 `--check-only` で流し、`OK` を確かめます。
+
+5. **マージ（メンテナンスの枠の中で）**：version を 0.34.0 に上げたプルリクエストをマージします。本番のビルドが、マイグレーションを当ててからビルドします。ここから切り替わるまで、本番は止まります（上の「止まる時間がある」）。
+   - Vercel の画面で、そのコミットの本番のビルドが Ready になるのを見ます。マイグレーションが止まったときは、ビルドが失敗し、本番は前のバージョンのまま動きます（原因を直して出し直します）。マイグレーションのあとで失敗したときは、上の「マイグレーションは当たったのに、ビルドが失敗したとき」です。
+   - Ready になったら、`verify` を待たずに、GitHub の Actions の画面で `deploy` を「Run workflow」で起動し、`sha` にマージのコミットの SHA（40 桁）を入れます。`deploy` が `vercel promote` し、カスタムドメインがそのビルドを指していることと `/signin` の応答を確かめます。ここで止まる時間が終わります。
+   - あとで `verify` が通ると、`release` がタグ `v0.34.0` と GitHub Release を作り、`deploy` を呼びます。その `deploy` は、すでに切り替わっているので「already live」で終わります。`verify` が落ちたときは、直したあとで `release` を手で起動します。
 6. **`/api/cron/demo-reset` を 1 回呼ぶ**：`CRON_SECRET` を付けて呼びます（「6. デモアカウント」の `curl`）。デモのアカウントにパスワード（`DEMO_PASSWORD`）が入ります（呼ぶまで、「デモで試す」は使えません）。ゲストの掃除も同じ実行で行われます。
 7. **確かめる**：管理者が Sparklingstadt ID でログインして、管理画面（`/admin/accounts`・`/admin/ai-usage`）を開けること。会員の 1 人で（ID とパスワードで）ログインして、ノートが見えること。
 8. **後片付け**：GitHub の OAuth App を消し、Vercel の Production（と Preview）から `AUTH_GITHUB_ID`・`GITHUB_WEB_CLIENT_SECRET`・`AUTH_ALLOWED_GITHUB_IDS`（と、あれば `AUTH_SECRET`・`AUTH_GITHUB_SECRET`）を消します。
