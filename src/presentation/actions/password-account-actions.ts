@@ -1,21 +1,17 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
 
-import { memberAccounts, ownPassword } from "@/composition/account-container";
+import { memberAccounts } from "@/composition/account-container";
 import {
   getCurrentAdminUser,
-  getCurrentMemberUser,
   signOutTo,
 } from "@/composition/identity-container";
-import { clientAddress } from "@/infrastructure/auth/client-address";
 import { attemptCall } from "@/presentation/controllers/action-state";
 import {
   accountForbiddenMessage,
   accountInputMessage,
   accountNotFoundMessage,
-  changePasswordMessage,
 } from "@/presentation/presenters/account-action-errors";
 
 export type AccountActionState =
@@ -88,6 +84,7 @@ export async function createPasswordAccountAction(
   return { status: "success", ...result.value.issued };
 }
 
+// accountId is the member's user id.
 export async function resetPasswordAccountPasswordAction(
   accountId: string,
   _previousState: AccountActionState,
@@ -111,35 +108,10 @@ export async function resetPasswordAccountPasswordAction(
   return { status: "success", ...result.value.issued };
 }
 
-export type ChangePasswordState =
-  { status: "idle" } | { status: "error"; message: string };
-
-export async function changeOwnPasswordAction(
-  _previousState: ChangePasswordState,
-  formData: FormData,
-): Promise<ChangePasswordState> {
-  const user = await getCurrentMemberUser();
-  if (user?.role !== "member") return forbidden;
-
-  const client = clientAddress(await headers());
-  const result = await attemptAccountCall("PASSWORD_CHANGE_FAILED", () =>
-    ownPassword.change(
-      {
-        currentPassword: field(formData, "currentPassword"),
-        newPassword: field(formData, "newPassword"),
-        confirmPassword: field(formData, "confirmPassword"),
-      },
-      client,
-    ),
-  );
-  if (!result.ok) return result.state;
-  const outcome = result.value;
-  if (outcome === "rate-limited") console.error("PASSWORD_CHANGE_RATE_LIMITED");
-  if (outcome !== "changed")
-    return { status: "error", message: changePasswordMessage(outcome) };
-  // The change already deleted every Session row of the member; signOutTo
-  // clears this browser's cookies. Runs outside any try/catch: signOutTo
-  // ends by throwing NEXT_REDIRECT.
+// After a member's own password change (Better Auth's /change-password from
+// the browser, which already ended every other session of theirs): signs
+// this browser out too and goes to the sign-in page. Ends by throwing
+// NEXT_REDIRECT.
+export async function signOutAfterPasswordChangeAction(): Promise<void> {
   await signOutTo("/signin?notice=password-changed");
-  return { status: "idle" };
 }

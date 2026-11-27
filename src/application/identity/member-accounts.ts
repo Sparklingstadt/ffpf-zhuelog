@@ -7,6 +7,7 @@ import {
   checkNewAccount,
   choosePassword,
   isAccountIdShape,
+  memberEmail,
   type AccountInputError,
   type PasswordChoice,
 } from "../../domain/identity/password-account";
@@ -21,36 +22,89 @@ export type CreateAccountResult =
   | { ok: true; issued: IssuedPassword }
   | { ok: false; reason: AccountInputError | "login-id-taken" };
 
-// "not-found" is a missing account, and also an id no account could have.
+// "not-found" is a missing user, a user who is not a member with a login id
+// (an admin, a guest, a Sparklingstadt ID member), and an id no user could
+// have.
 export type ResetPasswordResult =
   | { ok: true; issued: IssuedPassword }
   | { ok: false; reason: "password" | "not-found" };
 
-export type MemberAccountsDeps = {
-  currentUser: () => Promise<AuthenticatedUser | null>;
-  store: {
-    list(): Promise<MemberAccount[]>;
-    // null: the loginId is taken.
-    create(
-      input: { loginId: string; displayName: string; passwordHash: string },
-      now: Date,
-    ): Promise<MemberAccount | null>;
-    loginIdOf(id: string): Promise<string | null>;
-    // The loginId, or null when no account has the id.
-    setPassword(
-      id: string,
-      passwordHash: string,
-      now: Date,
-    ): Promise<string | null>;
-  };
-  hashPassword: (password: string) => Promise<string>;
-  generatePassword: () => string;
-  now: () => Date;
+// A user as Better Auth's admin API answers it (the fields used here).
+export type AdminApiUser = {
+  id: string;
+  name: string;
+  username?: string | null;
+  role?: string | null;
+  isAnonymous?: boolean | null;
+  createdAt: Date;
 };
 
-// The admin's management of password accounts: the caller is checked first
-// (requireAdmin runs before any input check), then the input. The plain
-// password leaves only in `issued`, for the admin to hand over once.
+// The part of Better Auth's admin plugin used here (auth.api), always called
+// with the admin's own request headers: Better Auth checks the session's role
+// again. Errors are Better Auth's APIError (status and body.code).
+export type MemberAccountsDeps = {
+  currentUser: () => Promise<AuthenticatedUser | null>;
+  headers: () => Promise<Headers>;
+  api: {
+    listUsers(input: {
+      query: {
+        filterField: "isAnonymous";
+        filterValue: false;
+        sortBy: "createdAt";
+        sortDirection: "asc";
+      };
+      headers: Headers;
+    }): Promise<{ users: AdminApiUser[] }>;
+    getUser(input: {
+      query: { id: string };
+      headers: Headers;
+    }): Promise<AdminApiUser>;
+    createUser(input: {
+      body: {
+        email: string;
+        password: string;
+        name: string;
+        data: { username: string };
+      };
+      headers: Headers;
+    }): Promise<unknown>;
+    setUserPassword(input: {
+      body: { userId: string; newPassword: string };
+      headers: Headers;
+    }): Promise<unknown>;
+    revokeUserSessions(input: {
+      body: { userId: string };
+      headers: Headers;
+    }): Promise<unknown>;
+  };
+  generatePassword: () => string;
+};
+
+const TAKEN_CODES = new Set([
+  // The username plugin: the login id is taken.
+  "USERNAME_IS_ALREADY_TAKEN",
+  // The admin plugin: the member mail address (made from the login id) is.
+  "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL",
+]);
+
+function errorCode(error: unknown): string | undefined {
+  const body = (error as { body?: { code?: unknown } } | null)?.body;
+  return typeof body?.code === "string" ? body.code : undefined;
+}
+
+function isAdminRole(role: string | null | undefined): boolean {
+  return (role ?? "user").split(",").some((part) => part.trim() === "admin");
+}
+
+// A member: neither an admin nor a guest.
+function isMember(user: AdminApiUser): boolean {
+  return user.isAnonymous !== true && !isAdminRole(user.role);
+}
+
+// The admin's management of member accounts, through Better Auth's admin
+// plugin: the caller is checked first (requireAdmin runs before any input
+// check), then the input. The plain password leaves only in `issued`, for the
+// admin to hand over once; Better Auth hashes it.
 export function createMemberAccounts(deps: MemberAccountsDeps) {
   async function requireAdmin(): Promise<void> {
     const user = await deps.currentUser();
@@ -63,11 +117,44 @@ export function createMemberAccounts(deps: MemberAccountsDeps) {
       : { password: choice.password, generated: false };
   }
 
+  // The member with a login id (and so a password here), or null.
+  async function passwordMember(
+    userId: string,
+    headers: Headers,
+  ): Promise<{ id: string; loginId: string } | null> {
+    let user: AdminApiUser;
+    try {
+      user = await deps.api.getUser({ query: { id: userId }, headers });
+    } catch (error) {
+      if ((error as { status?: unknown } | null)?.status === "NOT_FOUND")
+        return null;
+      throw error;
+    }
+    return isMember(user) && user.username
+      ? { id: user.id, loginId: user.username }
+      : null;
+  }
+
   return {
-    // Every password account (the demo's too), oldest first.
+    // Every member (the demo's and Sparklingstadt ID members too), oldest
+    // first.
     async list(): Promise<MemberAccount[]> {
       await requireAdmin();
-      return deps.store.list();
+      const { users } = await deps.api.listUsers({
+        query: {
+          filterField: "isAnonymous",
+          filterValue: false,
+          sortBy: "createdAt",
+          sortDirection: "asc",
+        },
+        headers: await deps.headers(),
+      });
+      return users.filter(isMember).map((user) => ({
+        id: user.id,
+        loginId: user.username ?? null,
+        displayName: user.name,
+        createdAt: user.createdAt,
+      }));
     },
 
     async create(raw: {
@@ -79,44 +166,58 @@ export function createMemberAccounts(deps: MemberAccountsDeps) {
       const input = checkNewAccount(raw);
       if (!input.ok) return { ok: false, reason: input.error };
       const { password, generated } = issue(input.password);
-      const created = await deps.store.create(
-        {
-          loginId: input.loginId,
-          displayName: input.displayName,
-          passwordHash: await deps.hashPassword(password),
-        },
-        deps.now(),
-      );
-      if (!created) return { ok: false, reason: "login-id-taken" };
+      try {
+        await deps.api.createUser({
+          body: {
+            email: memberEmail(input.loginId),
+            password,
+            name: input.displayName,
+            data: { username: input.loginId },
+          },
+          headers: await deps.headers(),
+        });
+      } catch (error) {
+        const code = errorCode(error);
+        if (code && TAKEN_CODES.has(code))
+          return { ok: false, reason: "login-id-taken" };
+        throw error;
+      }
       return {
         ok: true,
-        issued: { loginId: created.loginId, password, generated },
+        issued: { loginId: input.loginId, password, generated },
       };
     },
 
-    // The password is checked before the id. A missing account costs no
-    // hash. Nothing refuses the demo's account or the member the admin acts
-    // as. The id is bound into a server action, so the client can send any
-    // value: a non-string is an id no account could have.
+    // The password is checked before the id. Then the member's password is
+    // replaced and every session of theirs ends (they sign in again with the
+    // new one). Nothing refuses the demo's account. The id is bound into a
+    // server action, so the client can send any value: a non-string is an id
+    // no user could have.
     async resetPassword(
-      accountId: string,
+      userId: string,
       rawPassword: string,
     ): Promise<ResetPasswordResult> {
       await requireAdmin();
       const choice = choosePassword(rawPassword);
       if (!choice) return { ok: false, reason: "password" };
-      if (typeof accountId !== "string" || !isAccountIdShape(accountId))
+      if (typeof userId !== "string" || !isAccountIdShape(userId))
         return { ok: false, reason: "not-found" };
-      if ((await deps.store.loginIdOf(accountId)) === null)
-        return { ok: false, reason: "not-found" };
+      const headers = await deps.headers();
+      const target = await passwordMember(userId, headers);
+      if (!target) return { ok: false, reason: "not-found" };
       const { password, generated } = issue(choice);
-      const loginId = await deps.store.setPassword(
-        accountId,
-        await deps.hashPassword(password),
-        deps.now(),
-      );
-      if (loginId === null) return { ok: false, reason: "not-found" };
-      return { ok: true, issued: { loginId, password, generated } };
+      await deps.api.setUserPassword({
+        body: { userId: target.id, newPassword: password },
+        headers,
+      });
+      await deps.api.revokeUserSessions({
+        body: { userId: target.id },
+        headers,
+      });
+      return {
+        ok: true,
+        issued: { loginId: target.loginId, password, generated },
+      };
     },
   };
 }

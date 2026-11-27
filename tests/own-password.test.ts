@@ -2,347 +2,57 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
-  createOwnPassword,
-  type OwnPasswordDeps,
+  changePasswordFailure,
+  checkNewPassword,
 } from "../src/application/identity/own-password";
-import type { AuthenticatedUser } from "../src/domain/identity/entities/authenticated-user";
 
-const member: AuthenticatedUser = {
-  userId: "cacc1",
-  role: "member",
-  displayName: "alice",
-  username: "alice",
-};
-const admin: AuthenticatedUser = {
-  userId: "10001",
-  role: "admin",
-  displayName: "octocat",
-};
-const impersonated: AuthenticatedUser = {
-  userId: "cacc1",
-  role: "member",
-  displayName: "Alice",
-  username: "alice",
-  impersonatedBy: "10001",
-};
-const sidMember: AuthenticatedUser = {
-  userId: "cabc",
-  role: "member",
-  displayName: "f@example.com",
-};
-const demo: AuthenticatedUser = { ...member, demo: true };
-const guest: AuthenticatedUser = {
-  userId: "g1",
-  role: "guest",
-  displayName: "g",
-};
+// A member's own password change goes to Better Auth's /change-password from
+// the browser (so its rate limit counts it). These decide what the form says
+// before the request and for each refusal.
 
-const now = new Date("2026-11-17T03:00:00.000Z");
-const client = "203.0.113.7";
-const routeKey = "route:auth:203.0.113.7";
-const changeKey = "password-change:cacc1";
-const routeRule = { limit: 10, windowMs: 60_000 };
-const changeRule = { limit: 5, windowMs: 900_000 };
-
-function fakeDeps(
-  user: AuthenticatedUser | null,
-  {
-    counts = {},
-    account = { id: "cacc1", passwordHash: "hash:correct horse" },
-    replaced = true,
-    verifyError,
-  }: {
-    counts?: Record<string, number>;
-    account?: { id: string; passwordHash: string } | null;
-    replaced?: boolean;
-    verifyError?: Error;
-  } = {},
-) {
-  const calls: unknown[][] = [];
-  const count = { ...counts };
-  const deps: OwnPasswordDeps = {
-    currentUser: async () => user,
-    accounts: {
-      credentials: async (id) => {
-        calls.push(["credentials", id]);
-        return account;
-      },
-      replacePassword: async (id, expected, hash, at) => {
-        calls.push(["replacePassword", id, expected, hash, at]);
-        return replaced;
-      },
-    },
-    passwords: {
-      hash: async (password) => {
-        calls.push(["hash", password]);
-        return `hash:${password}`;
-      },
-      verify: async (password, hash) => {
-        calls.push(["verify", password, hash]);
-        if (verifyError) throw verifyError;
-        return hash === `hash:${password}`;
-      },
-      simulate: async (password) => {
-        calls.push(["simulate", password]);
-      },
-    },
-    throttle: {
-      consume: async (key, rule, at) => {
-        calls.push(["consume", key, rule, at]);
-        count[key] = (count[key] ?? 0) + 1;
-        return count[key] <= rule.limit;
-      },
-      reset: async (key) => {
-        calls.push(["reset", key]);
-        delete count[key];
-      },
-    },
-    now: () => now,
-  };
-  return { ownPassword: createOwnPassword(deps), calls, count };
-}
-
-function named(calls: unknown[][], name: string) {
-  return calls.filter((call) => call[0] === name);
-}
-
-const valid = {
-  currentPassword: "correct horse",
-  newPassword: "new-password",
-  confirmPassword: "new-password",
-};
-
-test("who may change: password members themselves only", async () => {
-  for (const user of [admin, impersonated, sidMember, demo, guest, null]) {
-    const { ownPassword, calls } = fakeDeps(user);
-    assert.equal(await ownPassword.change(valid, client), "forbidden");
-    assert.deepEqual(calls, [], JSON.stringify(user));
-  }
-});
-
-test("the client's route limit comes first", async () => {
-  const { ownPassword, calls, count } = fakeDeps(member, {
-    counts: { [routeKey]: 10 },
-  });
-  assert.equal(await ownPassword.change(valid, client), "rate-limited");
-  assert.deepEqual(calls, [["consume", routeKey, routeRule, now]]);
-  assert.equal(count[changeKey], undefined);
-});
-
-test("the new password is checked before anything about the current one", async () => {
-  const cases: [
-    { currentPassword: string; newPassword: string; confirmPassword: string },
-    string,
-  ][] = [
-    [
-      { ...valid, newPassword: "elevenchars", confirmPassword: "elevenchars" },
-      "invalid-new-password",
-    ],
-    [
-      { ...valid, newPassword: "", confirmPassword: "" },
-      "invalid-new-password",
-    ],
-    [
-      {
-        ...valid,
-        newPassword: "x".repeat(129),
-        confirmPassword: "x".repeat(129),
-      },
-      "invalid-new-password",
-    ],
-    [
-      { ...valid, newPassword: "elevenchars", confirmPassword: "other" },
-      "invalid-new-password",
-    ],
-    [
-      {
-        currentPassword: "wrong",
-        newPassword: "elevenchars",
-        confirmPassword: "elevenchars",
-      },
-      "invalid-new-password",
-    ],
-    [
-      {
-        ...valid,
-        newPassword: "new-password",
-        confirmPassword: "new-passwordx",
-      },
-      "password-mismatch",
-    ],
-    [
-      {
-        currentPassword: "",
-        newPassword: "new-password",
-        confirmPassword: "new-passwordx",
-      },
-      "password-mismatch",
-    ],
-  ];
-  for (const [input, outcome] of cases) {
-    const { ownPassword, calls, count } = fakeDeps(member);
-    assert.equal(
-      await ownPassword.change(input, client),
-      outcome,
-      JSON.stringify(input),
-    );
-    assert.deepEqual(calls, [["consume", routeKey, routeRule, now]]);
-    assert.equal(count[changeKey], undefined);
-  }
-});
-
-test("new passwords count UTF-16 units and keep spaces", async () => {
-  for (const next of [
-    "パ".repeat(12),
-    "x".repeat(128),
-    "パ".repeat(128),
-    "  leading sp",
-    "😀".repeat(6),
-  ]) {
-    const { ownPassword, calls } = fakeDeps(member);
-    assert.equal(
-      await ownPassword.change(
-        { ...valid, newPassword: next, confirmPassword: next },
-        client,
-      ),
-      "changed",
-      next,
-    );
-    assert.deepEqual(named(calls, "replacePassword"), [
-      ["replacePassword", "cacc1", "hash:correct horse", `hash:${next}`, now],
-    ]);
-  }
-  for (const next of ["😀".repeat(65), " eleven run"]) {
-    const { ownPassword, calls } = fakeDeps(member);
-    assert.equal(
-      await ownPassword.change(
-        { ...valid, newPassword: next, confirmPassword: next },
-        client,
-      ),
-      "invalid-new-password",
-      next,
-    );
-    assert.deepEqual(named(calls, "replacePassword"), []);
-  }
-});
-
-test("every current-password failure costs one hash and says the same", async () => {
-  const failures: {
-    name: string;
-    current: string;
-    options?: Parameters<typeof fakeDeps>[1];
-    consumed: boolean;
-    simulated?: string;
-    verified: boolean;
-  }[] = [
-    {
-      name: "no account",
-      current: "correct horse",
-      options: { account: null },
-      consumed: false,
-      simulated: "correct horse",
-      verified: false,
-    },
-    {
-      name: "empty",
-      current: "",
-      consumed: true,
-      simulated: "",
-      verified: false,
-    },
-    {
-      name: "129 ASCII",
-      current: "x".repeat(129),
-      consumed: true,
-      simulated: "x".repeat(128),
-      verified: false,
-    },
-    {
-      name: "129 katakana",
-      current: "パ".repeat(129),
-      consumed: true,
-      simulated: "パ".repeat(128),
-      verified: false,
-    },
-    {
-      name: "locked",
-      current: "correct horse",
-      options: { counts: { [changeKey]: 5 } },
-      consumed: true,
-      simulated: "correct horse",
-      verified: false,
-    },
-    { name: "wrong", current: "wrong", consumed: true, verified: true },
-  ];
-  for (const failure of failures) {
-    const { ownPassword, calls } = fakeDeps(member, failure.options);
-    assert.equal(
-      await ownPassword.change(
-        { ...valid, currentPassword: failure.current },
-        client,
-      ),
-      "invalid-current-password",
-      failure.name,
-    );
-    assert.deepEqual(
-      named(calls, "consume").filter((call) => call[1] === changeKey),
-      failure.consumed ? [["consume", changeKey, changeRule, now]] : [],
-      failure.name,
-    );
-    assert.deepEqual(
-      named(calls, "simulate"),
-      failure.simulated === undefined ? [] : [["simulate", failure.simulated]],
-      failure.name,
-    );
-    assert.equal(named(calls, "verify").length, failure.verified ? 1 : 0);
-    assert.equal(
-      named(calls, "verify").length + named(calls, "simulate").length,
-      1,
-      failure.name,
-    );
-    for (const name of ["hash", "replacePassword", "reset"])
-      assert.deepEqual(named(calls, name), [], `${failure.name}: ${name}`);
-  }
-});
-
-test("a change replaces the verified hash and bumps the session", async () => {
-  const { ownPassword, calls } = fakeDeps(member);
-  assert.equal(await ownPassword.change(valid, client), "changed");
-  assert.deepEqual(calls, [
-    ["consume", routeKey, routeRule, now],
-    ["credentials", "cacc1"],
-    ["consume", changeKey, changeRule, now],
-    ["verify", "correct horse", "hash:correct horse"],
-    ["hash", "new-password"],
-    [
-      "replacePassword",
-      "cacc1",
-      "hash:correct horse",
-      "hash:new-password",
-      now,
-    ],
-    ["reset", changeKey],
-  ]);
-});
-
-test("a hash replaced meanwhile is a wrong current password", async () => {
-  const { ownPassword, calls } = fakeDeps(member, { replaced: false });
+test("the new password is checked for length, then against its confirmation", () => {
   assert.equal(
-    await ownPassword.change(valid, client),
-    "invalid-current-password",
+    checkNewPassword({ newPassword: "short", confirmPassword: "short" }),
+    "invalid-new-password",
   );
-  assert.deepEqual(named(calls, "reset"), []);
+  assert.equal(
+    checkNewPassword({
+      newPassword: "x".repeat(129),
+      confirmPassword: "x".repeat(129),
+    }),
+    "invalid-new-password",
+  );
+  assert.equal(
+    checkNewPassword({
+      newPassword: "member-password-2",
+      confirmPassword: "member-password-3",
+    }),
+    "password-mismatch",
+  );
+  assert.equal(
+    checkNewPassword({
+      newPassword: " spaces kept 1 ",
+      confirmPassword: " spaces kept 1 ",
+    }),
+    null,
+  );
 });
 
-// The real hasher rethrows a scrypt failure: the change fails as an error,
-// never as a wrong current password, and nothing is replaced or reset.
-test("a hasher failure is thrown, not invalid-current-password", async () => {
-  const { ownPassword, calls } = fakeDeps(member, {
-    verifyError: new RangeError("scrypt"),
-  });
-  await assert.rejects(ownPassword.change(valid, client), {
-    name: "RangeError",
-  });
-  for (const name of ["hash", "replacePassword", "reset", "simulate"])
-    assert.deepEqual(named(calls, name), [], name);
+test("each refusal from Better Auth has one outcome", () => {
+  const cases = [
+    // A wrong current password and too many attempts read the same.
+    [{ status: 400, code: "INVALID_PASSWORD" }, "invalid-current-password"],
+    [{ status: 429 }, "invalid-current-password"],
+    [{ status: 400, code: "PASSWORD_TOO_SHORT" }, "invalid-new-password"],
+    [{ status: 400, code: "PASSWORD_TOO_LONG" }, "invalid-new-password"],
+    // Signed out meanwhile, the demo account, an admin impersonating.
+    [{ status: 401 }, "forbidden"],
+    [{ status: 403 }, "forbidden"],
+    // No password here (a Sparklingstadt ID member) and anything else.
+    [{ status: 400, code: "CREDENTIAL_ACCOUNT_NOT_FOUND" }, "error"],
+    [{ status: 500 }, "error"],
+    [{}, "error"],
+  ] as const;
+  for (const [error, outcome] of cases)
+    assert.equal(changePasswordFailure(error), outcome, JSON.stringify(error));
 });

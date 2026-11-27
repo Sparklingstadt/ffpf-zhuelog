@@ -4,10 +4,9 @@ import type { AuthenticatedUser } from "@/domain/identity/entities/authenticated
 import { stopActingAction } from "@/presentation/actions/acting-actions";
 import { Button } from "@/presentation/components/ui/button";
 
-// Shown on every page while an admin impersonates a member, so the admin
-// always knows whose records they are changing and can get back in one
-// click. (Task 7 of the Better Auth migration makes the button end the
-// impersonation.)
+// Shown on every page while an admin impersonates a member (Better Auth's
+// session.impersonatedBy), so the admin always knows whose records they are
+// changing and can get back in one click: the button ends the impersonation.
 export function ActingBanner({ user }: { user: AuthenticatedUser | null }) {
   if (!user?.impersonatedBy) return null;
   return (

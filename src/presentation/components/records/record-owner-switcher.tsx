@@ -10,7 +10,7 @@ type Props = {
   action: string;
 };
 
-// Admin-only switch for whose records the page shows. A plain GET form, so it
+// Admin-only switch for whose records the page shows, by user id. A plain GET form, so it
 // works without JavaScript (an empty `?user=` means the admin's own records).
 // With JavaScript, choosing 「自分」 leaves `user` out of the URL. Pages must
 // render it for admins only.

@@ -17,16 +17,16 @@ import {
 // zone); 15:00 UTC is the start of the next Japan day.
 async function recordUsage(
   db: Client,
-  ownerId: string,
+  userId: string,
   feature: string,
   model: string,
   tokens: [input: number, output: number],
   createdAt: string,
 ) {
   await db.query(
-    `INSERT INTO "AiUsage" (id, "ownerId", feature, model, "inputTokens", "outputTokens", "createdAt")
+    `INSERT INTO "AiUsage" (id, "userId", feature, model, "inputTokens", "outputTokens", "createdAt")
      VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-    [randomUUID(), ownerId, feature, model, ...tokens, createdAt],
+    [randomUUID(), userId, feature, model, ...tokens, createdAt],
   );
 }
 
@@ -89,7 +89,12 @@ test("the admin reads a Japan month of AI usage, most tokens first", async ({
   const people = page.locator("tbody");
   await expect(
     people.nth(0).getByRole("row").first().getByRole("cell"),
-  ).toHaveText([/^管理者\s*10001$/, "1", "5,000", "1,000"]);
+  ).toHaveText([
+    new RegExp(`^管理者\\s*${adminOwnerId}$`),
+    "1",
+    "5,000",
+    "1,000",
+  ]);
   const hanakoRows = people.nth(1).getByRole("row");
   await expect(hanakoRows.nth(0).getByRole("cell")).toHaveText([
     /^花子/,

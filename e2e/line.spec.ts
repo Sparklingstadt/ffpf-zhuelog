@@ -84,8 +84,8 @@ function linkLine(
   reviewNotify = false,
 ) {
   return db.query(
-    'INSERT INTO "LineLink" ("lineUserId", "ownerId", "role", "createdAt", "reviewNotify") VALUES ($1, $2, $3, NOW(), $4)',
-    [lineUser, owner, "member", reviewNotify],
+    'INSERT INTO "LineLink" ("lineUserId", "userId", "createdAt", "reviewNotify") VALUES ($1, $2, NOW(), $3)',
+    [lineUser, owner, reviewNotify],
   );
 }
 
@@ -109,8 +109,8 @@ test("linked members can unlink and see links completed in LINE without reloadin
   const lineUser = `U${randomUUID().replaceAll("-", "")}`;
   const link = () =>
     db.query(
-      'INSERT INTO "LineLink" ("lineUserId", "ownerId", "role", "createdAt") VALUES ($1, $2, $3, NOW())',
-      [lineUser, owner, "member"],
+      'INSERT INTO "LineLink" ("lineUserId", "userId", "createdAt") VALUES ($1, $2, NOW())',
+      [lineUser, owner],
     );
   await link();
   await asMember(page, "line-member", "member-password-1");
@@ -124,7 +124,7 @@ test("linked members can unlink and see links completed in LINE without reloadin
   const issue = page.getByRole("button", { name: "連携コードを出す" });
   await expect(issue).toBeVisible();
   expect(
-    (await db.query('SELECT 1 FROM "LineLink" WHERE "ownerId"=$1', [owner]))
+    (await db.query('SELECT 1 FROM "LineLink" WHERE "userId"=$1', [owner]))
       .rowCount,
   ).toBe(0);
 
@@ -233,7 +233,7 @@ test(
       `SELECT e."kind", e."correctedText", b."fileName",
             (SELECT count(*)::int FROM "Hint" h WHERE h."learningEntryId" = e."id") AS hints
        FROM "LearningEntry" e JOIN "ImportBatch" b ON b."id" = e."batchId"
-      WHERE e."ownerId" = $1`,
+      WHERE e."userId" = $1`,
       [owner],
     );
     expect(notes).toEqual([
@@ -252,11 +252,11 @@ test(
     await expect
       .poll(async () => {
         const { rows } = await db.query(
-          `SELECT "ownerId", "inputTokens", "outputTokens" FROM "AiUsage" WHERE "feature" = 'line'`,
+          `SELECT "userId", "inputTokens", "outputTokens" FROM "AiUsage" WHERE "feature" = 'line'`,
         );
         return rows;
       })
-      .toEqual([{ ownerId: owner, inputTokens: 15, outputTokens: 25 }]);
+      .toEqual([{ userId: owner, inputTokens: 15, outputTokens: 25 }]);
 
     await asMember(page, "line-writer", "member-password-1");
     await page.goto("/logs");
@@ -267,7 +267,7 @@ test(
     await sendLineEvents([event]);
     expect(await repliesTo(event)).toHaveLength(1);
     const { rows: count } = await db.query(
-      `SELECT count(*)::int AS n FROM "LearningEntry" WHERE "ownerId" = $1`,
+      `SELECT count(*)::int AS n FROM "LearningEntry" WHERE "userId" = $1`,
       [owner],
     );
     expect(count[0].n).toBe(1);
@@ -287,7 +287,7 @@ test("a Japanese message is translated", anyWidth, async ({ db }) => {
   expect(replies).toHaveLength(1);
   expect(replies[0][0]).toContain("【中国語訳】\ne2e 的翻译");
   const { rows } = await db.query(
-    `SELECT "kind" FROM "LearningEntry" WHERE "ownerId" = $1`,
+    `SELECT "kind" FROM "LearningEntry" WHERE "userId" = $1`,
     [owner],
   );
   expect(rows).toEqual([{ kind: "translation" }]);
@@ -321,16 +321,16 @@ test("a code issued on the web page links through the webhook", async ({
   ).toBeVisible();
   expect(
     (
-      await db.query('SELECT 1 FROM "LineLinkCode" WHERE "ownerId" = $1', [
+      await db.query('SELECT 1 FROM "LineLinkCode" WHERE "userId" = $1', [
         owner,
       ])
     ).rowCount,
   ).toBe(0);
   const { rows } = await db.query(
-    `SELECT "lineUserId", "role" FROM "LineLink" WHERE "ownerId" = $1`,
+    `SELECT "lineUserId" FROM "LineLink" WHERE "userId" = $1`,
     [owner],
   );
-  expect(rows).toEqual([{ lineUserId: lineUser, role: "member" }]);
+  expect(rows).toEqual([{ lineUserId: lineUser }]);
 
   const again = textEvent(newEventId(), lineUser, code);
   await sendLineEvents([again]);
@@ -438,16 +438,16 @@ test(
     const lineUser = newLineUser();
     await linkLine(db, lineUser, owner, true);
     await db.query(
-      `INSERT INTO "LineMessage" ("id", "webhookEventId", "lineUserId", "ownerId", "kind", "text", "status", "attempts", "createdAt", "updatedAt")
+      `INSERT INTO "LineMessage" ("id", "webhookEventId", "lineUserId", "userId", "kind", "text", "status", "attempts", "createdAt", "updatedAt")
      VALUES ($1, $2, $3, $4, 'correction', '我想去北京。', 'pending', 0, NOW() - interval '10 minutes', NOW() - interval '10 minutes')`,
       [`m${newEventId()}`, newEventId(), lineUser, owner],
     );
     await seedNotes(db, owner, [{ text: "我喜欢学习。" }]);
     await db.query(
-      `INSERT INTO "ReviewItem" ("id", "ownerId", "language", "kind", "targetId", "due", "state", "createdAt", "updatedAt")
+      `INSERT INTO "ReviewItem" ("id", "userId", "language", "kind", "targetId", "due", "state", "createdAt", "updatedAt")
      SELECT 'c' || substr(md5(random()::text), 1, 24), $1, 'zh', 'entry', e."id",
             NOW() - interval '1 hour', 0, NOW(), NOW()
-       FROM "LearningEntry" e WHERE e."ownerId" = $1`,
+       FROM "LearningEntry" e WHERE e."userId" = $1`,
       [owner],
     );
 

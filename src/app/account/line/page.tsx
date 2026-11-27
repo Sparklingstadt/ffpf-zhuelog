@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 
-import { LineLinkForbiddenError } from "@/application/line/line-link";
+import {
+  LineLinkForbiddenError,
+  lineLinkAllowed,
+} from "@/application/line/line-link";
 import { getCurrentViewerUser } from "@/composition/identity-container";
 import { lineLink } from "@/composition/line-container";
 import {
@@ -23,11 +26,12 @@ export const dynamic = "force-dynamic";
 
 export default async function LineLinkPage() {
   const user = await getCurrentViewerUser();
-  // The viewer guard lets guests through; they have no LINE link.
-  if (!user || user.role === "guest") redirect("/");
+  // Guests, the demo account and an admin impersonating a member have no
+  // LINE link (the viewer guard lets guests through).
+  if (!user || !lineLinkAllowed(user)) redirect("/");
 
-  // The demo account and an admin impersonating a member have no LINE link
-  // either. redirect is called outside the try: it throws.
+  // The use case decides again from the same session. redirect is called
+  // outside the try: it throws.
   let link: Awaited<ReturnType<typeof lineLink.status>> | null = null;
   try {
     link = await lineLink.status();

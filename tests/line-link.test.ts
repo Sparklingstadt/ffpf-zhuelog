@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import {
   createLineLink,
+  lineLinkAllowed,
   LineLinkForbiddenError,
   type LineLinkDeps,
 } from "../src/application/line/line-link";
@@ -72,6 +73,14 @@ function harness(
   };
   return { link: createLineLink(deps), calls };
 }
+
+test("lineLinkAllowed: members and admins as themselves, never while impersonated, the demo or a guest", () => {
+  assert.equal(lineLinkAllowed(member), true);
+  assert.equal(lineLinkAllowed(admin), true);
+  assert.equal(lineLinkAllowed(impersonated), false);
+  assert.equal(lineLinkAllowed(demo), false);
+  assert.equal(lineLinkAllowed(guest), false);
+});
 
 test("only members and admins who are themselves may link", async () => {
   for (const user of [demo, impersonated, guest, null]) {

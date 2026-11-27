@@ -18,10 +18,12 @@ import {
 } from "@/domain/identity/password-account";
 import {
   AUTH_RATE_LIMIT,
+  isAdminRole,
   isAllowedUsername,
   normalizeUsername,
   rejectsDemoPasswordChange,
   rejectsGuestImpersonation,
+  rejectsImpersonatedPasswordChange,
   startsSession,
   withoutSessionCookie,
 } from "@/infrastructure/auth/better-auth-rules";
@@ -79,7 +81,8 @@ export const auth = betterAuth({
   // ?error= it does not know.
   onAPIError: { errorURL: "/signin" },
   advanced: {
-    // The same headers as client-address.ts: x-real-ip, else x-forwarded-for.
+    // x-real-ip, else x-forwarded-for (Vercel overwrites both with the real
+    // client address).
     ipAddress: { ipAddressHeaders: ["x-real-ip", "x-forwarded-for"] },
   },
   // Name and login id are not changed by members themselves (and the demo's
@@ -112,11 +115,20 @@ export const auth = betterAuth({
             ctx.path,
             session?.user.username,
             demoLoginId(),
+          ) ||
+          rejectsImpersonatedPasswordChange(
+            ctx.path,
+            session?.session.impersonatedBy as string | null | undefined,
           )
         )
           throw new APIError("FORBIDDEN");
       }
       if (ctx.path === "/admin/impersonate-user") {
+        // Anyone but an admin is left to the admin plugin (401 or 403), before
+        // the target is looked up: nobody else learns whether an id is a
+        // guest's.
+        const session = await getSessionFromCtx<{ role?: string | null }>(ctx);
+        if (!isAdminRole(session?.user.role)) return;
         const userId: unknown = ctx.body?.userId;
         const target =
           typeof userId === "string"

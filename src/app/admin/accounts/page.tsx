@@ -38,7 +38,7 @@ export default async function AdminAccountsPage({
     <PageShell user={user} width="6xl">
       <PageHeader
         title="アカウント管理"
-        description="ID・パスワードでログインするアカウントを作成し、パスワードを再設定します。"
+        description="会員のアカウントを作成し、パスワードを再設定します。会員として操作することもできます。"
         dense
         actions={null}
       />
@@ -48,8 +48,7 @@ export default async function AdminAccountsPage({
           role="alert"
           className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
         >
-          この会員として操作できませんでした。会員が存在するか、API
-          が最新かを確認してください。
+          この会員として操作できませんでした。会員が存在するかを確認してください。
         </p>
       ) : null}
 
@@ -88,26 +87,32 @@ export default async function AdminAccountsPage({
                     className="flex flex-wrap items-start gap-x-4 gap-y-3 py-4 first:pt-0 last:pb-0"
                   >
                     <div className="min-w-48 flex-1">
-                      <p className="font-mono text-sm font-medium break-all">
-                        {account.loginId}
-                      </p>
+                      {account.loginId ? (
+                        <p className="font-mono text-sm font-medium break-all">
+                          {account.loginId}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          Sparklingstadt ID でログイン
+                        </p>
+                      )}
                       <p className="text-sm">{account.displayName}</p>
                       <p className="text-xs text-muted-foreground">
                         作成日 {dateFormat.format(account.createdAt)}
                       </p>
                     </div>
                     <div className="flex flex-col items-start gap-2">
-                      <form
-                        action={startActingAsAction.bind(null, account.ownerId)}
-                      >
+                      <form action={startActingAsAction.bind(null, account.id)}>
                         <Button type="submit" size="sm" variant="outline">
                           この会員として操作
                         </Button>
                       </form>
-                      <ResetPasswordForm
-                        accountId={account.id}
-                        loginId={account.loginId}
-                      />
+                      {account.loginId ? (
+                        <ResetPasswordForm
+                          accountId={account.id}
+                          loginId={account.loginId}
+                        />
+                      ) : null}
                     </div>
                   </li>
                 ))}

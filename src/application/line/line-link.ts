@@ -8,6 +8,13 @@ export class LineLinkForbiddenError extends Error {
   override name = "LineLinkForbiddenError";
 }
 
+// Whether the user may link LINE: a member or an admin as themselves. Not a
+// guest or the demo account, and not while an admin impersonates a member
+// (the admin's LINE would then be tied to the member).
+export function lineLinkAllowed(user: AuthenticatedUser): boolean {
+  return user.role !== "guest" && !user.demo && !user.impersonatedBy;
+}
+
 export type LineLinkDeps = {
   currentUser: () => Promise<AuthenticatedUser | null>;
   // LINE is configured.
@@ -32,13 +39,7 @@ export type LineLinkDeps = {
 export function createLineLink(deps: LineLinkDeps) {
   async function owner(): Promise<{ ownerId: string }> {
     const user = await deps.currentUser();
-    if (
-      !user ||
-      (user.role !== "member" && user.role !== "admin") ||
-      user.impersonatedBy !== undefined ||
-      user.demo === true
-    )
-      throw new LineLinkForbiddenError();
+    if (!user || !lineLinkAllowed(user)) throw new LineLinkForbiddenError();
     return { ownerId: user.userId };
   }
 

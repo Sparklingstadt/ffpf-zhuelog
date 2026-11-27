@@ -1,4 +1,4 @@
-import type { ChangePasswordOutcome } from "@/application/identity/own-password";
+import type { ChangePasswordFailure } from "@/application/identity/own-password";
 import type { AccountInputError } from "@/domain/identity/password-account";
 import { genericErrorMessage } from "@/presentation/presenters/generic-error-message";
 
@@ -35,14 +35,12 @@ export function accountInputMessage(
   }
 }
 
-// The form's text for each outcome but "changed".
-export function changePasswordMessage(
-  outcome: Exclude<ChangePasswordOutcome, "changed">,
-): string {
-  switch (outcome) {
+// The password change form's text for each failure.
+export function changePasswordMessage(failure: ChangePasswordFailure): string {
+  switch (failure) {
     case "forbidden":
       return accountForbiddenMessage;
-    case "rate-limited":
+    case "error":
       return genericErrorMessage;
     case "invalid-new-password":
       return passwordLengthMessage;

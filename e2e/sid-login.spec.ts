@@ -42,6 +42,7 @@ async function logoutCalls(method: "GET" | "DELETE" = "GET") {
   return (await response.json()) as {
     clientId: string;
     postLogoutRedirectUri: string;
+    idTokenHint: string | null;
   }[];
 }
 
@@ -180,6 +181,7 @@ test("signing out of Sparklingstadt ID goes through the ID server's logout once 
     {
       clientId: "e2e-sid-client",
       postLogoutRedirectUri: `${baseURL}/signin`,
+      idTokenHint: expect.any(String),
     },
   ]);
   expect(await sessionCookies(context)).toEqual({ session: undefined });

@@ -29,7 +29,7 @@ test("account input errors read as their fixed messages", () => {
 
 test("each failed password change has the form's text", () => {
   assert.equal(changePasswordMessage("forbidden"), accountForbiddenMessage);
-  assert.equal(changePasswordMessage("rate-limited"), genericErrorMessage);
+  assert.equal(changePasswordMessage("error"), genericErrorMessage);
   assert.equal(
     changePasswordMessage("invalid-new-password"),
     "パスワードは12〜128文字にしてください。",

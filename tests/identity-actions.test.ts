@@ -8,7 +8,6 @@ import {
   accountForbiddenMessage,
   accountInputMessage,
   accountNotFoundMessage,
-  changePasswordMessage,
 } from "../src/presentation/presenters/account-action-errors";
 import { genericErrorMessage } from "../src/presentation/presenters/generic-error-message";
 import {
@@ -66,14 +65,14 @@ stubSource("composition/identity-container", {
     calls.push(["signOutTo", to]);
     throw new RedirectSignal(to);
   },
-  stopActing: record("stopActing"),
+  impersonateMember: record("impersonateMember"),
+  stopImpersonation: record("stopImpersonation"),
 });
 stubSource("composition/account-container", {
   memberAccounts: {
     create: record("memberAccounts.create"),
     resetPassword: record("memberAccounts.resetPassword"),
   },
-  ownPassword: { change: record("ownPassword.change") },
 });
 stubSource("composition/line-container", {
   lineLink: {
@@ -135,31 +134,46 @@ test("the demo sign-in only ever comes back to a path of this site, and sign-out
   ]);
 });
 
-test("acting as a member waits for Better Auth's impersonation", async () => {
-  const { startActingAsAction, stopActingAction } = await acting();
+test("only an admin starts impersonating, and a refusal goes back to the accounts page", async () => {
+  const { startActingAsAction } = await acting();
   const target = member.userId;
 
   for (const visitor of [null, guest, member]) {
     user = visitor;
     assert.equal((await redirectOf(() => startActingAsAction(target))).to, "/");
   }
-
-  // Until Task 7 of the migration it never starts, and the admin is told.
-  user = admin;
-  for (const userId of [target, "10001", "password:../x", ""])
-    assert.equal(
-      (await redirectOf(() => startActingAsAction(userId))).to,
-      "/admin/accounts?actAs=failed",
-    );
   assert.deepEqual(calls, []);
 
-  // Anyone may stop: it only clears their own cookie.
-  user = null;
+  user = admin;
+  answers["impersonateMember"] = () => true;
+  assert.equal((await redirectOf(() => startActingAsAction(target))).to, "/");
+  // Better Auth refuses (no such user, an admin, a guest).
+  answers["impersonateMember"] = () => false;
+  assert.equal(
+    (await redirectOf(() => startActingAsAction("10001"))).to,
+    "/admin/accounts?actAs=failed",
+  );
+  // A bound id that is not text never reaches Better Auth.
+  assert.equal(
+    (await redirectOf(() => startActingAsAction(42 as unknown as string))).to,
+    "/admin/accounts?actAs=failed",
+  );
+  assert.deepEqual(calls, [
+    ["impersonateMember", target],
+    ["impersonateMember", "10001"],
+  ]);
+});
+
+test("stopping goes back to the accounts page, or home when nothing was impersonated", async () => {
+  const { stopActingAction } = await acting();
+  answers["stopImpersonation"] = () => true;
   assert.equal(
     (await redirectOf(() => stopActingAction())).to,
     "/admin/accounts",
   );
-  assert.deepEqual(calls, [["stopActing"]]);
+  answers["stopImpersonation"] = () => false;
+  assert.equal((await redirectOf(() => stopActingAction())).to, "/");
+  assert.deepEqual(calls, [["stopImpersonation"], ["stopImpersonation"]]);
 });
 
 test("only an admin creates accounts and resets passwords", async () => {
@@ -313,79 +327,12 @@ test("an account call that fails says not allowed or the generic text, logging i
   assert.deepEqual(next.revalidated, []);
 });
 
-test("only a password member changes their own password", async () => {
-  const { changeOwnPasswordAction } = await accounts();
-  const fields = form({
-    currentPassword: "old-password-1",
-    newPassword: "new-password-1",
-    confirmPassword: "new-password-1",
-  });
-
-  // Admins sign in with GitHub and have no password here.
-  for (const visitor of [null, guest, admin]) {
-    user = visitor;
-    assert.deepEqual(await changeOwnPasswordAction(idle, fields), refused);
-  }
-  assert.deepEqual(calls, []);
-});
-
-test("a changed password signs the member out; a refused one stays on the form", async (t) => {
-  const { changeOwnPasswordAction } = await accounts();
-  const logged = captureErrors(t);
+test("after the own password change this browser is signed out to the notice", async () => {
+  const { signOutAfterPasswordChangeAction } = await accounts();
   user = member;
-  const fields = form({
-    currentPassword: "old-password-1",
-    newPassword: "new-password-1",
-    confirmPassword: new Blob(["x"]),
-  });
-
-  for (const outcome of [
-    "forbidden",
-    "invalid-new-password",
-    "password-mismatch",
-    "invalid-current-password",
-  ] as const) {
-    answers["ownPassword.change"] = () => outcome;
-    assert.deepEqual(await changeOwnPasswordAction(idle, fields), {
-      status: "error",
-      message: changePasswordMessage(outcome),
-    });
-  }
-  assert.deepEqual(logged, []);
-  // Too many attempts is told apart only in the log.
-  answers["ownPassword.change"] = () => "rate-limited";
-  assert.deepEqual(await changeOwnPasswordAction(idle, fields), {
-    status: "error",
-    message: genericErrorMessage,
-  });
-  assert.deepEqual(logged, [["PASSWORD_CHANGE_RATE_LIMITED"]]);
-  answers["ownPassword.change"] = throws(new TypeError("db down"));
-  assert.deepEqual(await changeOwnPasswordAction(idle, fields), {
-    status: "error",
-    message: genericErrorMessage,
-  });
-  assert.ok(!calls.some(([name]) => name === "signOutTo"));
-
-  calls = [];
-  answers["ownPassword.change"] = () => "changed";
-  const redirect = await redirectOf(() =>
-    changeOwnPasswordAction(idle, fields),
-  );
+  const redirect = await redirectOf(() => signOutAfterPasswordChangeAction());
   assert.equal(redirect.to, "/signin?notice=password-changed");
-  // The attempts are counted by the client's address; a field that is not
-  // text is empty.
-  assert.deepEqual(calls, [
-    [
-      "ownPassword.change",
-      {
-        currentPassword: "old-password-1",
-        newPassword: "new-password-1",
-        confirmPassword: "",
-      },
-      "203.0.113.7",
-    ],
-    ["signOutTo", "/signin?notice=password-changed"],
-  ]);
+  assert.deepEqual(calls, [["signOutTo", "/signin?notice=password-changed"]]);
 });
 
 test("a LINE link code is issued with its expiry as text", async (t) => {

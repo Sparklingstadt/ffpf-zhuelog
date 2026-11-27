@@ -73,7 +73,7 @@ export default async function AdminAiUsagePage({
             <p className="text-sm leading-6 text-muted-foreground">
               LINE の添削・翻訳、ChatGPT
               との会話、クイック質問、単語帳の下書きで OpenAI
-              を呼んだ回数とトークン数です。月は日本時間で区切ります。管理者が会員として操作したときの分は、管理者に数えます。
+              を呼んだ回数とトークン数です。月は日本時間で区切ります。管理者が会員として操作したときの分は、その会員に数えます。
             </p>
           </header>
 

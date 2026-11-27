@@ -47,12 +47,12 @@ test("members see only their own notes, numbered from 1 for each", async ({
     expect(
       (
         await db.query(
-          'SELECT "ownerId", count(*)::int AS n FROM "LearningEntry" GROUP BY "ownerId" ORDER BY n DESC',
+          'SELECT "userId", count(*)::int AS n FROM "LearningEntry" GROUP BY "userId" ORDER BY n DESC',
         )
       ).rows,
     ).toEqual([
-      { ownerId: memberOwnerId(idA), n: 2 },
-      { ownerId: memberOwnerId(idB), n: 1 },
+      { userId: memberOwnerId(idA), n: 2 },
+      { userId: memberOwnerId(idB), n: 1 },
     ]);
 
     await a.page.goto("/");

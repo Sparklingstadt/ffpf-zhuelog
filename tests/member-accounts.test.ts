@@ -4,25 +4,26 @@ import { test } from "node:test";
 import {
   AccountAdminForbiddenError,
   createMemberAccounts,
+  type AdminApiUser,
   type MemberAccountsDeps,
 } from "../src/application/identity/member-accounts";
 import type { AuthenticatedUser } from "../src/domain/identity/entities/authenticated-user";
-import type { MemberAccount } from "../src/domain/identity/member-account";
+import { memberEmail } from "../src/domain/identity/password-account";
 
 const admin: AuthenticatedUser = {
-  userId: "10001",
+  userId: "admin1",
   role: "admin",
-  displayName: "octocat",
+  displayName: "管理者",
 };
 const impersonated: AuthenticatedUser = {
-  userId: "cacc1",
+  userId: "u1",
   role: "member",
   displayName: "Alice",
   username: "alice",
-  impersonatedBy: "10001",
+  impersonatedBy: "admin1",
 };
 const member: AuthenticatedUser = {
-  userId: "cacc1",
+  userId: "u1",
   role: "member",
   displayName: "alice",
   username: "alice",
@@ -39,83 +40,99 @@ const guest: AuthenticatedUser = {
   displayName: "g",
 };
 
-const now = new Date("2026-11-17T03:00:00.000Z");
+const at = (day: number) =>
+  new Date(`2026-11-${String(day).padStart(2, "0")}T03:00:00.000Z`);
 
-const account: MemberAccount = {
-  id: "cacc1",
-  ownerId: "password:cacc1",
-  loginId: "alice.w",
-  displayName: "Alice",
-  createdAt: now,
-};
+// What Better Auth's listUsers answers: every user who is not a guest.
+const users: AdminApiUser[] = [
+  {
+    id: "u1",
+    name: "Alice",
+    username: "alice.w",
+    role: "user",
+    isAnonymous: false,
+    createdAt: at(1),
+  },
+  { id: "admin1", name: "管理者", role: "admin", createdAt: at(2) },
+  // A Sparklingstadt ID member: no login id, no password here.
+  { id: "s1", name: "雪菜", username: null, role: "user", createdAt: at(3) },
+];
 
-type Store = MemberAccountsDeps["store"];
-
+// A fake auth.api: records each call and answers from `answers`.
 function fakeDeps(
   user: AuthenticatedUser | null,
-  store: Partial<Store> = {},
+  answers: Partial<Record<keyof MemberAccountsDeps["api"], () => unknown>> = {},
   generated = "GENERATEDpassword123",
 ) {
   const calls: unknown[][] = [];
-  const hashed: string[] = [];
+  const headers = new Headers({ cookie: "better-auth.session_token=admin" });
+  const call =
+    (name: keyof MemberAccountsDeps["api"], fallback: () => unknown) =>
+    async (input: unknown) => {
+      calls.push([name, input]);
+      return (answers[name] ?? fallback)();
+    };
   const deps: MemberAccountsDeps = {
     currentUser: async () => user,
-    store: {
-      list: async () => {
-        calls.push(["list"]);
-        return [account];
-      },
-      create: async (input, at) => {
-        calls.push(["create", input, at]);
-        return store.create
-          ? store.create(input, at)
-          : { ...account, loginId: input.loginId };
-      },
-      loginIdOf: async (id) => {
-        calls.push(["loginIdOf", id]);
-        return store.loginIdOf ? store.loginIdOf(id) : "alice";
-      },
-      setPassword: async (id, hash, at) => {
-        calls.push(["setPassword", id, hash, at]);
-        return store.setPassword ? store.setPassword(id, hash, at) : "alice";
-      },
-    },
-    hashPassword: async (password) => {
-      hashed.push(password);
-      return `hash:${password}`;
+    headers: async () => headers,
+    api: {
+      listUsers: call("listUsers", () => ({ users })) as never,
+      getUser: call("getUser", () => users[0]) as never,
+      createUser: call("createUser", () => ({ user: users[0] })) as never,
+      setUserPassword: call("setUserPassword", () => ({
+        status: true,
+      })) as never,
+      revokeUserSessions: call("revokeUserSessions", () => ({
+        success: true,
+      })) as never,
     },
     generatePassword: () => generated,
-    now: () => now,
   };
-  return { accounts: createMemberAccounts(deps), calls, hashed };
+  return { accounts: createMemberAccounts(deps), calls, headers };
 }
 
+const apiError = (code: string, status = "BAD_REQUEST") =>
+  Object.assign(new Error(code), { status, body: { code } });
+
 test("only admins manage accounts, and not while impersonating", async () => {
-  for (const user of [admin]) {
-    const { accounts } = fakeDeps(user);
-    assert.deepEqual(await accounts.list(), [account]);
-  }
   for (const user of [member, impersonated, demo, guest, null]) {
-    const { accounts, calls, hashed } = fakeDeps(user);
+    const { accounts, calls } = fakeDeps(user);
     await assert.rejects(accounts.list(), AccountAdminForbiddenError);
     await assert.rejects(
-      accounts.create({
-        loginId: "alice",
-        displayName: "Alice",
-        password: "",
-      }),
+      accounts.create({ loginId: "alice", displayName: "Alice", password: "" }),
       AccountAdminForbiddenError,
     );
     await assert.rejects(
-      accounts.resetPassword("cacc1", ""),
+      accounts.resetPassword("u1", ""),
       AccountAdminForbiddenError,
     );
     assert.deepEqual(calls, []);
-    assert.deepEqual(hashed, []);
   }
 });
 
-test("create checks loginId, then name, then password", async () => {
+test("the list is every member (not admins or guests), oldest first, from Better Auth's users", async () => {
+  const { accounts, calls, headers } = fakeDeps(admin);
+  assert.deepEqual(await accounts.list(), [
+    { id: "u1", loginId: "alice.w", displayName: "Alice", createdAt: at(1) },
+    { id: "s1", loginId: null, displayName: "雪菜", createdAt: at(3) },
+  ]);
+  assert.deepEqual(calls, [
+    [
+      "listUsers",
+      {
+        query: {
+          filterField: "isAnonymous",
+          filterValue: false,
+          sortBy: "createdAt",
+          sortDirection: "asc",
+        },
+        headers,
+      },
+    ],
+  ]);
+});
+
+test("create checks loginId, then name, then password, before calling Better Auth", async () => {
   // The table of checkNewAccount's failures (tests/password-account.test.ts).
   const cases = [
     [{ loginId: "ab", displayName: "x", password: "" }, "login-id"],
@@ -125,20 +142,19 @@ test("create checks loginId, then name, then password", async () => {
     [{ loginId: "abc", displayName: "x", password: "12345678901" }, "password"],
   ] as const;
   for (const [raw, reason] of cases) {
-    const { accounts, calls, hashed } = fakeDeps(admin);
+    const { accounts, calls } = fakeDeps(admin);
     assert.deepEqual(
       await accounts.create(raw),
       { ok: false, reason },
       JSON.stringify(raw),
     );
     assert.deepEqual(calls, []);
-    assert.deepEqual(hashed, []);
   }
 });
 
-test("create stores the trimmed account with the hash of the password it hands out", async () => {
+test("create sends the normalized login id as username and its member mail address", async () => {
   {
-    const { accounts, calls } = fakeDeps(admin);
+    const { accounts, calls, headers } = fakeDeps(admin);
     const result = await accounts.create({
       loginId: "  Alice.W ",
       displayName: "  Alice  ",
@@ -146,15 +162,19 @@ test("create stores the trimmed account with the hash of the password it hands o
     });
     assert.deepEqual(calls, [
       [
-        "create",
+        "createUser",
         {
-          loginId: "alice.w",
-          displayName: "Alice",
-          passwordHash: "hash:GENERATEDpassword123",
+          body: {
+            email: memberEmail("alice.w"),
+            password: "GENERATEDpassword123",
+            name: "Alice",
+            data: { username: "alice.w" },
+          },
+          headers,
         },
-        now,
       ],
     ]);
+    assert.equal(memberEmail("alice.w"), "alice.w@members.zhuelog.invalid");
     assert.deepEqual(result, {
       ok: true,
       issued: {
@@ -165,13 +185,17 @@ test("create stores the trimmed account with the hash of the password it hands o
     });
   }
   {
-    const { accounts, hashed } = fakeDeps(admin);
+    // A typed password is kept as typed (spaces too).
+    const { accounts, calls } = fakeDeps(admin);
     const result = await accounts.create({
       loginId: "alice",
       displayName: "Alice",
       password: "  keep spaces 1 ",
     });
-    assert.deepEqual(hashed, ["  keep spaces 1 "]);
+    assert.equal(
+      (calls[0][1] as { body: { password: string } }).body.password,
+      "  keep spaces 1 ",
+    );
     assert.deepEqual(result, {
       ok: true,
       issued: {
@@ -181,25 +205,18 @@ test("create stores the trimmed account with the hash of the password it hands o
       },
     });
   }
-  {
-    const { accounts, hashed } = fakeDeps(admin);
-    const result = await accounts.create({
-      loginId: "alice",
-      displayName: "Alice",
-      password: "   \t ",
-    });
-    assert.deepEqual(hashed, ["GENERATEDpassword123"]);
-    assert.deepEqual(result, {
-      ok: true,
-      issued: {
-        loginId: "alice",
-        password: "GENERATEDpassword123",
-        generated: true,
+});
+
+test("a taken login id (or its mail address) is told; other failures are thrown", async () => {
+  for (const code of [
+    "USERNAME_IS_ALREADY_TAKEN",
+    "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL",
+  ]) {
+    const { accounts } = fakeDeps(admin, {
+      createUser: () => {
+        throw apiError(code);
       },
     });
-  }
-  {
-    const { accounts } = fakeDeps(admin, { create: async () => null });
     assert.deepEqual(
       await accounts.create({
         loginId: "alice",
@@ -209,69 +226,89 @@ test("create stores the trimmed account with the hash of the password it hands o
       { ok: false, reason: "login-id-taken" },
     );
   }
+  const { accounts } = fakeDeps(admin, {
+    createUser: () => {
+      throw new TypeError("db down");
+    },
+  });
+  await assert.rejects(
+    accounts.create({ loginId: "alice", displayName: "Alice", password: "" }),
+    TypeError,
+  );
 });
 
-test("reset checks the password before the account and hashes nothing for a missing one", async () => {
+test("reset checks the password before the account and touches nothing for a bad one", async () => {
   {
-    const { accounts, calls, hashed } = fakeDeps(admin);
-    assert.deepEqual(await accounts.resetPassword("missing", "short"), {
+    const { accounts, calls } = fakeDeps(admin);
+    assert.deepEqual(await accounts.resetPassword("u1", "short"), {
       ok: false,
       reason: "password",
     });
     assert.deepEqual(calls, []);
-    assert.deepEqual(hashed, []);
   }
-  for (const id of ["", "a\u0000b"]) {
-    const { accounts, calls, hashed } = fakeDeps(admin);
+  // The bound id reaches the server action as the client sent it.
+  for (const id of ["", "a\u0000b", 42 as unknown as string]) {
+    const { accounts, calls } = fakeDeps(admin);
     assert.deepEqual(await accounts.resetPassword(id, ""), {
       ok: false,
       reason: "not-found",
     });
     assert.deepEqual(calls, []);
-    assert.deepEqual(hashed, []);
   }
-  {
-    // The bound id reaches the server action as the client sent it.
-    const { accounts, calls, hashed } = fakeDeps(admin);
-    const forged = 42 as unknown as string;
-    assert.deepEqual(await accounts.resetPassword(forged, ""), {
+});
+
+test("reset is only for a member with a login id; anyone else is not found", async () => {
+  const targets: (() => unknown)[] = [
+    () => {
+      throw apiError("USER_NOT_FOUND", "NOT_FOUND");
+    },
+    () => users[1], // an admin
+    () => users[2], // a Sparklingstadt ID member
+    () => ({ ...users[0], isAnonymous: true }), // a guest
+  ];
+  for (const getUser of targets) {
+    const { accounts, calls, headers } = fakeDeps(admin, { getUser });
+    assert.deepEqual(await accounts.resetPassword("x1", ""), {
       ok: false,
       reason: "not-found",
     });
-    assert.deepEqual(calls, []);
-    assert.deepEqual(hashed, []);
+    assert.deepEqual(calls, [["getUser", { query: { id: "x1" }, headers }]]);
   }
-  {
-    const { accounts, calls, hashed } = fakeDeps(admin, {
-      loginIdOf: async () => null,
-    });
-    assert.deepEqual(await accounts.resetPassword("cx", ""), {
-      ok: false,
-      reason: "not-found",
-    });
-    assert.deepEqual(calls, [["loginIdOf", "cx"]]);
-    assert.deepEqual(hashed, []);
-  }
-  {
-    const { accounts, calls } = fakeDeps(admin);
-    assert.deepEqual(await accounts.resetPassword("cx", "a brand new pw"), {
-      ok: true,
-      issued: {
-        loginId: "alice",
-        password: "a brand new pw",
-        generated: false,
-      },
-    });
-    assert.deepEqual(calls, [
-      ["loginIdOf", "cx"],
-      ["setPassword", "cx", "hash:a brand new pw", now],
-    ]);
-  }
-  {
-    const { accounts } = fakeDeps(admin, { setPassword: async () => null });
-    assert.deepEqual(await accounts.resetPassword("cx", "a brand new pw"), {
-      ok: false,
-      reason: "not-found",
-    });
-  }
+  // Anything else than "not found" is not swallowed.
+  const { accounts } = fakeDeps(admin, {
+    getUser: () => {
+      throw new TypeError("db down");
+    },
+  });
+  await assert.rejects(accounts.resetPassword("x1", ""), TypeError);
+});
+
+test("reset sets the password, then ends every session of the member", async () => {
+  const { accounts, calls, headers } = fakeDeps(admin);
+  assert.deepEqual(await accounts.resetPassword("u1", "a brand new pw"), {
+    ok: true,
+    issued: {
+      loginId: "alice.w",
+      password: "a brand new pw",
+      generated: false,
+    },
+  });
+  assert.deepEqual(calls, [
+    ["getUser", { query: { id: "u1" }, headers }],
+    [
+      "setUserPassword",
+      { body: { userId: "u1", newPassword: "a brand new pw" }, headers },
+    ],
+    ["revokeUserSessions", { body: { userId: "u1" }, headers }],
+  ]);
+
+  const blank = fakeDeps(admin);
+  assert.deepEqual(await blank.accounts.resetPassword("u1", "  "), {
+    ok: true,
+    issued: {
+      loginId: "alice.w",
+      password: "GENERATEDpassword123",
+      generated: true,
+    },
+  });
 });

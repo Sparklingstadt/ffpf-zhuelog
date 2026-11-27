@@ -69,6 +69,12 @@ export function checkNewAccount(raw: {
   return { ok: true, loginId, displayName, password };
 }
 
+// Members have no mail address, but Better Auth's user.email is required and
+// unique: an address under .invalid, which can never receive mail.
+export function memberEmail(loginId: string): string {
+  return `${loginId}@members.zhuelog.invalid`;
+}
+
 // Non-empty, at most 128 UTF-8 bytes, well-formed, no NUL.
 export function isAccountIdShape(id: string): boolean {
   return (
@@ -77,33 +83,4 @@ export function isAccountIdShape(id: string): boolean {
     !LONE_SURROGATE.test(id) &&
     new TextEncoder().encode(id).length <= MAX_ACCOUNT_ID_BYTES
   );
-}
-
-// The current password of a password change or a sign-in: non-empty and at
-// most 128 code points (not UTF-16 units).
-export const CURRENT_PASSWORD_MAX_CODE_POINTS = 128;
-
-export function isPlausibleCurrentPassword(current: string): boolean {
-  if (current === "") return false;
-  // Count code points without copying: a surrogate pair is one, as for...of
-  // sees it.
-  let count = 0;
-  for (let i = 0; i < current.length; count += 1) {
-    if (count === CURRENT_PASSWORD_MAX_CODE_POINTS) return false;
-    i += (current.codePointAt(i) ?? 0) > 0xffff ? 2 : 1;
-  }
-  return true;
-}
-
-// The first n code points of s (what simulate may see: a refused password is
-// cut to 128 code points before its dummy hash).
-export function firstCodePoints(s: string, n: number): string {
-  let out = "";
-  let count = 0;
-  for (const codePoint of s) {
-    if (count === n) break;
-    out += codePoint;
-    count += 1;
-  }
-  return out;
 }

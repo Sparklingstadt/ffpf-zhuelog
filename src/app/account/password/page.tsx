@@ -17,7 +17,9 @@ export const dynamic = "force-dynamic";
 
 export default async function ChangePasswordPage() {
   const user = await getCurrentMemberUser();
-  if (user?.role !== "member") redirect("/");
+  // An admin impersonating a member is that member, but the member's
+  // password is not theirs to change (Better Auth refuses it too).
+  if (user?.role !== "member" || user.impersonatedBy) redirect("/");
   // Sparklingstadt ID members have no login id and no password here; their
   // password lives on the Sparklingstadt ID server.
   const isSidMember = !user.username;

@@ -11,6 +11,7 @@ import {
 import type { AuthenticatedUser } from "@/domain/identity/entities/authenticated-user";
 import type { CurrentUserProvider } from "@/application/identity/ports/current-user-provider";
 import { auth } from "@/infrastructure/auth/better-auth";
+import { withSessionCookieFrom } from "@/infrastructure/auth/better-auth-rules";
 import { demoLoginId, demoPassword } from "@/infrastructure/config/environment";
 import { errorName } from "@/presentation/controllers/load-or";
 import {
@@ -91,6 +92,10 @@ export async function signInAsDemo(redirectTo: string) {
 // goes there through the ID server's end_session_endpoint (RP-Initiated
 // Logout), so the ID server's sign-in ends too; Better Auth builds that URL
 // from the user's "sid" account and the provider's post-logout redirect URI.
+// While an admin impersonates a member, the impersonation is stopped first
+// and the admin is signed out: Better Auth would otherwise build that URL
+// from the member's account and send the admin's browser to the member's
+// logout.
 export async function signOutCurrentUser() {
   const providerLogout = await endSession();
   redirect(providerLogout ?? "/signin");
@@ -108,22 +113,82 @@ export async function signOutTo(redirectTo: string) {
 // reached the cookie is cleared anyway, and an undeleted row simply expires.
 async function endSession(): Promise<string | null> {
   try {
+    const { headers: sessionHeaders, providerLogout } = await sessionToEnd(
+      await headers(),
+    );
     const result = await auth.api.signOut({
-      headers: await headers(),
+      headers: sessionHeaders,
       body: { disableRedirect: true },
     });
-    return result.url ?? null;
+    return providerLogout ? (result.url ?? null) : null;
   } catch (error) {
     console.error("SIGN_OUT_FAILED", errorName(error));
     const jar = await cookies();
     for (const { name } of jar.getAll())
-      if (name.endsWith("better-auth.session_token")) jar.delete(name);
+      if (
+        name.endsWith("better-auth.session_token") ||
+        name.endsWith("better-auth.admin_session")
+      )
+        jar.delete(name);
     return null;
   }
 }
 
-// Clears the retired zl_act_as cookie (nothing reads it any more). Task 7 of
-// the Better Auth migration replaces this with ending the impersonation.
-export async function stopActing() {
-  (await cookies()).delete("zl_act_as");
+// The request headers whose session is to be signed out: the admin's own,
+// after stopping an impersonation (the session cookie Better Auth has just
+// set for the admin). If the impersonation cannot be stopped, the
+// impersonation session itself is signed out, without the ID server's logout
+// (which would be the member's).
+async function sessionToEnd(
+  request: Headers,
+): Promise<{ headers: Headers; providerLogout: boolean }> {
+  const user = await getCachedCurrentUser();
+  if (!user?.impersonatedBy) return { headers: request, providerLogout: true };
+  try {
+    const stopped = await auth.api.stopImpersonating({
+      headers: request,
+      returnHeaders: true,
+    });
+    const cookie = withSessionCookieFrom(
+      request.get("cookie"),
+      stopped.headers.getSetCookie(),
+    );
+    if (cookie) {
+      const admin = new Headers(request);
+      admin.set("cookie", cookie);
+      return { headers: admin, providerLogout: true };
+    }
+  } catch (error) {
+    console.error("STOP_IMPERSONATING_FAILED", errorName(error));
+  }
+  return { headers: request, providerLogout: false };
+}
+
+// An admin becomes the member userId (Better Auth's impersonation: the
+// session's user is the member's for an hour, or until stopImpersonation).
+// false when Better Auth refuses: not an admin, no such user, an admin or a
+// guest as the target.
+export async function impersonateMember(userId: string): Promise<boolean> {
+  try {
+    await auth.api.impersonateUser({
+      body: { userId },
+      headers: await headers(),
+    });
+    return true;
+  } catch (error) {
+    console.warn("IMPERSONATE_REFUSED", errorName(error));
+    return false;
+  }
+}
+
+// Ends the impersonation: the admin's own session is back. false when there
+// was none to end.
+export async function stopImpersonation(): Promise<boolean> {
+  try {
+    await auth.api.stopImpersonating({ headers: await headers() });
+    return true;
+  } catch (error) {
+    console.warn("STOP_IMPERSONATING_REFUSED", errorName(error));
+    return false;
+  }
 }

@@ -3,12 +3,15 @@ import { afterEach, test } from "node:test";
 
 import {
   AUTH_RATE_LIMIT,
+  isAdminRole,
   isAllowedUsername,
   memberEmail,
   normalizeUsername,
   rejectsDemoPasswordChange,
   rejectsGuestImpersonation,
+  rejectsImpersonatedPasswordChange,
   startsSession,
+  withSessionCookieFrom,
   withoutSessionCookie,
 } from "../src/infrastructure/auth/better-auth-rules";
 import {
@@ -68,6 +71,31 @@ test("without a session there is no demo to protect", () => {
   );
 });
 
+test("an admin impersonating a member may not change the member's password", () => {
+  assert.equal(
+    rejectsImpersonatedPasswordChange("/change-password", "admin1"),
+    true,
+  );
+  assert.equal(
+    rejectsImpersonatedPasswordChange("/change-password", null),
+    false,
+  );
+  assert.equal(
+    rejectsImpersonatedPasswordChange("/change-password", undefined),
+    false,
+  );
+  assert.equal(rejectsImpersonatedPasswordChange("/sign-out", "admin1"), false);
+});
+
+test("only an admin caller has the impersonation target looked up", () => {
+  assert.equal(isAdminRole("admin"), true);
+  assert.equal(isAdminRole("user, admin"), true);
+  assert.equal(isAdminRole("user"), false);
+  assert.equal(isAdminRole("administrator"), false);
+  assert.equal(isAdminRole(null), false);
+  assert.equal(isAdminRole(undefined), false);
+});
+
 test("a guest cannot be impersonated", () => {
   assert.equal(
     rejectsGuestImpersonation("/admin/impersonate-user", { isAnonymous: true }),
@@ -125,6 +153,31 @@ test("withoutSessionCookie drops only Better Auth's session cookies", () => {
     withoutSessionCookie("my-better-auth.session_token=x"),
     "my-better-auth.session_token=x",
   );
+});
+
+test("withSessionCookieFrom puts the session a response set into the request's cookies", () => {
+  const request =
+    "a=1; better-auth.session_token=member.sig; better-auth.admin_session=x";
+  assert.equal(
+    withSessionCookieFrom(request, [
+      "better-auth.session_token=admin.sig%3D; Max-Age=2592000; Path=/; HttpOnly; SameSite=Lax",
+      "better-auth.admin_session=; Max-Age=0; Path=/",
+    ]),
+    "a=1; better-auth.admin_session=x; better-auth.session_token=admin.sig%3D",
+  );
+  assert.equal(
+    withSessionCookieFrom(null, [
+      "__Secure-better-auth.session_token=admin.sig; Path=/; Secure",
+    ]),
+    "__Secure-better-auth.session_token=admin.sig",
+  );
+  // A deleted session cookie, or none at all, is no session.
+  assert.equal(
+    withSessionCookieFrom(request, ["better-auth.session_token=; Max-Age=0"]),
+    null,
+  );
+  assert.equal(withSessionCookieFrom(request, ["other=1"]), null);
+  assert.equal(withSessionCookieFrom(request, []), null);
 });
 
 test("memberEmail uses the .invalid domain", () => {

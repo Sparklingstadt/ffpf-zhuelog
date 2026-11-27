@@ -33,34 +33,38 @@ async function readOutputPassword(page: Page) {
   return match[1];
 }
 
-async function memberSessions(db: Client, accountId: string) {
+async function memberSessions(db: Client, userId: string) {
   const { rows } = await db.query(
-    `SELECT count(*)::int AS n FROM "Session" WHERE "ownerId" = 'password:' || $1`,
-    [accountId],
+    `SELECT count(*)::int AS n FROM "session" WHERE "userId" = $1`,
+    [userId],
   );
   return rows[0].n as number;
 }
 
+// The member's user and the hash in their credential account.
 async function account(db: Client, loginId: string) {
   const { rows } = await db.query(
-    `SELECT "id", "displayName", "passwordHash", "sessionVersion"
-       FROM "PasswordAccount" WHERE "loginId" = $1`,
+    `SELECT u."id", u."name" AS "displayName", u."email", u."role",
+            a."password" AS "passwordHash"
+       FROM "user" u JOIN "account" a ON a."userId" = u."id" AND a."providerId" = 'credential'
+      WHERE u."username" = $1`,
     [loginId],
   );
   return rows[0] as
     | {
         id: string;
         displayName: string;
+        email: string;
+        role: string;
         passwordHash: string;
-        sessionVersion: number;
       }
     | undefined;
 }
 
-async function passwordChangeAttempts(db: Client, accountId: string) {
+// Better Auth's rate-limit counters for the password change.
+async function passwordChangeAttempts(db: Client) {
   const { rows } = await db.query(
-    `SELECT "count" FROM "SignInThrottle" WHERE "key" = 'password-change:' || $1::text`,
-    [accountId],
+    `SELECT "count" FROM "rateLimit" WHERE "key" LIKE '%/change-password'`,
   );
   return rows.map((row) => row.count as number);
 }
@@ -148,23 +152,25 @@ test(
   async ({ page, db }) => {
     await createMember(db, "taro", "太郎", "member-password-1");
 
+    // The form stays on the sign-in page with the message.
     await signInWithPassword(page, "taro", "wrong-password-1");
-    await expect(page).toHaveURL(/error=CredentialsSignin/);
     await expect(page.getByText(lockMessage)).toBeVisible();
+    await expect(page).toHaveURL((url) => url.pathname === "/signin");
 
     // An unknown ID gets exactly the same message.
     await signInWithPassword(page, "nobody", "wrong-password-1");
-    await expect(page).toHaveURL(/error=CredentialsSignin/);
     await expect(page.getByText(lockMessage)).toBeVisible();
+    await expect(page).toHaveURL((url) => url.pathname === "/signin");
   },
 );
 
 test(
-  "five failures pause that login ID for that client only",
+  "too many sign-ins pause that client only",
   anyWidth,
   async ({ browser, baseURL, db }) => {
     await createMember(db, "taro", "太郎", "member-password-1");
-    // The app reads the client address from x-real-ip, which Vercel sets.
+    // Better Auth reads the client address from x-real-ip, which Vercel sets,
+    // and allows 20 sign-ins per 15 minutes from one address.
     const attacker = await browser.newContext({
       baseURL,
       extraHTTPHeaders: { "x-real-ip": "203.0.113.7" },
@@ -175,7 +181,7 @@ test(
     });
     try {
       const attackerPage = await attacker.newPage();
-      for (let attempt = 0; attempt < 5; attempt += 1) {
+      for (let attempt = 0; attempt < 20; attempt += 1) {
         await signInWithPassword(
           attackerPage,
           "taro",
@@ -227,7 +233,6 @@ test(
       await page.getByRole("button", { name: "パスワードを再設定" }).click();
       const newPassword = await readOutputPassword(page);
       expect(newPassword).not.toBe("member-password-1");
-      expect((await account(db, "taro"))?.sessionVersion).toBe(1);
       expect(await memberSessions(db, accountId)).toBe(0);
 
       for (const signedOut of [memberPage, secondPage]) {
@@ -246,30 +251,41 @@ test(
   },
 );
 
-test("member changes own password", async ({ page, db }) => {
+test("member changes own password, and their other browsers are signed out", async ({
+  page,
+  browser,
+  baseURL,
+  db,
+}) => {
   const accountId = await createMember(db, "taro", "太郎", "member-password-1");
   const hashBefore = (await account(db, "taro"))?.passwordHash;
-  await asMember(page, "taro", "member-password-1");
+  const otherContext = await browser.newContext({ baseURL });
+  try {
+    const other = await otherContext.newPage();
+    await asMember(other, "taro", "member-password-1", "/logs");
+    await asMember(page, "taro", "member-password-1");
+    expect(await memberSessions(db, accountId)).toBe(2);
 
-  await page.goto("/account/password");
-  await page.getByLabel("現在のパスワード").fill("member-password-1");
-  await page
-    .getByLabel("新しいパスワード", { exact: true })
-    .fill("member-password-2");
-  await page.getByLabel("新しいパスワード（確認）").fill("member-password-2");
-  await page.getByRole("button", { name: "パスワードを変更" }).click();
+    await page.goto("/account/password");
+    await fillChangeForm(page, "member-password-1", "member-password-2");
 
-  await expect(page).toHaveURL(/\/signin\?notice=password-changed/);
-  await expect(
-    page.getByText(
-      "パスワードを変更しました。新しいパスワードでログインしてください。",
-    ),
-  ).toBeVisible();
-  const after = await account(db, "taro");
-  expect(after?.sessionVersion).toBe(1);
-  expect(after?.passwordHash).not.toBe(hashBefore);
-  expect(await passwordChangeAttempts(db, accountId)).toEqual([]);
-  expect(await memberSessions(db, accountId)).toBe(0);
+    await expect(page).toHaveURL(/\/signin\?notice=password-changed/);
+    await expect(
+      page.getByText(
+        "パスワードを変更しました。新しいパスワードでログインしてください。",
+      ),
+    ).toBeVisible();
+    const after = await account(db, "taro");
+    expect(after?.passwordHash).not.toBe(hashBefore);
+    expect(after?.passwordHash).toMatch(/^scrypt:32768:8:1:/);
+    expect(await memberSessions(db, accountId)).toBe(0);
+
+    // The other browser is back at the sign-in page on its next request.
+    await other.goto("/logs");
+    await expect(other).toHaveURL(/\/signin/);
+  } finally {
+    await otherContext.close();
+  }
 
   await signInWithPassword(page, "taro", "member-password-1");
   await expect(page.getByText(lockMessage)).toBeVisible();
@@ -297,15 +313,16 @@ test(
     await fillCreateForm(page, "TARO", "太郎2");
     await expectAlert(page, "このログインIDはすでに使われています。");
     const { rows } = await db.query(
-      `SELECT count(*)::int AS n FROM "PasswordAccount"`,
+      `SELECT count(*)::int AS n FROM "user" WHERE "role" = 'user'`,
     );
     expect(rows[0].n).toBe(1);
 
+    const hashBefore = (await account(db, "taro"))?.passwordHash;
     await page.getByLabel("taro の新しいパスワード").fill("short");
     page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: "パスワードを再設定" }).click();
     await expectAlert(page, passwordLengthMessage);
-    expect((await account(db, "taro"))?.sessionVersion).toBe(0);
+    expect((await account(db, "taro"))?.passwordHash).toBe(hashBefore);
   },
 );
 
@@ -329,10 +346,11 @@ test("a created member signs in with the password the web hashed", async ({
 
   const created = await account(db, "hanako");
   expect(created?.displayName).toBe("花子");
+  expect(created?.email).toBe("hanako@members.zhuelog.invalid");
+  expect(created?.role).toBe("user");
   expect(created?.passwordHash).toMatch(
     /^scrypt:32768:8:1:[\w-]{22}:[\w-]{86}$/,
   );
-  expect(created?.sessionVersion).toBe(0);
 
   const memberContext = await browser.newContext({ baseURL });
   try {
@@ -350,15 +368,12 @@ test(
   "wrong current passwords lock the change for a while",
   anyWidth,
   async ({ page, browser, baseURL, db }) => {
-    const accountId = await createMember(
-      db,
-      "taro",
-      "太郎",
-      "member-password-1",
-    );
+    await createMember(db, "taro", "太郎", "member-password-1");
+    const hashBefore = (await account(db, "taro"))?.passwordHash;
     await asMember(page, "taro", "member-password-1");
     await page.goto("/account/password");
 
+    // Better Auth's rate limit: 5 changes per 15 minutes from one address.
     for (let attempt = 1; attempt <= 5; attempt += 1) {
       await fillChangeForm(
         page,
@@ -366,16 +381,14 @@ test(
         "member-password-2",
       );
       // The message is the same every time, so wait for this attempt's count.
-      await expect
-        .poll(() => passwordChangeAttempts(db, accountId))
-        .toEqual([attempt]);
+      await expect.poll(() => passwordChangeAttempts(db)).toEqual([attempt]);
       await expectAlert(page, currentPasswordMessage);
     }
     // Even the right current password is refused until the window ends.
     await fillChangeForm(page, "member-password-1", "member-password-2");
     await expectAlert(page, currentPasswordMessage);
-    await expect.poll(() => passwordChangeAttempts(db, accountId)).toEqual([6]);
-    expect((await account(db, "taro"))?.sessionVersion).toBe(0);
+    await expect(page).toHaveURL((url) => url.pathname === "/account/password");
+    expect((await account(db, "taro"))?.passwordHash).toBe(hashBefore);
 
     // The lock is on changing the password only: signing in still works.
     const other = await browser.newContext({ baseURL });
@@ -391,12 +404,8 @@ test(
   "mismatched and short new passwords are refused",
   anyWidth,
   async ({ page, db }) => {
-    const accountId = await createMember(
-      db,
-      "taro",
-      "太郎",
-      "member-password-1",
-    );
+    await createMember(db, "taro", "太郎", "member-password-1");
+    const hashBefore = (await account(db, "taro"))?.passwordHash;
     await asMember(page, "taro", "member-password-1");
     await page.goto("/account/password");
 
@@ -409,7 +418,8 @@ test(
     await expectAlert(page, "確認用のパスワードが一致しません。");
     await fillChangeForm(page, "member-password-1", "short");
     await expectAlert(page, passwordLengthMessage);
-    expect(await passwordChangeAttempts(db, accountId)).toEqual([]);
-    expect((await account(db, "taro"))?.sessionVersion).toBe(0);
+    // Refused in the browser: nothing reached Better Auth.
+    expect(await passwordChangeAttempts(db)).toEqual([]);
+    expect((await account(db, "taro"))?.passwordHash).toBe(hashBefore);
   },
 );

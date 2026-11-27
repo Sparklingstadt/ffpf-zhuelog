@@ -210,7 +210,7 @@ test(
       { text: "B1原文", createdAt: "2026-10-04T01:00:00Z", hint: "「一」" },
     ]);
     const { rows } = await db.query(
-      `SELECT id FROM "LearningEntry" WHERE "ownerId" = $1`,
+      `SELECT id FROM "LearningEntry" WHERE "userId" = $1`,
       [memberOwnerId(taro)],
     );
     const taroNoteId = rows[0].id as string;
@@ -272,10 +272,10 @@ test(
       "2026-10-01 00:00:10",
     ];
     for (const [index, id] of ids.entries())
-      await db.query(
-        `UPDATE "PasswordAccount" SET "createdAt" = $2 WHERE "id" = $1`,
-        [id, joined[index]],
-      );
+      await db.query(`UPDATE "user" SET "createdAt" = $2 WHERE "id" = $1`, [
+        id,
+        joined[index],
+      ]);
 
     await asMember(page, "viewer", password, "/follow");
     const listed = await page
@@ -309,7 +309,7 @@ test(
       })),
     );
     await db.query(
-      `UPDATE "LearningEntry" SET "sharedAt" = NOW() WHERE "ownerId" = $1`,
+      `UPDATE "LearningEntry" SET "sharedAt" = NOW() WHERE "userId" = $1`,
       [memberOwnerId(taro)],
     );
     const { rows } = await db.query(
@@ -320,24 +320,21 @@ test(
       [rows[0].id],
     );
 
-    // Left out: a member not followed, a trashed note and a deleted member.
+    // Left out: a member not followed and a trashed note. (A deleted
+    // member's notes and follows go with their user.)
     await seedNotes(db, memberOwnerId(jiro), [{ text: "次郎の共有" }]);
     await seedNotes(db, memberOwnerId(taro), [
       { text: "捨てた共有", createdAt: "2026-12-01T00:00:00Z" },
     ]);
-    const gone = "password:gone00000000000000000000";
-    await seedNotes(db, gone, [
-      { text: "消えた人の共有", createdAt: "2026-12-01T00:00:00Z" },
-    ]);
     await db.query(
-      `UPDATE "LearningEntry" SET "sharedAt" = NOW() WHERE "originalText" IN ('次郎の共有', '捨てた共有', '消えた人の共有')`,
+      `UPDATE "LearningEntry" SET "sharedAt" = NOW() WHERE "originalText" IN ('次郎の共有', '捨てた共有')`,
     );
     await db.query(
       `UPDATE "LearningEntry" SET "deletedAt" = NOW() WHERE "originalText" = '捨てた共有'`,
     );
     await db.query(
-      `INSERT INTO "Follow" ("followerId", "followeeId") VALUES ($1, $2), ($1, $3)`,
-      [memberOwnerId(hanako), memberOwnerId(taro), gone],
+      `INSERT INTO "Follow" ("followerId", "followeeId") VALUES ($1, $2)`,
+      [memberOwnerId(hanako), memberOwnerId(taro)],
     );
 
     await asMember(page, "hanako", password, "/follow");
@@ -347,7 +344,7 @@ test(
     );
     await expect(note(page, "共有002")).toBeVisible();
     await expect(note(page, "共有001")).toHaveCount(0);
-    for (const text of ["次郎の共有", "捨てた共有", "消えた人の共有"])
+    for (const text of ["次郎の共有", "捨てた共有"])
       await expect(page.getByText(text)).toHaveCount(0);
 
     // Hints come in position order (cards start open).
@@ -447,7 +444,7 @@ test(
         (await db.query(`SELECT count(*)::int AS n FROM "Follow"`)).rows[0].n;
 
       // A member who does not exist.
-      await forge("password:gone00000000000000000000");
+      await forge("gone0000000000000000000000000000");
       await expect(
         b.page.getByText("見つかりませんでした。画面を更新してください。"),
       ).toBeVisible();

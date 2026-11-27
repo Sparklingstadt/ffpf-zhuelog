@@ -23,7 +23,8 @@ import { createServer, type IncomingMessage } from "node:http";
 //                          ES256 ID token for sidStubUser carrying the nonce.
 //   GET  /oauth/jwks       the public key of this run's random P-256 key.
 //   GET  /oauth/logout     RP-Initiated Logout: checks the client, remembers the
-//                          call, and goes back to post_logout_redirect_uri.
+//                          call (with its id_token_hint), and goes back to
+//                          post_logout_redirect_uri.
 //   GET/DELETE /__logouts  (test only) the remembered logout calls / forget them.
 //   POST /__deny-next      (test only) the next /oauth/authorize answers
 //                          redirect_uri?error=access_denied&state=… instead,
@@ -66,6 +67,7 @@ export function startSidOidcStub(
   let logouts: {
     clientId: string | null;
     postLogoutRedirectUri: string | null;
+    idTokenHint: string | null;
   }[] = [];
 
   const idToken = (nonce: string) => {
@@ -198,7 +200,11 @@ export function startSidOidcStub(
         response.writeHead(400).end("invalid logout request");
         return;
       }
-      logouts.push({ clientId, postLogoutRedirectUri: back });
+      logouts.push({
+        clientId,
+        postLogoutRedirectUri: back,
+        idTokenHint: url.searchParams.get("id_token_hint"),
+      });
       response.writeHead(302, { location: back }).end();
       return;
     }

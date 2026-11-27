@@ -49,28 +49,11 @@ model Hint {
   @@index([learningEntryId])
 }
 
-// Table dropped in 20261127100000_owner_to_user; model removed with its code in Task 6/7.
-// Password sign-in for members. Managed by GitHub admins at /admin/accounts.
-model PasswordAccount {
-  id             String    @id @default(cuid())
-  loginId        String    @unique
-  displayName    String
-  passwordHash   String
-  sessionVersion Int       @default(0)
-  // Unused since sign-in throttling moved to SignInThrottle. Kept so the
-  // previous deployment keeps working while the migration is rolled out;
-  // drop them in a later migration.
-  failedAttempts Int       @default(0)
-  lockedUntil    DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-}
-
 // Fixed-window attempt counters (sign-in-throttle-store). Kept by
 // 20261127100000_owner_to_user for the LINE link-code redemption throttle
-// ("line-link:<lineUserId>"); the own password change also counts here until
-// Task 7 moves it to Better Auth. Sign-in is limited by Better Auth's
-// rateLimit table. Rows past expiresAt are dead and pruned opportunistically.
+// ("line-link:<lineUserId>") only: sign-in and the own password change are
+// limited by Better Auth's rateLimit table. Rows past expiresAt are dead and
+// pruned opportunistically.
 model SignInThrottle {
   key       String   @id
   count     Int
@@ -90,28 +73,6 @@ model Follow {
 
   @@id([followerId, followeeId])
   @@index([followeeId])
-}
-
-// Table dropped in 20261127100000_owner_to_user; model removed with its code in Task 6/7.
-// Still written by password-account-store (Task 7 replaces it).
-// A signed-in browser of the own session scheme (stage 11 of the Go retirement). The cookie holds a
-// random token; only its SHA-256 is kept here. role/login/sessionVersion are
-// what Go's refresh tokens kept (the ApiRefreshToken table, dropped in stage
-// 12b), so the per-request check stayed the same. The CHECK constraint in the
-// migration pins the shape of each role.
-model LegacySession {
-  id             String   @id @default(cuid())
-  tokenHash      String   @unique // SHA-256 hex of the cookie's token
-  ownerId        String
-  role           String // "admin" | "member" | "guest"
-  login          String? // admin only: GitHub login at sign-in (display only)
-  sessionVersion Int? // member only: the account's sessionVersion at sign-in
-  expiresAt      DateTime
-  createdAt      DateTime @default(now())
-
-  @@index([ownerId])
-  @@index([expiresAt])
-  @@map("Session")
 }
 
 // Ties one LINE account to one Zhuelog user. The role is the user's
@@ -327,8 +288,7 @@ model AiUsage {
 }
 
 // Better Auth's tables (1.7.28), shaped as `@better-auth/cli generate` would for
-// the username, anonymous and admin plugins and database rate limiting. The
-// table names are lower case, so they sit beside the legacy "Session" table.
+// the username, anonymous and admin plugins and database rate limiting.
 model User {
   id              String    @id
   name            String
