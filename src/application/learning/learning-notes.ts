@@ -17,9 +17,9 @@ import type {
 } from "../../domain/learning/learning-note-views";
 import type { ViewedOwner } from "../../domain/learning/viewed-owner";
 
-// The signed-in user may not do this: signed out, a guest, revoked, without
-// an owner id, reading another member's notes without being an admin, or
-// sharing while not a plain member.
+// The signed-in user may not do this: signed out, a guest, reading another
+// member's notes without being an admin, or sharing while not a member (an
+// admin, or the demo).
 export class LearningForbiddenError extends Error {
   override name = "LearningForbiddenError";
 }
@@ -83,25 +83,24 @@ export type LearningNotesDeps = {
 
 // Whose learning notes are read and changed. Reads follow the owner the page
 // chose, re-checked here; writes always act on the signed-in user's own
-// notes (the member an admin acts as), never on an owner from a form.
+// notes (the member an admin impersonates), never on an owner from a form.
 export function createLearningNotes(deps: LearningNotesDeps) {
-  async function signedIn(): Promise<AuthenticatedUser & { githubId: string }> {
+  async function signedIn(): Promise<AuthenticatedUser> {
     const user = await deps.currentUser();
-    if (!user || !isMemberRole(user.role) || !user.githubId)
-      throw new LearningForbiddenError();
-    return { ...user, githubId: user.githubId };
+    if (!user || !isMemberRole(user.role)) throw new LearningForbiddenError();
+    return user;
   }
 
   // The signed-in user's own id, or another member's for an admin.
   async function viewed(owner: ViewedOwner): Promise<string> {
     const user = await signedIn();
-    if (owner.kind === "self") return user.githubId;
+    if (owner.kind === "self") return user.userId;
     if (user.role !== "admin") throw new LearningForbiddenError();
     return owner.ownerId;
   }
 
   async function own(): Promise<string> {
-    return (await signedIn()).githubId;
+    return (await signedIn()).userId;
   }
 
   return {
@@ -179,17 +178,17 @@ export function createLearningNotes(deps: LearningNotesDeps) {
         : deps.entryReviews.removeEntry(ownerId, id);
     },
 
-    // Only members can be followed, so only a plain member (not an admin,
-    // even acting as one, and not the demo) shares notes.
+    // Only members can be followed, so only a member (not an admin, and not
+    // the demo) shares notes.
     async setShared(id: string, shared: boolean): Promise<boolean> {
       const user = await signedIn();
       if (user.role !== "member" || user.demo === true)
         throw new LearningForbiddenError();
-      return deps.writes.setShared(user.githubId, id, shared);
+      return deps.writes.setShared(user.userId, id, shared);
     },
 
     // Adds the CSV's rows to the signed-in user's own notes (the member an
-    // admin acts as; the demo may import too). A problem with the file comes
+    // admin impersonates; the demo may import too). A problem with the file comes
     // back as its message and nothing is written; other failures are thrown.
     async importCsv(file: {
       name: string;

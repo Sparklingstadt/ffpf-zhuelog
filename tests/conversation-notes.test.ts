@@ -15,26 +15,29 @@ import type {
 import type { AuthenticatedUser } from "../src/domain/identity/entities/authenticated-user";
 
 const member: AuthenticatedUser = {
-  githubLogin: "taro",
-  githubId: "password:abc",
+  userId: "abc",
   role: "member",
-  accountId: "abc",
+  displayName: "taro",
+  username: "taro",
 };
-const actingAdmin: AuthenticatedUser = {
-  githubLogin: "octocat",
-  githubId: "password:abc",
-  role: "admin",
-  actingAs: { ownerId: "password:abc", loginId: "taro", displayName: "太郎" },
-  actorId: "10001",
+const impersonated: AuthenticatedUser = {
+  userId: "abc",
+  role: "member",
+  displayName: "太郎",
+  username: "taro",
+  impersonatedBy: "10001",
 };
 const demo: AuthenticatedUser = {
-  githubLogin: "demo",
-  githubId: "demo:1",
+  userId: "demo1",
   role: "member",
+  displayName: "demo",
   demo: true,
 };
-const guest: AuthenticatedUser = { githubLogin: "g", role: "guest" };
-const noGithubId: AuthenticatedUser = { githubLogin: "x", role: "member" };
+const guest: AuthenticatedUser = {
+  userId: "g1",
+  role: "guest",
+  displayName: "g",
+};
 
 const chatModel = "gpt-test";
 const now = new Date("2026-11-16T03:00:00.000Z");
@@ -141,7 +144,7 @@ async function chatWith(
   return found.asker.ask(asked, signal);
 }
 
-test("conversations follow the signed-in owner and chats bill the actor", async () => {
+test("conversations follow the signed-in owner and chats bill them", async () => {
   // A member: the conversations and the usage are the member's.
   {
     const { notes, calls, usage } = setup(member);
@@ -154,13 +157,13 @@ test("conversations follow the signed-in owner and chats bill the actor", async 
     assert.equal(await notes.remove(id), true);
     assert.deepEqual(
       calls.map((c) => c.args[0]),
-      ["password:abc", "password:abc", "password:abc", "password:abc"],
+      ["abc", "abc", "abc", "abc"],
     );
-    assert.deepEqual(calls[0].args, ["password:abc", 100]);
+    assert.deepEqual(calls[0].args, ["abc", 100]);
     assert.deepEqual(await collect(await chatWith(notes)), ["你", "好"]);
     assert.deepEqual(usage, [
       {
-        ownerId: "password:abc",
+        ownerId: "abc",
         feature: "chat",
         model: chatModel,
         inputTokens: 21,
@@ -169,22 +172,22 @@ test("conversations follow the signed-in owner and chats bill the actor", async 
     ]);
   }
 
-  // An admin acting as a member: the member's conversations, the admin's
-  // usage.
+  // An admin impersonating a member is the member: their conversations and
+  // their usage (Task 7 of the Better Auth migration settles this).
   {
-    const { notes, calls, usage } = setup(actingAdmin);
+    const { notes, calls, usage } = setup(impersonated);
     await notes.list();
     await notes.get(id);
     await notes.save(input);
     await notes.remove(id);
     assert.deepEqual(
       calls.map((c) => c.args[0]),
-      ["password:abc", "password:abc", "password:abc", "password:abc"],
+      ["abc", "abc", "abc", "abc"],
     );
     await collect(await chatWith(notes));
     assert.deepEqual(usage, [
       {
-        ownerId: "10001",
+        ownerId: "abc",
         feature: "chat",
         model: chatModel,
         inputTokens: 21,
@@ -202,17 +205,16 @@ test("conversations follow the signed-in owner and chats bill the actor", async 
     assert.equal(await notes.remove(id), true);
     assert.deepEqual(
       calls.map((c) => c.args[0]),
-      ["demo:1", "demo:1", "demo:1", "demo:1"],
+      ["demo1", "demo1", "demo1", "demo1"],
     );
     assert.deepEqual(await notes.chatter(), { ok: false, reason: "demo" });
     assert.equal(answered.length, 0);
   }
 
-  // Signed out, a guest or no githubId: nothing is read or asked.
+  // Signed out or a guest: nothing is read or asked.
   for (const [user, reason] of [
     [null, "signed-out"],
     [guest, "forbidden"],
-    [noGithubId, "forbidden"],
   ] as const) {
     const { notes, calls, answered } = setup(user);
     assert.deepEqual(await notes.chatter(), { ok: false, reason });
@@ -243,7 +245,7 @@ test("without OpenAI the conversations stay readable and removable", async () =>
   assert.equal(await notes.save(input), "unavailable");
   assert.equal(calls.length, 0);
   assert.equal(await notes.remove(id), true);
-  assert.deepEqual(calls, [{ method: "remove", args: ["password:abc", id] }]);
+  assert.deepEqual(calls, [{ method: "remove", args: ["abc", id] }]);
 
   // A model without a way to answer is unavailable too.
   const noAnswer = setup(member, { answer: undefined });
@@ -287,7 +289,7 @@ test("another owner's conversation id is a conflict", async () => {
       {
         method: "save",
         args: [
-          "password:abc",
+          "abc",
           {
             id,
             title: "你好",

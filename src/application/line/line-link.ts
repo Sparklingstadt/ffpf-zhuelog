@@ -1,8 +1,9 @@
 import type { AuthenticatedUser } from "../../domain/identity/entities/authenticated-user";
 import { LINK_CODE_TTL_MS } from "../../domain/line/link-code";
 
-// The signed-in user may not link LINE: signed out, a guest, revoked,
-// without an owner id, the demo account, or an admin acting as a member.
+// The signed-in user may not link LINE: signed out, a guest, the demo
+// account, or an admin impersonating a member (so the admin's LINE is never
+// tied to the member).
 export class LineLinkForbiddenError extends Error {
   override name = "LineLinkForbiddenError";
 }
@@ -34,12 +35,11 @@ export function createLineLink(deps: LineLinkDeps) {
     if (
       !user ||
       (user.role !== "member" && user.role !== "admin") ||
-      user.actingAs ||
-      user.demo === true ||
-      !user.githubId
+      user.impersonatedBy !== undefined ||
+      user.demo === true
     )
       throw new LineLinkForbiddenError();
-    return { ownerId: user.githubId };
+    return { ownerId: user.userId };
   }
 
   return {

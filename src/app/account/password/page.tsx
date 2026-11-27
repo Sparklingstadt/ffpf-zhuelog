@@ -2,7 +2,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getCurrentMemberUser } from "@/composition/identity-container";
-import { SID_OWNER_PREFIX } from "@/domain/identity/owner-id";
 import { sidConfig } from "@/infrastructure/config/environment";
 import { ChangePasswordForm } from "@/presentation/components/auth/change-password-form";
 import {
@@ -19,10 +18,9 @@ export const dynamic = "force-dynamic";
 export default async function ChangePasswordPage() {
   const user = await getCurrentMemberUser();
   if (user?.role !== "member") redirect("/");
-  // Sparklingstadt ID members have no password account here (no accountId); their
+  // Sparklingstadt ID members have no login id and no password here; their
   // password lives on the Sparklingstadt ID server.
-  const isSidMember = Boolean(user.githubId?.startsWith(SID_OWNER_PREFIX));
-  if (!isSidMember && !user.accountId) redirect("/");
+  const isSidMember = !user.username;
   const sidIssuer = sidConfig()?.issuer;
 
   return (

@@ -8,40 +8,33 @@ import {
 import type { AuthenticatedUser } from "../src/domain/identity/entities/authenticated-user";
 
 const member: AuthenticatedUser = {
-  githubLogin: "alice",
-  githubId: "password:cacc1",
+  userId: "cacc1",
   role: "member",
-  accountId: "cacc1",
+  displayName: "alice",
+  username: "alice",
 };
 const admin: AuthenticatedUser = {
-  githubLogin: "octocat",
-  githubId: "10001",
+  userId: "10001",
   role: "admin",
+  displayName: "octocat",
 };
-const actingAdmin: AuthenticatedUser = {
-  githubLogin: "octocat",
-  githubId: "password:cacc1",
-  role: "admin",
-  accountId: "cacc1",
-  actingAs: {
-    ownerId: "password:cacc1",
-    loginId: "alice",
-    displayName: "Alice",
-  },
-  actorId: "10001",
+const impersonated: AuthenticatedUser = {
+  userId: "cacc1",
+  role: "member",
+  displayName: "Alice",
+  username: "alice",
+  impersonatedBy: "10001",
 };
 const sidMember: AuthenticatedUser = {
-  githubLogin: "f@example.com",
-  githubId: "sid:cabc",
+  userId: "cabc",
   role: "member",
+  displayName: "f@example.com",
 };
 const demo: AuthenticatedUser = { ...member, demo: true };
-const guest: AuthenticatedUser = { githubLogin: "g", role: "guest" };
-const revoked: AuthenticatedUser = { ...member, role: "revoked" };
-const noAccountId: AuthenticatedUser = {
-  githubLogin: "alice",
-  githubId: "password:cacc1",
-  role: "member",
+const guest: AuthenticatedUser = {
+  userId: "g1",
+  role: "guest",
+  displayName: "g",
 };
 
 const now = new Date("2026-11-17T03:00:00.000Z");
@@ -119,17 +112,8 @@ const valid = {
   confirmPassword: "new-password",
 };
 
-test("who may change: password members only", async () => {
-  for (const user of [
-    admin,
-    actingAdmin,
-    sidMember,
-    demo,
-    guest,
-    null,
-    revoked,
-    noAccountId,
-  ]) {
+test("who may change: password members themselves only", async () => {
+  for (const user of [admin, impersonated, sidMember, demo, guest, null]) {
     const { ownPassword, calls } = fakeDeps(user);
     assert.equal(await ownPassword.change(valid, client), "forbidden");
     assert.deepEqual(calls, [], JSON.stringify(user));

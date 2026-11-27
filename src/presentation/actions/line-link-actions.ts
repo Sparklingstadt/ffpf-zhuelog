@@ -13,7 +13,7 @@ export type LineLinkState =
 
 // The signed-in member's or admin's own LINE link, read and written in the
 // database by the lineLink use case, which refuses guests, the demo account
-// and an admin acting as a member (LineLinkForbiddenError, shown as
+// and an admin impersonating a member (LineLinkForbiddenError, shown as
 // accountForbiddenMessage by attemptCall).
 
 // Takes no arguments: the state and the form data are both unused, and a

@@ -7,7 +7,8 @@ import {
 } from "../../domain/ai-usage/monthly-usage";
 import type { AuthenticatedUser } from "../../domain/identity/entities/authenticated-user";
 
-// Only admins read the AI usage (an admin acting as a member included).
+// Only admins read the AI usage (not while impersonating a member: the
+// admin is then that member).
 export class AiUsageForbiddenError extends Error {
   override name = "AiUsageForbiddenError";
 }

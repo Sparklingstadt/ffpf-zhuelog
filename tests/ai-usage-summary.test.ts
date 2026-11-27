@@ -10,33 +10,33 @@ import type { AiUsageTotal } from "../src/domain/ai-usage/monthly-usage";
 import type { AuthenticatedUser } from "../src/domain/identity/entities/authenticated-user";
 
 const member: AuthenticatedUser = {
-  githubLogin: "taro",
-  githubId: "password:abc",
+  userId: "abc",
   role: "member",
-  accountId: "abc",
+  displayName: "taro",
+  username: "taro",
 };
-const actingAdmin: AuthenticatedUser = {
-  githubLogin: "octocat",
-  githubId: "password:abc",
-  role: "admin",
-  actingAs: { ownerId: "password:abc", loginId: "taro", displayName: "太郎" },
-  actorId: "10001",
+const impersonated: AuthenticatedUser = {
+  userId: "abc",
+  role: "member",
+  displayName: "太郎",
+  username: "taro",
+  impersonatedBy: "10001",
 };
 const admin: AuthenticatedUser = {
-  githubLogin: "octocat",
-  githubId: "10001",
+  userId: "10001",
   role: "admin",
+  displayName: "octocat",
 };
 const demo: AuthenticatedUser = {
-  githubLogin: "demo",
-  githubId: "demo:1",
+  userId: "demo1",
   role: "member",
+  displayName: "demo",
   demo: true,
 };
 const guest: AuthenticatedUser = {
-  githubLogin: "guest",
-  githubId: "guest",
+  userId: "guest",
   role: "guest",
+  displayName: "guest",
 };
 
 const totals: AiUsageTotal[] = [
@@ -74,13 +74,13 @@ function summary(
   return { usage: createAiUsageSummary(deps), calls, nows: () => nows };
 }
 
-test("only admins read the AI usage", async () => {
-  for (const user of [admin, actingAdmin]) {
+test("only admins read the AI usage, and not while impersonating", async () => {
+  for (const user of [admin]) {
     const { usage, calls } = summary(user);
     assert.equal((await usage.month("2026-09")).totals, totals);
     assert.equal(calls.length, 1);
   }
-  for (const user of [member, demo, guest, null]) {
+  for (const user of [member, impersonated, demo, guest, null]) {
     const { usage, calls } = summary(user);
     await assert.rejects(usage.month("2026-09"), AiUsageForbiddenError);
     assert.equal(calls.length, 0);

@@ -118,25 +118,27 @@ export const auth = betterAuth({
       validationOrder: { username: "post-normalization" },
       usernameValidator: isAllowedUsername,
     }),
-    ...(sid
-      ? [
-          genericOAuth({
-            config: [
-              {
-                providerId: "sid",
-                discoveryUrl: `${sid.issuer}/.well-known/openid-configuration`,
-                clientId: sid.clientId,
-                clientSecret: sid.clientSecret,
-                scopes: ["openid", "email", "profile"],
-                pkce: true,
-                // Without the issuer and JWKS from discovery the provider is
-                // left out rather than accepting ID tokens unverified.
-                requireIdTokenVerification: true,
-              },
-            ],
-          }),
-        ]
-      : []),
+    // Always listed (with no provider when SID_* is unset): a plugin added
+    // conditionally turns the plugins into a plain array, and the user and
+    // session fields of the plugins (role, isAnonymous, impersonatedBy...)
+    // drop out of getSession's type.
+    genericOAuth({
+      config: sid
+        ? [
+            {
+              providerId: "sid",
+              discoveryUrl: `${sid.issuer}/.well-known/openid-configuration`,
+              clientId: sid.clientId,
+              clientSecret: sid.clientSecret,
+              scopes: ["openid", "email", "profile"],
+              pkce: true,
+              // Without the issuer and JWKS from discovery the provider is
+              // left out rather than accepting ID tokens unverified.
+              requireIdTokenVerification: true,
+            },
+          ]
+        : [],
+    }),
     anonymous(),
     // Impersonating administrators stays refused (the plugin's default).
     admin(),

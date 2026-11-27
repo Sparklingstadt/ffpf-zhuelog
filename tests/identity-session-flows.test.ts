@@ -23,32 +23,26 @@ import {
 installNextStubs();
 
 const admin: AuthenticatedUser = {
-  githubLogin: "admin",
-  githubId: "10001",
+  userId: "10001",
   role: "admin",
+  displayName: "admin",
 };
 const member: AuthenticatedUser = {
-  githubLogin: "taro",
-  githubId: "password:c1abcdefghijklmnopqrstu",
+  userId: "c1abcdefghijklmnopqrstu",
   role: "member",
+  displayName: "taro",
+  username: "taro",
 };
-const guest: AuthenticatedUser = { githubLogin: "guest", role: "guest" };
-const revoked: AuthenticatedUser = { githubLogin: "old", role: "revoked" };
+const guest: AuthenticatedUser = {
+  userId: "g1",
+  role: "guest",
+  displayName: "guest",
+};
 
-// Who the request's session says is signed in, and the account rows there are.
+// Who the request's session says is signed in.
 let user: AuthenticatedUser | null = null;
-let accounts: Record<string, object> = {};
-let lookups: string[] = [];
 stubSource("composition/current-user", {
   getCachedCurrentUser: async () => user,
-});
-stubSource("infrastructure/prisma/identity-accounts", {
-  prismaIdentityAccounts: {
-    findPasswordAccount: async (id: string) => {
-      lookups.push(id);
-      return accounts[id] ?? null;
-    },
-  },
 });
 
 const container = () => import("../src/composition/sign-in-container");
@@ -146,8 +140,6 @@ beforeEach(() => {
   });
   for (const name of ENV) delete process.env[name];
   user = null;
-  accounts = {};
-  lookups = [];
   ended = [];
 });
 afterEach(() => {
@@ -445,45 +437,13 @@ test("signing out still clears the cookies when the database cannot be reached",
   assert.deepEqual(logged, [["error", "SESSION_END_FAILED", "TypeError"]]);
 });
 
-test("only a signed-in admin starts acting, and only as a password member who exists", async () => {
-  const { startActingAs, stopActing } = await identity();
-  const target = member.githubId!;
-  accounts = { c1abcdefghijklmnopqrstu: { id: "c1abcdefghijklmnopqrstu" } };
-
-  // The role is read again here, whatever the action checked.
-  for (const visitor of [null, guest, member, revoked]) {
-    user = visitor;
-    assert.equal(await startActingAs(target), false);
-  }
-  assert.deepEqual(lookups, []);
-
-  user = admin;
-  // Not a password member's id: the database is not even asked.
-  for (const ownerId of [
-    "10001",
-    "sid:abc",
-    "password:../x",
-    "password:UPPER",
-    "password:",
-    "",
-  ])
-    assert.equal(await startActingAs(ownerId), false, ownerId);
-  assert.deepEqual(lookups, []);
-  // The right shape, but no such account (deleted in the meantime).
-  assert.equal(await startActingAs("password:gone"), false);
-  assert.deepEqual(lookups, ["gone"]);
-  assert.deepEqual(writtenCookies(), []);
-
-  assert.equal(await startActingAs(target), true);
-  assert.deepEqual(writtenCookies(), [["zl_act_as", target, MONTH]]);
-  assert.equal(next.written[0]!.options.httpOnly, true);
-
-  next.written.length = 0;
+test("stopping acting clears the retired act-as cookie", async () => {
+  const { stopActing } = await identity();
   await stopActing();
   assert.deepEqual(writtenCookies(), [["zl_act_as", "", 0]]);
 });
 
-test("the getters answer by role, and a revoked session is nobody", async () => {
+test("the getters answer by role, and no session is nobody", async () => {
   const {
     getCurrentAdminUser,
     getCurrentMemberUser,
@@ -502,7 +462,7 @@ test("the getters answer by role, and a revoked session is nobody", async () => 
   assert.deepEqual(await who(), [null, member, member]);
   user = guest;
   assert.deepEqual(await who(), [null, null, guest]);
-  for (const nobody of [revoked, null]) {
+  for (const nobody of [null]) {
     user = nobody;
     assert.deepEqual(await who(), [null, null, null]);
     assert.deepEqual(await getRecordOwner(undefined), {
@@ -512,8 +472,8 @@ test("the getters answer by role, and a revoked session is nobody", async () => 
   }
 
   user = admin;
-  assert.deepEqual(await getRecordOwner(member.githubId), {
+  assert.deepEqual(await getRecordOwner(member.userId), {
     user: admin,
-    owner: { kind: "other", ownerId: member.githubId },
+    owner: { kind: "other", ownerId: member.userId },
   });
 });

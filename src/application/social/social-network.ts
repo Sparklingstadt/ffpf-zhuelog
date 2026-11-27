@@ -2,16 +2,16 @@ import {
   isMemberRole,
   type AuthenticatedUser,
 } from "../../domain/identity/entities/authenticated-user";
+import { isUserId } from "../../domain/identity/user-id";
 import {
   FOLLOW_TIMELINE_LIMIT,
-  isMemberOwnerId,
   type FollowDirectory,
   type FollowResult,
   type FollowTimelineItem,
 } from "../../domain/social/follow";
 
-// The signed-in user has no follows: signed out, a guest, revoked, without
-// an owner id, or the demo account (shared by strangers).
+// The signed-in user has no follows: signed out, a guest, or the demo
+// account (shared by strangers).
 export class SocialForbiddenError extends Error {
   override name = "SocialForbiddenError";
 }
@@ -30,20 +30,15 @@ export type SocialNetworkDeps = {
 };
 
 // Follows, the member list and the shared-notes timeline, always the
-// signed-in user's own (the member an admin acts as), never an owner from a
+// signed-in user's own (the member an admin impersonates), never an owner from a
 // form. The user is decided first, so a refused user is refused before the
 // followee is checked.
 export function createSocialNetwork(deps: SocialNetworkDeps) {
   async function me(): Promise<string> {
     const user = await deps.currentUser();
-    if (
-      !user ||
-      !isMemberRole(user.role) ||
-      !user.githubId ||
-      user.demo === true
-    )
+    if (!user || !isMemberRole(user.role) || user.demo === true)
       throw new SocialForbiddenError();
-    return user.githubId;
+    return user.userId;
   }
 
   return {
@@ -57,7 +52,7 @@ export function createSocialNetwork(deps: SocialNetworkDeps) {
 
     async follow(followeeId: string): Promise<FollowResult> {
       const followerId = await me();
-      if (!isMemberOwnerId(followeeId)) return "not-found";
+      if (!isUserId(followeeId)) return "not-found";
       if (followeeId === followerId) return "self";
       return (await deps.store.follow(followerId, followeeId, deps.now()))
         ? "followed"
@@ -69,7 +64,7 @@ export function createSocialNetwork(deps: SocialNetworkDeps) {
     // and succeeds.
     async unfollow(followeeId: string): Promise<void> {
       const followerId = await me();
-      if (!isMemberOwnerId(followeeId)) return;
+      if (!isUserId(followeeId)) return;
       await deps.store.unfollow(followerId, followeeId);
     },
   };

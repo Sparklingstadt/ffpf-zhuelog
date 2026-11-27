@@ -15,17 +15,17 @@ import type {
 } from "../src/domain/vocabulary/vocabulary-entry";
 
 const member: AuthenticatedUser = {
-  githubLogin: "taro",
-  githubId: "password:abc",
+  userId: "abc",
   role: "member",
-  accountId: "abc",
+  displayName: "taro",
+  username: "taro",
 };
-const actingAdmin: AuthenticatedUser = {
-  githubLogin: "octocat",
-  githubId: "password:abc",
-  role: "admin",
-  actingAs: { ownerId: "password:abc", loginId: "taro", displayName: "太郎" },
-  actorId: "10001",
+const impersonated: AuthenticatedUser = {
+  userId: "abc",
+  role: "member",
+  displayName: "太郎",
+  username: "taro",
+  impersonatedBy: "10001",
 };
 const demo: AuthenticatedUser = { ...member, demo: true };
 
@@ -106,28 +106,27 @@ test("reads and writes as the signed-in owner", async () => {
   assert.deepEqual(await book.save(input), entry);
   await book.remove(entry.id);
   assert.deepEqual(calls, [
-    ["list", "password:abc"],
-    ["save", "password:abc", input],
-    ["remove", "password:abc", entry.id],
+    ["list", "abc"],
+    ["save", "abc", input],
+    ["remove", "abc", entry.id],
   ]);
 });
 
-test("an admin acting as a member reads and writes the member's book", async () => {
-  const { book, calls } = setup(actingAdmin);
+test("an admin impersonating a member reads and writes the member's book", async () => {
+  const { book, calls } = setup(impersonated);
   await book.list();
   await book.save(input);
   await book.remove(entry.id);
   assert.deepEqual(
     calls.map((call) => call[1]),
-    ["password:abc", "password:abc", "password:abc"],
+    ["abc", "abc", "abc"],
   );
 });
 
 test("refuses without a member or admin", async () => {
   const users: (AuthenticatedUser | null)[] = [
     null,
-    { githubLogin: "guest", role: "guest" },
-    { githubLogin: "", role: "revoked" },
+    { userId: "g1", role: "guest", displayName: "guest" },
   ];
   for (const user of users) {
     const { book, calls, draftCalls } = setup(user);
@@ -151,7 +150,7 @@ test("a member's draft is returned and its usage recorded as theirs", async () =
   });
   assert.deepEqual(draftCalls, [["学习", "我在学习。"]]);
   assert.deepEqual(recorded, [
-    { ownerId: "password:abc", feature: "vocabulary_draft", ...usage },
+    { ownerId: "abc", feature: "vocabulary_draft", ...usage },
   ]);
 });
 
@@ -173,11 +172,11 @@ test("without OpenAI the draft is unavailable", async () => {
   });
 });
 
-test("usage is recorded under the actor", async () => {
-  const { book, recorded } = setup(actingAdmin);
+test("an impersonating admin's usage is recorded under the member", async () => {
+  const { book, recorded } = setup(impersonated);
   assert.equal((await book.draft("学习", "")).ok, true);
   assert.deepEqual(recorded, [
-    { ownerId: "10001", feature: "vocabulary_draft", ...usage },
+    { ownerId: "abc", feature: "vocabulary_draft", ...usage },
   ]);
 });
 

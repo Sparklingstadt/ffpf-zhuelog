@@ -1,4 +1,5 @@
 import type { AppRole } from "@/domain/identity/entities/authenticated-user";
+import { isUserId } from "@/domain/identity/user-id";
 import type { FollowResult } from "@/domain/social/follow";
 import { z } from "zod";
 
@@ -10,7 +11,7 @@ import {
   type ActionState,
 } from "@/presentation/controllers/action-state";
 
-type Member = () => Promise<{ githubId?: string; role: AppRole } | null>;
+type Member = () => Promise<{ userId: string; role: AppRole } | null>;
 
 const notFound: ActionState = {
   status: "error",
@@ -21,8 +22,8 @@ const selfFollow: ActionState = {
   message: "自分はフォローできません。",
 };
 
-// Members are password accounts and Sparklingstadt ID accounts.
-const followeeIdSchema = z.string().regex(/^(password|sid):[a-z0-9]{1,64}$/);
+// A well-formed user id; the store checks that it is a member.
+const followeeIdSchema = z.string().refine(isUserId);
 const sharedSchema = z.enum(["true", "false"]);
 
 // The follower is always the signed-in user; the form never names one.
@@ -34,8 +35,8 @@ export async function handleFollow(
   },
 ): Promise<ActionState> {
   const user = await dependencies.getMember();
-  if (!user?.githubId) return actionUnauthorized;
-  const followerId = user.githubId;
+  if (!user) return actionUnauthorized;
+  const followerId = user.userId;
   const followeeId = followeeIdSchema.safeParse(formData.get("followeeId"));
   if (!followeeId.success) return notFound;
   return attemptAction("FOLLOW_FAILED", async () => {
@@ -55,8 +56,8 @@ export async function handleUnfollow(
   },
 ): Promise<ActionState> {
   const user = await dependencies.getMember();
-  if (!user?.githubId) return actionUnauthorized;
-  const followerId = user.githubId;
+  if (!user) return actionUnauthorized;
+  const followerId = user.userId;
   const followeeId = followeeIdSchema.safeParse(formData.get("followeeId"));
   if (!followeeId.success) return notFound;
   return attemptAction("FOLLOW_FAILED", async () => {

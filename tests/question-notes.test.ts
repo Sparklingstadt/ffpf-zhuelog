@@ -15,26 +15,29 @@ import type { AuthenticatedUser } from "../src/domain/identity/entities/authenti
 import type { OpenAiUsage } from "../src/domain/vocabulary/vocabulary-entry";
 
 const member: AuthenticatedUser = {
-  githubLogin: "taro",
-  githubId: "password:abc",
+  userId: "abc",
   role: "member",
-  accountId: "abc",
+  displayName: "taro",
+  username: "taro",
 };
-const actingAdmin: AuthenticatedUser = {
-  githubLogin: "octocat",
-  githubId: "password:abc",
-  role: "admin",
-  actingAs: { ownerId: "password:abc", loginId: "taro", displayName: "太郎" },
-  actorId: "10001",
+const impersonated: AuthenticatedUser = {
+  userId: "abc",
+  role: "member",
+  displayName: "太郎",
+  username: "taro",
+  impersonatedBy: "10001",
 };
 const demo: AuthenticatedUser = {
-  githubLogin: "demo",
-  githubId: "demo:1",
+  userId: "demo1",
   role: "member",
+  displayName: "demo",
   demo: true,
 };
-const guest: AuthenticatedUser = { githubLogin: "g", role: "guest" };
-const noGithubId: AuthenticatedUser = { githubLogin: "x", role: "member" };
+const guest: AuthenticatedUser = {
+  userId: "g1",
+  role: "guest",
+  displayName: "g",
+};
 
 const chatModel = "gpt-test";
 const now = new Date("2026-11-16T03:00:00.000Z");
@@ -112,7 +115,7 @@ async function askWith(
   return found.asker.ask(text, signal);
 }
 
-test("quick questions follow the signed-in owner and bill the actor", async () => {
+test("quick questions follow the signed-in owner and bill them", async () => {
   // A member: the notes and the usage are the member's.
   {
     const { notes, calls, usage } = setup(member);
@@ -121,13 +124,13 @@ test("quick questions follow the signed-in owner and bill the actor", async () =
     assert.equal(await notes.save(input), "saved");
     assert.deepEqual(
       calls.map((c) => c.args[0]),
-      ["password:abc", "password:abc", "password:abc"],
+      ["abc", "abc", "abc"],
     );
-    assert.deepEqual(calls[0].args, ["password:abc", 100]);
+    assert.deepEqual(calls[0].args, ["abc", 100]);
     assert.deepEqual(await collect(await askWith(notes)), ["你", "好"]);
     assert.deepEqual(usage, [
       {
-        ownerId: "password:abc",
+        ownerId: "abc",
         feature: "quick_question",
         model: chatModel,
         inputTokens: 21,
@@ -136,20 +139,21 @@ test("quick questions follow the signed-in owner and bill the actor", async () =
     ]);
   }
 
-  // An admin acting as a member: the member's notes, the admin's usage.
+  // An admin impersonating a member is the member: their notes and their
+  // usage (Task 7 of the Better Auth migration settles this).
   {
-    const { notes, calls, usage } = setup(actingAdmin);
+    const { notes, calls, usage } = setup(impersonated);
     await notes.list();
     await notes.get(id);
     await notes.save(input);
     assert.deepEqual(
       calls.map((c) => c.args[0]),
-      ["password:abc", "password:abc", "password:abc"],
+      ["abc", "abc", "abc"],
     );
     await collect(await askWith(notes));
     assert.deepEqual(usage, [
       {
-        ownerId: "10001",
+        ownerId: "abc",
         feature: "quick_question",
         model: chatModel,
         inputTokens: 21,
@@ -166,17 +170,16 @@ test("quick questions follow the signed-in owner and bill the actor", async () =
     assert.equal(await notes.save(input), "saved");
     assert.deepEqual(
       calls.map((c) => c.args[0]),
-      ["demo:1", "demo:1", "demo:1"],
+      ["demo1", "demo1", "demo1"],
     );
     assert.deepEqual(await notes.asker(), { ok: false, reason: "demo" });
     assert.equal(answered.length, 0);
   }
 
-  // Signed out, a guest or no githubId: nothing is read or asked.
+  // Signed out or a guest: nothing is read or asked.
   for (const [user, reason] of [
     [null, "signed-out"],
     [guest, "forbidden"],
-    [noGithubId, "forbidden"],
   ] as const) {
     const { notes, calls, answered } = setup(user);
     assert.deepEqual(await notes.asker(), { ok: false, reason });
@@ -240,7 +243,7 @@ test("a note id saved with other content is a conflict", async () => {
       {
         method: "save",
         args: [
-          "password:abc",
+          "abc",
           { id, question: "了 の使い方", answer: "完了を表します。" },
           chatModel,
           now,

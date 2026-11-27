@@ -26,7 +26,7 @@ export default async function LineLinkPage() {
   // The viewer guard lets guests through; they have no LINE link.
   if (!user || user.role === "guest") redirect("/");
 
-  // The demo account and an admin acting as a member have no LINE link
+  // The demo account and an admin impersonating a member have no LINE link
   // either. redirect is called outside the try: it throws.
   let link: Awaited<ReturnType<typeof lineLink.status>> | null = null;
   try {

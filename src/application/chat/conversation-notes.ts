@@ -22,7 +22,7 @@ export type { AskRefusal } from "./chat-user";
 
 const FEATURE = "chat";
 
-// Neither a member nor an admin (signed out, a guest or no githubId): there
+// Neither a member nor an admin (signed out or a guest): there
 // are no conversations to read, save or remove.
 export class ConversationForbiddenError extends Error {
   override name = "ConversationForbiddenError";
@@ -66,18 +66,18 @@ export type ConversationNotesDeps = {
 };
 
 // The signed-in user's saved conversations and chats with ChatGPT: whose
-// conversations they are (the member an admin acts as), who pays for an
-// answer (the admin themself), what the demo account may not do (chat), and
-// whether OpenAI is on.
+// conversations they are and who pays for an answer (the member an admin
+// impersonates), what the demo account may not do (chat), and whether OpenAI
+// is on.
 export function createConversationNotes(deps: ConversationNotesDeps) {
   async function owner(): Promise<string> {
     const found = chatPerson(await deps.currentUser());
     if (!found) throw new ConversationForbiddenError();
-    return found.ownerId;
+    return found.userId;
   }
 
   function chatterFor(
-    actorId: string,
+    userId: string,
     answer: NonNullable<ConversationNotesDeps["answer"]>,
   ): Chatter {
     return {
@@ -88,7 +88,7 @@ export function createConversationNotes(deps: ConversationNotesDeps) {
           feature: FEATURE,
           record: (usage) =>
             deps.recordUsage({
-              ownerId: actorId,
+              ownerId: userId,
               feature: FEATURE,
               model: usage.model,
               inputTokens: usage.inputTokens,
@@ -151,7 +151,7 @@ export function createConversationNotes(deps: ConversationNotesDeps) {
         return { ok: false, reason: refusal ?? "forbidden" };
       if (!deps.answer || !deps.chatModel)
         return { ok: false, reason: "unavailable" };
-      return { ok: true, asker: chatterFor(found.actorId, deps.answer) };
+      return { ok: true, asker: chatterFor(found.userId, deps.answer) };
     },
   };
 }

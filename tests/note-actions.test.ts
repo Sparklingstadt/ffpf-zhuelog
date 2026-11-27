@@ -20,9 +20,10 @@ import {
 installNextStubs();
 
 const member: AuthenticatedUser = {
-  githubLogin: "taro",
-  githubId: "password:c1abcdefghijklmnopqrstu",
+  userId: "c1abcdefghijklmnopqrstu",
   role: "member",
+  displayName: "taro",
+  username: "taro",
 };
 
 let user: AuthenticatedUser | null = null;
@@ -97,21 +98,21 @@ beforeEach(() => {
 
 test("following names only the member to follow and refreshes the follow page", async () => {
   const { followMemberAction, unfollowMemberAction } = await follows();
-  const followee = form({ followeeId: "password:c2" });
+  const followee = form({ followeeId: "c2" });
 
   assert.deepEqual(await followMemberAction(idle, followee), success);
   assert.deepEqual(await unfollowMemberAction(idle, followee), success);
   // The follows are made as the signed-in user, so the follower is not sent.
   assert.deepEqual(calls, [
-    ["follow", "password:c2"],
-    ["unfollow", "password:c2"],
+    ["follow", "c2"],
+    ["unfollow", "c2"],
   ]);
   assert.deepEqual(next.revalidated, [["/follow"], ["/follow"]]);
 });
 
 test("a follow that is refused refreshes nothing", async () => {
   const { followMemberAction, unfollowMemberAction } = await follows();
-  const followee = form({ followeeId: "password:c2" });
+  const followee = form({ followeeId: "c2" });
 
   answers.follow = () => "self";
   assert.equal((await followMemberAction(idle, followee)).status, "error");

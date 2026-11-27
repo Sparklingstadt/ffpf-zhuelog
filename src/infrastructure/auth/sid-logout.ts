@@ -1,4 +1,7 @@
-import { SID_OWNER_PREFIX } from "@/domain/identity/owner-id";
+// The retired owner id of a Sparklingstadt ID member. Better Auth user ids
+// never start with it, so this answers null until Task 6 of the migration
+// replaces the sign-out.
+const SID_OWNER_PREFIX = "sid:";
 
 // RP-Initiated Logout for Sparklingstadt ID: after the web has ended its own
 // session, a member who signed in through the ID is sent to the ID server's
@@ -21,11 +24,11 @@ export function sidLogoutUrl(input: {
 // Where sign-out goes after the web's own session is ended: the ID server's
 // logout for a Sparklingstadt ID member, else /signin. Signing out must work
 // even when the user cannot be read (database down), so any failure while
-// deciding is reported and answers /signin. For an admin acting as a member
-// the admin's own id decides (currentOwnerId), so an admin is never sent to
-// the ID server.
+// deciding is reported and answers /signin. For an admin impersonating a
+// member the admin's own id decides (currentOwnerId), so an admin is never
+// sent to the ID server.
 export async function resolveSignOutTarget(deps: {
-  // The id that decides: the admin's own while acting as a member.
+  // The id that decides: the admin's own while impersonating a member.
   currentOwnerId(): Promise<string | null>;
   config(): { issuer: string; clientId: string } | null;
   origin(): Promise<string>;

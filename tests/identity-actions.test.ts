@@ -28,16 +28,21 @@ import {
 installNextStubs();
 
 const admin: AuthenticatedUser = {
-  githubLogin: "admin",
-  githubId: "10001",
+  userId: "10001",
   role: "admin",
+  displayName: "admin",
 };
 const member: AuthenticatedUser = {
-  githubLogin: "taro",
-  githubId: "password:c1abcdefghijklmnopqrstu",
+  userId: "c1abcdefghijklmnopqrstu",
   role: "member",
+  displayName: "taro",
+  username: "taro",
 };
-const guest: AuthenticatedUser = { githubLogin: "guest", role: "guest" };
+const guest: AuthenticatedUser = {
+  userId: "g1",
+  role: "guest",
+  displayName: "guest",
+};
 
 // Who is signed in, every call the actions made, and what each call answers.
 let user: AuthenticatedUser | null = null;
@@ -65,7 +70,6 @@ stubSource("composition/identity-container", {
     calls.push(["signOutTo", to]);
     throw new RedirectSignal(to);
   },
-  startActingAs: record("startActingAs"),
   stopActing: record("stopActing"),
 });
 stubSource("composition/account-container", {
@@ -158,41 +162,25 @@ test("a password form without text fields signs in with empty values, and sign-o
   ]);
 });
 
-test("only an admin starts acting, and only as a member", async () => {
+test("acting as a member waits for Better Auth's impersonation", async () => {
   const { startActingAsAction, stopActingAction } = await acting();
-  const target = member.githubId!;
+  const target = member.userId;
 
   for (const visitor of [null, guest, member]) {
     user = visitor;
     assert.equal((await redirectOf(() => startActingAsAction(target))).to, "/");
   }
-  assert.deepEqual(calls, []);
 
-  // An admin's own id, a Sparklingstadt ID account and a made-up path are not
-  // password members; nothing is even looked up.
+  // Until Task 7 of the migration it never starts, and the admin is told.
   user = admin;
-  for (const ownerId of ["10001", "sid:abc", "password:../x", ""])
+  for (const userId of [target, "10001", "password:../x", ""])
     assert.equal(
-      (await redirectOf(() => startActingAsAction(ownerId))).to,
+      (await redirectOf(() => startActingAsAction(userId))).to,
       "/admin/accounts?actAs=failed",
     );
   assert.deepEqual(calls, []);
 
-  answers.startActingAs = () => true;
-  assert.equal((await redirectOf(() => startActingAsAction(target))).to, "/");
-  // The member was deleted in the meantime.
-  answers.startActingAs = () => false;
-  assert.equal(
-    (await redirectOf(() => startActingAsAction(target))).to,
-    "/admin/accounts?actAs=failed",
-  );
-  assert.deepEqual(calls, [
-    ["startActingAs", target],
-    ["startActingAs", target],
-  ]);
-
   // Anyone may stop: it only clears their own cookie.
-  calls = [];
   user = null;
   assert.equal(
     (await redirectOf(() => stopActingAction())).to,

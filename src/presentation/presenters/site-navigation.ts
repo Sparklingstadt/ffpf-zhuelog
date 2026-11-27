@@ -240,11 +240,7 @@ export function menuIdentity(user: AuthenticatedUser): {
 } {
   if (user.role === "guest") return { name: "ゲスト", roleLabel: "ゲスト" };
   if (user.role === "admin")
-    return { name: `@${user.githubLogin}`, roleLabel: "管理者" };
-  if (user.demo)
-    return { name: user.displayName ?? user.githubLogin, roleLabel: "デモ" };
-  return {
-    name: user.displayName ?? user.githubLogin,
-    roleLabel: "メンバー",
-  };
+    return { name: user.displayName, roleLabel: "管理者" };
+  if (user.demo) return { name: user.displayName, roleLabel: "デモ" };
+  return { name: user.displayName, roleLabel: "メンバー" };
 }

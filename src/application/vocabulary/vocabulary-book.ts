@@ -12,8 +12,8 @@ import type {
 
 const DRAFT_FEATURE = "vocabulary_draft";
 
-// Neither a member nor an admin (signed out, a guest or revoked): there is
-// no book to read or change.
+// Neither a member nor an admin (signed out or a guest): there is no book
+// to read or change.
 export class VocabularyForbiddenError extends Error {
   override name = "VocabularyForbiddenError";
 }
@@ -59,37 +59,32 @@ export type DraftOutcome =
   | { ok: true; draft: VocabularyDraft }
   | { ok: false; reason: "unavailable" | "forbidden" | "failed" };
 
-type Person = { ownerId: string; actorId: string; demo: boolean };
+type Person = { userId: string; demo: boolean };
 
-// The signed-in user's vocabulary book: whose it is (the member an admin acts
-// as), what the demo account may not do, and whether AI drafts are on.
+// The signed-in user's vocabulary book: whose it is and who pays for a draft
+// (the member an admin impersonates), what the demo account may not do, and
+// whether AI drafts are on.
 export function createVocabularyBook(deps: VocabularyBookDeps) {
-  // ownerId is whose records these are; actorId is who is operating (the
-  // admin themself while acting as a member).
   async function person(): Promise<Person | null> {
     const user = await deps.currentUser();
-    if (!user || !isMemberRole(user.role) || !user.githubId) return null;
-    return {
-      ownerId: user.githubId,
-      actorId: user.actorId ?? user.githubId,
-      demo: user.demo === true,
-    };
+    if (!user || !isMemberRole(user.role)) return null;
+    return { userId: user.userId, demo: user.demo === true };
   }
 
   async function owner(): Promise<string> {
     const found = await person();
     if (!found) throw new VocabularyForbiddenError();
-    return found.ownerId;
+    return found.userId;
   }
 
   // Records the tokens a draft spent, waiting at most recordTimeoutMs. A
   // failed or late write is only logged, so it never changes what the user
   // gets.
-  async function record(actorId: string, usage: OpenAiUsage): Promise<void> {
+  async function record(userId: string, usage: OpenAiUsage): Promise<void> {
     await recordWithin(
       () =>
         deps.recordUsage({
-          ownerId: actorId,
+          ownerId: userId,
           feature: DRAFT_FEATURE,
           model: usage.model,
           inputTokens: usage.inputTokens,
@@ -133,7 +128,7 @@ export function createVocabularyBook(deps: VocabularyBookDeps) {
         deps.logError("VOCABULARY_DRAFT_FAILED", errorName(error));
         outcome = { ok: false, reason: "failed" };
       }
-      for (const usage of spent) await record(found.actorId, usage);
+      for (const usage of spent) await record(found.userId, usage);
       return outcome;
     },
   };

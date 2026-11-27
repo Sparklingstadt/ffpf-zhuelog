@@ -2,8 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   ACT_AS_COOKIE,
-  ACT_AS_MAX_AGE,
-  actAsCookieWrite,
   clearedActAsCookieWrite,
   cookieWrite,
   LEGACY_SESSION_COOKIES,
@@ -81,13 +79,7 @@ test("signing out clears all four", () => {
     assert.equal(write.options.secure, false);
 });
 
-test("the act-as cookie lives 30 days", () => {
-  assert.equal(ACT_AS_MAX_AGE, 2_592_000);
-  assert.deepEqual(actAsCookieWrite("password:abc", true), {
-    name: "zl_act_as",
-    value: "password:abc",
-    options: { ...attributes(true), maxAge: 2_592_000 },
-  });
+test("the retired act-as cookie is only cleared", () => {
   assert.deepEqual(clearedActAsCookieWrite(false), {
     name: "zl_act_as",
     value: "",

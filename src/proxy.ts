@@ -28,8 +28,8 @@ function passThrough(request: NextRequest) {
 }
 
 // Must sit alongside src/app; a root-level proxy is ignored for this layout.
-// Only checks that zl_session exists; pages, actions and route handlers check
-// the session itself (getCachedCurrentUser).
+// Only checks that a Better Auth session cookie exists; pages, actions and
+// route handlers check the session itself (getCachedCurrentUser).
 export function proxy(request: NextRequest) {
   return sessionGate(request, passThrough);
 }

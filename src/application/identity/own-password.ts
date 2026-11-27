@@ -70,14 +70,17 @@ export function createOwnPassword(deps: OwnPasswordDeps) {
     ): Promise<ChangePasswordOutcome> {
       const now = deps.now();
       const user = await deps.currentUser();
+      // Not while an admin impersonates the member (kept as before; Task 7 of
+      // the Better Auth migration moves this to changePassword).
       if (
         user?.role !== "member" ||
         user.demo === true ||
-        !user.githubId?.startsWith("password:") ||
-        !user.accountId
+        user.impersonatedBy !== undefined ||
+        !user.username
       )
         return "forbidden";
-      const accountId = user.accountId;
+      // Compile-only until Task 7: the password account is the user's.
+      const accountId = user.userId;
 
       if (
         !(await deps.throttle.consume(

@@ -11,7 +11,8 @@ import {
   type PasswordChoice,
 } from "../../domain/identity/password-account";
 
-// Only admins manage member accounts (an admin acting as a member too).
+// Only admins manage member accounts (not while impersonating a member: the
+// admin is then that member).
 export class AccountAdminForbiddenError extends Error {
   override name = "AccountAdminForbiddenError";
 }

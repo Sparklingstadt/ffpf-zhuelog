@@ -13,7 +13,7 @@ export type ImportState = ActionState;
 export async function handleLearningCsvImport(
   formData: FormData,
   dependencies: {
-    getMember: () => Promise<{ githubId?: string } | null>;
+    getMember: () => Promise<{ userId: string } | null>;
     importCsv: (file: File) => Promise<CsvImportResult>;
   },
 ): Promise<ImportState> {
@@ -24,14 +24,6 @@ export async function handleLearningCsvImport(
       message: "この操作を行う権限がありません。再度ログインしてください。",
     };
   }
-  // Older GitHub sessions have no owner ID: ask the user to sign in again.
-  if (!user.githubId) {
-    return {
-      status: "error",
-      message: "一度ログアウトしてログインし直してください。",
-    };
-  }
-
   const file = formData.get("csvFile");
   // An empty file gets the same message from importCsv.
   if (!(file instanceof File)) {

@@ -10,35 +10,34 @@ import type { AuthenticatedUser } from "../src/domain/identity/entities/authenti
 import type { MemberAccount } from "../src/domain/identity/member-account";
 
 const admin: AuthenticatedUser = {
-  githubLogin: "octocat",
-  githubId: "10001",
+  userId: "10001",
   role: "admin",
+  displayName: "octocat",
 };
-const actingAdmin: AuthenticatedUser = {
-  githubLogin: "octocat",
-  githubId: "password:cacc1",
-  role: "admin",
-  actingAs: {
-    ownerId: "password:cacc1",
-    loginId: "alice",
-    displayName: "Alice",
-  },
-  actorId: "10001",
+const impersonated: AuthenticatedUser = {
+  userId: "cacc1",
+  role: "member",
+  displayName: "Alice",
+  username: "alice",
+  impersonatedBy: "10001",
 };
 const member: AuthenticatedUser = {
-  githubLogin: "alice",
-  githubId: "password:cacc1",
+  userId: "cacc1",
   role: "member",
-  accountId: "cacc1",
+  displayName: "alice",
+  username: "alice",
 };
 const demo: AuthenticatedUser = {
-  githubLogin: "demo",
-  githubId: "demo:1",
+  userId: "demo1",
   role: "member",
+  displayName: "demo",
   demo: true,
 };
-const guest: AuthenticatedUser = { githubLogin: "g", role: "guest" };
-const revoked: AuthenticatedUser = { ...admin, role: "revoked" };
+const guest: AuthenticatedUser = {
+  userId: "g1",
+  role: "guest",
+  displayName: "g",
+};
 
 const now = new Date("2026-11-17T03:00:00.000Z");
 
@@ -91,12 +90,12 @@ function fakeDeps(
   return { accounts: createMemberAccounts(deps), calls, hashed };
 }
 
-test("only admins manage accounts", async () => {
-  for (const user of [admin, actingAdmin]) {
+test("only admins manage accounts, and not while impersonating", async () => {
+  for (const user of [admin]) {
     const { accounts } = fakeDeps(user);
     assert.deepEqual(await accounts.list(), [account]);
   }
-  for (const user of [member, demo, guest, null, revoked]) {
+  for (const user of [member, impersonated, demo, guest, null]) {
     const { accounts, calls, hashed } = fakeDeps(user);
     await assert.rejects(accounts.list(), AccountAdminForbiddenError);
     await assert.rejects(

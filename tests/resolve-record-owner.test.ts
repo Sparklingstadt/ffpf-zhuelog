@@ -4,41 +4,38 @@ import type {
   AppRole,
   AuthenticatedUser,
 } from "../src/domain/identity/entities/authenticated-user";
-import { isOwnerId } from "../src/domain/identity/owner-id";
+import { isUserId } from "../src/domain/identity/user-id";
 import {
   resolveRecordOwner,
   showsRecords,
 } from "../src/application/identity/use-cases/resolve-record-owner";
 
-const ADMIN_ID = "219588180";
-const MEMBER_ID = "password:ckabcdefghijklmnopqrstuvw";
+// Better Auth user ids (32 letters and digits by default).
+const ADMIN_ID = "Adm1nUserIdAAAAAAAAAAAAAAAAAAAAA";
+const MEMBER_ID = "MemberUserIdBBBBBBBBBBBBBBBBBBBB";
 
-const user = (role: AppRole, githubId?: string): AuthenticatedUser => ({
-  githubLogin: "taro",
+const user = (role: AppRole, userId: string): AuthenticatedUser => ({
+  userId,
   role,
-  ...(githubId ? { githubId } : {}),
+  displayName: "太郎",
 });
 
-test("unauthenticated, guest, revoked and ownerless users are denied", () => {
+test("unauthenticated users and guests are denied", () => {
   assert.deepEqual(resolveRecordOwner(null, undefined), {
     kind: "denied",
     reason: "unauthenticated",
   });
-  assert.deepEqual(resolveRecordOwner(user("guest", "1"), undefined), {
+  assert.deepEqual(resolveRecordOwner(user("guest", "g1"), undefined), {
     kind: "denied",
     reason: "guest",
   });
-  assert.deepEqual(resolveRecordOwner(user("revoked", "1"), undefined), {
+  assert.deepEqual(resolveRecordOwner(user("guest", "g1"), MEMBER_ID), {
     kind: "denied",
-    reason: "unauthenticated",
-  });
-  assert.deepEqual(resolveRecordOwner(user("admin"), undefined), {
-    kind: "denied",
-    reason: "reauth",
+    reason: "guest",
   });
 });
 
-test("admin sees self by default and may view well-formed other owners", () => {
+test("admin sees self by default and may view another user by id", () => {
   const admin = user("admin", ADMIN_ID);
   const self = { kind: "self", ownerId: ADMIN_ID };
   assert.deepEqual(resolveRecordOwner(admin, undefined), self);
@@ -48,22 +45,27 @@ test("admin sees self by default and may view well-formed other owners", () => {
     kind: "other",
     ownerId: MEMBER_ID,
   });
-  assert.deepEqual(resolveRecordOwner(admin, "42"), {
+  assert.deepEqual(resolveRecordOwner(admin, "a_b-C9"), {
     kind: "other",
-    ownerId: "42",
-  });
-  assert.deepEqual(resolveRecordOwner(admin, "sid:cabc"), {
-    kind: "other",
-    ownerId: "sid:cabc",
+    ownerId: "a_b-C9",
   });
 });
 
-test("admin with a malformed owner id is sent back to self", () => {
+test("admin with a malformed user id is sent back to self", () => {
   const admin = user("admin", ADMIN_ID);
-  for (const bad of ["../x", "password:ABC"])
-    assert.deepEqual(resolveRecordOwner(admin, bad), {
-      kind: "redirect-self",
-    });
+  for (const bad of [
+    "../x",
+    "password:x",
+    "sid:cabc",
+    "a b",
+    "a".repeat(65),
+    "x\n",
+  ])
+    assert.deepEqual(
+      resolveRecordOwner(admin, bad),
+      { kind: "redirect-self" },
+      JSON.stringify(bad),
+    );
 });
 
 test("member sees self and never anyone else", () => {
@@ -79,44 +81,46 @@ test("member sees self and never anyone else", () => {
   assert.deepEqual(resolveRecordOwner(member, ADMIN_ID), {
     kind: "redirect-self",
   });
-  assert.deepEqual(resolveRecordOwner(member, "sid:cabc"), {
+});
+
+test("an impersonating admin is the member: no one else's records", () => {
+  const acting: AuthenticatedUser = {
+    ...user("member", MEMBER_ID),
+    impersonatedBy: ADMIN_ID,
+  };
+  assert.deepEqual(resolveRecordOwner(acting, undefined), {
+    kind: "self",
+    ownerId: MEMBER_ID,
+  });
+  assert.deepEqual(resolveRecordOwner(acting, ADMIN_ID), {
     kind: "redirect-self",
   });
 });
 
-test("isOwnerId accepts GitHub, password and Sparklingstadt ID owner ids only", () => {
-  assert.equal(isOwnerId(ADMIN_ID), true);
-  assert.equal(isOwnerId(MEMBER_ID), true);
-  assert.equal(isOwnerId("sid:cabc"), true);
+test("isUserId accepts 1 to 64 letters, digits, _ and - only", () => {
+  for (const good of [ADMIN_ID, "a", "A_b-9", "a".repeat(64)])
+    assert.equal(isUserId(good), true, good);
   for (const bad of [
-    "password:",
+    "",
+    "a".repeat(65),
+    "password:abc",
+    "sid:abc",
     "219588180\n",
-    "abc",
-    "sid:",
-    "sid:ABC",
-    `sid:${"a".repeat(65)}`,
-    "gitlab:1",
+    "a/b",
+    "a.b",
+    "ａ",
   ])
-    assert.equal(isOwnerId(bad), false, JSON.stringify(bad));
+    assert.equal(isUserId(bad), false, JSON.stringify(bad));
 });
 
-test("only your own or, for an admin, another member's records are listed", () => {
+test("only your own or, for an admin, another user's records are listed", () => {
   const admin = user("admin", ADMIN_ID);
   assert.equal(showsRecords(resolveRecordOwner(admin, undefined)), true);
   assert.equal(showsRecords(resolveRecordOwner(admin, MEMBER_ID)), true);
-  assert.equal(showsRecords(resolveRecordOwner(admin, "abc")), false);
+  assert.equal(showsRecords(resolveRecordOwner(admin, "a:b")), false);
   assert.equal(showsRecords(resolveRecordOwner(null, undefined)), false);
   assert.equal(
-    showsRecords(resolveRecordOwner(user("guest", "1"), undefined)),
+    showsRecords(resolveRecordOwner(user("guest", "g1"), undefined)),
     false,
   );
-  assert.equal(
-    showsRecords(resolveRecordOwner(user("admin"), undefined)),
-    false,
-  );
-});
-
-test("isOwnerId accepts sid: owner ids and refuses the retired ffpf: ones", () => {
-  assert.equal(isOwnerId("sid:abc123"), true);
-  assert.equal(isOwnerId("ffpf:abc123"), false);
 });

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 import { getRecordOwner } from "@/composition/identity-container";
 
-// Sends a signed-out (or revoked) visitor to `signInPath`; returns the user
+// Sends a signed-out visitor to `signInPath`; returns the user
 // and whose records the page shows. `requested` is the raw `?user=` value.
 export async function requireSignedInOwner(
   requested: string | undefined,

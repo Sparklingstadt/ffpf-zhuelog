@@ -100,15 +100,8 @@ export default async function AdminAccountsPage({
                       <form
                         action={startActingAsAction.bind(null, account.ownerId)}
                       >
-                        <Button
-                          type="submit"
-                          size="sm"
-                          variant="outline"
-                          disabled={user.actingAs?.ownerId === account.ownerId}
-                        >
-                          {user.actingAs?.ownerId === account.ownerId
-                            ? "この会員として操作中"
-                            : "この会員として操作"}
+                        <Button type="submit" size="sm" variant="outline">
+                          この会員として操作
                         </Button>
                       </form>
                       <ResetPasswordForm

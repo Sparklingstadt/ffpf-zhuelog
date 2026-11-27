@@ -31,7 +31,6 @@ import {
 } from "@/infrastructure/auth/github-oauth";
 import { isSecureRequest } from "@/infrastructure/auth/secure-request";
 import {
-  actAsCookieWrite,
   clearedActAsCookieWrite,
   cookieWrite,
   OAUTH_COOKIE,
@@ -47,8 +46,6 @@ import {
   sidConfig,
   githubOAuthConfig,
 } from "@/infrastructure/config/environment";
-import { ACT_AS_PATTERN } from "@/infrastructure/identity/session-current-user-provider";
-import { prismaIdentityAccounts } from "@/infrastructure/prisma/identity-accounts";
 import {
   demoFailureUrl,
   errorName,
@@ -58,8 +55,7 @@ import {
 import { getCachedCurrentUser } from "./current-user";
 import { newSessionCookies, sessionStore, signIn } from "./sign-in-container";
 
-// Decided from the zl_session cookie's Session row and the account tables,
-// once per request.
+// Decided from the Better Auth session, once per request.
 const currentUserProvider: CurrentUserProvider = {
   getCurrentUser: getCachedCurrentUser,
 };
@@ -79,8 +75,8 @@ export function getCurrentViewerUser() {
   return requireViewerUser.execute();
 }
 
-// Reads the user through the same provider as the other getters so a revoked
-// session (sessionVersion) is denied here too. The user comes back with the
+// Reads the user through the same provider as the other getters so an
+// ended session or a banned user is denied here too. The user comes back with the
 // owner so pages need not read the session twice.
 export async function getRecordOwner(requested: string | undefined): Promise<{
   user: AuthenticatedUser | null;
@@ -223,15 +219,15 @@ export function demoAvailable() {
 }
 
 // A Sparklingstadt ID member also leaves the ID server (RP-Initiated Logout),
-// which returns to /signin. The owner is read before the session is ended, and
-// an admin acting as a member is judged by the admin's own id, so an admin is
-// never sent there. The origin is the sign-in callback's (publicOrigin).
+// which returns to /signin. The user is read before the session is ended, and
+// an admin impersonating a member is judged by the admin's own id, so an
+// admin is never sent there. (Better Auth user ids never carry "sid:", so
+// until Task 6's sign-out this always answers /signin.) The origin is the sign-in callback's (publicOrigin).
 export async function signOutCurrentUser() {
   const target = await resolveSignOutTarget({
     currentOwnerId: async () => {
       const user = await getCachedCurrentUser();
-      if (user?.actingAs) return user.actorId ?? null;
-      return user?.githubId ?? null;
+      return user?.impersonatedBy ?? user?.userId ?? null;
     },
     config: () => sidConfig() ?? null,
     origin: async () => publicOrigin(requestOrigin(await headers())),
@@ -256,23 +252,8 @@ export async function signOutTo(redirectTo: string) {
   redirect(redirectTo);
 }
 
-// An admin acting as a member: their records become the member's while the
-// admin keeps the admin role. The cookie is written only for a signed-in
-// admin and an existing password member of the one allowed shape; the
-// provider checks the same again on every request. Returns whether it
-// started.
-export async function startActingAs(ownerId: string): Promise<boolean> {
-  const user = await getCachedCurrentUser();
-  if (user?.role !== "admin") return false;
-  if (!ACT_AS_PATTERN.test(ownerId)) return false;
-  const account = await prismaIdentityAccounts.findPasswordAccount(
-    ownerId.slice("password:".length),
-  );
-  if (account === null) return false;
-  await writeCookies([actAsCookieWrite(ownerId, await requestIsSecure())]);
-  return true;
-}
-
+// Clears the retired zl_act_as cookie (nothing reads it any more). Task 7 of
+// the Better Auth migration replaces this with ending the impersonation.
 export async function stopActing() {
   await writeCookies([clearedActAsCookieWrite(await requestIsSecure())]);
 }
