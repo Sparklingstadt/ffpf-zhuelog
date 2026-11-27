@@ -3,10 +3,17 @@
 
 import { normalizeLoginId } from "@/domain/identity/password-account";
 
-// A login id as the username plugin sees it: already in the stored form of
-// ^[a-z0-9._-]{3,32}$. The plugin's own default (^[a-zA-Z0-9_.]+$, at most 30)
-// also applies at sign-in, so without this a member whose id has '-' or 31 to
-// 32 characters could not sign in.
+// What the username plugin does to a typed login id before it checks and
+// looks it up: trim(), then toLowerCase(), as normalizeLoginId does, so
+// "Alice" and " alice" still sign in as alice.
+export function normalizeUsername(username: string): string {
+  return username.trim().toLowerCase();
+}
+
+// A login id as the username plugin checks it, after normalizeUsername:
+// already in the stored form of ^[a-z0-9._-]{3,32}$. The plugin's own default
+// (^[a-zA-Z0-9_.]+$, at most 30) also applies at sign-in, so without this a
+// member whose id has '-' or 31 to 32 characters could not sign in.
 export function isAllowedUsername(username: string): boolean {
   return normalizeLoginId(username) === username;
 }

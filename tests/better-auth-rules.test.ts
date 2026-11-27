@@ -5,6 +5,7 @@ import {
   AUTH_RATE_LIMIT,
   isAllowedUsername,
   memberEmail,
+  normalizeUsername,
   rejectsDemoPasswordChange,
   rejectsGuestImpersonation,
 } from "../src/infrastructure/auth/better-auth-rules";
@@ -21,6 +22,18 @@ test("isAllowedUsername follows the login id rule", () => {
   assert.equal(isAllowedUsername("a".repeat(33)), false);
   assert.equal(isAllowedUsername("ab"), false);
   assert.equal(isAllowedUsername("Abc"), false);
+});
+
+test("a typed login id is trimmed and lower-cased before it is checked", () => {
+  assert.equal(normalizeUsername("Alice"), "alice");
+  assert.equal(normalizeUsername(" alice\t"), "alice");
+  assert.equal(normalizeUsername("A.B-C_D"), "a.b-c_d");
+  // The pair the username plugin runs (post-normalization validation) is
+  // normalizeLoginId: whatever it accepts, they accept.
+  for (const typed of ["Alice", " alice ", "ALICE-01", "a".repeat(32)])
+    assert.equal(isAllowedUsername(normalizeUsername(typed)), true, typed);
+  for (const typed of ["ab", " a b ", "a".repeat(33), "alice!"])
+    assert.equal(isAllowedUsername(normalizeUsername(typed)), false, typed);
 });
 
 test("the demo may not change its password", () => {

@@ -2,8 +2,8 @@
 // stated otherwise, so trim(), toLowerCase() and length are the plain JS ones.
 
 const LOGIN_ID = /^[a-z0-9._-]{3,32}$/;
-const MIN_NEW_PASSWORD_UNITS = 12;
-const MAX_NEW_PASSWORD_UNITS = 128;
+export const MIN_NEW_PASSWORD_UNITS = 12;
+export const MAX_NEW_PASSWORD_UNITS = 128;
 const MAX_DISPLAY_NAME_UNITS = 50;
 const MAX_ACCOUNT_ID_BYTES = 128;
 // A lone surrogate: a string with one is not well-formed Unicode.

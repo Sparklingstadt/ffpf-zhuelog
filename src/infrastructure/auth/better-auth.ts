@@ -13,8 +13,13 @@ import { nextCookies, toNextJsHandler } from "better-auth/next-js";
 import { admin, anonymous, genericOAuth, username } from "better-auth/plugins";
 
 import {
+  MAX_NEW_PASSWORD_UNITS,
+  MIN_NEW_PASSWORD_UNITS,
+} from "@/domain/identity/password-account";
+import {
   AUTH_RATE_LIMIT,
   isAllowedUsername,
+  normalizeUsername,
   rejectsDemoPasswordChange,
   rejectsGuestImpersonation,
 } from "@/infrastructure/auth/better-auth-rules";
@@ -56,6 +61,10 @@ export const auth = betterAuth({
     enabled: true,
     // Members are created by an administrator only.
     disableSignUp: true,
+    // The app's rule for a new password (isValidNewPassword). Sign-in checks
+    // only the maximum, so shorter passwords set before still sign in.
+    minPasswordLength: MIN_NEW_PASSWORD_UNITS,
+    maxPasswordLength: MAX_NEW_PASSWORD_UNITS,
     password: {
       hash: (password) => hasher.hash(password),
       verify: ({ hash, password }) => hasher.verify(password, hash),
@@ -104,6 +113,9 @@ export const auth = betterAuth({
     username({
       minUsernameLength: 3,
       maxUsernameLength: 32,
+      usernameNormalization: normalizeUsername,
+      // Check the normalized id, so a typed "Alice" is checked as "alice".
+      validationOrder: { username: "post-normalization" },
       usernameValidator: isAllowedUsername,
     }),
     ...(sid
@@ -117,6 +129,9 @@ export const auth = betterAuth({
                 clientSecret: sid.clientSecret,
                 scopes: ["openid", "email", "profile"],
                 pkce: true,
+                // Without the issuer and JWKS from discovery the provider is
+                // left out rather than accepting ID tokens unverified.
+                requireIdTokenVerification: true,
               },
             ],
           }),
