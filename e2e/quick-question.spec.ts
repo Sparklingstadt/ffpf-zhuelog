@@ -36,7 +36,7 @@ test("one quick question saves a private note and the next starts fresh", async 
   ).toBe(0);
   const { rows } = await db.query('SELECT * FROM "QuickQuestion"');
   expect(rows).toHaveLength(1);
-  expect(rows[0].ownerId).toBe("10001");
+  expect(rows[0].userId).toBe(adminOwnerId);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
@@ -214,12 +214,12 @@ test("an answer OpenAI cuts or refuses is not saved", async ({
       .n,
   ).toBe(0);
   const { rows } = await db.query(
-    `SELECT "ownerId", "model", "inputTokens", "outputTokens" FROM "AiUsage"
+    `SELECT "userId", "model", "inputTokens", "outputTokens" FROM "AiUsage"
       WHERE "feature" = 'quick_question'`,
   );
   expect(rows).toEqual([
     {
-      ownerId: adminOwnerId,
+      userId: adminOwnerId,
       model: "gpt-6.1-sol",
       inputTokens: 21,
       outputTokens: 43,
@@ -256,10 +256,10 @@ test(
     expect(saves).toHaveLength(1);
     const [save] = saves;
     const notes =
-      'SELECT "id", "ownerId", "answer", "createdAt" FROM "QuickQuestion"';
+      'SELECT "id", "userId", "answer", "createdAt" FROM "QuickQuestion"';
     const { rows: before } = await db.query(notes);
     expect(before).toHaveLength(1);
-    expect(before[0].ownerId).toBe(adminOwnerId);
+    expect(before[0].userId).toBe(adminOwnerId);
 
     const retry = await page.request.fetch(save);
     expect(retry.status()).toBe(200);

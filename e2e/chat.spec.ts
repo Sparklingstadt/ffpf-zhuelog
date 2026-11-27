@@ -93,9 +93,9 @@ test("a member chats and keeps their own conversation notes; guests have no way 
   await expect
     .poll(async () => {
       const { rows } = await db.query(
-        `SELECT "ownerId" FROM "ChatConversation"`,
+        `SELECT "userId" FROM "ChatConversation"`,
       );
-      return rows.map((row) => row.ownerId);
+      return rows.map((row) => row.userId);
     })
     .toEqual([memberOwnerId(accountId)]);
   await page.goto("/conversations");
@@ -220,13 +220,13 @@ test("an answer OpenAI cuts at its limit is kept, a refused one is not", async (
   const usage = async () =>
     (
       await db.query(
-        `SELECT "ownerId", "model", "inputTokens", "outputTokens" FROM "AiUsage"
+        `SELECT "userId", "model", "inputTokens", "outputTokens" FROM "AiUsage"
           WHERE "feature" = 'chat'`,
       )
     ).rows;
   const billed = [
     {
-      ownerId: adminOwnerId,
+      userId: adminOwnerId,
       model: "gpt-6.1-sol",
       inputTokens: 21,
       outputTokens: 43,
@@ -272,10 +272,10 @@ test(
     expect(saves).toHaveLength(1);
     const [save] = saves;
     const conversations =
-      'SELECT "id", "ownerId", "title", "updatedAt" FROM "ChatConversation"';
+      'SELECT "id", "userId", "title", "updatedAt" FROM "ChatConversation"';
     const { rows: before } = await db.query(conversations);
     expect(before).toHaveLength(1);
-    expect(before[0].ownerId).toBe(adminOwnerId);
+    expect(before[0].userId).toBe(adminOwnerId);
     const { id, title } = before[0];
 
     await createMember(db, "chat-member", "会員", "member-password-1");

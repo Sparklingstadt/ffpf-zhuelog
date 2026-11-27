@@ -49,7 +49,7 @@ test("a learning note put in review comes back as a card and can be taken out", 
   ).toBeVisible();
   await expect(page.getByText("今日の復習に入っています")).toHaveCount(0);
   const { rows } = await db.query(
-    `SELECT count(*)::int AS n FROM "ReviewItem" WHERE "ownerId" = $1 AND "kind" = 'entry'`,
+    `SELECT count(*)::int AS n FROM "ReviewItem" WHERE "userId" = $1 AND "kind" = 'entry'`,
     [adminOwnerId],
   );
   expect(rows[0].n).toBe(0);
@@ -104,7 +104,7 @@ test("space rates a turned card as suggested, and the last card says so", async 
   await page.keyboard.press("Space");
   await expect(page.getByText("1問 復習しました")).toBeVisible();
   const { rows } = await db.query(
-    `SELECT "rating" FROM "ReviewLog" WHERE "ownerId" = $1`,
+    `SELECT "rating" FROM "ReviewLog" WHERE "userId" = $1`,
     [adminOwnerId],
   );
   expect(rows).toEqual([{ rating: 3 }]);
@@ -134,7 +134,7 @@ test("deleting notes for good takes their review cards with them", async ({
       await db.query(
         `SELECT e."originalText" AS text FROM "ReviewItem" i
            LEFT JOIN "LearningEntry" e ON e.id = i."targetId"
-          WHERE i."ownerId" = $1 AND i."kind" = 'entry'`,
+          WHERE i."userId" = $1 AND i."kind" = 'entry'`,
         [adminOwnerId],
       )
     ).rows
@@ -196,12 +196,12 @@ test("a retried answer is applied once", async ({ page, context, db }) => {
   expect(await retry.text()).toContain('{"ok":true}');
 
   const logs = await db.query(
-    `SELECT "state", "rating" FROM "ReviewLog" WHERE "ownerId" = $1`,
+    `SELECT "state", "rating" FROM "ReviewLog" WHERE "userId" = $1`,
     [adminOwnerId],
   );
   expect(logs.rows).toEqual([{ state: 0, rating: 3 }]);
   const items = await db.query(
-    `SELECT "reps" FROM "ReviewItem" WHERE "ownerId" = $1`,
+    `SELECT "reps" FROM "ReviewItem" WHERE "userId" = $1`,
     [adminOwnerId],
   );
   expect(items.rows).toEqual([{ reps: 1 }]);
@@ -237,7 +237,7 @@ test("the count leaves out trashed notes but still counts cards whose target is 
   // A card whose note is gone (deleted without its card).
   await db.query(
     `INSERT INTO "ReviewItem"
-       ("id", "ownerId", "language", "kind", "targetId", "due", "state", "createdAt", "updatedAt")
+       ("id", "userId", "language", "kind", "targetId", "due", "state", "createdAt", "updatedAt")
      VALUES ('c' || substr(md5(random()::text), 1, 24), $1, 'zh', 'entry', 'ngone0000000000000',
              now(), 0, now(), now())`,
     [adminOwnerId],

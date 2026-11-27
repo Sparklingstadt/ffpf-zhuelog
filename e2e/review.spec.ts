@@ -37,7 +37,7 @@ test("missed practice questions come back on the review page and an answer resch
   const {
     rows: [round],
   } = await db.query(
-    `SELECT "questions" FROM "PrepositionPracticeRecord" WHERE "ownerId" = $1`,
+    `SELECT "questions" FROM "PrepositionPracticeRecord" WHERE "userId" = $1`,
     [owner],
   );
   const missed = (
@@ -48,7 +48,7 @@ test("missed practice questions come back on the review page and an answer resch
   expect(missed.length).toBeGreaterThan(0);
 
   const { rows: items } = await db.query(
-    `SELECT "kind", "targetId", "language", "state" FROM "ReviewItem" WHERE "ownerId" = $1 ORDER BY "targetId"`,
+    `SELECT "kind", "targetId", "language", "state" FROM "ReviewItem" WHERE "userId" = $1 ORDER BY "targetId"`,
     [owner],
   );
   expect(items.map((it) => it.targetId)).toEqual(
@@ -86,7 +86,7 @@ test("missed practice questions come back on the review page and an answer resch
 
   const { rows: logs } = await db.query(
     `SELECT l."rating", l."state", i."reps", i."due" > now() AS "later"
-     FROM "ReviewLog" l JOIN "ReviewItem" i ON i."id" = l."itemId" WHERE l."ownerId" = $1`,
+     FROM "ReviewLog" l JOIN "ReviewItem" i ON i."id" = l."itemId" WHERE l."userId" = $1`,
     [owner],
   );
   expect(logs).toEqual([{ rating: 4, state: 0, reps: 1, later: true }]);
@@ -125,7 +125,7 @@ test("missed verb-mode complement questions come back on the review page like pr
   const {
     rows: [round],
   } = await db.query(
-    `SELECT "questions" FROM "ComplementPracticeRecord" WHERE "ownerId" = $1`,
+    `SELECT "questions" FROM "ComplementPracticeRecord" WHERE "userId" = $1`,
     [owner],
   );
   const missed = (
@@ -136,7 +136,7 @@ test("missed verb-mode complement questions come back on the review page like pr
   expect(missed.length).toBeGreaterThan(0);
 
   const { rows: items } = await db.query(
-    `SELECT "kind", "targetId" FROM "ReviewItem" WHERE "ownerId" = $1 ORDER BY "targetId"`,
+    `SELECT "kind", "targetId" FROM "ReviewItem" WHERE "userId" = $1 ORDER BY "targetId"`,
     [owner],
   );
   expect(items.map((it) => it.targetId)).toEqual(
@@ -165,7 +165,7 @@ test("missed verb-mode complement questions come back on the review page like pr
   if (shown > 1) await expect(page.getByText(`2 / ${shown}`)).toBeVisible();
   else await expect(page.getByText("1問 復習しました")).toBeVisible();
   const { rows: logs } = await db.query(
-    `SELECT l."rating" FROM "ReviewLog" l WHERE l."ownerId" = $1`,
+    `SELECT l."rating" FROM "ReviewLog" l WHERE l."userId" = $1`,
     [owner],
   );
   expect(logs).toEqual([{ rating: 4 }]);
@@ -188,7 +188,7 @@ test("adding a word from a solved card leaves the session where it was", async (
   for (const [i, targetId] of ["result-01", "result-02", "result-03"].entries())
     await db.query(
       `INSERT INTO "ReviewItem"
-       ("id", "ownerId", "language", "kind", "targetId", "due", "state", "createdAt", "updatedAt")
+       ("id", "userId", "language", "kind", "targetId", "due", "state", "createdAt", "updatedAt")
        VALUES ('c' || substr(md5(random()::text), 1, 24), $1, 'zh', 'complement', $2,
                now() - make_interval(mins => $3), 0, now(), now())`,
       [owner, targetId, 10 - i],

@@ -37,7 +37,7 @@ test("a word added to the book comes up as a flashcard and can be removed", asyn
 
   const { rows: items } = await db.query(
     `SELECT i."kind", i."targetId" = v."id" AS "same" FROM "ReviewItem" i
-     JOIN "VocabularyEntry" v ON v."ownerId" = i."ownerId" WHERE i."ownerId" = $1`,
+     JOIN "VocabularyEntry" v ON v."userId" = i."userId" WHERE i."userId" = $1`,
     [owner],
   );
   expect(items).toEqual([{ kind: "vocabulary", same: true }]);
@@ -60,7 +60,7 @@ test("a word added to the book comes up as a flashcard and can be removed", asyn
   await page.getByRole("button", { name: "消す" }).click();
   await expect(page.getByText("まだ単語がありません。")).toBeVisible();
   const { rows } = await db.query(
-    `SELECT count(*)::int AS n FROM "ReviewItem" WHERE "ownerId" = $1`,
+    `SELECT count(*)::int AS n FROM "ReviewItem" WHERE "userId" = $1`,
     [owner],
   );
   expect(rows).toEqual([{ n: 0 }]);
@@ -111,7 +111,7 @@ test("the AI draft comes from OpenAI and its usage is recorded", async ({
   await expect(page.getByText("AI の下書き")).toBeVisible();
 
   const { rows } = await db.query(
-    `SELECT "feature", "inputTokens", "outputTokens" FROM "AiUsage" WHERE "ownerId" = $1`,
+    `SELECT "feature", "inputTokens", "outputTokens" FROM "AiUsage" WHERE "userId" = $1`,
     [owner],
   );
   expect(rows).toEqual([

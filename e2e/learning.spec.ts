@@ -34,7 +34,7 @@ test("guest sees no notes and no note tools", async ({ page, db }) => {
     `INSERT INTO "ImportBatch" (id, "fileName", "rowCount") VALUES ('e2e-batch', 'fixture.csv', 1)`,
   );
   await db.query(
-    'INSERT INTO "LearningEntry" (id, "originalText", "correctedText", pinyin, "ownerId", "batchId") VALUES ($1,$2,$3,$4,$5,$6)',
+    'INSERT INTO "LearningEntry" (id, "originalText", "correctedText", pinyin, "userId", "batchId") VALUES ($1,$2,$3,$4,$5,$6)',
     ["1", "他人の原文", "他人の添削", "pinyin", adminOwnerId, "e2e-batch"],
   );
   await asGuest(page);
@@ -288,7 +288,7 @@ test("admin navigates date, detail and adjacent notes with JST grouping", async 
     ["3", "2026-09-20T01:00:00Z"],
   ]) {
     await db.query(
-      'INSERT INTO "LearningEntry" (id, "originalText", "correctedText", pinyin, "createdAt", "ownerId", "batchId") VALUES ($1,$2,$3,$4,$5,$6,$7)',
+      'INSERT INTO "LearningEntry" (id, "originalText", "correctedText", pinyin, "createdAt", "userId", "batchId") VALUES ($1,$2,$3,$4,$5,$6,$7)',
       [id, `原文${id}`, `添削${id}`, "pinyin", date, adminOwnerId, "e2e-batch"],
     );
   }
