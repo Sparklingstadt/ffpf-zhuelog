@@ -87,6 +87,13 @@ test("a Sparklingstadt ID user signs in, keeps notes, gets the portal link and s
     },
   ]);
   const userId = rows[0].id as string;
+  // The ID server's access token is stored encrypted (encryptOAuthTokens);
+  // the ID token is kept as it is, for the logout's id_token_hint.
+  const tokens = await db.query(
+    `SELECT "accessToken", "idToken" FROM "account" WHERE "providerId" = 'sid'`,
+  );
+  expect(tokens.rows[0].accessToken).toMatch(/^(\$ba\$\d+\$)?[0-9a-f]{80,}$/);
+  expect(tokens.rows[0].idToken).toMatch(/^eyJ/);
 
   // A member: notes can be added, and they are owned by the new user.
   await upload(page, "最初の文,添削後の文,ピン音\n雪の文,雪の添削,xuě");

@@ -125,11 +125,76 @@ test("the list is every member (not admins or guests), oldest first, from Better
           filterValue: false,
           sortBy: "createdAt",
           sortDirection: "asc",
+          limit: 100,
+          offset: 0,
         },
         headers,
       },
     ],
   ]);
+});
+
+// Better Auth's Prisma adapter answers at most 100 users when no limit is
+// given; the list asks page by page until a page comes back short.
+test("the list pages through every user, past 100", async () => {
+  const many: AdminApiUser[] = Array.from({ length: 250 }, (_, i) => ({
+    id: `u${i}`,
+    name: `会員${i}`,
+    username: `member${i}`,
+    role: "user",
+    createdAt: new Date(Date.UTC(2026, 0, 1, 0, 0, i)),
+  }));
+  const pages: { limit: number; offset: number }[] = [];
+  const deps: MemberAccountsDeps = {
+    currentUser: async () => admin,
+    headers: async () => new Headers(),
+    api: {
+      listUsers: async ({
+        query,
+      }: {
+        query: { limit: number; offset: number };
+      }) => {
+        const { limit, offset } = query;
+        pages.push({ limit, offset });
+        return { users: many.slice(offset, offset + limit) };
+      },
+    } as unknown as MemberAccountsDeps["api"],
+    generatePassword: () => "x",
+  };
+  const listed = await createMemberAccounts(deps).list();
+  assert.equal(listed.length, 250);
+  assert.equal(listed[0]?.id, "u0");
+  assert.equal(listed.at(-1)?.id, "u249");
+  assert.deepEqual(pages, [
+    { limit: 100, offset: 0 },
+    { limit: 100, offset: 100 },
+    { limit: 100, offset: 200 },
+  ]);
+});
+
+test("the list stops when a page brings no new user", async () => {
+  // An answer that ignored the offset would otherwise be asked forever.
+  const page: AdminApiUser[] = Array.from({ length: 100 }, (_, i) => ({
+    id: `u${i}`,
+    name: `会員${i}`,
+    username: `member${i}`,
+    role: "user",
+    createdAt: at(1),
+  }));
+  let calls = 0;
+  const listed = await createMemberAccounts({
+    currentUser: async () => admin,
+    headers: async () => new Headers(),
+    api: {
+      listUsers: async () => {
+        calls += 1;
+        return { users: page };
+      },
+    } as unknown as MemberAccountsDeps["api"],
+    generatePassword: () => "x",
+  }).list();
+  assert.equal(listed.length, 100);
+  assert.equal(calls, 2);
 });
 
 test("create checks loginId, then name, then password, before calling Better Auth", async () => {

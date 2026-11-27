@@ -61,6 +61,8 @@ export type MemberAccountsDeps = {
         filterValue: false;
         sortBy: "createdAt";
         sortDirection: "asc";
+        limit: number;
+        offset: number;
       };
       headers: Headers;
     }): Promise<{ users: AdminApiUser[] }>;
@@ -88,6 +90,10 @@ export type MemberAccountsDeps = {
   };
   generatePassword: () => string;
 };
+
+// Users asked for per listUsers call (Better Auth's Prisma adapter answers at
+// most 100 when no limit is given).
+const LIST_PAGE_SIZE = 100;
 
 const TAKEN_CODES = new Set([
   // The username plugin: the login id is taken.
@@ -142,19 +148,30 @@ export function createMemberAccounts(deps: MemberAccountsDeps) {
 
   return {
     // Every member (the demo's and Sparklingstadt ID members too), oldest
-    // first.
+    // first: listUsers is asked page by page until a page comes back short
+    // (or brings no user not seen yet).
     async list(): Promise<MemberAccount[]> {
       await requireAdmin();
-      const { users } = await deps.api.listUsers({
-        query: {
-          filterField: "isAnonymous",
-          filterValue: false,
-          sortBy: "createdAt",
-          sortDirection: "asc",
-        },
-        headers: await deps.headers(),
-      });
-      return users.filter(isMember).map((user) => ({
+      const headers = await deps.headers();
+      const seen = new Map<string, AdminApiUser>();
+      for (let offset = 0; ; offset += LIST_PAGE_SIZE) {
+        const { users } = await deps.api.listUsers({
+          query: {
+            filterField: "isAnonymous",
+            filterValue: false,
+            sortBy: "createdAt",
+            sortDirection: "asc",
+            limit: LIST_PAGE_SIZE,
+            offset,
+          },
+          headers,
+        });
+        const before = seen.size;
+        for (const user of users)
+          if (!seen.has(user.id)) seen.set(user.id, user);
+        if (users.length < LIST_PAGE_SIZE || seen.size === before) break;
+      }
+      return [...seen.values()].filter(isMember).map((user) => ({
         id: user.id,
         loginId: user.username ?? null,
         displayName: user.name,

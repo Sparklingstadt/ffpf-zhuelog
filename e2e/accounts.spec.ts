@@ -194,6 +194,54 @@ test(
 );
 
 test(
+  "nobody can ask whether a login id is taken",
+  anyWidth,
+  async ({ page, db }) => {
+    await createMember(db, "taro", "太郎", "member-password-1");
+    await page.goto("/signin");
+    const status = await page.evaluate(async () => {
+      const response = await fetch("/api/auth/is-username-available", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ username: "taro" }),
+      });
+      return response.status;
+    });
+    expect(status).toBe(404);
+  },
+);
+
+// The ID server's tokens are not handed out over Better Auth, to anyone.
+test(
+  "the routes that hand out the ID server's tokens are closed",
+  anyWidth,
+  async ({ page, db }) => {
+    await createMember(db, "taro", "太郎", "member-password-1");
+    await asMember(page, "taro", "member-password-1");
+    const answers = await page.evaluate(async () => {
+      const post = async (path: string) =>
+        (
+          await fetch(path, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ providerId: "sid" }),
+          })
+        ).status;
+      return {
+        getAccessToken: await post("/api/auth/get-access-token"),
+        refreshToken: await post("/api/auth/refresh-token"),
+        accountInfo: (await fetch("/api/auth/account-info")).status,
+      };
+    });
+    expect(answers).toEqual({
+      getAccessToken: 404,
+      refreshToken: 404,
+      accountInfo: 404,
+    });
+  },
+);
+
+test(
   "too many sign-ins pause that client only",
   anyWidth,
   async ({ browser, baseURL, db }) => {

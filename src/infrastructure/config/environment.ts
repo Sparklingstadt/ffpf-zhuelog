@@ -4,7 +4,7 @@ import { normalizeLineOfficialAccountId } from "@/domain/line/official-account";
 
 // Secrets travel to these URLs (the Sparklingstadt ID issuer), so they must be HTTPS
 // unless they are this machine (local development and e2e).
-export function isHttpsOrLoopbackUrl(raw: string): boolean {
+function isHttpsOrLoopbackUrl(raw: string): boolean {
   let url: URL;
   try {
     url = new URL(raw);

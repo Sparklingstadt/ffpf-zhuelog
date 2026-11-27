@@ -591,3 +591,47 @@ test(
     ).toHaveAccessibleName(new RegExp(`^${before.name}\\s`));
   },
 );
+
+// The demo is one user shared by every visitor: its sessions are not listed
+// (they would show the other visitors' tokens, addresses and browsers) and
+// cannot be revoked over Better Auth (that would sign everyone out). The
+// routes are closed (404) and the visitor's own session keeps working.
+test(
+  "the demo cannot list or revoke the sessions it shares",
+  anyWidth,
+  async ({ page }) => {
+    await resetDemo();
+    await page.goto("/signin");
+    await page.getByRole("button", { name: "デモで試す" }).click();
+    await expect(page).toHaveURL(/\/$/);
+
+    const answers = await page.evaluate(async () => {
+      const post = async (path: string, body: unknown) =>
+        (
+          await fetch(path, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(body),
+          })
+        ).status;
+      return {
+        listSessions: (await fetch("/api/auth/list-sessions")).status,
+        revokeSession: await post("/api/auth/revoke-session", { token: "x" }),
+        revokeSessions: await post("/api/auth/revoke-sessions", {}),
+        revokeOtherSessions: await post("/api/auth/revoke-other-sessions", {}),
+        getSession: (await fetch("/api/auth/get-session")).status,
+      };
+    });
+    expect(answers).toEqual({
+      listSessions: 404,
+      revokeSession: 404,
+      revokeSessions: 404,
+      revokeOtherSessions: 404,
+      getSession: 200,
+    });
+    await page.reload();
+    await expect(
+      page.getByRole("status", { name: "デモアカウント" }),
+    ).toContainText("デモアカウントです。");
+  },
+);

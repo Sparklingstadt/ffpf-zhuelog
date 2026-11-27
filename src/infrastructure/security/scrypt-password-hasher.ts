@@ -97,8 +97,6 @@ export type DeriveKey = (
 ) => Promise<Buffer>;
 
 export class ScryptPasswordHasher {
-  private dummyHash: Promise<string> | undefined;
-
   constructor(private readonly derive: DeriveKey = deriveKey) {}
 
   hash(password: string) {
@@ -106,8 +104,7 @@ export class ScryptPasswordHasher {
   }
 
   // false for a wrong password, a hash it cannot read, or a failure of the
-  // computation itself: a failure must look like a mismatch, or verify and
-  // simulate would answer differently and tell whether an account exists.
+  // computation itself: a failure looks like a mismatch, never an error.
   async verify(password: string, passwordHash: string) {
     const parsed = parse(passwordHash);
     if (!parsed) return false;
@@ -124,38 +121,6 @@ export class ScryptPasswordHasher {
       );
     } catch {
       return false;
-    }
-  }
-
-  // The dummy hash of a random password that simulate verifies against,
-  // created once. A failed creation is forgotten, so the next call tries again.
-  private dummy() {
-    this.dummyHash ??= this.hash(generatePassword()).catch((error) => {
-      this.dummyHash = undefined;
-      throw error;
-    });
-    return this.dummyHash;
-  }
-
-  // Builds the dummy hash now, so the first simulate costs one verify like
-  // the rest. Never throws; a failure is retried by simulate. Not called at
-  // import, so a cold start never pays a scrypt for it.
-  async warm() {
-    try {
-      await this.dummy();
-    } catch {
-      // simulate builds it again.
-    }
-  }
-
-  // Spends the work of one verify on a valid hash, for a failure that must
-  // cost as much as a wrong password. Never throws. Without a warm(), the
-  // dummy hash is built on the first call.
-  async simulate(password: string) {
-    try {
-      await this.verify(password, await this.dummy());
-    } catch {
-      // A failed dummy hash costs less, but simulate must never throw.
     }
   }
 }

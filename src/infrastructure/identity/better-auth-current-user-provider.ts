@@ -3,6 +3,7 @@ import type {
   AppRole,
   AuthenticatedUser,
 } from "@/domain/identity/entities/authenticated-user";
+import { isAdminRole } from "@/domain/identity/roles";
 
 // The part of Better Auth's getSession answer (with the username, anonymous
 // and admin plugins) that decides who is signed in. Kept structural so this
@@ -21,12 +22,13 @@ export type BetterAuthSession = {
 
 function roleOf(user: BetterAuthSession["user"]): AppRole {
   if (user.isAnonymous === true) return "guest";
-  return user.role === "admin" ? "admin" : "member";
+  return isAdminRole(user.role) ? "admin" : "member";
 }
 
 // Who a Better Auth session is: null for no session or a banned user. An
-// anonymous user is a guest whatever their role; role "admin" is an admin;
-// everyone else is a member. The demo account is the member whose login id is
+// anonymous user is a guest whatever their role; a role with "admin" in it
+// (isAdminRole, as the admin plugin reads it) is an admin; everyone else is a
+// member. The demo account is the member whose login id is
 // DEMO_LOGIN_ID (none when it is unset).
 export function toAuthenticatedUser(
   session: BetterAuthSession | null,

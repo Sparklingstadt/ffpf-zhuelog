@@ -6,7 +6,6 @@ import {
   demoConfig,
   demoLoginId,
   sidConfig,
-  isHttpsOrLoopbackUrl,
   lineConfig,
 } from "../src/infrastructure/config/environment";
 
@@ -190,7 +189,8 @@ test("sidConfig keeps the https-or-loopback rule for the issuer", () => {
   assert.equal(sidConfig()?.issuer, "http://127.0.0.1:3110");
 });
 
-test("isHttpsOrLoopbackUrl needs HTTPS unless the host is localhost or 127.0.0.1", () => {
+test("sidConfig needs an HTTPS issuer unless its host is localhost or 127.0.0.1", () => {
+  const rest = { SID_CLIENT_ID: "zhuelog", SID_CLIENT_SECRET: "s" };
   const cases: [string, boolean][] = [
     ["https://api.test", true],
     ["http://api.test", false],
@@ -201,8 +201,10 @@ test("isHttpsOrLoopbackUrl needs HTTPS unless the host is localhost or 127.0.0.1
     ["ftp://localhost", false],
     ["not a url", false],
   ];
-  for (const [url, want] of cases)
-    assert.equal(isHttpsOrLoopbackUrl(url), want, url);
+  for (const [url, want] of cases) {
+    setLine({ ...rest, SID_ISSUER: url });
+    assert.equal(sidConfig() !== undefined, want, url);
+  }
 });
 
 test("sidConfig reads SID_*, and the retired FFPF_ID_* alone give nothing", () => {

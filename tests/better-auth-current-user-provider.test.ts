@@ -53,6 +53,21 @@ test("role admin is an admin", () => {
   );
 });
 
+test("a role list with admin in it is an admin, as for the admin plugin", () => {
+  assert.equal(
+    toAuthenticatedUser(session({ role: "admin,user" }), "demo")?.role,
+    "admin",
+  );
+  assert.equal(
+    toAuthenticatedUser(session({ role: "user, admin" }), "demo")?.role,
+    "admin",
+  );
+  assert.equal(
+    toAuthenticatedUser(session({ role: "administrator" }), "demo")?.role,
+    "member",
+  );
+});
+
 test("the demo login id marks the demo account", () => {
   assert.equal(
     toAuthenticatedUser(session({ username: "demo" }), "demo")?.demo,

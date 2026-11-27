@@ -8,9 +8,9 @@ import type { OpenAiUsage } from "../../domain/vocabulary/vocabulary-entry";
 // What the quick questions and the chat share: whose notes they are, who
 // pays for an answer, who may ask, and how an answer is metered.
 
-// userId is whose notes these are and who pays for an answer (an admin
-// impersonating a member is that member, so the member pays; Task 7 of the
-// Better Auth migration settles how impersonated use is counted).
+// userId is whose notes these are and who pays for an answer. An admin
+// impersonating a member is that member: the answer reads the member's notes
+// and is counted in the member's AI usage.
 export type ChatPerson = { userId: string; demo: boolean };
 
 // null: signed out or a guest.

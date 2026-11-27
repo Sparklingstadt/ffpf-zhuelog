@@ -60,6 +60,10 @@ export const auth = betterAuth({
     // by a matching mail address: otherwise whoever the ID server let claim
     // an administrator's address would become that administrator.
     accountLinking: { disableImplicitLinking: true },
+    // The ID server's access and refresh tokens are stored encrypted with
+    // BETTER_AUTH_SECRET. The ID token stays as it is: signing out sends it
+    // to the ID server (id_token_hint).
+    encryptOAuthTokens: true,
   },
   emailAndPassword: {
     enabled: true,
@@ -85,12 +89,33 @@ export const auth = betterAuth({
     // client address).
     ipAddress: { ipAddressHeaders: ["x-real-ip", "x-forwarded-for"] },
   },
-  // Name and login id are not changed by members themselves (and the demo's
-  // must not be changed at all). Members sign in by login id only: their mail
-  // address (memberEmail) is guessable, and /sign-in/email would get its own
-  // looser rate limit than /sign-in/username. Closed on the HTTP router only;
-  // nothing here calls it on the server either.
-  disabledPaths: ["/update-user", "/sign-in/email"],
+  // Routes the app does not use, closed on the HTTP router only (404; the
+  // server-side auth.api calls, such as the admin's revokeUserSessions, and
+  // the routes' own internal steps are not affected):
+  // - Name and login id are not changed by members themselves (and the
+  //   demo's must not be changed at all).
+  // - Members sign in by login id only: their mail address (memberEmail) is
+  //   guessable, and /sign-in/email would get its own looser rate limit than
+  //   /sign-in/username.
+  // - The demo is one user shared by every visitor: listing its sessions
+  //   would show the others' tokens, addresses and browsers, and revoking
+  //   them would sign everyone out. Sign-out and changePassword's
+  //   revokeOtherSessions end sessions without these routes.
+  // - Whether a login id is taken is not for anyone to ask.
+  // - The ID server's tokens are not handed out, not even to an admin
+  //   impersonating a Sparklingstadt ID member.
+  disabledPaths: [
+    "/update-user",
+    "/sign-in/email",
+    "/list-sessions",
+    "/revoke-session",
+    "/revoke-sessions",
+    "/revoke-other-sessions",
+    "/is-username-available",
+    "/get-access-token",
+    "/refresh-token",
+    "/account-info",
+  ],
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
       // A sign-in starts from no session: the browser's previous session
