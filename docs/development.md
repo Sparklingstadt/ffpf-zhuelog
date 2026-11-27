@@ -6,7 +6,7 @@
 
 前提: Node.js 24 または 26、Docker Desktop
 
-ログインも学習ノートの読み書きも Web が行います。ログイン中の人は、Cookie `zl_session` のトークンから DB の `Session` の行を引いて決めるので、手元では DB だけが要ります。
+ログインも学習ノートの読み書きも Web が行います。ログインは Better Auth が行い、ログイン中の人は、Cookie `better-auth.session_token` から DB の `session` と `user` の行を引いて決めるので、手元では DB だけが要ります。
 
 ```bash
 cp .env.example .env
@@ -17,14 +17,14 @@ pnpm run db:seed:sample   # サンプルの会員（下の表）
 pnpm run dev
 ```
 
-ブラウザーで <http://localhost:3000> を開き、ゲストか、サンプルの会員（下の「サンプルのアカウント」）でログインします。GitHub ログインは本物の OAuth App が要るので、手元では使えません。
+ブラウザーで <http://localhost:3000> を開き、ゲストか、サンプルの会員（下の「サンプルのアカウント」）でログインします。管理者は Sparklingstadt ID でログインする人ですが、手元では本物の ID サーバーが要るので、下の「手元で管理者になる」の方法を使います。
 
 `.env` では、次のようにそろえます。
 
 - `DATABASE_URL`: `.env.example` の値（`docker compose up -d` の開発用 DB）のまま。サンプルの会員は `pnpm run db:seed:sample` で、この DB に入ります。開発用 DB は `127.0.0.1:55432` で動きます（ほかの Postgres がよく使う 5432 とぶつからないように）。ポートは `ZHUELOG_DB_PORT` で替えられ、替えたら `DATABASE_URL` のポートも合わせます。「address already in use」や Prisma の `P1010` が出たら、ほかの Postgres がそのポートを使っています。
-- `AUTH_URL`: `http://localhost:3000`。GitHub と Sparklingstadt ID の `redirect_uri` を決めます。
-- `AUTH_ALLOWED_GITHUB_IDS`・`DEMO_LOGIN_ID`: ローカルでは `0` と `demo`。
-- `GITHUB_WEB_CLIENT_SECRET`（`AUTH_GITHUB_ID` と一緒）: GitHub のボタンを使うときだけ。無いと GitHub のボタンは押せません。
+- `AUTH_URL`: `http://localhost:3000`。Better Auth の `baseURL` と、Sparklingstadt ID の `redirect_uri` を決めます。
+- `BETTER_AUTH_SECRET`: 32 文字以上のランダムな値（例: `openssl rand -base64 32`）。必須です。
+- `DEMO_LOGIN_ID`・`DEMO_PASSWORD`: ローカルでは `demo` と `demo-password-123`（サンプルの会員 `demo` のパスワードと同じです。両方あるときだけ、デモのボタンが出ます）。
 - `SID_ISSUER`・`SID_CLIENT_ID`・`SID_CLIENT_SECRET`: 手元で Sparklingstadt ID を試すときだけ。3 つそろわないと、Sparklingstadt ID のボタンは出ません。手元の ID サーバー（下の「Sparklingstadt ID でのログイン」）を使うなら、`SID_ISSUER` は `http://localhost:<ID サーバーのポート>` です（issuer は `https://` が必要ですが、`localhost` と `127.0.0.1` だけは `http://` で使えます）。
 
 Prisma のマイグレーションと seed は、同じ `DATABASE_URL` を使います。
@@ -46,16 +46,28 @@ LINE 連携は手元では使えません。本物の LINE のチャネルと Op
 
 ## 認証・認可の設定
 
-ログインは Web が行います。Web の Vercel プロジェクトに入れる値は `AUTH_URL`・`AUTH_GITHUB_ID`・`GITHUB_WEB_CLIENT_SECRET`・`AUTH_ALLOWED_GITHUB_IDS`・`DEMO_LOGIN_ID`・`DATABASE_URL` です（Sparklingstadt ID を使うときは、下の「Sparklingstadt ID でのログイン」の 3 つも）。手順は [docs/deployment.md](deployment.md) の「2. Web の設定」にあります。
+ログインは Better Auth が行います（`/api/auth/*`）。Web の Vercel プロジェクトに入れる値は `AUTH_URL`・`BETTER_AUTH_SECRET`・`DEMO_LOGIN_ID`・`DEMO_PASSWORD`・`DATABASE_URL` です（Sparklingstadt ID を使うときは、下の「Sparklingstadt ID でのログイン」の 3 つも）。手順は [docs/deployment.md](deployment.md) の「2. Web の設定」にあります。しくみは [architecture.md](architecture.md) の「4. 認証」にあります。
 
-GitHubの **Settings → Developer settings → OAuth Apps** で、Web 用のOAuth Appを作成します。
+管理者は、DB の `user.role` が `admin` の人です。環境変数の許可リストはありません。管理者を増やす・外すときは、DB を直接変えます。
 
-- Homepage URL: `https://本番ドメイン`
-- Authorization callback URL: `https://本番ドメイン/api/auth/callback/github`（実際の callback は、この下の `/api/auth/callback/github/go` です）
+```sql
+UPDATE "user" SET role = 'admin' WHERE id = '<user の id>';
+```
 
-Client ID は Web の `AUTH_GITHUB_ID` に、Client Secret は Web の `GITHUB_WEB_CLIENT_SECRET` に入れます。Web は、`AUTH_URL` の origin から `redirect_uri`（`/api/auth/callback/github/go`）を作って、GitHub に code を渡します。
+### 手元で管理者になる
 
-管理者の許可リストは、Web の `AUTH_ALLOWED_GITHUB_IDS` です。Web がモジュールを読み込むときに 1 度だけ読むので、値を変えたら再デプロイします。GitHubユーザーの **数字のID** をカンマ区切りで並べます。IDは `https://api.github.com/users/<ログイン名>` の `id` で確認できます。ログイン名は使いません。ログイン名は変更でき、空いた名前を別人が取得できるためです。空の場合は安全側に倒し、すべてのGitHubユーザーを拒否します。
+手元には本物の Sparklingstadt ID が無いので、次のどちらかで管理者になります。
+
+- **`UPDATE` で役割を替える（手軽）**：サンプルの会員（`friend` など）で ID とパスワードでログインできるようにしてから、DB でその `user` の役割を替えます。次のログインから（ログイン中なら、次のリクエストから）管理者です。
+
+  ```bash
+  psql "postgresql://zhuelog:zhuelog@127.0.0.1:55432/zhuelog" \
+    -c "UPDATE \"user\" SET role = 'admin' WHERE username = 'friend'"
+  ```
+
+  管理者は会員の画面の `/admin/accounts` で、会員を作ったり、なりすましたりできます。戻すときは、`role` を `'user'` に替えます。
+
+- **Sparklingstadt ID のスタブ**：`e2e/fixtures/sid-oidc-stub.ts` の `startSidOidcStub` が、画面なしで戻ってくる小さな OIDC のサーバーです。起動して、`SID_ISSUER`・`SID_CLIENT_ID`・`SID_CLIENT_SECRET` をそのスタブに向け、その `sub`（`sidStubUser.sub`）を持つ `account`（`providerId` は `sid`）を、`role` が `admin` の `user` につないでおくと、「Sparklingstadt ID でログイン」で管理者になれます。e2e の `asAdmin`（`e2e/fixtures.ts`）が、この形を作っています。
 
 ### Sparklingstadt ID でのログイン
 
@@ -63,7 +75,7 @@ Client ID は Web の `AUTH_GITHUB_ID` に、Client Secret は Web の `GITHUB_W
 
 - sparklingstadt-id のリポジトリで `pnpm run oidc:client zhuelog` を実行してクライアントを登録します（redirect URI は `https://本番ドメイン/api/auth/callback/sid`、`postLogoutRedirectUris` は `https://本番ドメイン/signin`。手順は sparklingstadt-id の README）。
 - Web に `SID_ISSUER`・`SID_CLIENT_ID`・`SID_CLIENT_SECRET` を入れます。`redirect_uri` は、`AUTH_URL` の origin に `/api/auth/callback/sid` を付けた値で、ID サーバーに登録した値と 1 文字も違わない必要があります。
-- 本番 DB にマイグレーション `20261122090000_replace_ffpf_accounts_with_sid_accounts`（`SidAccount` の追加）が必要です。main へのマージで Web の本番ビルドが自動で当てます（下の「マイグレーションの適用」）。
+- 管理者は、この道でログインする人です（`user.role` が `admin`）。管理者の `user` と、`sub` のつなぎ方は [docs/deployment.md](deployment.md) の「Better Auth への切り替え」にあります。メールアドレスが同じというだけでは、`user` につながりません。
 - 詳しい手順は [docs/deployment.md](deployment.md) の「5. Sparklingstadt ID でのログイン」にあります。
 - 手元で試すとき：sparklingstadt-id の README の「開発」では、`ID_ISSUER=http://localhost:3000` で `pnpm run dev` を動かします。この Web の `AUTH_URL` も `http://localhost:3000` なので、同じ手元では動きません。どちらかのポートを替えます（Web なら `pnpm exec next dev -p 3001` と `AUTH_URL=http://localhost:3001`。ID サーバーなら、`ID_ISSUER` のポートと `SID_ISSUER` を合わせます）。クライアントの `redirectUris` は `http://localhost:<Web のポート>/api/auth/callback/sid`、`postLogoutRedirectUris` は `http://localhost:<Web のポート>/signin` にします。
 
@@ -71,23 +83,23 @@ Client ID は Web の `AUTH_GITHUB_ID` に、Client Secret は Web の `GITHUB_W
 
 ロールは4種類です。
 
-- **admin（管理者）**: GitHub認証で許可リストに載っているユーザー。自分の学習ノート、CSVインポートとアカウント管理を使えます。メンバーの学習ノートは、切り替え欄から閲覧のみで見られます。
+- **admin（管理者）**: Sparklingstadt ID でログインする、`user.role` が `admin` の人。自分の学習ノート、CSVインポートとアカウント管理を使えます。メンバーになりすまして（画面は、そのメンバーとしてログインしているのと同じ）、その人の学習ノートを見られます。なりすましの間は、管理画面と AI の利用量は使えません。
 - **member（メンバー）**: ID・パスワードでログインするアカウント、または Sparklingstadt ID でログインした人。自分の学習ノートとCSVインポートを使えます。CSVインポートは自分の学習ノートに追加されます。ほかのユーザーの記録は見られません。アカウント管理は使えません。
-- **guest（ゲスト）**: ログイン画面の「ゲストとして使う」。学習ノートはなく、`/` には案内だけが出ます。`/logs` と `/follow` は `/` に戻されます。
-- **revoked**: 許可リストから外れた管理者や、再設定・変更でセッションが失効したメンバー。どのページも使えず、ログイン画面に戻されます。
+- **guest（ゲスト）**: ログイン画面の「ゲストとして使う」（`isAnonymous` の `user`）。学習ノートはなく、`/` には案内だけが出ます。`/logs` と `/follow` は `/` に戻されます。作ってから 24 時間たったゲストは、毎日のデモのリセットが消します。
+- **banned**: Better Auth の `banned` が立った人。どのページも使えず、ログイン画面に戻されます。
 
-ID・パスワードのmemberのアカウントは、GitHub管理者が `/admin/accounts` で作ります。セルフ登録はありません（Sparklingstadt ID のメンバーは、初めてログインしたときに作られます）。最初のアカウントも、まずGitHubで管理者としてログインして作成してください。
+ID・パスワードのmemberのアカウントは、管理者が `/admin/accounts` で作ります。セルフ登録はありません（Sparklingstadt ID のメンバーは、初めてログインしたときに作られます）。最初の管理者は、本番では切り替えのときに用意し（[docs/deployment.md](deployment.md) の「Better Auth への切り替え」）、手元では上の「手元で管理者になる」で作ります。
 
 - **作成・再設定**: ログインID（英小文字・数字・`.` `_` `-` の3〜32文字）と表示名を入力します。パスワードは12〜128文字で、空欄にすると自動生成します。パスワードは作成・再設定の直後に一度だけ画面に表示され、あとから確認できません。管理者から本人に別の経路で伝えてください。
 - **パスワード変更**: memberは、メニューの「パスワード変更」（`/account/password`）から自分で変更できます。変更するとログアウトされ、新しいパスワードでログインし直します。Sparklingstadt ID のメンバーには、この画面に Sparklingstadt ID のアカウントページへのリンクを出します（パスワードは ID サーバーで変えます）。
-- **試行回数の制限**: 接続元（IPアドレス。IPv6は /64 単位）ごとに数えます。同じ接続元から同じログインIDへ15分間に5回まで、ログインID全体で15分間に20回までです。超えると、その接続元からは15分間、正しいパスワードでもログインできません。アカウント単位ではロックしないので、ほかの場所からの失敗で本人が締め出されることはありません。接続元は Vercel が設定する `x-real-ip` / `x-forwarded-for` で、Web が判定します。回数は Web が DB のテーブル（`SignInThrottle`）で数えます。ログイン画面には、IDの有無や制限の状態を区別せず「IDまたはパスワードが違うか、一時的にロックされています。」とだけ表示します。パスワード変更画面の現在のパスワードも、アカウントごとに15分間5回までです。
-- **セッションの失効**: パスワードを再設定・変更すると、そのアカウントの既存のセッションは、すべて使えなくなります。ログインのセッションは Web が DB の `Session` に持ち、会員の `sessionVersion` と管理者の許可リストは、リクエストのたびに確認します。パスワードを変えると、そのアカウントの `Session` の行はすべて消えます。
+- **試行回数の制限**: Better Auth のレート制限だけで数えます（DB の `rateLimit`）。接続元（IPアドレス）ごとに、ID・パスワードのログインは15分に20回、パスワード変更は15分に5回までで、全体は1分に10回までです。アカウント単位ではロックしないので、ほかの場所からの失敗で本人が締め出されることはありません。接続元は Vercel が設定する `x-real-ip` を Better Auth が読みます。制限は `NODE_ENV=production` のときだけ働き、`pnpm run dev` では働きません。ログイン画面には、IDの有無や制限の状態を区別せず、決まった文だけを表示します。
+- **セッションの失効**: パスワードを変更すると、そのアカウントのほかの端末のセッションが、すべて使えなくなります。管理者が再設定すると、そのアカウントのセッションはすべて消えます。ログインのセッションは Better Auth が DB の `session` に持ち、リクエストのたびに確認します。
 - **パスワードの保存**: scrypt（N=2^15, r=8, p=1）でハッシュ化したものだけを保存します。平文はDBにもログにも残しません。
-- **記録の持ち主**: memberの学習ノートは、所有者 `password:<アカウントID>`（Sparklingstadt ID のメンバーは `sid:<sub>`）に紐づきます。本人と管理者が見られます（詳細は「学習ノートの公開範囲」）。
+- **記録の持ち主**: memberの学習ノートは、`userId`（`user.id`、`user` への外部キー）に紐づきます。本人と、なりすましている管理者が見られます（詳細は「学習ノートの公開範囲」）。`user` を消すと、その人のデータも消えます。
 
 **マイグレーションの適用**: 本番へのDBマイグレーションは、mainへのマージで走るWebの本番ビルドが自動で当てます。`vercel.json` の `buildCommand` が `scripts/vercel-build.sh` を動かし、`VERCEL_ENV=production` のときだけ `prisma migrate deploy` を実行してから `next build` します。Previewは自分のNeonブランチを使い、マイグレーションは当てません（[docs/deployment.md](deployment.md) の「2. Web の設定」の「Web のプレビュー（Preview）」を参照）。このためWebのProductionには `DATABASE_URL` が必要です（無い・つながらない・DDLが失敗すると、本番のWebのデプロイが失敗します）。ビルドのあいだは前のデプロイが動いているので、**マイグレーションは前のデプロイのコードと両立する形（表の追加、null許可の列の追加）にします**。列や表の削除のような壊す変更は、2回のリリースに分けます。以下の `migrate deploy` / `migrate status` の手順は、自動で当たらなかったときの手動の適用と、適用済みの確認に使います。詳しくは [docs/deployment.md](deployment.md) の「1. 本番の DB とマイグレーション」を参照してください。以下の各節にある「マージの前に適用」という記述は、自動化の前の手順なので、手動の適用として読んでください。
 
-パスワードアカウントのために新しい環境変数は要りません。ただしDBマイグレーション `20261007090000_password_accounts`（`PasswordAccount` テーブルの追加）が必要です。Vercelとリンク済みのmainのチェックアウトで、次の手順で本番DB（Neon）へ適用できます。`prisma.config.ts` は `.env` だけを読み込むので、`vercel env pull` だけでは本番の `DATABASE_URL` が使われません。`--environment=production` で取得したファイルを、`--env-file` で明示して渡します。
+自動で当たらなかったときは、Vercelとリンク済みのmainのチェックアウトで、次の手順で本番DB（Neon）へ適用できます。`prisma.config.ts` は `.env` だけを読み込むので、`vercel env pull` だけでは本番の `DATABASE_URL` が使われません。`--environment=production` で取得したファイルを、`--env-file` で明示して渡します。
 
 ```bash
 vercel env pull .env.production.local --environment=production --yes
@@ -96,15 +108,15 @@ node --env-file=.env.production.local node_modules/prisma/build/index.js migrate
 rm .env.production.local
 ```
 
-適用前にデプロイすると、ID・パスワードでのログインと `/admin/accounts` だけがエラーになります。GitHubログインとゲストログインは影響を受けません。
+認可はProxyによるページ保護に加え、画面のServer ComponentとServer Actionでも検証します。データの権限は、Server Component・Server Action・Route Handler が、リクエストのたびに Better Auth のセッション（`auth.api.getSession`）から確かめます。
 
-認可はProxyによるページ保護に加え、画面のServer ComponentとServer Actionでも検証します。データの権限は、Server Component・Server Action・Route Handler が、リクエストのたびに `Session` から確かめます。
-
-ログイン画面からは、GitHub認証を使わずゲストとしてログインすることもできます。学習ノート・日付別ログ・CSVインポート・フォローは管理者・メンバー専用です。書き込み権限と記録の持ち主はServer Actionでも検証します。
+ログイン画面からは、ゲストとしてログインすることもできます。学習ノート・日付別ログ・CSVインポート・フォローは管理者・メンバー専用です。書き込み権限と記録の持ち主はServer Actionでも検証します。
 
 開発用PostgreSQLはDockerホストの `127.0.0.1` にだけ公開されます。`.env` はGit管理対象外です。秘密情報をコミットせず、公開・漏洩した可能性がある場合は該当する認証情報を直ちに失効・再発行してください。
 
 ## 学習ノートの持ち主の本番への反映
+
+（歴史の記録です。持ち主の列は、その後 `userId` に替わりました。いまの手順は [deployment.md](deployment.md) の「移行の記録」の「Better Auth への切り替え」にあります。）
 
 mainはVercelの本番へ自動でデプロイされます。手順の順番を守ってください。
 
@@ -152,19 +164,17 @@ rm .env.production.local
 ## データ構造
 
 - `ImportBatch`: インポートしたファイル名・件数・日時
-- `LearningEntry`: 最初の文・添削後の文・ピンイン・所有者（GitHubの数字のID、`password:<アカウントID>`、または `sid:<sub>`）
+- `LearningEntry`: 最初の文・添削後の文・ピンイン・持ち主（`userId`。`user.id` への外部キーで、`user` を消すと一緒に消える）
 - `Hint`: 学習文に属する可変個数のヒントと表示順
-- `PasswordAccount`: ID・パスワードのアカウント（ログインID・表示名・パスワードのハッシュ・`sessionVersion`）。`failedAttempts`・`lockedUntil` は旧ロック用で、今は使っていません
-- `SidAccount`: Sparklingstadt ID でログインしたメンバー（`sub`・メールアドレス・表示名・`sessionVersion`・最終ログイン日時）。ログインのたびに最新の値で更新します
-- `FfpfAccount`: 以前の FFPF ID のログインの表。今は使わず、中身は空です。前のデプロイを動かし続けるために 1 回のリリースだけ残し、次のマイグレーションで落とします
-- `SignInThrottle`: ログイン試行回数の制限用のカウンター（キー・回数・期限）。Web が使います
-- `Session`: Web のログインのセッション（トークンの SHA-256 ハッシュ・所有者・役割・期限）。会員と管理者は 30 日、ゲストは 24 時間で、使っても延びません。期限切れの行は、ログインのたびに 100 行まで消します
+- `user`・`session`・`account`・`verification`・`rateLimit`: Better Auth の表。`user` はログイン ID（`username`）・表示名（`name`）・役割（`role`）・ゲストか（`isAnonymous`）・`banned` を持つ。`session` はログインのセッション（トークン・期限・なりすまし元の `impersonatedBy`）。`account` は、会員のパスワードのハッシュ（`providerId` が `credential`）と、Sparklingstadt ID の `sub`（`providerId` が `sid`）を持つ。`rateLimit` はログインのレート制限のカウンター。セッションは会員・管理者・ゲストとも 30 日で、使うと延びる
+- `SignInThrottle`: LINE の連携コードの入力の試行回数のカウンター（キー・回数・期限）。ログインでは使わない
+- すべての持ち物の表（`LearningEntry`・`ReviewItem`・`AiUsage`・`LineLink`・`Follow` など）は、`userId` で `user` につなぐ
 
 インポートはファイル単位のトランザクションです。途中の行でエラーになった場合、そのファイルのデータは1件も保存されません。
 
 ## セキュリティ
 
-ページの保護は `src/proxy.ts` と各Server Componentで、書き込みはServer Action内で再検証します。管理者の許可リストは、Web がリクエストのたびに確認します。リモートPostgreSQL接続は `sslmode=verify-full` に統一し、証明書とホスト名を検証します。
+ページの保護は `src/proxy.ts` と各Server Componentで、書き込みはServer Action内で再検証します。管理者かどうかは、Web がリクエストのたびに Better Auth のセッションの `user.role` から確認します。リモートPostgreSQL接続は `sslmode=verify-full` に統一し、証明書とホスト名を検証します。
 
 HTMLにはリクエストごとのnonce付きCSPを設定します。ログの秘匿化、監査範囲と制約は [2026-09-24 セキュリティレビュー](security-review-2026-09-24.md) を参照してください（AI機能はその後削除しました）。
 
@@ -208,8 +218,8 @@ Desktop Chromiumとモバイル幅（Pixel 7 / Chromium）の両方で検証し�
 DBは`127.0.0.1:55439/zhuelog_e2e`に固定され、`compose.e2e.yaml`の専用コンテナだけを使用します。
 各テスト前にこのDBの学習データを初期化します。ポート55439を別のDBに割り当てないでください。
 通常の`DATABASE_URL`と実際のOAuth情報は使用しません。
-管理者のセッションは、テスト側が `Session` の行を DB に書き、そのトークンを Cookie `zl_session` に入れて作ります。本番コードに認証バイパスは追加していません。
-GitHub OAuthの外部ログインは、このE2Eの対象外です。
+管理者は、テストが DB に作った管理者の `user` を、Sparklingstadt ID のスタブの `sub` につないでから、画面から Sparklingstadt ID でログインして作ります（`asAdmin`）。本番コードに認証バイパスは追加していません。
+本物の Sparklingstadt ID への外部ログインは、このE2Eの対象外です（スタブで確かめます）。
 
 失敗時のスクリーンショット・トレースは`test-results/`、HTMLレポートは`playwright-report/`に出力されます（Git管理外）。
 `pnpm exec playwright show-report`で結果を確認できます。

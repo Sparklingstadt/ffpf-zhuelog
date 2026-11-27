@@ -27,18 +27,18 @@
 
 ## 技術構成
 
-| 部分         | 使っているもの                                                                                                                                                                                                                                                                   |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Web          | Next.js 16（App Router、Server Components、Server Actions）、React 19、TypeScript、Tailwind CSS 4、shadcn/ui                                                                                                                                                                     |
-| DB           | PostgreSQL 17（本番は Neon）。スキーマとマイグレーションは Prisma 7。Web がすべてのデータを Prisma で読み書きします。Prisma を import してよいのは `src/infrastructure/prisma/` だけです                                                                                         |
-| 認証         | GitHub OAuth（PKCE）、ID とパスワード（scrypt。ハッシュの書き込みも確認も Web）、Sparklingstadt ID（OpenID Connect）、ゲスト。ログインはランダムなトークン（Cookie `zl_session`）のハッシュを DB の `Session` に置きます。期限は 30 日（ゲストは 24 時間）で、使っても延びません |
-| 外部サービス | OpenAI API、LINE Messaging API                                                                                                                                                                                                                                                   |
-| テスト       | Node の test runner、Playwright（PC とスマホの幅）、lefthook、GitHub Actions                                                                                                                                                                                                     |
-| デプロイ     | Vercel（Web の 1 プロジェクト）。本番のマイグレーションはビルドで当てます。毎日の定期実行は Vercel Cron（`vercel.json`）                                                                                                                                                         |
+| 部分         | 使っているもの                                                                                                                                                                                                                                                                              |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Web          | Next.js 16（App Router、Server Components、Server Actions）、React 19、TypeScript、Tailwind CSS 4、shadcn/ui                                                                                                                                                                                |
+| DB           | PostgreSQL 17（本番は Neon）。スキーマとマイグレーションは Prisma 7。Web がすべてのデータを Prisma で読み書きします。Prisma を import してよいのは `src/infrastructure/prisma/` だけです                                                                                                    |
+| 認証         | Better Auth 1.7（ID とパスワード、Sparklingstadt ID の OpenID Connect、ゲスト。管理者は Sparklingstadt ID でログインする `role` が `admin` の人）。パスワードは scrypt で、セッションは Cookie（30 日、使うと延びる）と DB の `session`。ログインのレート制限は DB（`rateLimit`）で数えます |
+| 外部サービス | OpenAI API、LINE Messaging API                                                                                                                                                                                                                                                              |
+| テスト       | Node の test runner、Playwright（PC とスマホの幅）、lefthook、GitHub Actions                                                                                                                                                                                                                |
+| デプロイ     | Vercel（Web の 1 プロジェクト）。本番のマイグレーションはビルドで当てます。毎日の定期実行は Vercel Cron（`vercel.json`）                                                                                                                                                                    |
 
 ## 設計の要点
 
-- **DB は Prisma でだけ触る**：画面・Server Action・Route Handler は、`src/composition/` で組み立てた application のユースケースを呼び、DB は `src/infrastructure/prisma/` の store が Prisma で読み書きします。ログイン中の人は、Cookie `zl_session` のトークンから `Session` の行を引いて決めます。Prisma を import してよいのは `src/infrastructure/prisma/` だけで、pg と next-auth は import できません。これをテストで確かめています。
+- **DB は Prisma でだけ触る**：画面・Server Action・Route Handler は、`src/composition/` で組み立てた application のユースケースを呼び、DB は `src/infrastructure/prisma/` の store が Prisma で読み書きします。ログイン中の人は、Better Auth の Cookie から `session` と `user` の行を引いて決めます。Prisma を import してよいのは `src/infrastructure/prisma/` だけで、pg と next-auth は import できません。これをテストで確かめています。
 - **層を分ける**：Web のコードは `domain`・`application`・`infrastructure`・`presentation`・`composition` に分け、内側の層が Next.js や React に依存しないことを ESLint とテストで検査します。
 - **復習を 1 つの列にする**：学習ノート、練習の間違い、単語帳の語句を、同じ FSRS のカードとして 1 つの「今日の復習」に並べます。
 - **AI の費用を測ってから考える**：OpenAI を呼ぶ 4 か所のトークン数を記録し、料金や無料枠はその数字を見てから考える順にしました。

@@ -44,7 +44,7 @@ version を変えないマージは、Vercel がビルドするだけで、本�
 
 ## 1. 本番の DB とマイグレーション
 
-スキーマは Prisma のマイグレーションで管理します。ログインのセッションは `Session`、ログインの試行回数は `SignInThrottle` です。`ApiRefreshToken` は段階 12b で消しました（末尾の「移行の記録」の「段階12（後片付け）のマージの前と後」）。マイグレーションは、Web の **本番ビルド** が自動で適用します。`vercel.json` の `buildCommand` が `scripts/vercel-build.sh` を動かし、`VERCEL_ENV=production` のときだけ `prisma migrate deploy` を実行してから `next build` します（Preview のビルドは自分の Neon ブランチを使い、マイグレーションは当てません）。そのため、Web の Production には `DATABASE_URL` が必要です。無い・つながらない・DDL が失敗すると、本番の Web のデプロイが失敗します（失敗したビルドの本番は、前のバージョンのままです）。
+スキーマは Prisma のマイグレーションで管理します。ログインは Better Auth の表（`user`・`session`・`account`・`verification`・`rateLimit`）です。`SignInThrottle` は、LINE の連携コードの入力の試行回数だけに残しています。`ApiRefreshToken` は段階 12b で消しました（末尾の「移行の記録」の「段階12（後片付け）のマージの前と後」）。マイグレーションは、Web の **本番ビルド** が自動で適用します。`vercel.json` の `buildCommand` が `scripts/vercel-build.sh` を動かし、`VERCEL_ENV=production` のときだけ `prisma migrate deploy` を実行してから `next build` します（Preview のビルドは自分の Neon ブランチを使い、マイグレーションは当てません）。そのため、Web の Production には `DATABASE_URL` が必要です。無い・つながらない・DDL が失敗すると、本番の Web のデプロイが失敗します（失敗したビルドの本番は、前のバージョンのままです）。
 
 **マイグレーションの制約**: 本番のビルドがマイグレーションを当ててから `vercel promote` で切り替えるまでは、前のデプロイの Web が新しいスキーマの上で動きます。そのため、マイグレーションは前のデプロイのコードとそのまま両立する形にします。足してよいのは、表の追加と、null を許す列（または既定値のある列）の追加だけです。列・表の削除や名前の変更、型の変更、NOT NULL の追加のような壊す変更は、2 回のリリースに分けます（1 回目で新しい形を足してコードを切り替え、2 回目のリリースで古い形を削除します）。
 
@@ -65,31 +65,30 @@ SELECT 1 FROM pg_collation WHERE collname = 'ja-x-icu';
 
 ## 2. Web の設定
 
-Web（Next.js）は、ログインも学習ノートの読み書きも自分で行います。ログイン中の人は、Cookie `zl_session` のトークンの SHA-256 で DB の `Session` の行を引いて決め、DB の `PasswordAccount`・`SidAccount` を Prisma（`src/infrastructure/prisma/`）で読みます。ログインとログアウトも Web が行います（GitHub・ID とパスワード・Sparklingstadt ID・ゲスト・デモ）。会員の管理とパスワードの変更は `PasswordAccount`・`SignInThrottle` に書き、パスワードの変更と管理者の再設定は、そのアカウントの `Session` も同じトランザクションで消します。設計は `docs/superpowers/specs/2026-11-16-deprecate-go-backend-design.md` にあります。
+Web（Next.js）は、ログインも学習ノートの読み書きも自分で行います。ログインは Better Auth 1.7.28（`/api/auth/*`）が行い、ログイン中の人は、Cookie `better-auth.session_token` から DB の `session` と `user` の行を引いて決めます（ID とパスワード・Sparklingstadt ID・ゲスト・デモ）。会員の管理（作成・再設定・なりすまし）は Better Auth の `admin` プラグイン、パスワードの変更は `changePassword` が行い、どちらもそのアカウントの `session` を消します。設計は `docs/superpowers/specs/2026-11-27-better-auth-migration-design.md`、しくみは [architecture.md](architecture.md) の「4. 認証」にあります。
 
 Web の Vercel プロジェクトの Production に入れる、ログインの値は次のとおりです。
 
-| 名前                       | 内容                                                                                                                                 |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `AUTH_URL`                 | Web の公開されている origin（例: `https://ffpf-zhuelog.sparklingstadt.com`）。GitHub と Sparklingstadt ID の `redirect_uri` を決める |
-| `AUTH_GITHUB_ID`           | Web 用 GitHub OAuth App の Client ID                                                                                                 |
-| `GITHUB_WEB_CLIENT_SECRET` | Web 用 GitHub OAuth App の Client Secret（段階 11 までは Go に入れていた値。読み戻せないときは、新しく作る）                         |
-| `SID_ISSUER`               | Sparklingstadt ID の issuer（本番は `https://id.sparklingstadt.com`、末尾スラッシュなし）                                            |
-| `SID_CLIENT_ID`            | Sparklingstadt ID に登録した zhuelog のクライアント ID                                                                               |
-| `SID_CLIENT_SECRET`        | sparklingstadt-id の `pnpm run oidc:client zhuelog` で作ったシークレット                                                             |
+| 名前                 | 内容                                                                                                                                                                                                |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AUTH_URL`           | Web の公開されている origin（例: `https://ffpf-zhuelog.sparklingstadt.com`）。Better Auth の `baseURL` になり、Sparklingstadt ID の `redirect_uri` を決める。**Preview にも入れる**（下の注意）     |
+| `BETTER_AUTH_SECRET` | Better Auth がセッションの Cookie に署名する秘密（必須。32 文字以上のランダムな値。例: `openssl rand -base64 32`）。変えると全員がログアウトになる。Preview にも、本番と別の値を入れる              |
+| `DEMO_PASSWORD`      | デモのアカウントのパスワード。「デモで試す」がこの値でログインし、毎日のリセットが入れ直す。`DEMO_LOGIN_ID` と両方あるときだけデモが動く（「6. デモアカウント」）。Preview では、デモを試すときだけ |
+| `SID_ISSUER`         | Sparklingstadt ID の issuer（本番は `https://id.sparklingstadt.com`、末尾スラッシュなし）                                                                                                           |
+| `SID_CLIENT_ID`      | Sparklingstadt ID に登録した zhuelog のクライアント ID                                                                                                                                              |
+| `SID_CLIENT_SECRET`  | sparklingstadt-id の `pnpm run oidc:client zhuelog` で作ったシークレット                                                                                                                            |
 
 注意:
 
-- `AUTH_URL` は必ず設定し、利用者が開く Web の origin と同じにします。GitHub の `redirect_uri` は `<AUTH_URL の origin>/api/auth/callback/github/go`、Sparklingstadt ID の `redirect_uri` は `<AUTH_URL の origin>/api/auth/callback/sid` です。どちらも、GitHub の OAuth App と Sparklingstadt ID に登録した URL と **1 文字も違わず** 同じにします。
-- GitHub の OAuth App の callback URL は、以前から登録している `https://<Web>/api/auth/callback/github` のままにします。GitHub は登録した callback URL の **下の階層** を `redirect_uri` に使えるので、`/api/auth/callback/github/go` はその下になり、設定を変える必要はありません。Sparklingstadt ID に登録した redirect URI は、`https://<Web>/api/auth/callback/sid` です（「5. Sparklingstadt ID でのログイン」）。
-- `AUTH_GITHUB_ID` と `GITHUB_WEB_CLIENT_SECRET` は、同じ OAuth App の組にします。違うと、GitHub が `code` の交換を断り、GitHub ログインが失敗します。
+- `AUTH_URL` は必ず設定し、利用者が開く Web の origin と同じにします。Sparklingstadt ID の `redirect_uri` は `<AUTH_URL の origin>/api/auth/callback/sid`（切り替えの前と同じ）、ログアウトの戻り先 `post_logout_redirect_uri` は `<AUTH_URL の origin>/signin` です。どちらも、Sparklingstadt ID のクライアントに登録した URL と **1 文字も違わず** 同じにします。
+- `AUTH_URL` が無いと、`baseURL` は本番の URL になります。Preview でも `AUTH_URL` を入れないと、プレビューで SID と origin の確かめ（Better Auth は、リクエストの origin が `baseURL` と合うかを見ます）が通りません（下の「Web のプレビュー（Preview）」）。
+- `BETTER_AUTH_SECRET` が無いと、ログインを含む `/api/auth/*` と、ログイン中の人を決める処理がエラーになり、アプリがほぼ使えません（ビルドは通ります）。
 - 足りないときの症状：
-  - `GITHUB_WEB_CLIENT_SECRET`（または `AUTH_GITHUB_ID`）が無いと、ログイン画面の GitHub のボタンが押せません。
-  - `SID_ISSUER`・`SID_CLIENT_ID`・`SID_CLIENT_SECRET` のどれかが無い（または `SID_ISSUER` が `https://` でない。`localhost`・`127.0.0.1` を除く）と、「Sparklingstadt ID でログイン」が出ません。
-  - `AUTH_URL` が違う（または無くて、リクエストの origin と登録した URL が合わない）と、GitHub と Sparklingstadt ID が `redirect_uri` を登録した URL と合わないと判断して、ログインできません。ログイン画面に戻り、エラーが出ます。
-- パスワード・ゲスト・デモのログインは、上の値が無くても使えます（`DATABASE_URL` は要ります）。
-- Preview には、`GITHUB_WEB_CLIENT_SECRET` と `SID_CLIENT_SECRET` を **入れません**。プレビューの URL は、GitHub と Sparklingstadt ID に登録した URL と合わないためです（下の「Web のプレビュー（Preview）」）。
-- `AUTH_SECRET`・`AUTH_GITHUB_SECRET` は、Web では使いません。`DATABASE_URL` は、Web の実行時にも、**本番のビルド**の `prisma migrate deploy` にも使います（「1. 本番の DB とマイグレーション」）。消すと、ログイン中の人を決められず、本番の Web のデプロイも失敗します。
+  - `SID_ISSUER`・`SID_CLIENT_ID`・`SID_CLIENT_SECRET` のどれかが無い（または `SID_ISSUER` が `https://` でない。`localhost`・`127.0.0.1` を除く）と、「Sparklingstadt ID でログイン」が出ず、管理者は入れません。
+  - `DEMO_LOGIN_ID` か `DEMO_PASSWORD` が無いと、デモのボタンは出ません。
+- ID とパスワード・ゲスト・デモのログインは、`SID_*` が無くても使えます（`BETTER_AUTH_SECRET` と `DATABASE_URL` は要ります）。
+- Preview には、`SID_CLIENT_SECRET` を **入れません**。プレビューの URL は、Sparklingstadt ID に登録した URL と合わないためです（下の「Web のプレビュー（Preview）」）。
+- 以前の `AUTH_GITHUB_ID`・`GITHUB_WEB_CLIENT_SECRET`・`AUTH_ALLOWED_GITHUB_IDS`・`AUTH_SECRET`・`AUTH_GITHUB_SECRET` は、Web では使いません。切り替えのあとで消します（末尾の「移行の記録」の「Better Auth への切り替え」）。`DATABASE_URL` は、Web の実行時にも、**本番のビルド**の `prisma migrate deploy` にも使います（「1. 本番の DB とマイグレーション」）。消すと、ログイン中の人を決められず、本番の Web のデプロイも失敗します。
 
 LINE 連携を使うときは、Web の Vercel プロジェクトに、もう 1 つ次の値を入れます（無くても Web は動きます）。
 
@@ -100,24 +99,23 @@ LINE 連携を使うときは、Web の Vercel プロジェクトに、もう 1 
 
 `LINE_ADD_FRIEND_URL` が無い・`https://` で始まらないときは、「LINE 連携」画面（`/account/line`）に友だち追加のリンクを出しません（連携コードの発行と解除はできます）。
 
-Sparklingstadt ID でのログインを使うときは、上の表の `SID_ISSUER`・`SID_CLIENT_ID`・`SID_CLIENT_SECRET` の 3 つを入れます（「5. Sparklingstadt ID でのログイン」）。3 つがそろっていないときは、ログイン画面に「Sparklingstadt ID でログイン」を出しません。
+Sparklingstadt ID でのログインは、管理者の入口です。上の表の `SID_ISSUER`・`SID_CLIENT_ID`・`SID_CLIENT_SECRET` の 3 つを入れます（「5. Sparklingstadt ID でのログイン」）。3 つがそろっていないときは、ログイン画面に「Sparklingstadt ID でログイン」を出しません。
 
 ### Web が実行時に使う DB と秘密
 
 Web は実行時に、次の値を使います。Web の Vercel プロジェクトの Production に入れます。
 
-| 名前                        | 内容                                                                                                                                                                              |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`              | Neon の接続文字列。実行時の読み取りに使う。pooled の URL か **確かめる**（下の注を参照）                                                                                          |
-| `AUTH_ALLOWED_GITHUB_IDS`   | 管理者にする GitHub ユーザーの数字の ID（カンマ区切り。空なら管理者は誰も通らない）。Web がモジュールを読み込むときに 1 度だけ読むので、変えたら再デプロイが要る                  |
-| `DEMO_LOGIN_ID`             | デモアカウントのログイン ID。Web がデモのログインとリセット（`/api/cron/demo-reset`）に使い、空ならデモのボタンは出ず、リセットのルートは `404`。デモを使わないなら入れなくてよい |
-| `OPENAI_API_KEY`            | 単語帳の「AI で下書き」に使う OpenAI の API キー。無いと下書きは「今は使えません」になる                                                                                          |
-| `OPENAI_LEARNING_MODEL`     | 単語帳の下書きと LINE の添削・翻訳のモデル（任意。無ければ `gpt-5-mini`）                                                                                                         |
-| `LINE_CHANNEL_SECRET`       | LINE の Messaging API のチャネルシークレット。**Production だけ**（下の注を参照）                                                                                                 |
-| `LINE_CHANNEL_ACCESS_TOKEN` | LINE の長期のチャネルアクセストークン。**Production だけ**                                                                                                                        |
-| `CRON_SECRET`               | `/api/cron/line-drain` と `/api/cron/demo-reset` の認証用の秘密。**Production だけ**。Vercel が Cron の呼び出しに `Authorization: Bearer <値>` を付ける                           |
-| `LINE_API_BASE_URL`         | テスト専用。LINE の API の接続先の差し替え（ループバックの URL だけ。本番には設定しない）                                                                                         |
-| `OPENAI_CHAT_MODEL`         | クイック質問と ChatGPT と話すのモデル（任意。無ければ `gpt-6.1-sol`）                                                                                                             |
+| 名前                        | 内容                                                                                                                                                                                                                                                                                                                      |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`              | Neon の接続文字列。実行時の読み取りに使う。pooled の URL か **確かめる**（下の注を参照）                                                                                                                                                                                                                                  |
+| `DEMO_LOGIN_ID`             | デモアカウントのログイン ID。`DEMO_PASSWORD` と両方あるときだけ、デモのボタンが出て、`/api/cron/demo-reset`（とゲストの掃除）が動く。**実在の会員や管理者のログイン ID にしない**（毎晩のリセットが、そのユーザーのデータを消し、パスワードを替える）。Web がモジュールを読み込むときに読むので、変えたら再デプロイが要る |
+| `OPENAI_API_KEY`            | 単語帳の「AI で下書き」に使う OpenAI の API キー。無いと下書きは「今は使えません」になる                                                                                                                                                                                                                                  |
+| `OPENAI_LEARNING_MODEL`     | 単語帳の下書きと LINE の添削・翻訳のモデル（任意。無ければ `gpt-5-mini`）                                                                                                                                                                                                                                                 |
+| `LINE_CHANNEL_SECRET`       | LINE の Messaging API のチャネルシークレット。**Production だけ**（下の注を参照）                                                                                                                                                                                                                                         |
+| `LINE_CHANNEL_ACCESS_TOKEN` | LINE の長期のチャネルアクセストークン。**Production だけ**                                                                                                                                                                                                                                                                |
+| `CRON_SECRET`               | `/api/cron/line-drain` と `/api/cron/demo-reset` の認証用の秘密。**Production だけ**。Vercel が Cron の呼び出しに `Authorization: Bearer <値>` を付ける                                                                                                                                                                   |
+| `LINE_API_BASE_URL`         | テスト専用。LINE の API の接続先の差し替え（ループバックの URL だけ。本番には設定しない）                                                                                                                                                                                                                                 |
+| `OPENAI_CHAT_MODEL`         | クイック質問と ChatGPT と話すのモデル（任意。無ければ `gpt-6.1-sol`）                                                                                                                                                                                                                                                     |
 
 注意:
 
@@ -128,28 +126,28 @@ Web は実行時に、次の値を使います。Web の Vercel プロジェク�
 - LINE の `LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・`CRON_SECRET` は、**Production だけ** に入れ、Preview には入れません。入れると、プレビューのデプロイが本物の LINE のチャネルに返事をしてしまうためです（Webhook は本番の URL にだけ届きますが、プレビューから push を送れてしまいます）。LINE を使うには、LINE の 2 つと `OPENAI_API_KEY` がそろっている必要があります。LINE の 2 つのどちらか、または `OPENAI_API_KEY` が無い（`LINE_API_BASE_URL` がループバックでないときも同じ）Web は、`POST /api/line/webhook` と `GET /api/cron/line-drain` が `404`、`/account/line` が「LINE 連携は今は使えません。」になります（起動時には止まりません）。`CRON_SECRET` だけが無いときは、拾い直しとデモのリセットが常に `401` です。LINE の 2 つは、LINE Developers の値です。`CRON_SECRET` は `openssl rand -hex 32` で作ります。
 - `LINE_API_BASE_URL` はテスト専用です。`OPENAI_API_BASE_URL` と同じく、**Production と Preview には設定しません。**
 - 秘密の値は、このリポジトリのファイルやログに書きません。
-- `AUTH_ALLOWED_GITHUB_IDS`（数字の ID）・`DEMO_LOGIN_ID`・`DATABASE_URL` は、**マージ（本番のデプロイ）の前に** Web の Production に入れておきます。Vercel の環境変数は、変えたあとに再デプロイしないと効きません。
-- 足りない・値が違うときの症状：`DATABASE_URL` が無いと、ログインもできず、会員向けのページがエラーになります。`AUTH_ALLOWED_GITHUB_IDS` が空だと、GitHub でログインしても、管理者として断られます。
-- Web に Auth.js の時代の `AUTH_ALLOWED_GITHUB_IDS` が残っていないか確かめます（末尾の「移行の記録」の「段階3のマージの前に行うこと」で残すとしていた値です）。数字でない項目（ログイン名など）は捨てられ、管理者が権限を失います。数字の ID に直します。
+- `BETTER_AUTH_SECRET`・`DEMO_PASSWORD`・`DEMO_LOGIN_ID`・`DATABASE_URL` は、**マージ（本番のデプロイ）の前に** Web の Production に入れておきます。Vercel の環境変数は、変えたあとに再デプロイしないと効きません。
+- 足りない・値が違うときの症状：`DATABASE_URL` が無いと、ログインもできず、会員向けのページがエラーになります。`BETTER_AUTH_SECRET` が無いと、ログイン中の人を決められません。管理者は、DB の `user.role` が `admin` の人で、環境変数の許可リストはありません。
 
 ### Web のプレビュー（Preview）
 
 PR ごとの Web のプレビューも、ログインとデータの読み書きを Web が行います。Web の Vercel プロジェクトの **Preview** の環境変数には、次を入れます。
 
-| 名前                      | Preview に入れる値                                                                             |
-| ------------------------- | ---------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`            | **本番と別の Neon ブランチ**の pooled の URL                                                   |
-| `AUTH_ALLOWED_GITHUB_IDS` | 管理者にする GitHub の数字の ID（任意。GitHub ログインはプレビューで使えないので、空でもよい） |
-| `DEMO_LOGIN_ID`           | デモを試すときだけ                                                                             |
+| 名前                             | Preview に入れる値                                                                                                  |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                   | **本番と別の Neon ブランチ**の pooled の URL                                                                        |
+| `AUTH_URL`                       | そのプレビューを開く URL の origin。無いと、Better Auth の `baseURL` が本番の URL になり、origin の確かめが通らない |
+| `BETTER_AUTH_SECRET`             | 本番と別のランダムな値（必須）                                                                                      |
+| `DEMO_LOGIN_ID`・`DEMO_PASSWORD` | デモを試すときだけ（`DEMO_LOGIN_ID` は、プレビューの DB の実在の会員のログイン ID にしない）                        |
 
 注意:
 
-- `GITHUB_WEB_CLIENT_SECRET` と `SID_CLIENT_SECRET` は、Preview に **入れません**。プレビューの URL はデプロイごとに変わり、GitHub と Sparklingstadt ID に登録した URL と合わないので、どちらのログインも使えないためです（GitHub のボタンは押せず、「Sparklingstadt ID でログイン」は出ません）。パスワード・ゲスト・デモのログインは使えます。
+- `SID_CLIENT_SECRET` は、Preview に **入れません**。プレビューの URL はデプロイごとに変わり、Sparklingstadt ID に登録した URL と合わないので、「Sparklingstadt ID でログイン」は出ません（管理者はプレビューに入れません）。ID とパスワード・ゲスト・デモのログインは使えます。
 - 同じ DB や秘密を本番と使うと、プレビューが本番のデータを書き換えかねません。必ず別の Neon ブランチにします。
 - プレビューのビルドはマイグレーションを当てません（`scripts/vercel-build.sh`）。そのため、Preview 用の Neon ブランチのスキーマは、手で合わせます。次のどちらかです。
   - 本番から Neon のブランチを作り直す（スキーマも本番と同じになる）。
   - そのブランチの direct の URL に向けて、手元で `DATABASE_URL=<そのブランチの direct の URL> pnpm exec prisma migrate deploy` を実行する。
-- プレビューのログインのセッションは、Preview の Neon ブランチの `Session` に入ります。本番の `Session` とは別です。
+- プレビューのログインのセッションは、Preview の Neon ブランチの `session` に入ります。本番の `session` とは別です。
 
 ### 戻す手順
 
@@ -157,7 +155,7 @@ Web を戻すときは、Vercel の **Instant Rollback** で前のデプロイ�
 
 ### e2e
 
-`pnpm run test:e2e` は、Docker の Postgres と Web（本番モードでビルド）と、外部サービスのスタブだけで動きます。テストの側が `Session` の行を DB に書き、そのトークンを Cookie `zl_session` に入れてログインした状態を作ります。パスワードとゲストのログインは、画面から実際に行います。Sparklingstadt ID は、`e2e/fixtures/sid-oidc-stub.ts` の小さな OIDC スタブ（`127.0.0.1:3110`）を issuer にして、Web に `SID_*` を渡します。スタブは実行ごとに P-256 の鍵を作り、`/oauth/authorize` は画面を出さずにすぐ `redirect_uri?code=stub&state=…` へ戻し、`/oauth/token` は ES256 の ID トークンを、`/oauth/jwks` はその公開鍵を返し、`/oauth/logout` は `post_logout_redirect_uri` へ戻します。本物の Sparklingstadt ID には接続しません。
+`pnpm run test:e2e` は、Docker の Postgres と Web（本番モードでビルド）と、外部サービスのスタブだけで動きます。ログインは、どれも画面から実際に行います（会員は ID とパスワード、ゲストとデモはボタン）。管理者は、テストが DB に作った管理者の `user` を、Sparklingstadt ID のスタブの `sub` につないでから、Sparklingstadt ID でログインします。Sparklingstadt ID は、`e2e/fixtures/sid-oidc-stub.ts` の小さな OIDC スタブ（`127.0.0.1:3110`）を issuer にして、Web に `SID_*` を渡します。スタブは実行ごとに P-256 の鍵を作り、`/oauth/authorize` は画面を出さずにすぐ `redirect_uri?code=stub&state=…` へ戻し、`/oauth/token` は ES256 の ID トークンを、`/oauth/jwks` はその公開鍵を返し、`/oauth/logout` は `post_logout_redirect_uri` へ戻します。本物の Sparklingstadt ID には接続しません。
 
 ## 3. LINE 連携
 
@@ -198,70 +196,73 @@ LINE の連携を最初から作り直すとき（以前のチャネルが無い
 
 ## 5. Sparklingstadt ID でのログイン
 
-Sparklingstadt ID（sparklingstadt-id が提供する OpenID Connect のプロバイダー。<https://github.com/Sparklingstadt/sparklingstadt-id>）のアカウントで、会員（`member`）としてログインする機能です。ログイン画面の「Sparklingstadt ID でログイン」から使います。以前の FFPF ID のログインは、これに置き換えました。仕様は `docs/superpowers/specs/2026-11-22-sparklingstadt-id-login-design.md` にあります。
+Sparklingstadt ID（sparklingstadt-id が提供する OpenID Connect のプロバイダー。<https://github.com/Sparklingstadt/sparklingstadt-id>）のアカウントでログインする機能です。ログイン画面の「Sparklingstadt ID でログイン」から使います。**管理者は、この道でログインします**（`user.role` が `admin` の人。許可リストの環境変数はありません）。ほかの人は、会員（`role` は `user`）になります。仕様は `docs/superpowers/specs/2026-11-22-sparklingstadt-id-login-design.md`（最初の作り）と `docs/superpowers/specs/2026-11-27-better-auth-migration-design.md`（Better Auth に替えたあと）にあります。
 
-- 流れ：Web が PKCE・`state`・`nonce` を作って `zl_oauth` Cookie に入れ、`<SID_ISSUER>/oauth/authorize` へ送ります。戻り先 `/api/auth/callback/sid` で `state` を確かめてから、Web が `/oauth/token` で `code` を交換し（client_secret_basic。`SID_CLIENT_SECRET` を使う）、ID トークンを `/oauth/jwks` で検証します（ES256・`iss`・`aud`・`exp`・`nonce`・`email_verified`）。discovery は使わず、エンドポイントは `SID_ISSUER` から組み立てます。検証が通ったら、`SidAccount` を更新して `Session` の行を作り、`zl_session` を発行します。`redirect_uri` は `AUTH_URL` の origin に `/api/auth/callback/sid` を付けた値です。
-- 持ち主の ID は `sid:<sub>` です。`SidAccount` にメールアドレスと表示名を保存し、ログインのたびに最新の値で更新します。メールアドレスは表示用で、認可には使いません。許可リストは無く、メールアドレスを確認済みの Sparklingstadt ID なら誰でも会員になれます。
+- 流れ：Better Auth の `genericOAuth`（`providerId` は `sid`）が、`<SID_ISSUER>/.well-known/openid-configuration` から discovery で各エンドポイントを取り、PKCE・`state`・`nonce` を作って `<SID_ISSUER>/oauth/authorize` へ送ります。戻り先は `/api/auth/callback/sid` で、`code` の交換は `client_secret_basic`（`SID_CLIENT_SECRET`）、ID トークンの検証は Better Auth が JWKS で行います。discovery で issuer と JWKS が取れないときは、ID トークンを未検証で受けずに、このログインを使えなくします（`requireIdTokenVerification`）。`redirect_uri` は `AUTH_URL` の origin に `/api/auth/callback/sid` を付けた値です（切り替えの前と同じです）。
+- 初めてのログインで、Better Auth が `user` と `account`（`providerId` は `sid`、`accountId` は ID トークンの `sub`）を作ります。メールアドレスと表示名は ID サーバーの値です。**`account` は `sub` でだけ `user` につなぎます**（`disableImplicitLinking`）。メールアドレスが同じ `user` があっても、つながりません。管理者の `user` は、切り替えのときに `sub` で前もってつないでおきます（下の「Better Auth への切り替え」）。
+- Zhuelog では `email_verified` を確かめません。ID サーバーは、メールアドレスが未確認の人にコードを出さないので、ここまで届きません。
 - Sparklingstadt ID の会員は、パスワード会員と同じく学習ノート・共有・フォロー・タイムライン・LINE 連携を使えます。メンバー一覧にも出ます。パスワードはこのサービスに無いので、`/account/password` には Sparklingstadt ID のアカウントページ（`<SID_ISSUER>/account`）へのリンクだけを出します（パスワードを変えるフォームは出しません）。
-- ログアウト：Sparklingstadt ID の会員（持ち主の ID が `sid:` で始まる人）は、Web のセッションを消したあと、`<SID_ISSUER>/oauth/logout?client_id=<SID_CLIENT_ID>&post_logout_redirect_uri=<AUTH_URL の origin>/signin` へ送られ、ID サーバー側のログインも消えて `/signin` に戻ります。ほかのログインの人は、これまでどおり `/signin` へ戻ります。ログアウト先を決められなかったとき（DB に届かないときなど）は、ログに `SID_LOGOUT_URL_FAILED` を出し、Web のセッションは消して `/signin` へ戻します。
-- 誤りの扱い：`state` の不一致、`code` の交換と ID トークンの検証の失敗、ID サーバーに届かない・5xx・JWKS が取れないときは、どれも固定のコードだけをログに出し（秘密や `code` は出さない）、「認証サービスからの結果を確認できませんでした。」と出してログイン画面に戻します。ログのイベント名は `SID_REJECTED`（検証に失敗）と `SID_UNAVAILABLE`（届かない・5xx など）で、`SIGN_IN_SID_*` の名前も出ます。トークンの交換が断られたときのコードは `sid_error` に入ります。
-- 使う表は `SidAccount` で、Prisma のマイグレーション `20261122090000_replace_ffpf_accounts_with_sid_accounts` で作ります。
+- ログアウト：Sparklingstadt ID でログインした人は、Better Auth のセッションを消したあと、ID サーバーの `end_session_endpoint`（`/oauth/logout`）へ送られ、ID サーバー側のログインも消えて、`post_logout_redirect_uri`（`<AUTH_URL の origin>/signin`）の `/signin` に戻ります。ほかのログインの人は、`/signin` へ戻ります。DB に届かないときは、ログに `SIGN_OUT_FAILED` を出し、Cookie は消して `/signin` へ戻します。**管理者がなりすましているあいだにログアウトすると、先になりすましを終えてから管理者をログアウトします**（会員の ID サーバーのログアウトへは送りません）。
+- 誤りの扱い：`state` の不一致や、`code` の交換と ID トークンの検証の失敗は、ログイン画面（`/signin`）に戻し、「認証サービスからの結果を確認できませんでした。」のような、日本語の固定の文言を出します（Better Auth の英語のエラーのページは出しません。`onAPIError.errorURL` を `/signin` にしています）。
+- 使う表は Better Auth の `user`・`account` で、マイグレーション `20261127090000_better_auth_tables` と `20261127100000_owner_to_user` が作ります。
 
 ### 設定の手順
 
 1. sparklingstadt-id のリポジトリで `pnpm run oidc:client zhuelog` を実行し、シークレット（`secret=…`）とクライアントの JSON を作ります。JSON の `redirectUris` に `https://<Web のホスト>/api/auth/callback/sid`、`postLogoutRedirectUris` に `https://<Web のホスト>/signin` を入れて、sparklingstadt-id の `OIDC_CLIENTS` に足し、再デプロイします（詳しくは sparklingstadt-id の README）。
-2. マイグレーション `20261122090000_replace_ffpf_accounts_with_sid_accounts` は、main へのマージで Web の本番ビルドが自動で当てます（「1. 本番の DB とマイグレーション」）。
-3. Web の Vercel プロジェクトの Production に `SID_ISSUER`（`https://id.sparklingstadt.com`）・`SID_CLIENT_ID`・`SID_CLIENT_SECRET` を入れます。`redirect_uri`（`<AUTH_URL の origin>/api/auth/callback/sid`）と `post_logout_redirect_uri`（`<AUTH_URL の origin>/signin`）は、登録した URL と **1 文字も違わず** 合わせます。Preview には入れません。
-4. 本番の Web で、Sparklingstadt ID のログイン・ログアウトを試します（ログアウトで ID サーバーを通って `/signin` に戻ること）。
+2. Web の Vercel プロジェクトの Production に `SID_ISSUER`（`https://id.sparklingstadt.com`）・`SID_CLIENT_ID`・`SID_CLIENT_SECRET` を入れます。`redirect_uri`（`<AUTH_URL の origin>/api/auth/callback/sid`）と `post_logout_redirect_uri`（`<AUTH_URL の origin>/signin`）は、登録した URL と **1 文字も違わず** 合わせます。Preview には入れません。
+3. 本番の Web で、Sparklingstadt ID のログイン・ログアウトを試します（ログアウトで ID サーバーを通って `/signin` に戻ること）。
 
 ### 出す順番と注意
 
-- このコードは、ID サーバーがまだ動いていなくても先に出せます。`SID_*` が無いあいだは、「Sparklingstadt ID でログイン」のボタンが出ないだけです。
-- マイグレーションは、`ffpf:` の持ち主のデータ（学習ノート・フォロー・LINE 連携など、その持ち主の行）をすべて消し、`FfpfAccount` の表は空にします（表は落としません）。FFPF ID の利用者は持ち主だけなので、意図したことです。
-- 表を落とすのは、次のリリースのマイグレーションです（「1. 本番の DB とマイグレーション」の、2 回のリリースに分ける決まりのため）。前のデプロイは空になった `FfpfAccount` を読むだけなので、新しいデプロイに切り替わるまでのあいだも動き、Instant Rollback でも戻せます。
-- マージの前に、Web の Production から `FFPF_ID_ISSUER`・`FFPF_ID_CLIENT_ID`・`FFPF_ID_CLIENT_SECRET` を消します。残すと、切り替わるまでのあいだに前のデプロイが `ffpf:` の行を新しく作れてしまいます。
+- このコードは、ID サーバーがまだ動いていなくても先に出せます。`SID_*` が無いあいだは、「Sparklingstadt ID でログイン」のボタンが出ないだけです（管理者は入れません）。
+- 以前の FFPF ID の持ち主のデータは、マイグレーション `20261122090000_replace_ffpf_accounts_with_sid_accounts` がすでに消しています。
 
 ## 6. デモアカウント
 
 採用担当など、アカウントを持たない人が会員向けの画面（学習ノート・今日の復習・単語帳・会話ノート・練習の記録）を試せるようにする機能です。ログイン画面の「デモで試す」から入ります。
 
-- アカウント：`DEMO_LOGIN_ID` の ID の、普通のパスワード会員です。パスワードのハッシュは使えない値なので、ID とパスワードではログインできません。「デモで試す」は、Web が `Session` の行を作り（会員として、30 日）、`zl_session` を発行します。アカウントは下のリセットが作ります（手で作る必要はありません）。ログインの試行回数は、`SignInThrottle` で、1 つのクライアントから 15 分に 20 回まで（キーは `demo:<IP>`）に制限します。
-- データ：デモを試す全員で 1 つのアカウントを共有します。毎晩 04:00（日本時間）ごろに、Web の `vercel.json` の Cron（`0 19 * * *`、UTC）が `GET /api/cron/demo-reset` を呼び、1 つのトランザクションで、デモの持ち物（学習ノートとヒント、CSV の取り込みの記録、復習の項目と記録、単語帳、会話ノート、クイック質問、練習の記録（介詞・補語）、フォロー（デモがしたものと、デモをフォローしているもの）、LINE の連携・連携コード・受け取った文）を消してから、`src/domain/demo/demo-fixture.json` の内容を、Web の FSRS で復習の項目にして入れ直します（例のデータは、以前の Go が最後に作った内容と同じであることを `tests/fixtures/demo-seed-golden.json` で確かめています）。消さないものは、AI の利用量（`AiUsage`。管理者が費用を見る記録）とログインのセッション（`Session`）です。日付は「リセットの何日前か」で書いてあるので、いつ見ても直近 7 日の記録に見えます。ログイン中のセッションは消しません（デモに入っている人は、リセットのあとも `zl_session` のまま続けて使えます）。
-- 使えないもの：OpenAI を呼ぶルート（Web の `POST /api/chat` と `POST /api/quick-question`）は、デモには `403`（「デモでは使えません。」）です。Web の LINE 連携の画面（`/account/line`）は `/` に戻します。パスワードの変更も、デモには使えません。断るのは Web です。フォロー・会員の一覧・タイムライン・共有（ほかの会員に届くため）は、Web が断ります（`/follow` は `/` に戻し、フォローや共有を直接送ると画面には「ログインし直してください。」と出ます）。管理者がデモとして操作しているときや、ほかの会員には当てはまりません。Web の AI のルート（単語帳の下書き・クイック質問・ChatGPT と話す）は、Web が自分でデモかどうかを確かめて断ります。Web は、自分の DB の確認（`passwordHash` が使えない値で、ログイン ID が `DEMO_LOGIN_ID` と同じ）でデモかどうかを決め、すべてのページに「デモアカウントです。…」を出し、メニューから使えない機能を外します。
-- リセットは Web が行います（`DEMO_LOGIN_ID` が空なら、Web のルートは `404` です）。Hobby の Cron は時刻が 1 時間単位なので、04:00 から最大 59 分遅れることがあります。Vercel が `Authorization: Bearer <CRON_SECRET>` を付けて呼ぶので、Web の Production に `CRON_SECRET` が要ります。`maxDuration` は route に 30 秒と書いてあります。すぐ戻したいときは、下の `curl` で手でリセットします。
+- アカウント：`DEMO_LOGIN_ID` の ID の、普通のパスワード会員です（`user.username`、`account` の `credential`）。パスワードは `DEMO_PASSWORD` で、「デモで試す」は、Web の Server Action が `DEMO_PASSWORD` で Better Auth の `signInUsername` を呼んでログインします（パスワードなしで入る道はありません）。サーバーからの呼び出しはレート制限を通りませんが、デモは誰でも入れるので、守るものは変わりません。アカウントは下のリセットが作ります（手で作る必要はありません）。
+- データ：デモを試す全員で 1 つのアカウントを共有します。毎晩 04:00（日本時間）ごろに、Web の `vercel.json` の Cron（`0 19 * * *`、UTC）が `GET /api/cron/demo-reset` を呼び、1 つのトランザクションで、デモのパスワードを `DEMO_PASSWORD` に入れ直し、デモの持ち物（学習ノートとヒント、CSV の取り込みの記録、復習の項目と記録、単語帳、会話ノート、クイック質問、練習の記録（介詞・補語）、フォロー（デモがしたものと、デモをフォローしているもの）、LINE の連携・連携コード・受け取った文）を消してから、`src/domain/demo/demo-fixture.json` の内容を、Web の FSRS で復習の項目にして入れ直します（例のデータは、以前の Go が最後に作った内容と同じであることを `tests/fixtures/demo-seed-golden.json` で確かめています）。消さないものは、AI の利用量（`AiUsage`。管理者が費用を見る記録）とログインのセッション（`session`）です。日付は「リセットの何日前か」で書いてあるので、いつ見ても直近 7 日の記録に見えます。ログイン中のセッションは消しません（デモに入っている人は、リセットのあとも続けて使えます）。
+- **ゲストの掃除**：同じ毎日の実行が、作ってから 24 時間たったゲストの `user` を消します（`session` は外部キーで一緒に消えます）。`DEMO_LOGIN_ID` と `DEMO_PASSWORD` のどちらかが無いと、cron が `404` なので、この掃除も動きません。
+- **`DEMO_LOGIN_ID` に、実在の会員や管理者のログイン ID を入れないでください。** 毎晩のリセットが、その `user` のデータをすべて消し、パスワードを `DEMO_PASSWORD` に替えます。
+- 使えないもの：OpenAI を呼ぶルート（Web の `POST /api/chat` と `POST /api/quick-question`）は、デモには `403`（「デモでは使えません。」）です。Web の LINE 連携の画面（`/account/line`）は `/` に戻します。パスワードの変更も、デモには使えません（Better Auth の `/change-password` を、`hooks.before` がデモの `username` に対して断ります。`/update-user` も `disabledPaths` で閉じています）。フォロー・会員の一覧・タイムライン・共有（ほかの会員に届くため）は、Web が断ります（`/follow` は `/` に戻し、フォローや共有を直接送ると画面には「ログインし直してください。」と出ます）。Web の AI のルート（単語帳の下書き・クイック質問・ChatGPT と話す）は、Web が自分でデモかどうかを確かめて断ります。Web は、ログイン ID が `DEMO_LOGIN_ID` と同じ会員をデモと決め、すべてのページに「デモアカウントです。…」を出し、メニューから使えない機能を外します。
+- リセットは Web が行います（`DEMO_LOGIN_ID` か `DEMO_PASSWORD` が空なら、Web のルートは `404` です）。Hobby の Cron は時刻が 1 時間単位なので、04:00 から最大 59 分遅れることがあります。Vercel が `Authorization: Bearer <CRON_SECRET>` を付けて呼ぶので、Web の Production に `CRON_SECRET` が要ります。`maxDuration` は route に 30 秒と書いてあります。すぐ戻したいときは、下の `curl` で手でリセットします。
 - 手でリセットする：`curl -i -X POST https://ffpf-zhuelog.sparklingstadt.com/api/cron/demo-reset -H "Authorization: Bearer $CRON_SECRET"` が `204` を返します（`GET` でも同じです）。`CRON_SECRET` を知っている人だけが呼べます。`$CRON_SECRET` は Web の Production の値です。
 - マイグレーションは要りません（既存の表だけを使います）。Vercel Hobby の Cron は 1 つのプロジェクトに 100 個まで、どれも 1 日 1 回までなので、LINE の拾い直しとこのリセットの 2 つ（どちらも 1 日 1 回）は収まります（どちらも Web の `vercel.json` にあります）。
 
 ### 切り替えの手順
 
-1. Web の Vercel プロジェクトの Production に、`DEMO_LOGIN_ID`（例: `demo`）と `CRON_SECRET` を入れます。
+1. Web の Vercel プロジェクトの Production に、`DEMO_LOGIN_ID`（例: `demo`。実在の会員や管理者の ID にしない）・`DEMO_PASSWORD`・`CRON_SECRET` を入れます。
 2. Web を main からデプロイします。
-3. 上の `curl` でリセットを 1 回呼び、デモアカウントとデータを作ります（呼ぶまではアカウントが無く、「デモで試す」を押すと「デモは今は利用できません。」になります）。
+3. 上の `curl` でリセットを 1 回呼び、デモアカウントとデータを作り、パスワードを `DEMO_PASSWORD` にします（呼ぶまではアカウントが無く、「デモで試す」を押すと「デモは今は利用できません。」になります）。
 4. 本番の Web の `/signin` に「デモで試す」が出ること、押すと学習ノートと「デモアカウントです。」が出ることを確かめます。
 
-やめるときは、Web から `DEMO_LOGIN_ID` を消して再デプロイします。ボタンが消え、Web のリセットのルートも `404` になります。デモの `Session` の行が残っていても、`DEMO_LOGIN_ID` が無いと、そのアカウントはデモと見分けられません（普通の会員として扱われるので、パスワードの無いアカウントのまま残ります）。気になるときは、`DELETE FROM "Session" WHERE "ownerId" = 'password:<デモのアカウントの id>'` で消します。アカウントとデータは残ります。
+やめるときは、Web から `DEMO_LOGIN_ID`（か `DEMO_PASSWORD`）を消して再デプロイします。ボタンが消え、Web のリセットのルートも `404`（ゲストの掃除も止まります）になります。`DEMO_LOGIN_ID` が無いと、そのアカウントはデモと見分けられず、普通の会員として扱われ、パスワードは最後のリセットで入れた `DEMO_PASSWORD` のままです。気になるときは、管理者がパスワードを再設定するか、`DELETE FROM "session" WHERE "userId" = '<デモの user の id>'` でセッションを消します。アカウントとデータは残ります。
 
 ## 7. 運用上の注意
 
 ### ログインのセッション
 
-- **長さ**：会員と管理者は 30 日、ゲストは 24 時間です。作ったときに期限を決め、使っても延ばしません。切れたら、ログインし直します。
-- **期限切れの行の掃除**：ログインのたびに、期限の切れた行を最大 100 行まで消します。別のジョブはありません。ログインが少ないと、期限切れの行が残りますが、読まれません（期限を確かめます）。
-- **ログアウト**：そのブラウザーの `Session` の行を消し、`zl_session` を消します。DB が失敗しても、Cookie は消します。
-- **パスワードの変更と管理者の再設定**：そのアカウントの `Session` の行を、同じトランザクションですべて消します。ほかの端末もログインし直しです。
-- **全員をログアウトさせたいとき**：Neon の SQL Editor で `DELETE FROM "Session";` を実行します（全員が次のリクエストでログイン画面に戻ります）。秘密が漏れたかもしれないときも、これを使います。
-- **管理者を外すとき**：`AUTH_ALLOWED_GITHUB_IDS` から ID を消して、再デプロイします。許可リストは、Web がモジュールを読み込むときに 1 度だけ読むので、環境変数を変えただけでは効きません。再デプロイすると、外れた管理者は次のリクエストから `revoked` になります。
-- **見る**：`SELECT "role", count(*) FROM "Session" GROUP BY 1;` で、役割ごとの行数が分かります。
+- **長さ**：会員・管理者・ゲストとも 30 日で、使うと延びます（Better Auth の既定の `updateAge`）。なりすましのセッションは 1 時間です。切れたら、ログインし直します。
+- **ゲストの掃除**：ゲストの `user` は、毎日のデモのリセットの cron が、作ってから 24 時間たったものを消します（`session` も一緒に消えます）。デモの設定（`DEMO_LOGIN_ID`・`DEMO_PASSWORD`）が無いと、この掃除は動きません。期限切れの `session` の行は、読まれませんが、自動では消えません。
+- **ログアウト**：そのブラウザーの `session` の行を消し、Cookie を消します。DB が失敗しても、Cookie は消します。なりすましの最中は、なりすましを終えてから、管理者をログアウトします。
+- **パスワードの変更と管理者の再設定**：会員が自分で変えると、ほかの端末の `session` が消えます。管理者が再設定すると、その会員の `session` がすべて消えます。
+- **全員をログアウトさせたいとき**：Neon の SQL Editor で `DELETE FROM "session";` を実行します（全員が次のリクエストでログイン画面に戻ります）。秘密が漏れたかもしれないときは、`BETTER_AUTH_SECRET` も替えます（替えると、Cookie の署名が合わず、全員がログアウトになります）。
+- **管理者にする・外す**：`user.role` を DB で替えます。`UPDATE "user" SET role = 'admin' WHERE id = '<user の id>';`（外すときは `'user'`）。ログイン中のセッションは、次のリクエストから新しい役割で見ます。
+- **見る**：`SELECT u."role", count(*) FROM "session" s JOIN "user" u ON u."id" = s."userId" GROUP BY 1;` で、役割ごとの行数が分かります。
 
 ### レート制限とクライアントの IP
 
-ログインには、次の制限があります。どれも DB の `SignInThrottle` で数えるので、インスタンスが増えても合計で数えます。
+ログインには、Better Auth のレート制限だけがあります。DB の `rateLimit` で数えるので、インスタンスが増えても合計で数えます。
 
-- **ログイン全体**：1 つのクライアントから、1 分に 10 回まで（ID とパスワード・ゲスト・GitHub・Sparklingstadt ID・デモの入り口で共有）。パスワードの変更も、同じ鍵（`route:auth:<IP>`）の枠に入ります。
-- **パスワードログインの試行回数**：15 分の枠で、1 つのクライアントからは 20 回まで、同じクライアントから同じ loginId へは 5 回まで（成功すると 0 に戻ります）。超えると、正しいパスワードでもログインできません（画面には、IDの有無を区別しない同じ文が出ます）。
-- **デモ**：1 つのクライアントから 15 分に 20 回まで（キーは `demo:<IP>`）。
+- **働くとき**：`NODE_ENV=production` のときだけです（Better Auth の既定）。Vercel の本番と Preview、e2e（本番モード）では働き、`next dev` では働きません。
+- **全体**：1 つのクライアントから、1 分に 10 回まで（`/api/auth/*` へのリクエストの全部）。
+- **ID とパスワードのログイン**（`/sign-in/username`）：1 つのクライアントから、15 分に 20 回まで。
+- **パスワードの変更**（`/change-password`）：1 つのクライアントから、15 分に 5 回まで。
+- **LINE の連携コードの入力**：LINE のユーザーごとに、1 時間に 5 回まで（`SignInThrottle`、キーは `line-link:<LINE のユーザー ID>`）。
+- アカウント（ログイン ID）ごとの制限や、ロックはありません。ほかの場所からの失敗で、本人が締め出されないようにするためです。デモは、サーバーから入るので、このレート制限を通りません。
 
-クライアントのアドレスは、Web が `x-real-ip` / `x-forwarded-for` から決めます。Vercel はこのヘッダーをクライアントの IP で上書きし、クライアントが送った値は渡さないので、偽装されません。**Vercel の前に別のプロキシ（CDN など）を置かないでください。** 置くと、すべてのクライアントがそのプロキシの 1 つのアドレスとして数えられます。
+クライアントのアドレスは、Better Auth が `x-real-ip` を先に、無ければ `x-forwarded-for` から決めます。Vercel は `x-real-ip` を必ずクライアントの IP で上書きし、クライアントが送った値は渡さないので、偽装されません。`x-real-ip` が無く、`x-forwarded-for` に複数のアドレスがあるときは、IP が決まらず、制限が数えられません（Vercel では起きません）。**Vercel の前に別のプロキシ（CDN など）を置かないでください。** 置くと、すべてのクライアントがそのプロキシの 1 つのアドレスとして数えられます。
 
 ### DB の接続数とパスワードの計算
 
@@ -271,9 +272,9 @@ Web は Prisma で DB につなぎます。Vercel がインスタンスを増や
 
 ### 公開範囲
 
-外から呼べる API は、Web の Route Handler だけです。LINE の webhook（`/api/line/webhook`）は LINE の署名を、2 つの cron（`/api/cron/*`）は `CRON_SECRET` を確かめます。チャットとクイック質問（`/api/chat`・`/api/quick-question`）は、ログイン中の `Session` を確かめます。CORS は設定していません。
+外から呼べる API は、Web の Route Handler だけです。LINE の webhook（`/api/line/webhook`）は LINE の署名を、2 つの cron（`/api/cron/*`）は `CRON_SECRET` を確かめます。チャットとクイック質問（`/api/chat`・`/api/quick-question`）は、ログイン中の Better Auth のセッションを確かめます。Better Auth の `/api/auth/*` は、Better Auth 自身の確かめとレート制限で守ります。CORS は設定していません。
 
-## 移行の記録（段階 1〜12）
+## 移行の記録（段階 1〜12、と Better Auth への切り替え）
 
 > 以下は Go の API をなくしたころの記録で、FFPF ID の話もそのまま残しています。FFPF ID のログインは、今は Sparklingstadt ID に置き換えました（「5. Sparklingstadt ID でのログイン」）。
 
@@ -795,12 +796,52 @@ Preview には入れません。プレビューの URL は、GitHub と FFPF ID 
 
 12a は手順 1・2 のあと、いつマージしてもよい。12b は手順 6 のあとだけ。
 
+### Better Auth への切り替え（2026 年 11 月）
+
+自前のログイン（GitHub・`zl_session`・`PasswordAccount`・`SidAccount`）を Better Auth に替え、データの持ち主を Better Auth の `user` にそろえた変更です。設計は `docs/superpowers/specs/2026-11-27-better-auth-migration-design.md`、計画は `docs/superpowers/plans/2026-11-27-better-auth-migration.md` にあります。**1 回のデプロイで切り替え、全員が一度ログアウトになります**（ID とパスワードの会員は、同じパスワードで入り直せます。ハッシュは同じ scrypt のまま `account` に移ります）。
+
+**何が起きるか**
+
+- マイグレーション `20261127090000_better_auth_tables` が Better Auth の表を足し、`20261127100000_owner_to_user` が、すべての `ownerId`（と `Follow` の 2 つの列）を `userId`（`user.id` への外部キー）に付け替えます。`PasswordAccount` は `user`＋`account`（`credential`）に、`SidAccount` は `user`＋`account`（`sid`）に、管理者は前もって用意した 1 行から `user`（`role` は `admin`）＋`account`（`sid`、`accountId` は管理者の `sub`）になります。そのあと、古い `PasswordAccount`・`SidAccount`・`Session`・`FfpfAccount` を落とします。
+- **付け替えができない `ownerId` が 1 つでもあると、マイグレーションは止まり**、デプロイは失敗します（黙って消しません）。マイグレーションは 1 つの明示的なトランザクション（`BEGIN`〜`COMMIT`）なので、止まったら DB は元のままで、本番は前のバージョンのままです。
+- `SignInThrottle` の表は残します（LINE の連携コードの入力の試行回数だけが使います）。
+
+**戻せません**：古い表を落とすので、切り替えのあと前のデプロイへ Instant Rollback しても、前のコードは動きません。問題が出たら、直して出し直します。マージの直前に Neon のブランチを 1 つ切っておくと、データを見直せます。
+
+**手順（本番はこの順）**
+
+1. **ID サーバー**：sparklingstadt-id の zhuelog のクライアントに、`post_logout_redirect_uri`（`<AUTH_URL の origin>/signin`）が `postLogoutRedirectUris` にあることを確かめます（なければ足して再デプロイ）。**`redirect_uri` は、切り替えの前と同じ `<AUTH_URL の origin>/api/auth/callback/sid` のままで、新しく登録するものはありません。**
+2. **Vercel の環境変数**：Production に `BETTER_AUTH_SECRET`（`openssl rand -base64 32`）と `DEMO_PASSWORD` を入れます。Preview にも `BETTER_AUTH_SECRET`（本番と別の値）を入れ、プレビューを使うなら `AUTH_URL` も入れます（無いと `baseURL` が本番の URL になり、SID と origin の確かめが通りません）。`DEMO_LOGIN_ID` が、実在の会員や管理者のログイン ID でないことも確かめます（毎晩のリセットが、そのユーザーのデータを消し、パスワードを替えるため）。
+3. **Neon のブランチで試す（マージの前）**：本番から Neon のブランチを切り、その direct の URL に向けて、下の手順 4 と、`pnpm exec prisma migrate deploy` を一度流します。マイグレーションは明示的な `BEGIN`〜`COMMIT` で包んでいて、Prisma が失敗を記録するときの動き（途中で失敗したマイグレーションの扱い）は、手元の DB では確かめられなかったためです。成功すること、`SELECT count(*) FROM "user"` が会員数＋管理者になることを見て、ブランチを捨てます。
+4. **管理者の行を用意する（本番の DB）**：次の引数で、**まず `--check-only`（何も書かず、止まる原因を調べるだけ）で調べ**、問題がなければ、**`--check-only` を外して、同じ引数で** もう一度流します（`_better_auth_admin` に管理者の 1 行を書きます）。`DATABASE_URL` は、本番の direct の URL にします（`dotenv` は、すでにある環境変数を上書きしません）。
+
+   ```bash
+   DATABASE_URL='<本番の direct の URL>' pnpm run auth:prepare-admin -- --check-only \
+     --github-id <いまの AUTH_ALLOWED_GITHUB_IDS の数字の ID> --sid-sub <管理者の SID の sub> \
+     --email <管理者の SID のメールアドレス> --name <表示名>
+   DATABASE_URL='<本番の direct の URL>' pnpm run auth:prepare-admin -- \
+     --github-id <同じ値> --sid-sub <同じ値> --email <同じ値> --name <同じ値>
+   ```
+
+   報告の「1. Owner values with no mapping」「2. Email collisions」「3. Admin sidSub equal to a SidAccount id」がすべて `none` で、`OK` と出ることを確かめます（出ないときは、終了コードが 0 でなく、そのままマージするとマイグレーションが止まります）。GitHub の ID を持ち主とするデータは、管理者 1 人ぶんだけです。ほかの数字の持ち主が見つかったら、止まります。
+
+5. **マージ**：本番のビルドが、マイグレーションを当ててからビルドします。止まったらデプロイは失敗し、本番は前のバージョンのままです。マージのあと、`vercel promote`（リリースのとき）で切り替わります。
+6. **`/api/cron/demo-reset` を 1 回呼ぶ**：`CRON_SECRET` を付けて呼びます（「6. デモアカウント」の `curl`）。デモのアカウントにパスワード（`DEMO_PASSWORD`）が入ります（呼ぶまで、「デモで試す」は使えません）。ゲストの掃除も同じ実行で行われます。
+7. **確かめる**：管理者が Sparklingstadt ID でログインして、管理画面（`/admin/accounts`・`/admin/ai-usage`）を開けること。会員の 1 人で（ID とパスワードで）ログインして、ノートが見えること。
+8. **後片付け**：GitHub の OAuth App を消し、Vercel の Production（と Preview）から `AUTH_GITHUB_ID`・`GITHUB_WEB_CLIENT_SECRET`・`AUTH_ALLOWED_GITHUB_IDS`（と、あれば `AUTH_SECRET`・`AUTH_GITHUB_SECRET`）を消します。
+
+**切り替えのあとの注意**
+
+- 管理者は、`user.role` が `admin` の人です。環境変数の許可リストはもうありません。管理者を増やす・外すときは、DB で `UPDATE "user" SET role = 'admin' WHERE id = '…'` を実行します（「7. 運用上の注意」）。
+- 会員の管理（作成・パスワードの再設定・なりすまし）の画面は同じ `/admin/accounts` です。なりすましの動きは変わりました（なりすましの間は、会員としてログインしているのと同じで、管理画面は使えません）。
+- ログインのレート制限は `NODE_ENV=production` のときだけ働きます。
+
 ### 移行全体のまとめ
 
 **何が変わったか（段階 0〜12）**
 
 - 以前：Web（Next.js）は画面だけで、データの読み書き・ログイン・チャット・LINE・AI の利用量・cron は、すべて Go の API（`services/api`、約 1.3 万行、API 約 70 本）が持っていた。Web は `src/infrastructure/go-api/` の約 20 個のアダプタで Go を呼び、ログインは Go の JWT と refresh token（`zl_access`・`zl_refresh`）だった。
-- いま：アプリは Next.js 1 つ。DB は Prisma で Web が直接読み書きする。ログインは Web のセッション（Cookie `zl_session` のトークンの SHA-256 を `Session` に置く。30 日、ゲストは 24 時間）。LINE の webhook と 2 つの cron（LINE の拾い直し、デモのリセット）も Web の Route Handler と Vercel Cron。Vercel のプロジェクトは 1 つ。
+- いま：アプリは Next.js 1 つ。DB は Prisma で Web が直接読み書きする。ログインは Web の Better Auth（2026 年 11 月に自前のセッションから替えた。下の「Better Auth への切り替え」）。LINE の webhook と 2 つの cron（LINE の拾い直し、デモのリセット）も Web の Route Handler と Vercel Cron。Vercel のプロジェクトは 1 つ。
 - 変わらないもの：画面の動き、エラーの文言、OAuth のコールバックの URL、DB のデータ（スキーマは `Session` を足し、`ApiRefreshToken` を消しただけ）。e2e（322 件）は、移す前と同じ確かめを Go なしで通している。
 - なくしたもの：ネイティブアプリ向けの `/v1/...` の JSON API と JWT（利用者の決定）、Go の CI・フック・Dependabot、API のドキュメントのサイト（docs-site）、`GO_API_URL`・`API_WEB_PROXY_SECRET`・`API_JWT_SECRET`、手元の 2 つめの DB。
 

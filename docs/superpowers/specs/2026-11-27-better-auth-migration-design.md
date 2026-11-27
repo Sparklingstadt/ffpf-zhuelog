@@ -97,8 +97,9 @@
 - 誰でも SID でログインできる（今と同じ）。初めてのログインで、Better Auth が `user` と `account` を作る。
 - 今の Zhuelog は `email_verified !== true` の ID トークンを断っているが、genericOAuth は断らない。この確かめは持たない。ID サーバーはメールが未確認の人にコードを出さない（ID サーバーの設計の 4.2）ので、Zhuelog まで届かない。
 - `account.accountLinking` の `trustedProviders` に `sid` は入れない（メールアドレスでのつなぎは使わない。管理者は 4.7 で `sub` で直接つなぐ）。
-- `redirect_uri` は Better Auth の既定（`<AUTH_URL>/api/auth/oauth2/callback/sid`）になる。**ID サーバーに登録した Zhuelog のクライアントの redirect URI を、切り替えのときに足す（または替える）。** 今の `/api/auth/callback/sid` を残す必要はない。
-- ログアウトは Better Auth の既定のまま：SID でログインした人の `signOut` は、discovery の `end_session_endpoint`（ID サーバーの `/oauth/logout`）へ送り、ID サーバーのログインも消す（今と同じ動き）。今の自前の `sid-logout.ts` は消す。ID サーバーに `post_logout_redirect_uri`（Better Auth が送る値）を登録する（4.7 の手順）。
+- `redirect_uri` は `<AUTH_URL>/api/auth/callback/sid`（better-auth 1.7.28 の `genericOAuth`。今と同じ）になる。**ID サーバーに新しく登録する redirect URI はない。**
+  - 訂正（実装のとき）：最初は Better Auth の既定を `<AUTH_URL>/api/auth/oauth2/callback/sid` と書いていたが、1.7.28 の実際の値は上のとおり。
+- ログアウトは Better Auth の既定のまま：SID でログインした人の `signOut` は、discovery の `end_session_endpoint`（ID サーバーの `/oauth/logout`）へ送り、ID サーバーのログインも消す（今と同じ動き）。今の自前の `sid-logout.ts` は消す。ID サーバーに `post_logout_redirect_uri`（`<AUTH_URL>/signin`。`postLogoutRedirectURI: "/signin"` で送る値）を登録する（4.7 の手順。すでに登録してあれば変更は要らない）。
 
 **管理者**
 
@@ -174,7 +175,7 @@
 
 **手順（`deployment.md` の「移行の記録」に残す）**
 
-1. ID サーバーに、Zhuelog の新しい redirect URI と `post_logout_redirect_uri` を足す。
+1. ID サーバーの zhuelog のクライアントに、`post_logout_redirect_uri`（`<AUTH_URL>/signin`）があることを確かめる（無ければ足す）。`redirect_uri` は今と同じ `/api/auth/callback/sid` なので、足すものはない（訂正：最初は新しい redirect URI を足すと書いていた）。
 2. Vercel に `BETTER_AUTH_SECRET`・`DEMO_PASSWORD` を入れる。
 3. デプロイ（マイグレーションが動く）と、移行のスクリプト。
 4. 管理者が SID でログインし、管理画面が使えることを確かめる。会員の 1 人でログインし、ノートが見えることを確かめる。
