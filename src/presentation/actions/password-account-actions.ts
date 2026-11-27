@@ -8,10 +8,12 @@ import {
   signOutTo,
 } from "@/composition/identity-container";
 import { attemptCall } from "@/presentation/controllers/action-state";
+import { errorName } from "@/presentation/controllers/load-or";
 import {
   accountForbiddenMessage,
   accountInputMessage,
   accountNotFoundMessage,
+  sessionsNotEndedMessage,
 } from "@/presentation/presenters/account-action-errors";
 
 export type AccountActionState =
@@ -22,6 +24,8 @@ export type AccountActionState =
       loginId: string;
       password: string;
       generated: boolean;
+      // Said next to the password when something after the change failed.
+      notice?: string;
     };
 
 const forbidden = {
@@ -105,6 +109,17 @@ export async function resetPasswordAccountPasswordAction(
           : accountNotFoundMessage,
     };
   refreshAccountList();
+  if (!result.value.sessionsEnded) {
+    console.error(
+      "PASSWORD_ACCOUNT_REVOKE_SESSIONS_FAILED",
+      errorName(result.value.sessionsError),
+    );
+    return {
+      status: "success",
+      ...result.value.issued,
+      notice: sessionsNotEndedMessage,
+    };
+  }
   return { status: "success", ...result.value.issued };
 }
 

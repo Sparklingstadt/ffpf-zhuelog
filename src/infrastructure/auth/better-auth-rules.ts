@@ -4,6 +4,7 @@
 import { normalizeLoginId } from "@/domain/identity/password-account";
 
 export { memberEmail } from "@/domain/identity/password-account";
+export { isAdminRole } from "@/domain/identity/roles";
 
 // What the username plugin does to a typed login id before it checks and
 // looks it up: trim(), then toLowerCase(), as normalizeLoginId does, so
@@ -43,12 +44,6 @@ export function rejectsImpersonatedPasswordChange(
   impersonatedBy: string | null | undefined,
 ): boolean {
   return path === "/change-password" && Boolean(impersonatedBy);
-}
-
-// The admin plugin's role "admin" (a user's role may be a comma-separated
-// list).
-export function isAdminRole(role: string | null | undefined): boolean {
-  return (role ?? "").split(",").some((part) => part.trim() === "admin");
 }
 
 // An administrator may impersonate members only: a guest (anonymous user) is

@@ -6,6 +6,11 @@ import { genericErrorMessage } from "@/presentation/presenters/generic-error-mes
 // (or an id no account could have).
 export const accountNotFoundMessage = "アカウントが見つかりません。";
 
+// Shown with the new password when the reset could not end the member's
+// sessions.
+export const sessionsNotEndedMessage =
+  "パスワードは再設定しましたが、ほかの端末ではログインしたままの可能性があります。";
+
 // The account actions' "not allowed" text.
 export const accountForbiddenMessage =
   "この操作を行う権限がありません。再度ログインしてください。";

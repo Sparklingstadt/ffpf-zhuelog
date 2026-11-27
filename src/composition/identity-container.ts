@@ -142,8 +142,12 @@ async function endSession(): Promise<string | null> {
 async function sessionToEnd(
   request: Headers,
 ): Promise<{ headers: Headers; providerLogout: boolean }> {
-  const user = await getCachedCurrentUser();
-  if (!user?.impersonatedBy) return { headers: request, providerLogout: true };
+  // The raw session, not the current user: a banned member reads as signed
+  // out there, but their impersonation session must still not take the
+  // member's provider logout.
+  const current = await auth.api.getSession({ headers: request });
+  if (!current?.session.impersonatedBy)
+    return { headers: request, providerLogout: true };
   try {
     const stopped = await auth.api.stopImpersonating({
       headers: request,

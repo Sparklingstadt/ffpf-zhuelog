@@ -292,6 +292,7 @@ test("reset sets the password, then ends every session of the member", async () 
       password: "a brand new pw",
       generated: false,
     },
+    sessionsEnded: true,
   });
   assert.deepEqual(calls, [
     ["getUser", { query: { id: "u1" }, headers }],
@@ -310,5 +311,43 @@ test("reset sets the password, then ends every session of the member", async () 
       password: "GENERATEDpassword123",
       generated: true,
     },
+    sessionsEnded: true,
   });
+});
+
+test("a new password still reaches the admin when the sessions cannot be ended", async () => {
+  const failure = new TypeError("db down");
+  const { accounts, calls } = fakeDeps(admin, {
+    revokeUserSessions: () => {
+      throw failure;
+    },
+  });
+  assert.deepEqual(await accounts.resetPassword("u1", "a brand new pw"), {
+    ok: true,
+    issued: {
+      loginId: "alice.w",
+      password: "a brand new pw",
+      generated: false,
+    },
+    sessionsEnded: false,
+    sessionsError: failure,
+  });
+  assert.deepEqual(
+    calls.map(([name]) => name),
+    ["getUser", "setUserPassword", "revokeUserSessions"],
+  );
+  // A failed password change is not swallowed.
+  const failed = fakeDeps(admin, {
+    setUserPassword: () => {
+      throw failure;
+    },
+  });
+  await assert.rejects(
+    failed.accounts.resetPassword("u1", "a brand new pw"),
+    TypeError,
+  );
+  assert.deepEqual(
+    failed.calls.map(([name]) => name),
+    ["getUser", "setUserPassword"],
+  );
 });

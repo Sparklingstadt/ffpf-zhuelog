@@ -406,6 +406,49 @@ test("impersonating, the admin is the member: the member's notes, no admin pages
 });
 
 test(
+  "impersonating, the member's password cannot be changed through Better Auth either",
+  anyWidth,
+  async ({ page, context, db }) => {
+    const accountId = await createMember(
+      db,
+      "test07",
+      "テスト七郎",
+      "member-password-1",
+    );
+    const hash = async () =>
+      (
+        await db.query(
+          `SELECT "password" FROM "account" WHERE "userId" = $1 AND "providerId" = 'credential'`,
+          [accountId],
+        )
+      ).rows[0].password as string;
+    const before = await hash();
+    await asAdmin(context);
+    await page.goto("/admin/accounts");
+    await page.getByRole("button", { name: "この会員として操作" }).click();
+    await expect(bannerOf(page)).toContainText("テスト七郎");
+
+    const status = await page.evaluate(async () => {
+      const response = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          currentPassword: "member-password-1",
+          newPassword: "admin-chosen-password-1",
+          revokeOtherSessions: true,
+        }),
+      });
+      return response.status;
+    });
+    expect(status).toBe(403);
+    expect(await hash()).toBe(before);
+    // Still the impersonation, not an ordinary session of the member.
+    await page.reload();
+    await expect(bannerOf(page)).toContainText("テスト七郎");
+  },
+);
+
+test(
   "a guest is never impersonated, and only an admin learns that it is a guest",
   anyWidth,
   async ({ page, context, browser, baseURL, db }) => {

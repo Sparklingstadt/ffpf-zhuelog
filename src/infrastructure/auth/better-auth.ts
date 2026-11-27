@@ -86,8 +86,11 @@ export const auth = betterAuth({
     ipAddress: { ipAddressHeaders: ["x-real-ip", "x-forwarded-for"] },
   },
   // Name and login id are not changed by members themselves (and the demo's
-  // must not be changed at all).
-  disabledPaths: ["/update-user"],
+  // must not be changed at all). Members sign in by login id only: their mail
+  // address (memberEmail) is guessable, and /sign-in/email would get its own
+  // looser rate limit than /sign-in/username. Closed on the HTTP router only;
+  // nothing here calls it on the server either.
+  disabledPaths: ["/update-user", "/sign-in/email"],
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
       // A sign-in starts from no session: the browser's previous session

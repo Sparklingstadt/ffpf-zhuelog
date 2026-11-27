@@ -20,6 +20,11 @@ export function AccountResult({
         パスワード:{" "}
         <span className="font-mono break-all">{state.password}</span>
         （この画面を離れると再表示できません）
+        {state.notice ? (
+          <span role="alert" className="mt-2 block text-destructive">
+            {state.notice}
+          </span>
+        ) : null}
       </output>
     );
   }

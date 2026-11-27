@@ -3,6 +3,7 @@ import type {
   IssuedPassword,
   MemberAccount,
 } from "../../domain/identity/member-account";
+import { isAdminRole } from "../../domain/identity/roles";
 import {
   checkNewAccount,
   choosePassword,
@@ -25,8 +26,16 @@ export type CreateAccountResult =
 // "not-found" is a missing user, a user who is not a member with a login id
 // (an admin, a guest, a Sparklingstadt ID member), and an id no user could
 // have.
+// sessionsEnded false: the password was replaced, but ending the member's
+// sessions failed (sessionsError), so other browsers may still be signed in.
 export type ResetPasswordResult =
-  | { ok: true; issued: IssuedPassword }
+  | { ok: true; issued: IssuedPassword; sessionsEnded: true }
+  | {
+      ok: true;
+      issued: IssuedPassword;
+      sessionsEnded: false;
+      sessionsError: unknown;
+    }
   | { ok: false; reason: "password" | "not-found" };
 
 // A user as Better Auth's admin API answers it (the fields used here).
@@ -90,10 +99,6 @@ const TAKEN_CODES = new Set([
 function errorCode(error: unknown): string | undefined {
   const body = (error as { body?: { code?: unknown } } | null)?.body;
   return typeof body?.code === "string" ? body.code : undefined;
-}
-
-function isAdminRole(role: string | null | undefined): boolean {
-  return (role ?? "user").split(",").some((part) => part.trim() === "admin");
 }
 
 // A member: neither an admin nor a guest.
@@ -210,14 +215,18 @@ export function createMemberAccounts(deps: MemberAccountsDeps) {
         body: { userId: target.id, newPassword: password },
         headers,
       });
-      await deps.api.revokeUserSessions({
-        body: { userId: target.id },
-        headers,
-      });
-      return {
-        ok: true,
-        issued: { loginId: target.loginId, password, generated },
-      };
+      const issued = { loginId: target.loginId, password, generated };
+      // The new password must still reach the admin when the sessions
+      // cannot be ended: the caller says so (and logs it).
+      try {
+        await deps.api.revokeUserSessions({
+          body: { userId: target.id },
+          headers,
+        });
+      } catch (sessionsError) {
+        return { ok: true, issued, sessionsEnded: false, sessionsError };
+      }
+      return { ok: true, issued, sessionsEnded: true };
     },
   };
 }

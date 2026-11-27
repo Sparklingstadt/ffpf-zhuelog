@@ -165,6 +165,35 @@ test(
 );
 
 test(
+  "members sign in by login id only: their mail address does not sign in",
+  anyWidth,
+  async ({ page, context, db }) => {
+    await createMember(db, "taro", "太郎", "member-password-1");
+    await page.goto("/signin");
+    const status = await page.evaluate(async () => {
+      const response = await fetch("/api/auth/sign-in/email", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email: "taro@members.zhuelog.invalid",
+          password: "member-password-1",
+        }),
+      });
+      return response.status;
+    });
+    expect(status).toBe(404);
+    expect(
+      (await db.query(`SELECT count(*)::int AS n FROM "session"`)).rows[0].n,
+    ).toBe(0);
+    expect(
+      (await context.cookies()).some((cookie) =>
+        cookie.name.endsWith("better-auth.session_token"),
+      ),
+    ).toBe(false);
+  },
+);
+
+test(
   "too many sign-ins pause that client only",
   anyWidth,
   async ({ browser, baseURL, db }) => {

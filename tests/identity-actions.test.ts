@@ -8,6 +8,7 @@ import {
   accountForbiddenMessage,
   accountInputMessage,
   accountNotFoundMessage,
+  sessionsNotEndedMessage,
 } from "../src/presentation/presenters/account-action-errors";
 import { genericErrorMessage } from "../src/presentation/presenters/generic-error-message";
 import {
@@ -282,6 +283,7 @@ test("a reset password is sent by the account's id and comes back once", async (
   answers["memberAccounts.resetPassword"] = () => ({
     ok: true,
     issued: reissued,
+    sessionsEnded: true,
   });
 
   assert.deepEqual(
@@ -294,6 +296,35 @@ test("a reset password is sent by the account's id and comes back once", async (
   );
   assert.deepEqual(calls, [
     ["memberAccounts.resetPassword", "c1", "new-password-12"],
+  ]);
+  assert.deepEqual(next.revalidated, [["/admin/accounts"]]);
+});
+
+test("a reset whose sessions could not be ended still shows the password, says so and logs the name only", async (t) => {
+  const { resetPasswordAccountPasswordAction } = await accounts();
+  const logged = captureErrors(t);
+  user = admin;
+  const reissued = {
+    loginId: "hana",
+    password: "new-password-12",
+    generated: false,
+  };
+  answers["memberAccounts.resetPassword"] = () => ({
+    ok: true,
+    issued: reissued,
+    sessionsEnded: false,
+    sessionsError: new TypeError("db down new-password-12"),
+  });
+  assert.deepEqual(
+    await resetPasswordAccountPasswordAction(
+      "c1",
+      idle,
+      form({ password: "new-password-12" }),
+    ),
+    { status: "success", ...reissued, notice: sessionsNotEndedMessage },
+  );
+  assert.deepEqual(logged, [
+    ["PASSWORD_ACCOUNT_REVOKE_SESSIONS_FAILED", "TypeError"],
   ]);
   assert.deepEqual(next.revalidated, [["/admin/accounts"]]);
 });
