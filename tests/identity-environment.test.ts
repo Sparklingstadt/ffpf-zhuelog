@@ -2,17 +2,14 @@ import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 
 import {
-  allowedGitHubIds,
   cronSecret,
   demoLoginId,
   sidConfig,
-  githubOAuthConfig,
   isHttpsOrLoopbackUrl,
   lineConfig,
 } from "../src/infrastructure/config/environment";
 
 const saved = {
-  ids: process.env.AUTH_ALLOWED_GITHUB_IDS,
   demo: process.env.DEMO_LOGIN_ID,
 };
 
@@ -23,8 +20,6 @@ const LINE_KEYS = [
   "OPENAI_API_KEY",
   "OPENAI_API_BASE_URL",
   "CRON_SECRET",
-  "AUTH_GITHUB_ID",
-  "GITHUB_WEB_CLIENT_SECRET",
   "SID_ISSUER",
   "SID_CLIENT_ID",
   "SID_CLIENT_SECRET",
@@ -42,25 +37,8 @@ function restore(key: string, value: string | undefined) {
 }
 
 afterEach(() => {
-  restore("AUTH_ALLOWED_GITHUB_IDS", saved.ids);
   restore("DEMO_LOGIN_ID", saved.demo);
   for (const key of LINE_KEYS) restore(key, savedLine[key]);
-});
-
-test("allowedGitHubIds keeps only numeric ids", () => {
-  process.env.AUTH_ALLOWED_GITHUB_IDS = " 10001, abc ,2002,,";
-  assert.deepEqual([...allowedGitHubIds()].sort(), ["10001", "2002"]);
-});
-
-test("allowedGitHubIds trims Unicode White_Space, not String.prototype.trim's set", () => {
-  // White_Space trimming strips U+0085 but keeps U+FEFF.
-  process.env.AUTH_ALLOWED_GITHUB_IDS = "\u0085301\u0085,\uFEFF302";
-  assert.deepEqual([...allowedGitHubIds()], ["301"]);
-});
-
-test("allowedGitHubIds is empty when unset", () => {
-  delete process.env.AUTH_ALLOWED_GITHUB_IDS;
-  assert.equal(allowedGitHubIds().size, 0);
 });
 
 test("demoLoginId is undefined when blank", () => {
@@ -164,24 +142,6 @@ test("cronSecret is the trimmed CRON_SECRET", () => {
   assert.equal(cronSecret(), undefined);
   setLine({});
   assert.equal(cronSecret(), undefined);
-});
-
-test("githubOAuthConfig needs both the client id and the secret", () => {
-  setLine({ AUTH_GITHUB_ID: " id ", GITHUB_WEB_CLIENT_SECRET: " secret " });
-  assert.deepEqual(githubOAuthConfig(), {
-    clientId: "id",
-    clientSecret: "secret",
-  });
-  for (const values of [
-    { AUTH_GITHUB_ID: "id" },
-    { GITHUB_WEB_CLIENT_SECRET: "secret" },
-    { AUTH_GITHUB_ID: "id", GITHUB_WEB_CLIENT_SECRET: "  " },
-    { AUTH_GITHUB_ID: " \t", GITHUB_WEB_CLIENT_SECRET: "secret" },
-    {},
-  ]) {
-    setLine(values);
-    assert.equal(githubOAuthConfig(), undefined, JSON.stringify(values));
-  }
 });
 
 test("sidConfig needs the issuer, the client id and the secret", () => {

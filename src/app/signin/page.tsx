@@ -1,12 +1,4 @@
-import {
-  CircleUserRound,
-  Eye,
-  FlaskConical,
-  KeyRound,
-  Languages,
-  LockKeyhole,
-  UserRoundCheck,
-} from "lucide-react";
+import { FlaskConical, KeyRound, Languages, LockKeyhole } from "lucide-react";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
@@ -14,37 +6,27 @@ import {
   demoAvailable,
   getCurrentViewerUser,
 } from "@/composition/identity-container";
-import { warmSignIn } from "@/composition/sign-in-container";
+import { sidConfig } from "@/infrastructure/config/environment";
+import { signInAsDemoAction } from "@/presentation/actions/auth-actions";
 import {
-  sidConfig,
-  githubOAuthConfig,
-} from "@/infrastructure/config/environment";
-import {
-  signInAsDemoAction,
-  signInAsGuestAction,
-  signInWithSidAction,
-  signInWithGitHubAction,
-  signInWithPasswordAction,
-} from "@/presentation/actions/auth-actions";
+  GuestSignInButton,
+  PasswordSignInForm,
+  SidSignInButton,
+} from "@/presentation/components/auth/sign-in-forms";
 import {
   Alert,
   AlertDescription,
   AlertTitle,
 } from "@/presentation/components/ui/alert";
 import { Button } from "@/presentation/components/ui/button";
-import { Input } from "@/presentation/components/ui/input";
-import { Label } from "@/presentation/components/ui/label";
 import { Card, CardContent } from "@/presentation/components/ui/card";
 import { getSafeCallbackPath } from "@/presentation/http/safe-callback-path";
 import { AppHeader } from "@/presentation/components/layout/app-header";
 
+// The errors the demo sign-in sends back. Any other ?error= (such as Better
+// Auth's code after a refused Sparklingstadt ID callback) is the generic
+// message: Better Auth's own words are never shown.
 const errorMessages: Record<string, string> = {
-  CredentialsSignin: "IDまたはパスワードが違うか、一時的にロックされています。",
-  AccessDenied:
-    "このGitHubアカウントには利用権限がありません。管理者に確認してください。",
-  Configuration: "認証設定が完了していません。管理者に確認してください。",
-  OAuthCallbackError:
-    "認証サービスからの結果を確認できませんでした。もう一度お試しください。",
   DemoUnavailable: "デモは今は利用できません。",
 };
 
@@ -58,25 +40,22 @@ export const metadata: Metadata = {
 type SignInPageProps = {
   searchParams: Promise<{
     callbackUrl?: string;
-    error?: string;
+    error?: string | string[];
     notice?: string;
   }>;
 };
 
 export default async function SignInPage({ searchParams }: SignInPageProps) {
-  // Builds the hasher's dummy hash before a password can be submitted, so an
-  // unknown login id costs what a known one does. Never throws; not awaited.
-  void warmSignIn();
   const user = await getCurrentViewerUser();
   if (user) redirect("/");
 
   const params = await searchParams;
   const callbackPath = getSafeCallbackPath(params.callbackUrl);
-  const isConfigured = Boolean(githubOAuthConfig());
   const showSid = Boolean(sidConfig());
   const showDemo = await demoAvailable();
-  const errorMessage = params.error
-    ? (errorMessages[params.error] ??
+  const error = [params.error ?? []].flat()[0];
+  const errorMessage = error
+    ? (errorMessages[error] ??
       "認証中にエラーが発生しました。もう一度お試しください。")
     : null;
   const showPasswordChangedNotice = params.notice === "password-changed";
@@ -139,11 +118,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
                 </div>
               ) : null}
               <div className="space-y-2">
-                <form action={signInAsGuestAction.bind(null, callbackPath)}>
-                  <Button type="submit" className="w-full" variant="outline">
-                    <Eye /> ゲストとして使う
-                  </Button>
-                </form>
+                <GuestSignInButton callbackPath={callbackPath} />
                 <p className="text-xs leading-5 text-muted-foreground">
                   ゲストは練習だけを試せます。学習ノート・CSVインポートは利用できません。
                 </p>
@@ -157,85 +132,18 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
                 <h2 id="signin-member" className="text-sm font-semibold">
                   会員の方
                 </h2>
-                {!isConfigured ? (
-                  <Alert>
-                    <LockKeyhole />
-                    <AlertTitle>OAuth設定が必要です</AlertTitle>
-                    <AlertDescription>
-                      GitHubでのログインは現在利用できません。READMEに従ってGitHub
-                      OAuth Appと許可ユーザーを設定してください。
-                    </AlertDescription>
-                  </Alert>
+                <PasswordSignInForm
+                  callbackPath={callbackPath}
+                  primary={!showDemo}
+                />
+                {showSid ? (
+                  <SidSignInButton callbackPath={callbackPath} />
                 ) : null}
-                <form
-                  action={signInWithPasswordAction.bind(null, callbackPath)}
-                  className="space-y-3"
-                >
-                  <div className="space-y-2">
-                    <Label htmlFor="loginId">ログインID</Label>
-                    <Input
-                      id="loginId"
-                      name="loginId"
-                      type="text"
-                      autoComplete="username"
-                      autoCapitalize="none"
-                      spellCheck={false}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="password">パスワード</Label>
-                    <Input
-                      id="password"
-                      name="password"
-                      type="password"
-                      autoComplete="current-password"
-                      required
-                    />
-                  </div>
-                  <Button
-                    type="submit"
-                    className="w-full"
-                    variant={showDemo ? "secondary" : "default"}
-                  >
-                    <KeyRound /> IDとパスワードでログイン
-                  </Button>
-                </form>
-                <div
-                  className={
-                    showSid ? "grid gap-2 sm:grid-cols-2" : "grid gap-2"
-                  }
-                >
-                  {showSid ? (
-                    <form action={signInWithSidAction.bind(null, callbackPath)}>
-                      <Button
-                        type="submit"
-                        className="w-full"
-                        variant="outline"
-                      >
-                        <UserRoundCheck /> Sparklingstadt ID でログイン
-                      </Button>
-                    </form>
-                  ) : null}
-                  <form
-                    action={signInWithGitHubAction.bind(null, callbackPath)}
-                  >
-                    <Button
-                      type="submit"
-                      className="w-full"
-                      variant="outline"
-                      disabled={!isConfigured}
-                    >
-                      <CircleUserRound /> GitHubでログイン
-                    </Button>
-                  </form>
-                </div>
                 <p className="text-xs leading-5 text-muted-foreground">
                   IDとパスワードのアカウントは管理者が発行します。
                   {showSid
-                    ? "Sparklingstadt ID ではメールアドレスと表示名が利用されます。"
+                    ? "Sparklingstadt ID ではメールアドレスと表示名が利用されます。管理者は Sparklingstadt ID でログインします。"
                     : null}
-                  GitHub認証ではユーザー名・表示名・メールアドレス・プロフィール画像が利用されます。
                 </p>
               </section>
             </CardContent>

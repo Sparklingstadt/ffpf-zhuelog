@@ -67,20 +67,8 @@ model PasswordAccount {
 }
 
 // Table dropped in 20261127100000_owner_to_user; model removed with its code in Task 6/7.
-// A member who signs in with Sparklingstadt ID (issued by sparklingstadt-id). id is the
-// Sparklingstadt ID server's sub; the ownerId is "sid:" + id. email is for display only and is
-// never used for authorization.
-model SidAccount {
-  id             String   @id
-  email          String
-  displayName    String
-  sessionVersion Int      @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  lastLoginAt    DateTime
-}
-
-// Table dropped in 20261127100000_owner_to_user; model removed with its code in Task 6/7.
+// Still read by sign-in-throttle-store for the own password change (Task 7)
+// and the LINE link codes.
 // Fixed-window sign-in attempt counters, written by the web's sign-in (the retired Go API wrote the same keys).
 // Keys always include the client address ("client:<ip>",
 // "login:<ip>:<loginId>"), so nobody can lock another person out from
@@ -108,6 +96,7 @@ model Follow {
 }
 
 // Table dropped in 20261127100000_owner_to_user; model removed with its code in Task 6/7.
+// Still written by password-account-store (Task 7 replaces it).
 // A signed-in browser of the own session scheme (stage 11 of the Go retirement). The cookie holds a
 // random token; only its SHA-256 is kept here. role/login/sessionVersion are
 // what Go's refresh tokens kept (the ApiRefreshToken table, dropped in stage

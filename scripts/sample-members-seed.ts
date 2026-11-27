@@ -2,10 +2,16 @@
 // database for trying the web (docs/development.md). Run through
 // `pnpm run db:seed:sample`; safe to run again (it skips what exists).
 // Local test values only.
+import { randomUUID } from "node:crypto";
+
 import { PrismaPg } from "@prisma/adapter-pg";
 import "dotenv/config";
 
 import { PrismaClient } from "../src/generated/prisma/client";
+import {
+  memberEmail,
+  normalizeUsername,
+} from "../src/infrastructure/auth/better-auth-rules";
 import { ScryptPasswordHasher } from "../src/infrastructure/security/scrypt-password-hasher";
 import { securePostgresConnectionString } from "../prisma/postgres-connection";
 
@@ -19,6 +25,8 @@ if (!["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)) {
 }
 const connectionString = securePostgresConnectionString(rawConnectionString);
 
+// "demo" is the demo account when DEMO_LOGIN_ID="demo" and
+// DEMO_PASSWORD="demo-password-123" (.env.example).
 const members = [
   { loginId: "demo", password: "demo-password-123", displayName: "デモ" },
   {
@@ -49,22 +57,38 @@ const prisma = new PrismaClient({
 });
 const hasher = new ScryptPasswordHasher();
 
+// A user id of the shape Better Auth makes (32 letters and digits).
+const newUserId = () => randomUUID().replaceAll("-", "");
+
+// Each member is a Better Auth "user" (the login id as its username, a mail
+// address under .invalid) with a credential account holding the scrypt hash,
+// as an administrator's member creation makes them.
 async function main() {
   const ids: Record<string, string> = {};
   for (const member of members) {
-    const existing = await prisma.passwordAccount.findUnique({
-      where: { loginId: member.loginId },
-    });
-    const account =
-      existing ??
-      (await prisma.passwordAccount.create({
+    const username = normalizeUsername(member.loginId);
+    const existing = await prisma.user.findUnique({ where: { username } });
+    const userId = existing?.id ?? newUserId();
+    if (!existing)
+      await prisma.user.create({
         data: {
-          loginId: member.loginId,
-          displayName: member.displayName,
-          passwordHash: await hasher.hash(member.password),
+          id: userId,
+          name: member.displayName,
+          email: memberEmail(username),
+          username,
+          displayUsername: username,
+          role: "user",
+          accounts: {
+            create: {
+              id: newUserId(),
+              accountId: userId,
+              providerId: "credential",
+              password: await hasher.hash(member.password),
+            },
+          },
         },
-      }));
-    ids[member.loginId] = account.id;
+      });
+    ids[member.loginId] = userId;
     console.log(`${existing ? "kept" : "created"} member ${member.loginId}`);
   }
 

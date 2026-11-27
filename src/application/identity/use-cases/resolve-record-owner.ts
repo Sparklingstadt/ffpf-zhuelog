@@ -8,7 +8,6 @@ export type RecordOwner =
   | { kind: "other"; ownerId: string }
   | { kind: "denied"; reason: "unauthenticated" }
   | { kind: "denied"; reason: "guest" }
-  | { kind: "denied"; reason: "reauth" }
   | { kind: "redirect-self" };
 
 // Whose notes a page lists: the user's own, or another member's for an admin.
@@ -19,9 +18,7 @@ export function showsRecords(
 }
 
 // Decides whose records a page shows. `requested` is the raw `?user=` value:
-// an admin may name any well-formed user id. (Better Auth sessions always
-// carry a user id, so "reauth" is no longer produced; the pages still handle
-// it until it is removed.)
+// an admin may name any well-formed user id.
 export function resolveRecordOwner(
   user: AuthenticatedUser | null,
   requested: string | undefined,

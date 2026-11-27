@@ -13,7 +13,10 @@
 import { Prisma, type PrismaClient } from "../../generated/prisma/client";
 import type { MemberAccount } from "../../domain/identity/member-account";
 import { newId } from "./new-id";
-import { SESSION_TRANSACTION_OPTIONS } from "./session-store";
+
+// For every interactive transaction that touches the legacy Session table
+// (password changes delete the owner's sessions with the hash update).
+const SESSION_TRANSACTION_OPTIONS = { maxWait: 5_000, timeout: 10_000 };
 
 type AccountRow = {
   id: string;

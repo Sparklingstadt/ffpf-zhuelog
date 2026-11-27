@@ -8,6 +8,8 @@ import {
   normalizeUsername,
   rejectsDemoPasswordChange,
   rejectsGuestImpersonation,
+  startsSession,
+  withoutSessionCookie,
 } from "../src/infrastructure/auth/better-auth-rules";
 import {
   betterAuthSecret,
@@ -89,6 +91,40 @@ test("an unknown impersonation target is left to the admin plugin", () => {
     false,
   );
   assert.equal(rejectsGuestImpersonation("/admin/impersonate-user", {}), false);
+});
+
+test("the sign-ins that start a session are told apart", () => {
+  for (const path of [
+    "/sign-in/username",
+    "/sign-in/anonymous",
+    "/callback/sid",
+  ])
+    assert.equal(startsSession(path), true, path);
+  for (const path of [
+    "/sign-in/social",
+    "/sign-out",
+    "/get-session",
+    "/change-password",
+    "/admin/impersonate-user",
+  ])
+    assert.equal(startsSession(path), false, path);
+});
+
+test("withoutSessionCookie drops only Better Auth's session cookies", () => {
+  assert.equal(
+    withoutSessionCookie(
+      "a=1; better-auth.session_token=x.y; better-auth.state=s; __Secure-better-auth.session_token=z; better-auth.session_data=d; b=2",
+    ),
+    "a=1; better-auth.state=s; b=2",
+  );
+  assert.equal(withoutSessionCookie("better-auth.session_token=x"), "");
+  assert.equal(withoutSessionCookie(""), "");
+  assert.equal(withoutSessionCookie(null), "");
+  // A cookie whose name only ends with the session cookie's stays.
+  assert.equal(
+    withoutSessionCookie("my-better-auth.session_token=x"),
+    "my-better-auth.session_token=x",
+  );
 });
 
 test("memberEmail uses the .invalid domain", () => {

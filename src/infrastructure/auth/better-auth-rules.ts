@@ -61,3 +61,33 @@ export const AUTH_RATE_LIMIT = {
     "/change-password": { window: 900, max: 5 },
   },
 } as const;
+
+// The endpoints that answer with a new session cookie: a member's or the
+// demo's password sign-in, a guest's, and the OAuth callback
+// (Sparklingstadt ID). /sign-in/social only sends the browser away.
+export function startsSession(path: string): boolean {
+  return (
+    path === "/sign-in/username" ||
+    path === "/sign-in/anonymous" ||
+    path.startsWith("/callback/")
+  );
+}
+
+// Better Auth's session cookies (the token and its cache, with or without
+// the __Secure- prefix).
+const SESSION_COOKIE =
+  /^(__Secure-)?better-auth\.(session_token|session_data)$/;
+
+// A Cookie request header without Better Auth's session cookies. A sign-in
+// must not read the browser's previous session: in better-auth 1.7 the
+// anonymous plugin's after-hook reads it, and when it names a session that
+// is gone (signed out elsewhere, expired, revoked) the plugin deletes the
+// session cookie, replacing the one the sign-in has just set, so the sign-in
+// would answer 200 and leave the browser signed out.
+export function withoutSessionCookie(header: string | null): string {
+  return (header ?? "")
+    .split(";")
+    .map((part) => part.trim())
+    .filter((part) => part && !SESSION_COOKIE.test(part.split("=")[0]))
+    .join("; ");
+}

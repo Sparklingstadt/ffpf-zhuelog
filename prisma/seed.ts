@@ -7,9 +7,15 @@ import "dotenv/config";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { securePostgresConnectionString } from "./postgres-connection";
 
-// Seeded notes belong to the administrator, matching the migration that
-// assigned the pre-existing shared notes to this GitHub account.
-const SEED_OWNER_ID = "219588180";
+// Seeded notes belong to an administrator the seed makes (or keeps): a
+// Better Auth "user" with role "admin". Administrators sign in with
+// Sparklingstadt ID, so it has no password: to sign in as it, give it an
+// "account" row with providerId "sid" and accountId your Sparklingstadt ID sub.
+const SEED_ADMIN = {
+  id: "seedadmin",
+  name: "管理者",
+  email: "admin@admin.zhuelog.invalid",
+} as const;
 
 type SeedEntry = {
   id: string;
@@ -151,6 +157,11 @@ async function main() {
 
   await prisma.$transaction(
     async (tx) => {
+      await tx.user.upsert({
+        where: { id: SEED_ADMIN.id },
+        update: {},
+        create: { ...SEED_ADMIN, role: "admin" },
+      });
       for (const batch of seed.batches) {
         const missingEntries = [];
 
@@ -193,7 +204,7 @@ async function main() {
           await tx.learningEntry.create({
             data: {
               id: entry.id,
-              userId: SEED_OWNER_ID,
+              userId: SEED_ADMIN.id,
               batchId: batch.id,
               createdAt: new Date(entry.createdAt),
               originalText: entry.originalText,

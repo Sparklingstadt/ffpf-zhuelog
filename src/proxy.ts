@@ -10,7 +10,7 @@ function passThrough(request: NextRequest) {
   if (pathname.startsWith("/api/") || isMetadataFile(pathname))
     return NextResponse.next();
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
-  // The Sparklingstadt ID sign-in form redirects to the issuer.
+  // The sign-out form redirects to the Sparklingstadt ID issuer's logout.
   const sid = sidConfig();
   const csp = contentSecurityPolicy(
     nonce,

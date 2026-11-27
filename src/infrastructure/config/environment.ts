@@ -59,19 +59,6 @@ export function demoPassword(): string | undefined {
   return password ? password : undefined;
 }
 
-// The web's GitHub OAuth App for the code exchange: AUTH_GITHUB_ID (the id
-// the authorize URL also uses) and GITHUB_WEB_CLIENT_SECRET. Both trimmed of
-// Unicode White_Space and non-empty, else undefined.
-export function githubOAuthConfig():
-  { clientId: string; clientSecret: string } | undefined {
-  const clientId = trimWhiteSpace(process.env.AUTH_GITHUB_ID ?? "");
-  const clientSecret = trimWhiteSpace(
-    process.env.GITHUB_WEB_CLIENT_SECRET ?? "",
-  );
-  if (!clientId || !clientSecret) return undefined;
-  return { clientId, clientSecret };
-}
-
 // Link to add the LINE official account as a friend. It is shown as a link
 // on the page, so only an https:// URL is used; anything else is ignored.
 export function lineAddFriendUrl(): string | undefined {
@@ -104,17 +91,6 @@ export function siteUrl(): string {
   const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
   if (vercel) return `https://${vercel}`;
   return "http://localhost:3000";
-}
-
-// GitHub account ids allowed to act as administrator: comma separated,
-// trimmed of Unicode White_Space, digits only. Empty means no administrator
-// gets through.
-export function allowedGitHubIds(): ReadonlySet<string> {
-  const ids = (process.env.AUTH_ALLOWED_GITHUB_IDS ?? "")
-    .split(",")
-    .map((id) => trimWhiteSpace(id))
-    .filter((id) => /^[0-9]+$/.test(id));
-  return new Set(ids);
 }
 
 let demoLoginIdReported = false;

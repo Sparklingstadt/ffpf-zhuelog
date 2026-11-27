@@ -22,6 +22,8 @@ import {
   normalizeUsername,
   rejectsDemoPasswordChange,
   rejectsGuestImpersonation,
+  startsSession,
+  withoutSessionCookie,
 } from "@/infrastructure/auth/better-auth-rules";
 import {
   betterAuthSecret,
@@ -80,6 +82,15 @@ export const auth = betterAuth({
   disabledPaths: ["/update-user"],
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
+      // A sign-in starts from no session: the previous session cookie is
+      // not read (withoutSessionCookie). A guest who signs in as a member
+      // is therefore not linked; the guest user is left to the nightly
+      // cleanup.
+      if (startsSession(ctx.path) && ctx.headers?.has("cookie")) {
+        const headers = new Headers(ctx.headers);
+        headers.set("cookie", withoutSessionCookie(ctx.headers.get("cookie")));
+        return { context: { headers } };
+      }
       if (ctx.path === "/change-password") {
         const session = await getSessionFromCtx<{ username?: string | null }>(
           ctx,
@@ -132,6 +143,13 @@ export const auth = betterAuth({
               clientSecret: sid.clientSecret,
               scopes: ["openid", "email", "profile"],
               pkce: true,
+              // The ID server takes the client secret as HTTP Basic
+              // credentials (client_secret_basic).
+              authentication: "basic",
+              // Signing out of a Sparklingstadt ID session also ends it on the
+              // ID server (its end_session_endpoint), which comes back here.
+              // Registered there as a post-logout redirect URI.
+              postLogoutRedirectURI: "/signin",
               // Without the issuer and JWKS from discovery the provider is
               // left out rather than accepting ID tokens unverified.
               requireIdTokenVerification: true,

@@ -59,11 +59,7 @@ stubSource("composition/identity-container", {
   getCurrentMemberUser: async () =>
     user && user.role !== "guest" ? user : null,
   getCurrentAdminUser: async () => (user?.role === "admin" ? user : null),
-  signInWithGitHub: record("signInWithGitHub"),
-  signInWithSid: record("signInWithSid"),
-  signInAsGuest: record("signInAsGuest"),
   signInAsDemo: record("signInAsDemo"),
-  signInWithPassword: record("signInWithPassword"),
   signOutCurrentUser: record("signOutCurrentUser"),
   // As the real one: it ends by redirecting.
   signOutTo: async (to: string) => {
@@ -123,41 +119,18 @@ beforeEach(() => {
   answers = {};
 });
 
-test("sign-in actions only ever come back to a path of this site", async () => {
+test("the demo sign-in only ever comes back to a path of this site, and sign-out is passed on", async () => {
   const actions = await auth();
 
-  await actions.signInWithGitHubAction("https://evil.example");
-  await actions.signInWithSidAction("//evil.example");
-  await actions.signInAsGuestAction("/%2fevil.example");
+  await actions.signInAsDemoAction("https://evil.example");
+  await actions.signInAsDemoAction("/%2fevil.example");
   await actions.signInAsDemoAction("/logs/2026/9/24?view=all");
-  await actions.signInWithPasswordAction(
-    "/\\evil.example",
-    form({ loginId: "taro", password: "member-password-1" }),
-  );
-
-  assert.deepEqual(calls, [
-    ["signInWithGitHub", "/"],
-    ["signInWithSid", "/"],
-    ["signInAsGuest", "/"],
-    ["signInAsDemo", "/logs/2026/9/24?view=all"],
-    [
-      "signInWithPassword",
-      { loginId: "taro", password: "member-password-1", redirectTo: "/" },
-    ],
-  ]);
-});
-
-test("a password form without text fields signs in with empty values, and sign-out is passed on", async () => {
-  const actions = await auth();
-
-  await actions.signInWithPasswordAction(
-    "/logs",
-    form({ loginId: new Blob(["x"]) }),
-  );
   await actions.signOutAction();
 
   assert.deepEqual(calls, [
-    ["signInWithPassword", { loginId: "", password: "", redirectTo: "/logs" }],
+    ["signInAsDemo", "/"],
+    ["signInAsDemo", "/"],
+    ["signInAsDemo", "/logs/2026/9/24?view=all"],
     ["signOutCurrentUser"],
   ]);
 });

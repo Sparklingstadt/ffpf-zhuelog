@@ -18,8 +18,8 @@ export function RecordOwnerSwitcher({ owner, options, action }: Props) {
   if (owner.kind !== "self" && owner.kind !== "other") return null;
 
   const selected = owner.kind === "other" ? owner.ownerId : "";
-  // An owner chosen via `?user=` that is not a listed member (e.g. a GitHub
-  // ID) still has to show as selected.
+  // An owner chosen via `?user=` that is not a listed member (e.g. an
+  // administrator's user id) still has to show as selected.
   const listed = options.some((option) => option.ownerId === selected);
 
   return (

@@ -1,10 +1,6 @@
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
-import type {
-  IssuedSession,
-  SignInResult,
-} from "@/application/identity/sign-in";
 import { RequireAdminUser } from "@/application/identity/use-cases/require-admin-user";
 import { RequireMemberUser } from "@/application/identity/use-cases/require-member-user";
 import { RequireViewerUser } from "@/application/identity/use-cases/require-viewer-user";
@@ -14,46 +10,15 @@ import {
 } from "@/application/identity/use-cases/resolve-record-owner";
 import type { AuthenticatedUser } from "@/domain/identity/entities/authenticated-user";
 import type { CurrentUserProvider } from "@/application/identity/ports/current-user-provider";
-import { clientAddress } from "@/infrastructure/auth/client-address";
-import { resolveSignOutTarget } from "@/infrastructure/auth/sid-logout";
+import { auth } from "@/infrastructure/auth/better-auth";
+import { demoLoginId, demoPassword } from "@/infrastructure/config/environment";
+import { errorName } from "@/presentation/controllers/load-or";
 import {
-  createSidOAuthStart,
-  sidAuthorizeUrl,
-  sidRedirectUri,
-} from "@/infrastructure/auth/sid-oauth";
-import {
-  createOAuthStart,
-  githubAuthorizeUrl,
-  githubRedirectUri,
-  OAUTH_COOKIE_MAX_AGE,
-  publicOrigin,
-  requestOrigin,
-} from "@/infrastructure/auth/github-oauth";
-import { isSecureRequest } from "@/infrastructure/auth/secure-request";
-import {
-  clearedActAsCookieWrite,
-  cookieWrite,
-  OAUTH_COOKIE,
-  signedOutCookieWrites,
-} from "@/infrastructure/auth/session-cookies";
-import {
-  readSessionToken,
-  requestIsSecure,
-  writeCookies,
-} from "@/infrastructure/auth/web-session";
-import {
-  demoLoginId,
-  sidConfig,
-  githubOAuthConfig,
-} from "@/infrastructure/config/environment";
-import {
+  demoFailureReason,
   demoFailureUrl,
-  errorName,
-  guestFailureUrl,
-  passwordFailureUrl,
+  type DemoFailure,
 } from "@/presentation/controllers/sign-in-controller";
 import { getCachedCurrentUser } from "./current-user";
-import { newSessionCookies, sessionStore, signIn } from "./sign-in-container";
 
 // Decided from the Better Auth session, once per request.
 const currentUserProvider: CurrentUserProvider = {
@@ -86,174 +51,79 @@ export async function getRecordOwner(requested: string | undefined): Promise<{
   return { user, owner: resolveRecordOwner(user, requested) };
 }
 
-// Sign-in and sign-out, for Server Actions only: they set cookies, which
-// Server Components cannot do. Next.js accepts Server Actions by POST only
-// and checks their Origin against the Host; the cookies are SameSite=Lax.
-// redirect() throws NEXT_REDIRECT, so it is never called inside a try block.
+// The demo sign-in and the sign-out, for Server Actions only: they set
+// cookies (Better Auth's nextCookies plugin writes them), which Server
+// Components cannot do. redirect() throws NEXT_REDIRECT, so it is never
+// called inside a try block. Members, Sparklingstadt ID and guests sign in
+// from the browser (Better Auth's client), so Better Auth's rate limit counts
+// them.
 
-// Every sign-in gets a new token: the browser's previous Session row is
-// ended, and zl_act_as and the cookies an earlier version of this app set
-// are cleared with it.
-async function startSession(session: IssuedSession) {
-  await writeCookies(
-    await newSessionCookies(
-      await readSessionToken(),
-      session,
-      await requestIsSecure(),
-    ),
-  );
-}
-
-// Store and hasher errors are thrown (the sign-in page's error boundary);
-// every refusal is the one credential message.
-export async function signInWithPassword(input: {
-  loginId: string;
-  password: string;
-  redirectTo: string;
-}) {
-  const client = clientAddress(await headers());
-  const result = await signIn.withPassword(
-    { loginId: input.loginId, password: input.password },
-    client,
-  );
-  if (!result.ok) redirect(passwordFailureUrl(result.reason, input.redirectTo));
-  await startSession(result.session);
-  redirect(input.redirectTo);
-}
-
-export async function signInAsGuest(redirectTo: string) {
-  const client = clientAddress(await headers());
-  let result: SignInResult;
-  try {
-    result = await signIn.asGuest(client);
-  } catch (error) {
-    console.error("SIGN_IN_GUEST_FAILED", errorName(error));
-    redirect(guestFailureUrl(redirectTo));
-  }
-  if (!result.ok) {
-    console.warn("SIGN_IN_GUEST_REFUSED", result.reason);
-    redirect(guestFailureUrl(redirectTo));
-  }
-  await startSession(result.session);
-  redirect(redirectTo);
-}
-
-export async function signInAsDemo(redirectTo: string) {
-  const client = clientAddress(await headers());
-  let result: SignInResult;
-  try {
-    result = await signIn.asDemo(client);
-  } catch (error) {
-    console.error("SIGN_IN_DEMO_FAILED", errorName(error));
-    redirect(demoFailureUrl("error", redirectTo));
-  }
-  if (!result.ok) {
-    console.warn("SIGN_IN_DEMO_REFUSED", result.reason);
-    redirect(demoFailureUrl(result.reason, redirectTo));
-  }
-  await startSession(result.session);
-  redirect(redirectTo);
-}
-
-// Starts GitHub sign-in: PKCE and state go into zl_oauth (SameSite=Lax, so
-// it comes back with GitHub's top-level redirect), and the browser goes to
-// GitHub. /api/auth/callback/github/go finishes it with the same redirect
-// URI (requestOrigin -> publicOrigin, so AUTH_URL when set).
-export async function signInWithGitHub(redirectTo: string) {
-  const config = githubOAuthConfig();
-  if (!config) redirect("/signin?error=Configuration");
-  const requestHeaders = await headers();
-  const start = createOAuthStart(redirectTo);
-  await writeCookies([
-    cookieWrite(
-      OAUTH_COOKIE,
-      start.cookieValue,
-      OAUTH_COOKIE_MAX_AGE,
-      isSecureRequest(requestHeaders),
-    ),
-  ]);
-  redirect(
-    githubAuthorizeUrl({
-      clientId: config.clientId,
-      redirectUri: githubRedirectUri(
-        publicOrigin(requestOrigin(requestHeaders)),
-      ),
-      state: start.state,
-      challenge: start.challenge,
-    }),
-  );
-}
-
-// Starts Sparklingstadt ID sign-in the same way: PKCE, state and nonce go into
-// zl_oauth (provider "sid"), and the browser goes to the Sparklingstadt ID server's authorize
-// endpoint. /api/auth/callback/sid finishes it.
-export async function signInWithSid(redirectTo: string) {
-  const config = sidConfig();
-  if (!config) redirect("/signin?error=Configuration");
-  const requestHeaders = await headers();
-  const start = createSidOAuthStart(redirectTo);
-  await writeCookies([
-    cookieWrite(
-      OAUTH_COOKIE,
-      start.cookieValue,
-      OAUTH_COOKIE_MAX_AGE,
-      isSecureRequest(requestHeaders),
-    ),
-  ]);
-  redirect(
-    sidAuthorizeUrl({
-      issuer: config.issuer,
-      clientId: config.clientId,
-      redirectUri: sidRedirectUri(publicOrigin(requestOrigin(requestHeaders))),
-      state: start.state,
-      challenge: start.challenge,
-      nonce: start.nonce,
-    }),
-  );
-}
-
-// Whether the sign-in page offers the demo account: whether DEMO_LOGIN_ID is
-// set.
+// Whether the sign-in page offers the demo account: both DEMO_LOGIN_ID and
+// DEMO_PASSWORD are set.
 export function demoAvailable() {
-  return Promise.resolve(Boolean(demoLoginId()));
+  return Promise.resolve(Boolean(demoLoginId() && demoPassword()));
 }
 
-// A Sparklingstadt ID member also leaves the ID server (RP-Initiated Logout),
-// which returns to /signin. The user is read before the session is ended, and
-// an admin impersonating a member is judged by the admin's own id, so an
-// admin is never sent there. (Better Auth user ids never carry "sid:", so
-// until Task 6's sign-out this always answers /signin.) The origin is the sign-in callback's (publicOrigin).
-export async function signOutCurrentUser() {
-  const target = await resolveSignOutTarget({
-    currentOwnerId: async () => {
-      const user = await getCachedCurrentUser();
-      return user?.impersonatedBy ?? user?.userId ?? null;
-    },
-    config: () => sidConfig() ?? null,
-    origin: async () => publicOrigin(requestOrigin(await headers())),
-    onError: (error) =>
-      console.error("SID_LOGOUT_URL_FAILED", errorName(error)),
-  });
-  await signOutTo(target);
-}
-
-// Signs out even when the database cannot be reached: the cookies are
-// cleared either way, and an undeleted row simply expires.
-export async function signOutTo(redirectTo: string) {
-  const token = await readSessionToken();
-  if (token) {
-    try {
-      await sessionStore.end(token);
-    } catch (error) {
-      console.error("SESSION_END_FAILED", errorName(error));
-    }
+// Signs in to the demo account with DEMO_PASSWORD on the server: anyone may
+// enter the demo, so there is nothing for the rate limit to protect.
+export async function signInAsDemo(redirectTo: string) {
+  const username = demoLoginId();
+  const password = demoPassword();
+  if (!username || !password)
+    redirect(demoFailureUrl("demo-unavailable", redirectTo));
+  let failure: DemoFailure | null = null;
+  try {
+    await auth.api.signInUsername({
+      body: { username, password },
+      headers: await headers(),
+    });
+  } catch (error) {
+    failure = demoFailureReason(error);
+    if (failure === "error")
+      console.error("SIGN_IN_DEMO_FAILED", errorName(error));
+    else console.warn("SIGN_IN_DEMO_REFUSED");
   }
-  await writeCookies(signedOutCookieWrites(await requestIsSecure()));
+  if (failure) redirect(demoFailureUrl(failure, redirectTo));
   redirect(redirectTo);
+}
+
+// Ends the Better Auth session and goes to /signin. A Sparklingstadt ID user
+// goes there through the ID server's end_session_endpoint (RP-Initiated
+// Logout), so the ID server's sign-in ends too; Better Auth builds that URL
+// from the user's "sid" account and the provider's post-logout redirect URI.
+export async function signOutCurrentUser() {
+  const providerLogout = await endSession();
+  redirect(providerLogout ?? "/signin");
+}
+
+// Ends the session (if any) and goes to redirectTo, without the ID server's
+// logout: for a member whose password has just changed.
+export async function signOutTo(redirectTo: string) {
+  await endSession();
+  redirect(redirectTo);
+}
+
+// Deletes the session row and the cookie; returns the ID server's logout URL
+// for a Sparklingstadt ID user. Never throws: when the database cannot be
+// reached the cookie is cleared anyway, and an undeleted row simply expires.
+async function endSession(): Promise<string | null> {
+  try {
+    const result = await auth.api.signOut({
+      headers: await headers(),
+      body: { disableRedirect: true },
+    });
+    return result.url ?? null;
+  } catch (error) {
+    console.error("SIGN_OUT_FAILED", errorName(error));
+    const jar = await cookies();
+    for (const { name } of jar.getAll())
+      if (name.endsWith("better-auth.session_token")) jar.delete(name);
+    return null;
+  }
 }
 
 // Clears the retired zl_act_as cookie (nothing reads it any more). Task 7 of
 // the Better Auth migration replaces this with ending the impersonation.
 export async function stopActing() {
-  await writeCookies([clearedActAsCookieWrite(await requestIsSecure())]);
+  (await cookies()).delete("zl_act_as");
 }

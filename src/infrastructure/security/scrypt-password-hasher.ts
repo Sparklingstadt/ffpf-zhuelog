@@ -139,7 +139,7 @@ export class ScryptPasswordHasher {
 
   // Builds the dummy hash now, so the first simulate costs one verify like
   // the rest. Never throws; a failure is retried by simulate. Not called at
-  // import: the sign-in page calls it (warmSignIn).
+  // import, so a cold start never pays a scrypt for it.
   async warm() {
     try {
       await this.dummy();

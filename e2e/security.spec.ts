@@ -1,5 +1,5 @@
 import {
-  addAdminSession,
+  adminOwnerId,
   anyWidth,
   asAdmin,
   asGuest,
@@ -41,17 +41,16 @@ test(
 );
 
 test(
-  "a de-listed admin's session cannot access pages or import actions",
+  "a banned admin's session cannot access pages or import actions",
   anyWidth,
   async ({ context, page, db }) => {
     await asAdmin(context);
     await page.goto("/import");
     await page.waitForLoadState("networkidle");
-    // A valid session, but for an admin who is not on the allowlist.
-    await addAdminSession(context, db, {
-      githubId: "removed",
-      login: "removed",
-    });
+    // The session is still there, but its user is banned.
+    await db.query(`UPDATE "user" SET "banned" = true WHERE "id" = $1`, [
+      adminOwnerId,
+    ]);
     await upload(page, "原文,添削,pinyin");
     await expect(
       page.getByText(

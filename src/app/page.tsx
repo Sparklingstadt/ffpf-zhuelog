@@ -16,7 +16,6 @@ import type { DueReviews } from "@/domain/review/review-item";
 import { setNoteReviewAction } from "@/presentation/actions/note-review-actions";
 import type { ViewedOwner } from "@/domain/learning/viewed-owner";
 import { loadRecordOwnerView } from "@/composition/record-owner-options";
-import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { PageShell } from "@/presentation/components/layout/page-shell";
 import { EntrySearchForm } from "@/presentation/components/learning/entry-search-form";
 import { LearningEntryCard } from "@/presentation/components/learning/learning-entry-card";
@@ -114,8 +113,9 @@ export default async function Home({ searchParams }: HomeProps) {
   const searching = !isEntrySearchEmpty(search);
   if (owner.kind === "redirect-self") redirect("/");
 
-  // Guests have no notes of their own.
-  if (owner.kind === "denied" && owner.reason === "guest") {
+  // Guests have no notes of their own (the only denial left: a signed-out
+  // visitor was sent to the sign-in page).
+  if (owner.kind === "denied") {
     return (
       <PageShell user={user} width="6xl" spacious>
         <NotesHeading />
@@ -129,15 +129,6 @@ export default async function Home({ searchParams }: HomeProps) {
             </p>
           </CardContent>
         </Card>
-      </PageShell>
-    );
-  }
-
-  if (owner.kind === "denied") {
-    return (
-      <PageShell user={user} width="6xl" spacious>
-        <NotesHeading />
-        <ReauthNotice subject="学習ノート" />
       </PageShell>
     );
   }

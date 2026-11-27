@@ -2,10 +2,6 @@ import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 
 import { isSecureRequest } from "../src/infrastructure/auth/secure-request";
-import {
-  signedInCookieWrites,
-  signedOutCookieWrites,
-} from "../src/infrastructure/auth/session-cookies";
 
 const originalAuthUrl = process.env.AUTH_URL;
 afterEach(() => {
@@ -35,14 +31,4 @@ test("an https AUTH_URL makes cookies secure", () => {
   assert.equal(isSecureRequest(new Headers()), true);
   process.env.AUTH_URL = "http://localhost:3000";
   assert.equal(isSecureRequest(new Headers()), false);
-});
-
-test("a plain-HTTP request writes and clears cookies without Secure", () => {
-  delete process.env.AUTH_URL;
-  const secure = isSecureRequest(new Headers({ host: "127.0.0.1:3107" }));
-  const writes = [
-    ...signedInCookieWrites({ token: "t", maxAgeSeconds: 86_400 }, secure),
-    ...signedOutCookieWrites(secure),
-  ];
-  for (const write of writes) assert.equal(write.options.secure, false);
 });

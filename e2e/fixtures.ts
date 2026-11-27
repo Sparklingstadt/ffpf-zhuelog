@@ -4,14 +4,19 @@ import {
   type BrowserContext,
   type Page,
 } from "@playwright/test";
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { Client } from "pg";
+import {
+  memberEmail,
+  normalizeUsername,
+} from "../src/infrastructure/auth/better-auth-rules";
 import { ScryptPasswordHasher } from "../src/infrastructure/security/scrypt-password-hasher";
-import { baseURL, databaseUrl, sessionCookieName } from "./environment";
+import { databaseUrl, demoLoginId, demoPassword } from "./environment";
+import { sidStubUser } from "./fixtures/sid-oidc-stub";
 
 export const test = base.extend<{ db: Client }>({
-  // Each test gets its own client address, so the per-client sign-in limits
-  // in SignInThrottle never carry over within a test file's flow.
+  // Each test gets its own client address, so Better Auth's rate limit (by
+  // address and path) never carries over within a test file's flow.
   extraHTTPHeaders: async ({ extraHTTPHeaders }, provide) => {
     const [a, b, c] = randomBytes(3);
     await provide({
@@ -30,12 +35,14 @@ export const test = base.extend<{ db: Client }>({
         const { rows } = await db.query("SELECT current_database() AS name");
         if (rows[0].name !== "zhuelog_e2e")
           throw new Error("Refusing to reset a non-E2E database");
+        // Better Auth's tables (users, their sessions and accounts, the rate
+        // limit's counters) and everything the users own.
         await db.query(
-          'TRUNCATE "Session", "PasswordAccount", "SidAccount", "Follow", "SignInThrottle", "ChatConversation", "QuickQuestion", "PrepositionPracticeRecord", "ComplementPracticeRecord", "ReviewLog", "ReviewItem", "VocabularyEntry", "AiUsage", "LineLink", "LineLinkCode", "LineMessage"',
+          'TRUNCATE "user", "session", "account", "verification", "rateLimit", "Follow", "ChatConversation", "QuickQuestion", "PrepositionPracticeRecord", "ComplementPracticeRecord", "ReviewLog", "ReviewItem", "VocabularyEntry", "AiUsage", "LineLink", "LineLinkCode", "LineMessage", "Hint", "LearningEntry", "ImportBatch" CASCADE',
         );
-        await db.query(
-          'TRUNCATE "Hint", "LearningEntry", "ImportBatch" CASCADE',
-        );
+        // The administrator is there from the start, so a test can seed the
+        // admin's notes before signing in (asAdmin links the sign-in).
+        await createAdminUser(db);
         await provide(db);
       } finally {
         await db.end();
@@ -53,53 +60,58 @@ export { expect };
 // at both widths.
 export const anyWidth = { tag: "@any-width" } as const;
 
-// The githubId that asAdmin puts in the session, and so the owner of the
-// admin's notes.
-export const adminOwnerId = "10001";
+// The user id of the administrator asAdmin signs in as, and so the owner of
+// the admin's notes.
+export const adminOwnerId = "e2eadmin";
+export const adminDisplayName = "e2e-admin";
 
-// Opens its own connection so the many callers need not take the db fixture.
+// A user id of the shape Better Auth makes (32 letters and digits).
+function newUserId() {
+  return randomBytes(16).toString("hex");
+}
+
+// The administrator: a "user" with role "admin". Its mail address is not the
+// Sparklingstadt ID stub's, so a test that signs in through the stub as a new
+// member never meets it (Better Auth never links by mail address here).
+async function createAdminUser(db: Client) {
+  await db.query(
+    `INSERT INTO "user" ("id", "name", "email", "emailVerified", "role", "updatedAt")
+     VALUES ($1, $2, $3, true, 'admin', NOW())
+     ON CONFLICT ("id") DO NOTHING`,
+    [adminOwnerId, adminDisplayName, "e2e-admin@admin.zhuelog.invalid"],
+  );
+}
+
+// Signs the context in as the administrator: the Sparklingstadt ID stub's
+// user is linked to the admin "user" by a "sid" account (accountId = the
+// stub's sub), as the migration links the real administrator, and the
+// context signs in through the real Sparklingstadt ID button. Until then the
+// stub's user is an ordinary new member (sid-login.spec.ts). Opens its own
+// connection so the many callers need not take the db fixture.
 export async function asAdmin(context: BrowserContext) {
   const db = new Client({ connectionString: databaseUrl });
   await db.connect();
   try {
-    // As the db fixture: NOW() in the session's expiry must be UTC.
-    await db.query("SET TIME ZONE 'UTC'");
-    await addAdminSession(context, db, {
-      githubId: adminOwnerId,
-      login: "e2e-admin",
-    });
+    await createAdminUser(db);
+    await db.query(
+      `INSERT INTO "account" ("id", "accountId", "providerId", "userId", "updatedAt")
+       SELECT $1, $2, 'sid', $3, NOW()
+        WHERE NOT EXISTS (SELECT 1 FROM "account" WHERE "providerId" = 'sid' AND "accountId" = $2)`,
+      [newUserId(), sidStubUser.sub, adminOwnerId],
+    );
   } finally {
     await db.end();
   }
-}
-
-// Puts an admin session cookie in the context. Test-only session row, as the
-// web's sign-in writes it. No app auth bypass.
-export async function addAdminSession(
-  context: BrowserContext,
-  db: Client,
-  admin: { githubId: string; login: string },
-) {
-  const token = randomBytes(32).toString("base64url");
-  await db.query(
-    `INSERT INTO "Session" ("id","tokenHash","ownerId","role","login","expiresAt")
-     VALUES ($1,$2,$3,'admin',$4, NOW() + interval '1 hour')`,
-    [
-      `c${randomBytes(12).toString("hex")}`,
-      createHash("sha256").update(token).digest("hex"),
-      admin.githubId,
-      admin.login,
-    ],
-  );
-  await context.addCookies([
-    {
-      name: sessionCookieName,
-      value: token,
-      url: baseURL,
-      httpOnly: true,
-      sameSite: "Lax",
-    },
-  ]);
+  const page = await context.newPage();
+  try {
+    await page.goto("/signin");
+    await page
+      .getByRole("button", { name: "Sparklingstadt ID でログイン" })
+      .click();
+    await expect(page).toHaveURL((url) => url.pathname === "/");
+  } finally {
+    await page.close();
+  }
 }
 
 export async function signInWithPassword(
@@ -127,24 +139,35 @@ export async function asMember(
   );
 }
 
-// Inserts a password account directly (faster than the admin UI) and returns
-// its id. The hash is the same one the app verifies at sign-in. The id mimics
-// a Prisma cuid (lowercase alphanumerics) because the app rejects other shapes.
+// Inserts a member directly (faster than the admin UI) and returns its user
+// id: a "user" with the normalized login id as its username and its member
+// mail address, and a credential account holding the scrypt hash the app
+// verifies at sign-in.
 export async function createMember(
   db: Client,
   loginId: string,
   displayName: string,
   password: string,
 ) {
-  const passwordHash = await new ScryptPasswordHasher().hash(password);
-  const { rows } = await db.query(
-    `INSERT INTO "PasswordAccount"
-       ("id", "loginId", "displayName", "passwordHash", "updatedAt")
-     VALUES ($1, $2, $3, $4, NOW())
-     RETURNING "id"`,
-    [`c${randomBytes(12).toString("hex")}`, loginId, displayName, passwordHash],
+  const username = normalizeUsername(loginId);
+  const userId = newUserId();
+  await db.query(
+    `INSERT INTO "user" ("id", "name", "email", "username", "displayUsername", "role", "updatedAt")
+     VALUES ($1, $2, $3, $4, $4, 'user', NOW())`,
+    [userId, displayName, memberEmail(username), username],
   );
-  return rows[0].id as string;
+  await db.query(
+    `INSERT INTO "account" ("id", "accountId", "providerId", "userId", "password", "updatedAt")
+     VALUES ($1, $2, 'credential', $2, $3, NOW())`,
+    [newUserId(), userId, await new ScryptPasswordHasher().hash(password)],
+  );
+  return userId;
+}
+
+// The demo account (DEMO_LOGIN_ID) with this run's DEMO_PASSWORD, which the
+// demo button signs in with. Returns its user id.
+export function createDemoMember(db: Client, displayName = "デモ") {
+  return createMember(db, demoLoginId, displayName, demoPassword());
 }
 
 export async function asGuest(page: Page, callback = "/") {
@@ -165,8 +188,8 @@ export async function upload(page: Page, text: string, name = "learning.csv") {
     .click();
 }
 
-// The owner id the app derives for a password account.
-export const memberOwnerId = (accountId: string) => `password:${accountId}`;
+// Records are owned by the user id itself.
+export const memberOwnerId = (userId: string) => userId;
 
 // Seeds learning notes straight into the database for one owner. Each text
 // becomes a note whose original and corrected sentence are the same, so Typle
@@ -185,7 +208,7 @@ export async function seedNotes(
     const id = `n${randomBytes(8).toString("hex")}`;
     await db.query(
       `INSERT INTO "LearningEntry"
-         (id, "originalText", "correctedText", pinyin, "createdAt", "ownerId", "batchId")
+         (id, "originalText", "correctedText", pinyin, "createdAt", "userId", "batchId")
        VALUES ($1, $2, $2, 'pinyin', COALESCE($3::timestamp, NOW()), $4, $5)`,
       [id, note.text, note.createdAt ?? null, ownerId, batchId],
     );

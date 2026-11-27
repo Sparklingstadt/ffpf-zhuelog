@@ -8,8 +8,13 @@ import {
 import { createServer, type IncomingMessage } from "node:http";
 
 // A stand-in for Sparklingstadt ID (sparklingstadt-id's OpenID Connect provider) for the e2e
-// run. It serves exactly what the web's Sparklingstadt ID client uses (the Sparklingstadt ID server's OpenID Connect endpoints):
+// run. It serves exactly what the web's Sparklingstadt ID client (Better Auth's
+// genericOAuth provider "sid") uses (the Sparklingstadt ID server's OpenID Connect endpoints):
 //
+//   GET  /.well-known/openid-configuration
+//                          discovery: the endpoints below, the issuer and
+//                          ES256 (so the web verifies the ID token against
+//                          the JWKS).
 //   GET  /oauth/authorize  checks the client and redirect URI, remembers the
 //                          PKCE challenge and nonce, and goes straight back to
 //                          redirect_uri?code=stub&state=… (no login screen).
@@ -90,6 +95,29 @@ export function startSidOidcStub(
           "cache-control": "no-store",
         })
         .end(body);
+
+    if (
+      request.method === "GET" &&
+      url.pathname === "/.well-known/openid-configuration"
+    ) {
+      json(
+        200,
+        JSON.stringify({
+          issuer: options.issuer,
+          authorization_endpoint: `${options.issuer}/oauth/authorize`,
+          token_endpoint: `${options.issuer}/oauth/token`,
+          jwks_uri: `${options.issuer}/oauth/jwks`,
+          end_session_endpoint: `${options.issuer}/oauth/logout`,
+          response_types_supported: ["code"],
+          subject_types_supported: ["public"],
+          id_token_signing_alg_values_supported: ["ES256"],
+          scopes_supported: ["openid", "email", "profile"],
+          token_endpoint_auth_methods_supported: ["client_secret_basic"],
+          code_challenge_methods_supported: ["S256"],
+        }),
+      );
+      return;
+    }
 
     if (request.method === "GET" && url.pathname === "/oauth/authorize") {
       const params = url.searchParams;

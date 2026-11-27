@@ -1,11 +1,9 @@
 import { CalendarDays } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 
-import { showsRecords } from "@/application/identity/use-cases/resolve-record-owner";
 import { learningNotes } from "@/composition/learning-container";
 import { loadRecordOwnerView } from "@/composition/record-owner-options";
 import { parseLogDate } from "@/domain/calendar/value-objects/log-date";
-import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { EmptyState } from "@/presentation/components/layout/empty-state";
 import { Breadcrumbs } from "@/presentation/components/layout/breadcrumbs";
 import { PageHeader } from "@/presentation/components/layout/page-header";
@@ -57,14 +55,11 @@ export default async function LogDatePage({
   const dateHref = getLogDateHref(date);
   if (owner.kind === "redirect-self") redirect(dateHref);
 
-  const hasNotes = showsRecords(owner);
-  const [entries, view, dates] = hasNotes
-    ? await Promise.all([
-        learningNotes.listDailyEntries(owner, date),
-        loadRecordOwnerView(user, owner),
-        learningNotes.listLogDates(owner),
-      ])
-    : [[], null, []];
+  const [entries, view, dates] = await Promise.all([
+    learningNotes.listDailyEntries(owner, date),
+    loadRecordOwnerView(user, owner),
+    learningNotes.listLogDates(owner),
+  ]);
   const shownMonth = { year: date.year, month: date.month };
 
   return (
@@ -80,9 +75,7 @@ export default async function LogDatePage({
       />
       <PageHeader
         title={formatLogDate(date)}
-        description={
-          hasNotes ? `この日に追加した学習ノート：${entries.length}件` : null
-        }
+        description={`この日に追加した学習ノート：${entries.length}件`}
         dense
         actions={
           owner.kind === "self" ? <TrashLink href="/logs/trash" /> : null
@@ -97,9 +90,7 @@ export default async function LogDatePage({
         <TrashNotice href="/logs/trash" />
       ) : null}
 
-      {!hasNotes ? (
-        <ReauthNotice subject="学習ノート" />
-      ) : entries.length === 0 ? (
+      {entries.length === 0 ? (
         <EmptyState
           icon={CalendarDays}
           title="この日の学習ノートはありません"
