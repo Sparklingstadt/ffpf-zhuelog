@@ -73,6 +73,11 @@ export const auth = betterAuth({
     },
   },
   rateLimit: AUTH_RATE_LIMIT,
+  // Errors that would go to Better Auth's own (English) error page, such as
+  // an OAuth callback with a missing or unknown state, come back to the
+  // sign-in page instead, which shows its generic Japanese message for any
+  // ?error= it does not know.
+  onAPIError: { errorURL: "/signin" },
   advanced: {
     // The same headers as client-address.ts: x-real-ip, else x-forwarded-for.
     ipAddress: { ipAddressHeaders: ["x-real-ip", "x-forwarded-for"] },
@@ -82,9 +87,16 @@ export const auth = betterAuth({
   disabledPaths: ["/update-user"],
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
-      // A sign-in starts from no session: the previous session cookie is
-      // not read (withoutSessionCookie). A guest who signs in as a member
-      // is therefore not linked; the guest user is left to the nightly
+      // A sign-in starts from no session: the browser's previous session
+      // cookie is dropped from the request (withoutSessionCookie).
+      // Works around better-auth 1.7.28: the anonymous plugin's after-hook
+      // on /sign-in* and /callback* calls getSessionFromCtx, whose
+      // getSession on a stale cookie (signed out elsewhere, expired,
+      // revoked) calls deleteSessionCookie; removeSetCookieEntries then
+      // scrubs the Set-Cookie of the session the sign-in has just created,
+      // so the sign-in answers 200 and leaves the browser signed out.
+      // Remove once upstream fixes it. Side effect: a guest who signs in as
+      // a member is not linked; the guest user is left to the nightly
       // cleanup.
       if (startsSession(ctx.path) && ctx.headers?.has("cookie")) {
         const headers = new Headers(ctx.headers);

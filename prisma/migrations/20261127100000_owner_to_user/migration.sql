@@ -11,8 +11,9 @@
 --
 -- An owner id that maps to no user stops the migration before anything is
 -- constrained: nothing is deleted silently. Guests own no rows. Afterwards the
--- old account, session and throttle tables are dropped (their Prisma models
--- stay until the code that uses them is removed).
+-- old account and session tables are dropped (their Prisma models stay until
+-- the code that uses them is removed). "SignInThrottle" stays: it holds no
+-- owner ids, and the LINE link-code redemption throttle still counts there.
 
 BEGIN;
 
@@ -316,7 +317,6 @@ ALTER TABLE "Follow" ADD CONSTRAINT "Follow_followeeId_fkey" FOREIGN KEY ("follo
 DROP TABLE "PasswordAccount";
 DROP TABLE "SidAccount";
 DROP TABLE "Session";
-DROP TABLE "SignInThrottle";
 DROP TABLE "FfpfAccount";
 DROP TABLE "_owner_map";
 DROP TABLE "_better_auth_admin";

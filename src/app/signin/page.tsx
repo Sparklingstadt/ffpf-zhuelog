@@ -23,10 +23,13 @@ import { Card, CardContent } from "@/presentation/components/ui/card";
 import { getSafeCallbackPath } from "@/presentation/http/safe-callback-path";
 import { AppHeader } from "@/presentation/components/layout/app-header";
 
-// The errors the demo sign-in sends back. Any other ?error= (such as Better
-// Auth's code after a refused Sparklingstadt ID callback) is the generic
+// The errors sent back here: a refused Sparklingstadt ID callback
+// (errorCallbackURL in sign-in-forms) and the demo sign-in. Any other
+// ?error= (such as Better Auth's own code, from onAPIError) is the generic
 // message: Better Auth's own words are never shown.
 const errorMessages: Record<string, string> = {
+  OAuthCallbackError:
+    "認証サービスからの結果を確認できませんでした。もう一度お試しください。",
   DemoUnavailable: "デモは今は利用できません。",
 };
 

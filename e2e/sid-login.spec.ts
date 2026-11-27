@@ -2,6 +2,7 @@ import type { BrowserContext, Page } from "@playwright/test";
 import { sessionCookieName, sidIssuerURL } from "./environment";
 import { sidStubUser } from "./fixtures/sid-oidc-stub";
 import {
+  anyWidth,
   asMember,
   createMember,
   expect,
@@ -200,3 +201,48 @@ test("a password member's sign-out does not pass through the ID server", async (
   ).toBeVisible();
   expect(await logoutCalls()).toEqual([]);
 });
+
+// Better Auth's own (English) error page is never shown: every failure comes
+// back to the sign-in page with a Japanese message.
+async function expectJapaneseFailure(page: Page, message: string) {
+  await expect(page).toHaveURL(/\/signin\?/);
+  await expect(page.getByText(message)).toBeVisible();
+  // Neither Better Auth's error code nor its English wording.
+  await expect(page.locator("body")).not.toContainText(
+    /error|state|please|denied|invalid/i,
+  );
+  await expect(
+    page.getByRole("button", { name: "Sparklingstadt ID でログイン" }),
+  ).toBeVisible();
+}
+
+test(
+  "a callback with an unknown state comes back to the sign-in page in Japanese",
+  anyWidth,
+  async ({ page, db }) => {
+    await page.goto("/api/auth/callback/sid?code=stub&state=bogus-state");
+    await expectJapaneseFailure(
+      page,
+      "認証中にエラーが発生しました。もう一度お試しください。",
+    );
+    expect((await db.query('SELECT 1 FROM "session"')).rows).toEqual([]);
+  },
+);
+
+test(
+  "a sign-in declined on the ID server shows the callback message and keeps the page to come back to",
+  anyWidth,
+  async ({ page, db }) => {
+    await fetch(`${sidIssuerURL}/__deny-next`, { method: "POST" });
+    await page.goto(`/signin?callbackUrl=${encodeURIComponent("/import")}`);
+    await page
+      .getByRole("button", { name: "Sparklingstadt ID でログイン" })
+      .click();
+    await expectJapaneseFailure(
+      page,
+      "認証サービスからの結果を確認できませんでした。もう一度お試しください。",
+    );
+    expect(new URL(page.url()).searchParams.get("callbackUrl")).toBe("/import");
+    expect((await db.query('SELECT 1 FROM "session"')).rows).toEqual([]);
+  },
+);

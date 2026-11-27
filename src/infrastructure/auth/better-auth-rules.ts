@@ -78,12 +78,9 @@ export function startsSession(path: string): boolean {
 const SESSION_COOKIE =
   /^(__Secure-)?better-auth\.(session_token|session_data)$/;
 
-// A Cookie request header without Better Auth's session cookies. A sign-in
-// must not read the browser's previous session: in better-auth 1.7 the
-// anonymous plugin's after-hook reads it, and when it names a session that
-// is gone (signed out elsewhere, expired, revoked) the plugin deletes the
-// session cookie, replacing the one the sign-in has just set, so the sign-in
-// would answer 200 and leave the browser signed out.
+// A Cookie request header without Better Auth's session cookies, for the
+// sign-in endpoints (startsSession): see the before-hook in better-auth.ts
+// for the better-auth 1.7.28 bug this works around.
 export function withoutSessionCookie(header: string | null): string {
   return (header ?? "")
     .split(";")

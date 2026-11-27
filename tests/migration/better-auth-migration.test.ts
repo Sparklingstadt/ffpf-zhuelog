@@ -307,7 +307,6 @@ test("the old tables and the work tables are dropped", async () => {
     "PasswordAccount",
     "SidAccount",
     "Session",
-    "SignInThrottle",
     "FfpfAccount",
     "_owner_map",
     "_better_auth_admin",
@@ -315,6 +314,13 @@ test("the old tables and the work tables are dropped", async () => {
     assert.equal(await tableExists(db, table), false, table);
   }
   assert.equal(await tableExists(db, "session"), true);
+});
+
+// The LINE link-code redemption throttle still counts there.
+test("SignInThrottle stays, with its rows", async () => {
+  const db = await migrateFrom(seed({ admin: ADMIN }));
+  const rows = await db.query(`SELECT "key", "count" FROM "SignInThrottle"`);
+  assert.deepEqual(rows.rows, [{ key: "client:1", count: 1 }]);
 });
 
 test("without an admin row the migration still moves the members", async () => {

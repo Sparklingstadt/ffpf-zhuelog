@@ -25,6 +25,9 @@ import { createServer, type IncomingMessage } from "node:http";
 //   GET  /oauth/logout     RP-Initiated Logout: checks the client, remembers the
 //                          call, and goes back to post_logout_redirect_uri.
 //   GET/DELETE /__logouts  (test only) the remembered logout calls / forget them.
+//   POST /__deny-next      (test only) the next /oauth/authorize answers
+//                          redirect_uri?error=access_denied&state=… instead,
+//                          as when the person declines on the ID server.
 //
 // Nothing leaves this machine, and the key exists only in this process.
 
@@ -58,6 +61,8 @@ export function startSidOidcStub(
   // The latest authorization request, which the code "stub" stands for.
   let pending: { challenge: string; nonce: string } | null = null;
   // Every call to /oauth/logout, for the spec to check.
+  // Set by POST /__deny-next: the next authorization is declined.
+  let denyNext = false;
   let logouts: {
     clientId: string | null;
     postLogoutRedirectUri: string | null;
@@ -134,11 +139,18 @@ export function startSidOidcStub(
         response.writeHead(400).end("invalid authorization request");
         return;
       }
+      const back = new URL(options.redirectUri);
+      if (denyNext) {
+        denyNext = false;
+        back.searchParams.set("error", "access_denied");
+        back.searchParams.set("state", params.get("state")!);
+        response.writeHead(302, { location: back.toString() }).end();
+        return;
+      }
       pending = {
         challenge: params.get("code_challenge")!,
         nonce: params.get("nonce")!,
       };
-      const back = new URL(options.redirectUri);
       back.searchParams.set("code", code);
       back.searchParams.set("state", params.get("state")!);
       response.writeHead(302, { location: back.toString() }).end();
@@ -188,6 +200,12 @@ export function startSidOidcStub(
       }
       logouts.push({ clientId, postLogoutRedirectUri: back });
       response.writeHead(302, { location: back }).end();
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/__deny-next") {
+      denyNext = true;
+      json(200, "{}");
       return;
     }
 

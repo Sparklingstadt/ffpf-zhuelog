@@ -66,14 +66,11 @@ model PasswordAccount {
   updatedAt      DateTime  @updatedAt
 }
 
-// Table dropped in 20261127100000_owner_to_user; model removed with its code in Task 6/7.
-// Still read by sign-in-throttle-store for the own password change (Task 7)
-// and the LINE link codes.
-// Fixed-window sign-in attempt counters, written by the web's sign-in (the retired Go API wrote the same keys).
-// Keys always include the client address ("client:<ip>",
-// "login:<ip>:<loginId>"), so nobody can lock another person out from
-// elsewhere; "password-change:<accountId>" is only reachable by the signed-in
-// member. Rows past expiresAt are dead and pruned opportunistically.
+// Fixed-window attempt counters (sign-in-throttle-store). Kept by
+// 20261127100000_owner_to_user for the LINE link-code redemption throttle
+// ("line-link:<lineUserId>"); the own password change also counts here until
+// Task 7 moves it to Better Auth. Sign-in is limited by Better Auth's
+// rateLimit table. Rows past expiresAt are dead and pruned opportunistically.
 model SignInThrottle {
   key       String   @id
   count     Int

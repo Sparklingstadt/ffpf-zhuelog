@@ -122,7 +122,8 @@ export function PasswordSignInForm({
 
 // Better Auth sends the browser to the Sparklingstadt ID server and, after its
 // callback (/api/auth/callback/sid), to callbackPath. A refused callback comes
-// back to the sign-in page with an error, which shows the generic message.
+// back to the sign-in page with OAuthCallbackError and the page to come back
+// to.
 export function SidSignInButton({ callbackPath }: { callbackPath: string }) {
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -133,7 +134,9 @@ export function SidSignInButton({ callbackPath }: { callbackPath: string }) {
       const { error } = await authClient.signIn.social({
         provider: "sid",
         callbackURL: callbackPath,
-        errorCallbackURL: `/signin?callbackUrl=${encodeURIComponent(callbackPath)}`,
+        // Better Auth appends its own error=; the sign-in page reads the
+        // first one.
+        errorCallbackURL: `/signin?error=OAuthCallbackError&callbackUrl=${encodeURIComponent(callbackPath)}`,
       });
       // Without an error the client is already on its way to the ID server.
       if (!error) return;
