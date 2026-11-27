@@ -33,6 +33,32 @@ export function sidConfig():
   return { issuer, clientId, clientSecret };
 }
 
+// sidConfig in the form the Better Auth configuration takes: null when
+// Sparklingstadt ID is not configured, and the "sid" provider is then left out.
+export function sidOAuthConfig(): {
+  issuer: string;
+  clientId: string;
+  clientSecret: string;
+} | null {
+  return sidConfig() ?? null;
+}
+
+// Better Auth's secret (BETTER_AUTH_SECRET, trimmed of Unicode White_Space).
+// Required: it signs the session cookies, so throws when unset or blank.
+export function betterAuthSecret(): string {
+  const secret = trimWhiteSpace(process.env.BETTER_AUTH_SECRET ?? "");
+  if (!secret) throw new Error("BETTER_AUTH_SECRET is not set");
+  return secret;
+}
+
+// The demo account's password (DEMO_PASSWORD, trimmed of Unicode
+// White_Space): the demo button signs in with it and the demo reset sets it
+// again. Undefined when blank, and there is then no demo.
+export function demoPassword(): string | undefined {
+  const password = trimWhiteSpace(process.env.DEMO_PASSWORD ?? "");
+  return password ? password : undefined;
+}
+
 // The web's GitHub OAuth App for the code exchange: AUTH_GITHUB_ID (the id
 // the authorize URL also uses) and GITHUB_WEB_CLIENT_SECRET. Both trimmed of
 // Unicode White_Space and non-empty, else undefined.

@@ -1,0 +1,152 @@
+import assert from "node:assert/strict";
+import { afterEach, test } from "node:test";
+
+import {
+  AUTH_RATE_LIMIT,
+  isAllowedUsername,
+  memberEmail,
+  rejectsDemoPasswordChange,
+  rejectsGuestImpersonation,
+} from "../src/infrastructure/auth/better-auth-rules";
+import {
+  betterAuthSecret,
+  demoPassword,
+  sidOAuthConfig,
+} from "../src/infrastructure/config/environment";
+
+test("isAllowedUsername follows the login id rule", () => {
+  assert.equal(isAllowedUsername("abc"), true);
+  assert.equal(isAllowedUsername("a.b-c_d"), true);
+  assert.equal(isAllowedUsername("a".repeat(32)), true);
+  assert.equal(isAllowedUsername("a".repeat(33)), false);
+  assert.equal(isAllowedUsername("ab"), false);
+  assert.equal(isAllowedUsername("Abc"), false);
+});
+
+test("the demo may not change its password", () => {
+  assert.equal(
+    rejectsDemoPasswordChange("/change-password", "demo", "demo"),
+    true,
+  );
+  assert.equal(
+    rejectsDemoPasswordChange("/change-password", "alice", "demo"),
+    false,
+  );
+  assert.equal(
+    rejectsDemoPasswordChange("/sign-in/username", "demo", "demo"),
+    false,
+  );
+  assert.equal(
+    rejectsDemoPasswordChange("/change-password", "demo", undefined),
+    false,
+  );
+});
+
+test("without a session there is no demo to protect", () => {
+  assert.equal(
+    rejectsDemoPasswordChange("/change-password", undefined, "demo"),
+    false,
+  );
+  assert.equal(
+    rejectsDemoPasswordChange("/change-password", null, "demo"),
+    false,
+  );
+});
+
+test("a guest cannot be impersonated", () => {
+  assert.equal(
+    rejectsGuestImpersonation("/admin/impersonate-user", { isAnonymous: true }),
+    true,
+  );
+  assert.equal(
+    rejectsGuestImpersonation("/admin/impersonate-user", {
+      isAnonymous: false,
+    }),
+    false,
+  );
+  assert.equal(
+    rejectsGuestImpersonation("/admin/list-users", { isAnonymous: true }),
+    false,
+  );
+});
+
+test("an unknown impersonation target is left to the admin plugin", () => {
+  assert.equal(
+    rejectsGuestImpersonation("/admin/impersonate-user", null),
+    false,
+  );
+  assert.equal(rejectsGuestImpersonation("/admin/impersonate-user", {}), false);
+});
+
+test("memberEmail uses the .invalid domain", () => {
+  assert.equal(memberEmail("alice"), "alice@members.zhuelog.invalid");
+});
+
+test("rate limits match the spec", () => {
+  assert.deepEqual(
+    {
+      window: AUTH_RATE_LIMIT.window,
+      max: AUTH_RATE_LIMIT.max,
+      storage: AUTH_RATE_LIMIT.storage,
+    },
+    { window: 60, max: 10, storage: "database" },
+  );
+  assert.deepEqual(AUTH_RATE_LIMIT.customRules["/sign-in/username"], {
+    window: 900,
+    max: 20,
+  });
+  assert.deepEqual(AUTH_RATE_LIMIT.customRules["/change-password"], {
+    window: 900,
+    max: 5,
+  });
+});
+
+const ENV_KEYS = [
+  "BETTER_AUTH_SECRET",
+  "DEMO_PASSWORD",
+  "SID_ISSUER",
+  "SID_CLIENT_ID",
+  "SID_CLIENT_SECRET",
+] as const;
+const savedEnv = Object.fromEntries(
+  ENV_KEYS.map((key) => [key, process.env[key]]),
+);
+
+afterEach(() => {
+  for (const key of ENV_KEYS) {
+    const value = savedEnv[key];
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+});
+
+test("betterAuthSecret is the trimmed BETTER_AUTH_SECRET and is required", () => {
+  process.env.BETTER_AUTH_SECRET = "  s3cret-value \n";
+  assert.equal(betterAuthSecret(), "s3cret-value");
+  process.env.BETTER_AUTH_SECRET = " 　";
+  assert.throws(() => betterAuthSecret(), /BETTER_AUTH_SECRET/);
+  delete process.env.BETTER_AUTH_SECRET;
+  assert.throws(() => betterAuthSecret(), /BETTER_AUTH_SECRET/);
+});
+
+test("demoPassword is the trimmed DEMO_PASSWORD, undefined when blank", () => {
+  process.env.DEMO_PASSWORD = " demo-password-1 ";
+  assert.equal(demoPassword(), "demo-password-1");
+  process.env.DEMO_PASSWORD = " 　";
+  assert.equal(demoPassword(), undefined);
+  delete process.env.DEMO_PASSWORD;
+  assert.equal(demoPassword(), undefined);
+});
+
+test("sidOAuthConfig is the SID settings, or null without all three", () => {
+  process.env.SID_ISSUER = "https://id.example.test/";
+  process.env.SID_CLIENT_ID = "zhuelog";
+  process.env.SID_CLIENT_SECRET = "secret";
+  assert.deepEqual(sidOAuthConfig(), {
+    issuer: "https://id.example.test",
+    clientId: "zhuelog",
+    clientSecret: "secret",
+  });
+  delete process.env.SID_CLIENT_SECRET;
+  assert.equal(sidOAuthConfig(), null);
+});
