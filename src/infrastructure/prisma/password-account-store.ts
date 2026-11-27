@@ -81,7 +81,7 @@ async function updatePasswordEndingSessions(
   return db().$transaction(async (tx) => {
     const rows = await tx.$queryRaw<{ loginId: string }[]>(statement);
     if (rows.length !== 1) return null;
-    await tx.session.deleteMany({ where: { ownerId: `password:${id}` } });
+    await tx.legacySession.deleteMany({ where: { ownerId: `password:${id}` } });
     return rows[0].loginId;
   }, SESSION_TRANSACTION_OPTIONS);
 }

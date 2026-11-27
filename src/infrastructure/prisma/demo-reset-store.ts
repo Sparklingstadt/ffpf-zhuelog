@@ -36,7 +36,7 @@ export const DEMO_OWNED_TABLES: readonly string[] = [
 
 // Owner-scoped tables the reset keeps on purpose, with the reason.
 export const DEMO_KEPT_TABLES: Readonly<Record<string, string>> = {
-  Session: "the demo's sessions survive the nightly reset",
+  LegacySession: "the demo's sessions survive the nightly reset",
   AiUsage: "the admin's record of OpenAI spend; the demo cannot call OpenAI",
 };
 

@@ -27,7 +27,7 @@ function fakeDb(row: Record<string, unknown> | null = null) {
       calls.push({ op: "executeRaw", args: sql });
       return 0;
     },
-    session: {
+    legacySession: {
       create: async (args: unknown) => {
         calls.push({ op: "create", args });
         return {};

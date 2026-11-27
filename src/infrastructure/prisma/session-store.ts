@@ -53,7 +53,7 @@ export function createSessionStore(
     async start(principal: SessionPrincipal, now: Date): Promise<string> {
       await db().$executeRaw(pruneSessionsSql(now));
       const token = tokens.newToken();
-      await db().session.create({
+      await db().legacySession.create({
         data: {
           tokenHash: tokens.hash(token),
           ownerId: principal.ownerId,
@@ -71,7 +71,7 @@ export function createSessionStore(
     // with expiresAt <= now, or a row toSessionPrincipal refuses.
     async find(token: string, now: Date): Promise<SessionPrincipal | null> {
       if (!tokens.isShape(token)) return null;
-      const row = await db().session.findUnique({
+      const row = await db().legacySession.findUnique({
         where: { tokenHash: tokens.hash(token) },
         select: {
           ownerId: true,
@@ -90,7 +90,7 @@ export function createSessionStore(
     // Deletes the row of this token; nothing for an unknown or malformed one.
     async end(token: string): Promise<void> {
       if (!tokens.isShape(token)) return;
-      await db().session.deleteMany({
+      await db().legacySession.deleteMany({
         where: { tokenHash: tokens.hash(token) },
       });
     },

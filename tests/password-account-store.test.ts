@@ -58,7 +58,7 @@ function fakeTransactionDb(rows: { loginId: string }[]) {
       statements.push(sql);
       return rows;
     },
-    session: {
+    legacySession: {
       deleteMany: async (args: unknown) => {
         deletes.push(args);
         return { count: 2 };

@@ -115,12 +115,12 @@ model Follow {
   @@index([followeeId])
 }
 
-// A signed-in browser (stage 11 of the Go retirement). The cookie holds a
+// A signed-in browser of the own session scheme (stage 11 of the Go retirement). The cookie holds a
 // random token; only its SHA-256 is kept here. role/login/sessionVersion are
 // what Go's refresh tokens kept (the ApiRefreshToken table, dropped in stage
 // 12b), so the per-request check stayed the same. The CHECK constraint in the
 // migration pins the shape of each role.
-model Session {
+model LegacySession {
   id             String   @id @default(cuid())
   tokenHash      String   @unique // SHA-256 hex of the cookie's token
   ownerId        String
@@ -132,6 +132,7 @@ model Session {
 
   @@index([ownerId])
   @@index([expiresAt])
+  @@map("Session")
 }
 
 // Ties one LINE account to one Zhuelog owner (a PasswordAccount id prefixed
@@ -338,4 +339,85 @@ model AiUsage {
 
   @@index([createdAt])
   @@index([ownerId, createdAt])
+}
+
+// Better Auth's tables (1.7.28), shaped as `@better-auth/cli generate` would for
+// the username, anonymous and admin plugins and database rate limiting. The
+// table names are lower case, so they sit beside the legacy "Session" table.
+model User {
+  id              String    @id
+  name            String
+  email           String    @unique
+  emailVerified   Boolean   @default(false)
+  image           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now()) @updatedAt
+  username        String?   @unique
+  displayUsername String?
+  isAnonymous     Boolean?  @default(false)
+  role            String?   @default("user")
+  banned          Boolean?  @default(false)
+  banReason       String?
+  banExpires      DateTime?
+  sessions        Session[]
+  accounts        Account[]
+
+  @@map("user")
+}
+
+model Session {
+  id             String   @id
+  expiresAt      DateTime
+  token          String   @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  ipAddress      String?
+  userAgent      String?
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  impersonatedBy String?
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+model RateLimit {
+  id          String @id
+  key         String @unique
+  count       Int
+  lastRequest BigInt
+
+  @@map("rateLimit")
 }
