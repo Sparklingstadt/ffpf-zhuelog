@@ -1,7 +1,7 @@
 -- Moves the owner of every row to Better Auth's "user" (stage 3 of the move to
--- Better Auth). One transaction: `prisma migrate deploy` sends this file as one
--- simple query, which Postgres runs as one implicit transaction, so any error,
--- the unmapped-owner check included, leaves the database as it was.
+-- Better Auth). The whole body is one explicit transaction (BEGIN ... COMMIT),
+-- so any error, the unmapped-owner check included, leaves the database as it
+-- was.
 --
 --   "password:<id>"  PasswordAccount -> "user" (same id) + "account" credential
 --   "sid:<sub>"      SidAccount      -> "user" (new id)  + "account" sid (accountId <sub>)
@@ -13,6 +13,8 @@
 -- constrained: nothing is deleted silently. Guests own no rows. Afterwards the
 -- old account, session and throttle tables are dropped (their Prisma models
 -- stay until the code that uses them is removed).
+
+BEGIN;
 
 -- 1. The admin to bring over; empty when the deployment script did not run.
 CREATE TABLE IF NOT EXISTS "_better_auth_admin" (
@@ -318,3 +320,5 @@ DROP TABLE "SignInThrottle";
 DROP TABLE "FfpfAccount";
 DROP TABLE "_owner_map";
 DROP TABLE "_better_auth_admin";
+
+COMMIT;

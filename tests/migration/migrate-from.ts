@@ -44,8 +44,8 @@ export class MigrationFailed extends Error {
 
 // A new database at the migration before TARGET_MIGRATION, with seedSql run,
 // then TARGET_MIGRATION applied the way `prisma migrate deploy` does: the
-// whole file as one simple query, which Postgres runs as one implicit
-// transaction. Rejects with MigrationFailed when the migration fails.
+// whole file as one simple query (the migration wraps itself in BEGIN ...
+// COMMIT). Rejects with MigrationFailed when the migration fails.
 export async function migrateFrom(seedSql: string): Promise<pg.Client> {
   const name = `zhuelog_migration_${randomBytes(6).toString("hex")}`;
   const admin = new pg.Client({ connectionString: adminUrl() });
@@ -73,6 +73,10 @@ export async function migrateFrom(seedSql: string): Promise<pg.Client> {
   try {
     await client.query(migration(TARGET_MIGRATION));
   } catch (error) {
+    // The migration's own BEGIN leaves the session in the aborted
+    // transaction; end it as the deploy tool would, so the test can read the
+    // database as the migration left it.
+    await client.query("ROLLBACK");
     throw new MigrationFailed(
       error instanceof Error ? error.message : String(error),
       client,
