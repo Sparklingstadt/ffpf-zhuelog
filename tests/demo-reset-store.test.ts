@@ -11,6 +11,7 @@ import {
   DEMO_KEPT_TABLES,
   DEMO_OWNED_TABLES,
   DEMO_RESET_TRANSACTION_OPTIONS,
+  deleteStaleGuestsSql,
   demoSeedRows,
 } from "../src/infrastructure/prisma/demo-reset-store";
 
@@ -106,14 +107,18 @@ const emptySeed: DemoSeed = {
 
 const now = new Date("2026-11-10T19:00:00.000Z");
 
+// Stands in for the scrypt hasher: the store must write what it returns.
+const fakeHash = async (password: string) => `hashed:${password}`;
+
 test("the reset empties exactly those tables, in one transaction", async () => {
   const { db, calls, options } = fakeDb();
   const store = createDemoResetStore(
     () => db,
+    fakeHash,
     () => "cnew",
   );
 
-  assert.equal(await store.reset("demo", emptySeed, now), "cdemo");
+  assert.equal(await store.reset("demo", "pw", emptySeed, now), "cdemo");
   assert.deepEqual(options(), { maxWait: 5000, timeout: 20000 });
   assert.deepEqual(DEMO_RESET_TRANSACTION_OPTIONS, {
     maxWait: 5000,
@@ -122,13 +127,14 @@ test("the reset empties exactly those tables, in one transaction", async () => {
 
   const raw = calls.filter((c) => c.model === "$raw");
   const sqlOf = (c: Call) => c.args[0] as { text: string; values: unknown[] };
-  const [insert, select, batches] = raw.map(sqlOf);
-  assert.equal(raw.length, 3);
+  const [insert, select, account, batches] = raw.map(sqlOf);
+  assert.equal(raw.length, 4);
   assert.ok(
     flat(insert.text).includes('ON CONFLICT ("username") DO NOTHING'),
     insert.text,
   );
   assert.ok(flat(select.text).includes("FOR UPDATE"), select.text);
+  assert.ok(flat(account.text).includes('UPDATE "account"'), account.text);
   assert.ok(
     flat(batches.text).includes(
       'DELETE FROM "ImportBatch" WHERE "id" IN (SELECT "batchId" FROM "LearningEntry" WHERE "userId" =',
@@ -177,29 +183,33 @@ test("the reset empties exactly those tables, in one transaction", async () => {
 });
 
 // What the reset writes for the demo user: the demo's loginId as its
-// username, its member mail address, the hash no password matches in a
-// credential account and now for every time, and nothing at all when the user
-// is there (its account, name and password stay). The account is made only
-// together with the user.
-test("the user is the demo user", async () => {
+// username, its member mail address and now for every time; a user already
+// there keeps its row. Its credential account is then made, or its password
+// put back, holding the hash of DEMO_PASSWORD, whether the user was just made
+// or not.
+test("the user is the demo user, with DEMO_PASSWORD as its password", async () => {
   const { db, calls } = fakeDb();
   let n = 0;
+  const hashed: string[] = [];
   const store = createDemoResetStore(
     () => db,
+    async (password) => {
+      hashed.push(password);
+      return fakeHash(password);
+    },
     () => `cnew${++n}`,
   );
-  await store.reset("demo", emptySeed, now);
-  const [insert, select] = calls
+  await store.reset("demo", "demo-pass", emptySeed, now);
+  assert.deepEqual(hashed, ["demo-pass"]);
+  const [insert, select, account] = calls
     .filter((c) => c.model === "$raw")
     .map((c) => c.args[0] as { text: string; values: unknown[] });
 
   assert.equal(
     flat(insert.text).trim(),
-    'WITH "made" AS ( INSERT INTO "user" ("id", "name", "email", "emailVerified", "username", "displayUsername", "isAnonymous", "role", "banned", "createdAt", "updatedAt") ' +
+    'INSERT INTO "user" ("id", "name", "email", "emailVerified", "username", "displayUsername", "isAnonymous", "role", "banned", "createdAt", "updatedAt") ' +
       "VALUES ($1, $2, $3, false, $4, $5, false, 'user', false, CAST($6 AS TIMESTAMP(3)), CAST($7 AS TIMESTAMP(3))) " +
-      'ON CONFLICT ("username") DO NOTHING RETURNING "id") ' +
-      'INSERT INTO "account" ("id", "accountId", "providerId", "userId", "password", "createdAt", "updatedAt") ' +
-      `SELECT $8, "id", 'credential', "id", $9, CAST($10 AS TIMESTAMP(3)), CAST($11 AS TIMESTAMP(3)) FROM "made"`,
+      'ON CONFLICT ("username") DO NOTHING',
   );
   assert.deepEqual(insert.values, [
     "cnew1",
@@ -209,16 +219,58 @@ test("the user is the demo user", async () => {
     "demo",
     now,
     now,
-    "cnew2",
-    "demo:no-password",
-    now,
-    now,
   ]);
   assert.equal(
     flat(select.text).trim(),
     'SELECT "id" FROM "user" WHERE "username" = $1 FOR UPDATE',
   );
   assert.deepEqual(select.values, ["demo"]);
+  assert.equal(
+    flat(account.text).trim(),
+    'WITH "updated" AS ( UPDATE "account" SET "password" = $1, "updatedAt" = CAST($2 AS TIMESTAMP(3)) ' +
+      `WHERE "userId" = $3 AND "providerId" = 'credential' RETURNING "id") ` +
+      'INSERT INTO "account" ("id", "accountId", "providerId", "userId", "password", "createdAt", "updatedAt") ' +
+      `SELECT $4, $5, 'credential', $6, $7, CAST($8 AS TIMESTAMP(3)), CAST($9 AS TIMESTAMP(3)) ` +
+      'WHERE NOT EXISTS (SELECT 1 FROM "updated")',
+  );
+  assert.deepEqual(account.values, [
+    "hashed:demo-pass",
+    now,
+    "cdemo",
+    "cnew2",
+    "cdemo",
+    "cdemo",
+    "hashed:demo-pass",
+    now,
+    now,
+  ]);
+});
+
+// Guests are users with isAnonymous; one made more than 24 hours ago goes
+// (its sessions with it, by the foreign key).
+test("stale guests are the anonymous users older than 24 hours", () => {
+  const sql = deleteStaleGuestsSql(now);
+  assert.equal(
+    flat(sql.text).trim(),
+    'DELETE FROM "user" WHERE "isAnonymous" = true AND "createdAt" < CAST($1 AS TIMESTAMP(3)) - INTERVAL \'24 hours\'',
+  );
+  assert.deepEqual(sql.values, [now]);
+});
+
+test("the store deletes stale guests with that statement", async () => {
+  const executed: { text: string; values: unknown[] }[] = [];
+  const db = {
+    $executeRaw: async (sql: { text: string; values: unknown[] }) => {
+      executed.push(sql);
+      return 3;
+    },
+  } as unknown as PrismaClient;
+  const store = createDemoResetStore(() => db, fakeHash);
+  assert.equal(await store.deleteStaleGuests(now), 3);
+  assert.deepEqual(
+    executed.map((sql) => [sql.text, sql.values]),
+    [[deleteStaleGuestsSql(now).text, [now]]],
+  );
 });
 
 test("the reset inserts the seed in foreign-key order", async () => {
@@ -226,9 +278,10 @@ test("the reset inserts the seed in foreign-key order", async () => {
   let n = 0;
   const store = createDemoResetStore(
     () => db,
+    fakeHash,
     () => `c${++n}`,
   );
-  await store.reset("demo", smallSeed(), now);
+  await store.reset("demo", "pw", smallSeed(), now);
   assert.deepEqual(
     calls.filter((c) => c.method === "createMany").map((c) => c.model),
     [

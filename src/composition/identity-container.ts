@@ -12,7 +12,7 @@ import type { AuthenticatedUser } from "@/domain/identity/entities/authenticated
 import type { CurrentUserProvider } from "@/application/identity/ports/current-user-provider";
 import { auth } from "@/infrastructure/auth/better-auth";
 import { withSessionCookieFrom } from "@/infrastructure/auth/better-auth-rules";
-import { demoLoginId, demoPassword } from "@/infrastructure/config/environment";
+import { demoConfig } from "@/infrastructure/config/environment";
 import { errorName } from "@/presentation/controllers/load-or";
 import {
   demoFailureReason,
@@ -62,16 +62,15 @@ export async function getRecordOwner(requested: string | undefined): Promise<{
 // Whether the sign-in page offers the demo account: both DEMO_LOGIN_ID and
 // DEMO_PASSWORD are set.
 export function demoAvailable() {
-  return Promise.resolve(Boolean(demoLoginId() && demoPassword()));
+  return Promise.resolve(demoConfig() !== undefined);
 }
 
 // Signs in to the demo account with DEMO_PASSWORD on the server: anyone may
 // enter the demo, so there is nothing for the rate limit to protect.
 export async function signInAsDemo(redirectTo: string) {
-  const username = demoLoginId();
-  const password = demoPassword();
-  if (!username || !password)
-    redirect(demoFailureUrl("demo-unavailable", redirectTo));
+  const demo = demoConfig();
+  if (!demo) redirect(demoFailureUrl("demo-unavailable", redirectTo));
+  const { loginId: username, password } = demo;
   let failure: DemoFailure | null = null;
   try {
     await auth.api.signInUsername({

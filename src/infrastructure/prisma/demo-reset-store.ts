@@ -3,11 +3,14 @@
 // It is one transaction so a visitor never sees the demo half emptied, and a
 // second reset running at the same time waits on the user row (the
 // SELECT ... FOR UPDATE) instead of inserting the seed twice. A missing demo
-// user is made with the given loginId as its username, its member mail
-// address and a credential account holding DEMO_PASSWORD_HASH; a user already
-// there is not changed at all.
+// user is made with the given loginId as its username and its member mail
+// address; a user already there keeps its row. Either way its credential
+// account is made, or its password put back, with the hash of DEMO_PASSWORD,
+// so the demo button signs in whatever happened during the day.
+//
+// The same daily run deletes the guests (anonymous users) made more than 24
+// hours ago; their sessions go with them by the foreign key.
 
-import { DEMO_PASSWORD_HASH } from "../../domain/identity/demo-account";
 import { memberEmail } from "../auth/better-auth-rules";
 import type { DemoSeed, DemoCardHistory } from "../../domain/demo/demo-seed";
 import { Prisma, type PrismaClient } from "../../generated/prisma/client";
@@ -298,34 +301,55 @@ export function demoSeedRows(
 
 const json = (value: unknown) => value as Prisma.InputJsonValue;
 
+// The guests (users with isAnonymous) made more than 24 hours before now.
+export function deleteStaleGuestsSql(now: Date): Prisma.Sql {
+  return Prisma.sql`
+    DELETE FROM "user" WHERE "isAnonymous" = true AND "createdAt" < CAST(${now} AS TIMESTAMP(3)) - INTERVAL '24 hours'`;
+}
+
 export function createDemoResetStore(
   db: () => PrismaClient,
+  hashPassword: (password: string) => Promise<string>,
   newRowId: () => string = newId,
 ) {
   return {
-    // Makes the demo user if it is missing, deletes everything it owns
-    // (but its sessions, its account and its AI usage) and inserts the seed.
-    // The demo user's id.
-    async reset(loginId: string, seed: DemoSeed, now: Date): Promise<string> {
+    // Makes the demo user if it is missing, sets its credential account's
+    // password to the hash of password, deletes everything it owns (but its
+    // sessions, its account and its AI usage) and inserts the seed. The demo
+    // user's id.
+    async reset(
+      loginId: string,
+      password: string,
+      seed: DemoSeed,
+      now: Date,
+    ): Promise<string> {
       const at = new Date(Math.trunc(now.getTime()));
+      // scrypt takes a while: outside the transaction.
+      const passwordHash = await hashPassword(password);
       return db().$transaction(async (tx) => {
-        // A concurrent reset waits on the row (or the unique key) here. The
-        // credential account is made only with the user.
+        // A concurrent reset waits on the row (or the unique key) here.
         await tx.$executeRaw(Prisma.sql`
-          WITH "made" AS (
-            INSERT INTO "user" ("id", "name", "email", "emailVerified", "username", "displayUsername", "isAnonymous", "role", "banned", "createdAt", "updatedAt")
-            VALUES (${newRowId()}, ${seed.displayName}, ${memberEmail(loginId)}, false, ${loginId}, ${loginId}, false, 'user', false, CAST(${at} AS TIMESTAMP(3)), CAST(${at} AS TIMESTAMP(3)))
-            ON CONFLICT ("username") DO NOTHING
-            RETURNING "id")
-          INSERT INTO "account" ("id", "accountId", "providerId", "userId", "password", "createdAt", "updatedAt")
-          SELECT ${newRowId()}, "id", 'credential', "id", ${DEMO_PASSWORD_HASH}, CAST(${at} AS TIMESTAMP(3)), CAST(${at} AS TIMESTAMP(3))
-            FROM "made"`);
+          INSERT INTO "user" ("id", "name", "email", "emailVerified", "username", "displayUsername", "isAnonymous", "role", "banned", "createdAt", "updatedAt")
+          VALUES (${newRowId()}, ${seed.displayName}, ${memberEmail(loginId)}, false, ${loginId}, ${loginId}, false, 'user', false, CAST(${at} AS TIMESTAMP(3)), CAST(${at} AS TIMESTAMP(3)))
+          ON CONFLICT ("username") DO NOTHING`);
         const users = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`
           SELECT "id" FROM "user" WHERE "username" = ${loginId} FOR UPDATE`);
         if (users.length === 0)
           throw new Error("demo reset: the demo user is missing");
         const userId = users[0].id;
         const where = { where: { userId } };
+
+        // The credential account, made if it is missing (a user made by
+        // someone else, or an account deleted), with DEMO_PASSWORD. The row
+        // lock above keeps two resets from both inserting it.
+        await tx.$executeRaw(Prisma.sql`
+          WITH "updated" AS (
+            UPDATE "account" SET "password" = ${passwordHash}, "updatedAt" = CAST(${at} AS TIMESTAMP(3))
+            WHERE "userId" = ${userId} AND "providerId" = 'credential'
+            RETURNING "id")
+          INSERT INTO "account" ("id", "accountId", "providerId", "userId", "password", "createdAt", "updatedAt")
+          SELECT ${newRowId()}, ${userId}, 'credential', ${userId}, ${passwordHash}, CAST(${at} AS TIMESTAMP(3)), CAST(${at} AS TIMESTAMP(3))
+          WHERE NOT EXISTS (SELECT 1 FROM "updated")`);
 
         // Each batch belongs to one owner; deleting it deletes its notes and
         // their hints.
@@ -386,6 +410,12 @@ export function createDemoResetStore(
           });
         return userId;
       }, DEMO_RESET_TRANSACTION_OPTIONS);
+    },
+
+    // Deletes the guests made more than 24 hours before now (their sessions
+    // go with them). The number deleted.
+    async deleteStaleGuests(now: Date): Promise<number> {
+      return db().$executeRaw(deleteStaleGuestsSql(now));
     },
   };
 }

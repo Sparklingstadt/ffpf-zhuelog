@@ -59,6 +59,16 @@ export function demoPassword(): string | undefined {
   return password ? password : undefined;
 }
 
+// The demo account: DEMO_LOGIN_ID and DEMO_PASSWORD. Undefined unless both
+// are set; there is then no demo (no demo button, and /api/cron/demo-reset
+// answers 404).
+export function demoConfig():
+  { loginId: string; password: string } | undefined {
+  const loginId = demoLoginId();
+  const password = demoPassword();
+  return loginId && password ? { loginId, password } : undefined;
+}
+
 // Link to add the LINE official account as a friend. It is shown as a link
 // on the page, so only an https:// URL is used; anything else is ignored.
 export function lineAddFriendUrl(): string | undefined {

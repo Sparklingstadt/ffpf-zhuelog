@@ -3,6 +3,7 @@ import { afterEach, test } from "node:test";
 
 import {
   cronSecret,
+  demoConfig,
   demoLoginId,
   sidConfig,
   isHttpsOrLoopbackUrl,
@@ -11,6 +12,7 @@ import {
 
 const saved = {
   demo: process.env.DEMO_LOGIN_ID,
+  demoPassword: process.env.DEMO_PASSWORD,
 };
 
 const LINE_KEYS = [
@@ -38,7 +40,23 @@ function restore(key: string, value: string | undefined) {
 
 afterEach(() => {
   restore("DEMO_LOGIN_ID", saved.demo);
+  restore("DEMO_PASSWORD", saved.demoPassword);
   for (const key of LINE_KEYS) restore(key, savedLine[key]);
+});
+
+// The demo needs both: without either the sign-in page has no demo button
+// and /api/cron/demo-reset answers 404.
+test("demoConfig needs DEMO_LOGIN_ID and DEMO_PASSWORD", () => {
+  process.env.DEMO_LOGIN_ID = "demo";
+  process.env.DEMO_PASSWORD = " demo-pass ";
+  assert.deepEqual(demoConfig(), { loginId: "demo", password: "demo-pass" });
+  process.env.DEMO_PASSWORD = " ";
+  assert.equal(demoConfig(), undefined);
+  delete process.env.DEMO_PASSWORD;
+  assert.equal(demoConfig(), undefined);
+  process.env.DEMO_PASSWORD = "demo-pass";
+  delete process.env.DEMO_LOGIN_ID;
+  assert.equal(demoConfig(), undefined);
 });
 
 test("demoLoginId is undefined when blank", () => {

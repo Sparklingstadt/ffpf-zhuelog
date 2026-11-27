@@ -25,45 +25,55 @@ const counter = () => {
   return () => `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`;
 };
 
-test("without DEMO_LOGIN_ID there is no reset", async () => {
-  const calls: unknown[] = [];
-  const reset = createDemoReset({
-    loginId: undefined,
-    fixture,
-    store: {
-      reset: async (...args) => {
-        calls.push(args);
-        return "c1";
-      },
-    },
-    newUuid: counter(),
-    now: () => new Date("2026-11-10T19:00:00.000Z"),
-  });
-  assert.equal(reset.available, false);
-  await assert.rejects(reset.reset());
-  assert.deepEqual(calls, []);
-});
+type Call = unknown[];
 
-test("the reset builds the seed for now and stores it", async () => {
+function fakeStore(calls: Call[]) {
+  return {
+    reset: async (...args: [string, string, DemoSeed, Date]) => {
+      calls.push(["reset", ...args]);
+      return "c1";
+    },
+    deleteStaleGuests: async (at: Date) => {
+      calls.push(["deleteStaleGuests", at]);
+      return 0;
+    },
+  };
+}
+
+for (const [name, loginId, password] of [
+  ["DEMO_LOGIN_ID", undefined, "pw"],
+  ["DEMO_PASSWORD", "demo", undefined],
+] as const)
+  test(`without ${name} there is no reset`, async () => {
+    const calls: Call[] = [];
+    const reset = createDemoReset({
+      loginId,
+      password,
+      fixture,
+      store: fakeStore(calls),
+      newUuid: counter(),
+      now: () => new Date("2026-11-10T19:00:00.000Z"),
+    });
+    assert.equal(reset.available, false);
+    await assert.rejects(reset.reset());
+    assert.deepEqual(calls, []);
+  });
+
+test("the reset stores the seed for now with DEMO_PASSWORD, then deletes stale guests", async () => {
   const now = new Date("2026-11-10T19:00:00.000Z");
-  const calls: [string, DemoSeed, Date][] = [];
+  const calls: Call[] = [];
   const reset = createDemoReset({
     loginId: "demo",
+    password: "demo-pass",
     fixture,
-    store: {
-      reset: async (loginId, seed, at) => {
-        calls.push([loginId, seed, at]);
-        return "c1";
-      },
-    },
+    store: fakeStore(calls),
     newUuid: counter(),
     now: () => now,
   });
   assert.equal(reset.available, true);
   await reset.reset();
-  assert.equal(calls.length, 1);
-  const [loginId, seed, at] = calls[0];
-  assert.equal(loginId, "demo");
-  assert.equal(at, now);
-  assert.deepEqual(seed, buildDemoSeed(fixture, now, counter()));
+  assert.deepEqual(calls, [
+    ["reset", "demo", "demo-pass", buildDemoSeed(fixture, now, counter()), now],
+    ["deleteStaleGuests", now],
+  ]);
 });
