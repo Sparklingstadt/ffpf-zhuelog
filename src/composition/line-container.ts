@@ -8,11 +8,7 @@ import {
 } from "@/application/line/line-bot";
 import { createLineLink } from "@/application/line/line-link";
 import { getCachedCurrentUser } from "@/composition/current-user";
-import {
-  allowedGitHubIds,
-  lineConfig,
-  openAiConfig,
-} from "@/infrastructure/config/environment";
+import { lineConfig, openAiConfig } from "@/infrastructure/config/environment";
 import { createLineMessaging } from "@/infrastructure/line/line-messaging";
 import {
   hashLinkCode,
@@ -102,8 +98,7 @@ export const lineBot =
           messenger: messaging,
           quota: messaging,
           ownerValid: createLineOwnerCheck({
-            adminIds: allowedGitHubIds(),
-            memberExists: links.memberExists,
+            ownerExists: links.ownerExists,
           }),
           hashCode: hashLinkCode,
           now: () => new Date(Math.trunc(Date.now())),

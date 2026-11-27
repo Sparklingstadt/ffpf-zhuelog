@@ -10,7 +10,7 @@ import type {
   ReviewNotifyTarget,
 } from "../../domain/line/line-message";
 import { japanDate } from "../../domain/review/review-days";
-import { memberExistsSql } from "./member-users";
+import { lineOwnerExistsSql } from "./member-users";
 
 // Interactive transaction limits for the LINE writes; Prisma's 5 s default is
 // too short for a cold Neon start.
@@ -202,12 +202,12 @@ export function createLineLinkStore(db: () => PrismaClient) {
       return count === 1;
     },
 
-    // The user exists and is a member: not an admin and not a guest.
-    async memberExists(userId: string): Promise<boolean> {
-      const rows = await db().$queryRaw<{ member: boolean }[]>(
-        memberExistsSql(userId),
+    // The user exists as a member or an admin: not a guest, not banned.
+    async ownerExists(userId: string): Promise<boolean> {
+      const rows = await db().$queryRaw<{ found: boolean }[]>(
+        lineOwnerExistsSql(userId),
       );
-      return rows[0]?.member === true;
+      return rows[0]?.found === true;
     },
   };
 }

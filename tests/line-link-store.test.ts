@@ -70,21 +70,21 @@ test("claimReviewNotifySql claims the JST day once", () => {
   assert.deepEqual(sql.values, [japanDay, "U1", japanDay]);
 });
 
-test("memberExists asks whether the user is a member", async () => {
+test("ownerExists asks whether the user is a member or admin who may sign in", async () => {
   const calls: { text: string; values: unknown[] }[] = [];
   const db = {
     $queryRaw: async (sql: { text: string; values: unknown[] }) => {
       calls.push({ text: flat(sql.text), values: sql.values });
-      return [{ member: sql.values[0] === "u1" }];
+      return [{ found: sql.values[0] === "u1" }];
     },
   } as unknown as PrismaClient;
   const store = createLineLinkStore(() => db);
 
-  assert.equal(await store.memberExists("u1"), true);
-  assert.equal(await store.memberExists("u2"), false);
+  assert.equal(await store.ownerExists("u1"), true);
+  assert.equal(await store.ownerExists("u2"), false);
   assert.equal(
     calls[0].text,
-    `SELECT EXISTS (SELECT 1 FROM "user" u WHERE u."id" = $1 AND coalesce(u."role", 'user') <> 'admin' AND NOT coalesce(u."isAnonymous", false)) AS "member"`,
+    `SELECT EXISTS (SELECT 1 FROM "user" u WHERE u."id" = $1 AND NOT coalesce(u."isAnonymous", false) AND NOT coalesce(u."banned", false)) AS "found"`,
   );
   assert.deepEqual(
     calls.map((c) => c.values),
