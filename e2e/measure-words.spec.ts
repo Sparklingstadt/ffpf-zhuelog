@@ -48,7 +48,7 @@ test("量詞: 25 questions are saved as mode measure, listed with the complement
   await expect(page.getByText("記録に保存しました。")).toBeVisible();
 
   const { rows } = await db.query(
-    'SELECT * FROM "ComplementPracticeRecord" WHERE "ownerId" = $1',
+    'SELECT * FROM "ComplementPracticeRecord" WHERE "userId" = $1',
     [owner],
   );
   expect(rows).toHaveLength(1);
@@ -75,7 +75,7 @@ test("量詞: 25 questions are saved as mode measure, listed with the complement
   const missed = questions.filter((q) => q.misses.length > 0);
   expect(missed.length).toBeGreaterThan(0);
   const { rows: items } = await db.query(
-    `SELECT "kind", "targetId" FROM "ReviewItem" WHERE "ownerId" = $1 ORDER BY "targetId"`,
+    `SELECT "kind", "targetId" FROM "ReviewItem" WHERE "userId" = $1 ORDER BY "targetId"`,
     [owner],
   );
   expect(items.map((it) => it.targetId)).toEqual(
@@ -97,7 +97,7 @@ test("量詞: 25 questions are saved as mode measure, listed with the complement
   if (shown > 1) await expect(page.getByText(`2 / ${shown}`)).toBeVisible();
   else await expect(page.getByText("1問 復習しました")).toBeVisible();
   const { rows: logs } = await db.query(
-    `SELECT l."rating" FROM "ReviewLog" l WHERE l."ownerId" = $1`,
+    `SELECT l."rating" FROM "ReviewLog" l WHERE l."userId" = $1`,
     [owner],
   );
   expect(logs).toEqual([{ rating: 4 }]);

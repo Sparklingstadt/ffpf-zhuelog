@@ -31,16 +31,21 @@ import {
 installNextStubs();
 
 const admin: AuthenticatedUser = {
-  githubLogin: "admin",
-  githubId: "10001",
+  userId: "10001",
   role: "admin",
+  displayName: "admin",
 };
 const member: AuthenticatedUser = {
-  githubLogin: "taro",
-  githubId: "password:c1abcdefghijklmnopqrstu",
+  userId: "c1abcdefghijklmnopqrstu",
   role: "member",
+  displayName: "taro",
+  username: "taro",
 };
-const guest: AuthenticatedUser = { githubLogin: "guest", role: "guest" };
+const guest: AuthenticatedUser = {
+  userId: "g1",
+  role: "guest",
+  displayName: "guest",
+};
 
 let user: AuthenticatedUser | null = null;
 let calls: unknown[][] = [];

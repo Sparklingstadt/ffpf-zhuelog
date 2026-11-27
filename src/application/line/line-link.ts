@@ -1,10 +1,18 @@
 import type { AuthenticatedUser } from "../../domain/identity/entities/authenticated-user";
 import { LINK_CODE_TTL_MS } from "../../domain/line/link-code";
 
-// The signed-in user may not link LINE: signed out, a guest, revoked,
-// without an owner id, the demo account, or an admin acting as a member.
+// The signed-in user may not link LINE: signed out, a guest, the demo
+// account, or an admin impersonating a member (so the admin's LINE is never
+// tied to the member).
 export class LineLinkForbiddenError extends Error {
   override name = "LineLinkForbiddenError";
+}
+
+// Whether the user may link LINE: a member or an admin as themselves. Not a
+// guest or the demo account, and not while an admin impersonates a member
+// (the admin's LINE would then be tied to the member).
+export function lineLinkAllowed(user: AuthenticatedUser): boolean {
+  return user.role !== "guest" && !user.demo && !user.impersonatedBy;
 }
 
 export type LineLinkDeps = {
@@ -18,12 +26,7 @@ export type LineLinkDeps = {
     // false: no LINE account is linked.
     setReviewNotify(ownerId: string, on: boolean): Promise<boolean>;
     unlinkOwner(ownerId: string): Promise<void>;
-    putCode(
-      ownerId: string,
-      role: "member" | "admin",
-      codeHash: string,
-      expiresAt: Date,
-    ): Promise<void>;
+    putCode(ownerId: string, codeHash: string, expiresAt: Date): Promise<void>;
   };
   newCode: () => string;
   hashCode: (code: string) => string;
@@ -34,20 +37,10 @@ export type LineLinkDeps = {
 // The user is decided first, so a refused user is refused even when LINE is
 // off.
 export function createLineLink(deps: LineLinkDeps) {
-  async function owner(): Promise<{
-    ownerId: string;
-    role: "member" | "admin";
-  }> {
+  async function owner(): Promise<{ ownerId: string }> {
     const user = await deps.currentUser();
-    if (
-      !user ||
-      (user.role !== "member" && user.role !== "admin") ||
-      user.actingAs ||
-      user.demo === true ||
-      !user.githubId
-    )
-      throw new LineLinkForbiddenError();
-    return { ownerId: user.githubId, role: user.role };
+    if (!user || !lineLinkAllowed(user)) throw new LineLinkForbiddenError();
+    return { ownerId: user.userId };
   }
 
   return {
@@ -66,11 +59,11 @@ export function createLineLink(deps: LineLinkDeps) {
 
     // Replaces the owner's previous code; only the code's hash is stored.
     async issueCode(): Promise<{ code: string; expiresAt: Date }> {
-      const { ownerId, role } = await owner();
+      const { ownerId } = await owner();
       if (!deps.enabled) throw new Error("LINE_UNAVAILABLE");
       const code = deps.newCode();
       const expiresAt = new Date(deps.now().getTime() + LINK_CODE_TTL_MS);
-      await deps.store.putCode(ownerId, role, deps.hashCode(code), expiresAt);
+      await deps.store.putCode(ownerId, deps.hashCode(code), expiresAt);
       return { code, expiresAt };
     },
 

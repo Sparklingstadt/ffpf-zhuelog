@@ -738,20 +738,48 @@ test("logs never carry text, ids or codes", () => {
     assert.equal(logged.includes(secret), false, secret);
 });
 
-test("owners are checked against the admin list or the member accounts", async () => {
+test("an owner may use LINE while their user exists as a member or an admin", async () => {
   const asked: string[] = [];
   const check = createLineOwnerCheck({
-    adminIds: new Set(["10001"]),
-    async memberExists(ownerId) {
+    async ownerExists(ownerId) {
       asked.push(ownerId);
-      return ownerId === "password:c1";
+      return ownerId === "admin1" || ownerId === "member1";
     },
   });
-  assert.equal(await check("10001", "admin"), true);
-  assert.equal(await check("10002", "admin"), false);
-  assert.equal(await check("password:c1", "member"), true);
-  assert.equal(await check("password:c2", "member"), false);
-  assert.equal(await check("guest", "guest"), false);
-  assert.equal(await check("10001", "revoked"), false);
-  assert.deepEqual(asked, ["password:c1", "password:c2"]);
+  // The GitHub allowlist plays no part: an admin is one by "user"."role".
+  assert.equal(await check("admin1", "admin"), true);
+  assert.equal(await check("member1", "member"), true);
+  // Deleted, anonymous or banned users are not found.
+  assert.equal(await check("gone1", "admin"), false);
+  assert.equal(await check("gone2", "member"), false);
+  assert.equal(await check("g1", "guest"), false);
+  assert.deepEqual(asked, ["admin1", "member1", "gone1", "gone2"]);
+});
+
+test("the drain keeps an admin's link and unlinks a user who is gone", async () => {
+  const adminLink = { ...link, ownerId: "admin1", role: "admin" };
+  const ownerValid = createLineOwnerCheck({
+    ownerExists: async (ownerId) => ownerId === "admin1",
+  });
+  let h = harness({
+    listStale: () => [row("m1", 1, { ownerId: "admin1" })],
+    find: () => adminLink,
+    ownerValid,
+  });
+  await h.bot.runDailyPass(drainDeadline);
+  assert.ok(!h.names().includes("unlinkLineUser"));
+  assert.ok(h.names().includes("startAttempt"));
+
+  h = harness({
+    listStale: () => [row("m1", 1, { ownerId: "gone1" })],
+    find: () => ({ ...link, ownerId: "gone1" }),
+    ownerValid,
+  });
+  await h.bot.runDailyPass(drainDeadline);
+  assert.deepEqual(h.calls.slice(2, 6), [
+    ["find", "U1"],
+    ["ownerValid", "gone1", "member"],
+    ["unlinkLineUser", "U1"],
+    ["fail", "m1", t0],
+  ]);
 });

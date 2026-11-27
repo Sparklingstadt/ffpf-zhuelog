@@ -20,8 +20,7 @@ import {
 } from "../../domain/review/review-item";
 import type { VocabularyCard } from "../../domain/vocabulary/vocabulary-entry";
 
-// The signed-in user has no review queue: signed out, a guest, revoked or
-// without an owner id.
+// The signed-in user has no review queue: signed out or a guest.
 export class ReviewForbiddenError extends Error {
   override name = "ReviewForbiddenError";
 }
@@ -64,13 +63,12 @@ export type ReviewQueueDeps = {
 };
 
 // Today's reviews, always the signed-in user's own queue (the member an
-// admin acts as; the demo has one too), never an owner from a form.
+// admin impersonates; the demo has one too), never an owner from a form.
 export function createReviewQueue(deps: ReviewQueueDeps) {
   async function owner(): Promise<string> {
     const user = await deps.currentUser();
-    if (!user || !isMemberRole(user.role) || !user.githubId)
-      throw new ReviewForbiddenError();
-    return user.githubId;
+    if (!user || !isMemberRole(user.role)) throw new ReviewForbiddenError();
+    return user.userId;
   }
 
   return {

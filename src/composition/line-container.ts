@@ -8,11 +8,7 @@ import {
 } from "@/application/line/line-bot";
 import { createLineLink } from "@/application/line/line-link";
 import { getCachedCurrentUser } from "@/composition/current-user";
-import {
-  allowedGitHubIds,
-  lineConfig,
-  openAiConfig,
-} from "@/infrastructure/config/environment";
+import { lineConfig, openAiConfig } from "@/infrastructure/config/environment";
 import { createLineMessaging } from "@/infrastructure/line/line-messaging";
 import {
   hashLinkCode,
@@ -61,9 +57,14 @@ export const lineBot =
   config && openAi
     ? (() => {
         const messaging = createLineMessaging(config);
+        const messages = createLineMessageStore(prisma);
         return createLineBot({
           links,
-          messages: createLineMessageStore(prisma),
+          messages: {
+            ...messages,
+            insert: ({ ownerId, ...message }, now) =>
+              messages.insert({ ...message, userId: ownerId }, now),
+          },
           throttle: createSignInThrottleStore(prisma),
           async generate(kind, text, onUsage) {
             try {
@@ -86,15 +87,18 @@ export const lineBot =
           recordUsage: (ownerId, usage) =>
             recordWithin(
               () =>
-                recordAiUsage(prisma, { ...usage, ownerId, feature: "line" }),
+                recordAiUsage(prisma, {
+                  ...usage,
+                  userId: ownerId,
+                  feature: "line",
+                }),
               RECORD_TIMEOUT_MS,
               (code, name) => console.error(code, name),
             ),
           messenger: messaging,
           quota: messaging,
           ownerValid: createLineOwnerCheck({
-            adminIds: allowedGitHubIds(),
-            memberExists: links.memberExists,
+            ownerExists: links.ownerExists,
           }),
           hashCode: hashLinkCode,
           now: () => new Date(Math.trunc(Date.now())),

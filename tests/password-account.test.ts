@@ -4,9 +4,7 @@ import { test } from "node:test";
 import {
   checkNewAccount,
   choosePassword,
-  firstCodePoints,
   isAccountIdShape,
-  isPlausibleCurrentPassword,
   isValidNewPassword,
   normalizeDisplayName,
   normalizeLoginId,
@@ -109,7 +107,7 @@ test("checkNewAccount checks loginId, then name, then password", () => {
   );
 });
 
-test("account ids and current passwords are checked for shape and length", () => {
+test("account ids are checked for shape and length", () => {
   assert.equal(isAccountIdShape("cx"), true);
   assert.equal(isAccountIdShape("a".repeat(128)), true);
   assert.equal(isAccountIdShape(""), false);
@@ -119,12 +117,4 @@ test("account ids and current passwords are checked for shape and length", () =>
   assert.equal(isAccountIdShape("a\u0000b"), false);
   assert.equal(isAccountIdShape("a" + String.fromCharCode(0xd800)), false);
   assert.equal(isAccountIdShape("cm3x9k2p70000ab12cd34ef56"), true);
-
-  assert.equal(isPlausibleCurrentPassword("x"), true);
-  assert.equal(isPlausibleCurrentPassword("パ".repeat(128)), true);
-  assert.equal(isPlausibleCurrentPassword(""), false);
-  assert.equal(isPlausibleCurrentPassword("x".repeat(129)), false);
-  assert.equal(isPlausibleCurrentPassword("パ".repeat(129)), false);
-
-  assert.equal(firstCodePoints("😀".repeat(130), 128), "😀".repeat(128));
 });

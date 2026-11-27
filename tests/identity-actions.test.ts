@@ -8,7 +8,7 @@ import {
   accountForbiddenMessage,
   accountInputMessage,
   accountNotFoundMessage,
-  changePasswordMessage,
+  sessionsNotEndedMessage,
 } from "../src/presentation/presenters/account-action-errors";
 import { genericErrorMessage } from "../src/presentation/presenters/generic-error-message";
 import {
@@ -28,16 +28,21 @@ import {
 installNextStubs();
 
 const admin: AuthenticatedUser = {
-  githubLogin: "admin",
-  githubId: "10001",
+  userId: "10001",
   role: "admin",
+  displayName: "admin",
 };
 const member: AuthenticatedUser = {
-  githubLogin: "taro",
-  githubId: "password:c1abcdefghijklmnopqrstu",
+  userId: "c1abcdefghijklmnopqrstu",
   role: "member",
+  displayName: "taro",
+  username: "taro",
 };
-const guest: AuthenticatedUser = { githubLogin: "guest", role: "guest" };
+const guest: AuthenticatedUser = {
+  userId: "g1",
+  role: "guest",
+  displayName: "guest",
+};
 
 // Who is signed in, every call the actions made, and what each call answers.
 let user: AuthenticatedUser | null = null;
@@ -54,26 +59,21 @@ stubSource("composition/identity-container", {
   getCurrentMemberUser: async () =>
     user && user.role !== "guest" ? user : null,
   getCurrentAdminUser: async () => (user?.role === "admin" ? user : null),
-  signInWithGitHub: record("signInWithGitHub"),
-  signInWithSid: record("signInWithSid"),
-  signInAsGuest: record("signInAsGuest"),
   signInAsDemo: record("signInAsDemo"),
-  signInWithPassword: record("signInWithPassword"),
   signOutCurrentUser: record("signOutCurrentUser"),
   // As the real one: it ends by redirecting.
   signOutTo: async (to: string) => {
     calls.push(["signOutTo", to]);
     throw new RedirectSignal(to);
   },
-  startActingAs: record("startActingAs"),
-  stopActing: record("stopActing"),
+  impersonateMember: record("impersonateMember"),
+  stopImpersonation: record("stopImpersonation"),
 });
 stubSource("composition/account-container", {
   memberAccounts: {
     create: record("memberAccounts.create"),
     resetPassword: record("memberAccounts.resetPassword"),
   },
-  ownPassword: { change: record("ownPassword.change") },
 });
 stubSource("composition/line-container", {
   lineLink: {
@@ -119,48 +119,25 @@ beforeEach(() => {
   answers = {};
 });
 
-test("sign-in actions only ever come back to a path of this site", async () => {
+test("the demo sign-in only ever comes back to a path of this site, and sign-out is passed on", async () => {
   const actions = await auth();
 
-  await actions.signInWithGitHubAction("https://evil.example");
-  await actions.signInWithSidAction("//evil.example");
-  await actions.signInAsGuestAction("/%2fevil.example");
+  await actions.signInAsDemoAction("https://evil.example");
+  await actions.signInAsDemoAction("/%2fevil.example");
   await actions.signInAsDemoAction("/logs/2026/9/24?view=all");
-  await actions.signInWithPasswordAction(
-    "/\\evil.example",
-    form({ loginId: "taro", password: "member-password-1" }),
-  );
-
-  assert.deepEqual(calls, [
-    ["signInWithGitHub", "/"],
-    ["signInWithSid", "/"],
-    ["signInAsGuest", "/"],
-    ["signInAsDemo", "/logs/2026/9/24?view=all"],
-    [
-      "signInWithPassword",
-      { loginId: "taro", password: "member-password-1", redirectTo: "/" },
-    ],
-  ]);
-});
-
-test("a password form without text fields signs in with empty values, and sign-out is passed on", async () => {
-  const actions = await auth();
-
-  await actions.signInWithPasswordAction(
-    "/logs",
-    form({ loginId: new Blob(["x"]) }),
-  );
   await actions.signOutAction();
 
   assert.deepEqual(calls, [
-    ["signInWithPassword", { loginId: "", password: "", redirectTo: "/logs" }],
+    ["signInAsDemo", "/"],
+    ["signInAsDemo", "/"],
+    ["signInAsDemo", "/logs/2026/9/24?view=all"],
     ["signOutCurrentUser"],
   ]);
 });
 
-test("only an admin starts acting, and only as a member", async () => {
-  const { startActingAsAction, stopActingAction } = await acting();
-  const target = member.githubId!;
+test("only an admin starts impersonating, and a refusal goes back to the accounts page", async () => {
+  const { startActingAsAction } = await acting();
+  const target = member.userId;
 
   for (const visitor of [null, guest, member]) {
     user = visitor;
@@ -168,37 +145,36 @@ test("only an admin starts acting, and only as a member", async () => {
   }
   assert.deepEqual(calls, []);
 
-  // An admin's own id, a Sparklingstadt ID account and a made-up path are not
-  // password members; nothing is even looked up.
   user = admin;
-  for (const ownerId of ["10001", "sid:abc", "password:../x", ""])
-    assert.equal(
-      (await redirectOf(() => startActingAsAction(ownerId))).to,
-      "/admin/accounts?actAs=failed",
-    );
-  assert.deepEqual(calls, []);
-
-  answers.startActingAs = () => true;
+  answers["impersonateMember"] = () => true;
   assert.equal((await redirectOf(() => startActingAsAction(target))).to, "/");
-  // The member was deleted in the meantime.
-  answers.startActingAs = () => false;
+  // Better Auth refuses (no such user, an admin, a guest).
+  answers["impersonateMember"] = () => false;
   assert.equal(
-    (await redirectOf(() => startActingAsAction(target))).to,
+    (await redirectOf(() => startActingAsAction("10001"))).to,
+    "/admin/accounts?actAs=failed",
+  );
+  // A bound id that is not text never reaches Better Auth.
+  assert.equal(
+    (await redirectOf(() => startActingAsAction(42 as unknown as string))).to,
     "/admin/accounts?actAs=failed",
   );
   assert.deepEqual(calls, [
-    ["startActingAs", target],
-    ["startActingAs", target],
+    ["impersonateMember", target],
+    ["impersonateMember", "10001"],
   ]);
+});
 
-  // Anyone may stop: it only clears their own cookie.
-  calls = [];
-  user = null;
+test("stopping goes back to the accounts page, or home when nothing was impersonated", async () => {
+  const { stopActingAction } = await acting();
+  answers["stopImpersonation"] = () => true;
   assert.equal(
     (await redirectOf(() => stopActingAction())).to,
     "/admin/accounts",
   );
-  assert.deepEqual(calls, [["stopActing"]]);
+  answers["stopImpersonation"] = () => false;
+  assert.equal((await redirectOf(() => stopActingAction())).to, "/");
+  assert.deepEqual(calls, [["stopImpersonation"], ["stopImpersonation"]]);
 });
 
 test("only an admin creates accounts and resets passwords", async () => {
@@ -307,6 +283,7 @@ test("a reset password is sent by the account's id and comes back once", async (
   answers["memberAccounts.resetPassword"] = () => ({
     ok: true,
     issued: reissued,
+    sessionsEnded: true,
   });
 
   assert.deepEqual(
@@ -319,6 +296,35 @@ test("a reset password is sent by the account's id and comes back once", async (
   );
   assert.deepEqual(calls, [
     ["memberAccounts.resetPassword", "c1", "new-password-12"],
+  ]);
+  assert.deepEqual(next.revalidated, [["/admin/accounts"]]);
+});
+
+test("a reset whose sessions could not be ended still shows the password, says so and logs the name only", async (t) => {
+  const { resetPasswordAccountPasswordAction } = await accounts();
+  const logged = captureErrors(t);
+  user = admin;
+  const reissued = {
+    loginId: "hana",
+    password: "new-password-12",
+    generated: false,
+  };
+  answers["memberAccounts.resetPassword"] = () => ({
+    ok: true,
+    issued: reissued,
+    sessionsEnded: false,
+    sessionsError: new TypeError("db down new-password-12"),
+  });
+  assert.deepEqual(
+    await resetPasswordAccountPasswordAction(
+      "c1",
+      idle,
+      form({ password: "new-password-12" }),
+    ),
+    { status: "success", ...reissued, notice: sessionsNotEndedMessage },
+  );
+  assert.deepEqual(logged, [
+    ["PASSWORD_ACCOUNT_REVOKE_SESSIONS_FAILED", "TypeError"],
   ]);
   assert.deepEqual(next.revalidated, [["/admin/accounts"]]);
 });
@@ -352,79 +358,12 @@ test("an account call that fails says not allowed or the generic text, logging i
   assert.deepEqual(next.revalidated, []);
 });
 
-test("only a password member changes their own password", async () => {
-  const { changeOwnPasswordAction } = await accounts();
-  const fields = form({
-    currentPassword: "old-password-1",
-    newPassword: "new-password-1",
-    confirmPassword: "new-password-1",
-  });
-
-  // Admins sign in with GitHub and have no password here.
-  for (const visitor of [null, guest, admin]) {
-    user = visitor;
-    assert.deepEqual(await changeOwnPasswordAction(idle, fields), refused);
-  }
-  assert.deepEqual(calls, []);
-});
-
-test("a changed password signs the member out; a refused one stays on the form", async (t) => {
-  const { changeOwnPasswordAction } = await accounts();
-  const logged = captureErrors(t);
+test("after the own password change this browser is signed out to the notice", async () => {
+  const { signOutAfterPasswordChangeAction } = await accounts();
   user = member;
-  const fields = form({
-    currentPassword: "old-password-1",
-    newPassword: "new-password-1",
-    confirmPassword: new Blob(["x"]),
-  });
-
-  for (const outcome of [
-    "forbidden",
-    "invalid-new-password",
-    "password-mismatch",
-    "invalid-current-password",
-  ] as const) {
-    answers["ownPassword.change"] = () => outcome;
-    assert.deepEqual(await changeOwnPasswordAction(idle, fields), {
-      status: "error",
-      message: changePasswordMessage(outcome),
-    });
-  }
-  assert.deepEqual(logged, []);
-  // Too many attempts is told apart only in the log.
-  answers["ownPassword.change"] = () => "rate-limited";
-  assert.deepEqual(await changeOwnPasswordAction(idle, fields), {
-    status: "error",
-    message: genericErrorMessage,
-  });
-  assert.deepEqual(logged, [["PASSWORD_CHANGE_RATE_LIMITED"]]);
-  answers["ownPassword.change"] = throws(new TypeError("db down"));
-  assert.deepEqual(await changeOwnPasswordAction(idle, fields), {
-    status: "error",
-    message: genericErrorMessage,
-  });
-  assert.ok(!calls.some(([name]) => name === "signOutTo"));
-
-  calls = [];
-  answers["ownPassword.change"] = () => "changed";
-  const redirect = await redirectOf(() =>
-    changeOwnPasswordAction(idle, fields),
-  );
+  const redirect = await redirectOf(() => signOutAfterPasswordChangeAction());
   assert.equal(redirect.to, "/signin?notice=password-changed");
-  // The attempts are counted by the client's address; a field that is not
-  // text is empty.
-  assert.deepEqual(calls, [
-    [
-      "ownPassword.change",
-      {
-        currentPassword: "old-password-1",
-        newPassword: "new-password-1",
-        confirmPassword: "",
-      },
-      "203.0.113.7",
-    ],
-    ["signOutTo", "/signin?notice=password-changed"],
-  ]);
+  assert.deepEqual(calls, [["signOutTo", "/signin?notice=password-changed"]]);
 });
 
 test("a LINE link code is issued with its expiry as text", async (t) => {

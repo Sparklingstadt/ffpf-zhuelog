@@ -2,7 +2,8 @@ export function contentSecurityPolicy(
   nonce: string,
   development: boolean,
   https: boolean,
-  // Sign-in forms redirect there (e.g. the Sparklingstadt ID issuer's origin).
+  // Forms whose submission redirects there: the sign-out's redirect to the
+  // Sparklingstadt ID issuer's logout (when JavaScript has not loaded).
   formActionOrigins: string[] = [],
 ) {
   return [
@@ -16,7 +17,7 @@ export function contentSecurityPolicy(
     "object-src 'none'",
     "base-uri 'self'",
     "frame-ancestors 'none'",
-    ["form-action 'self' https://github.com", ...formActionOrigins].join(" "),
+    ["form-action 'self'", ...formActionOrigins].join(" "),
     ...(https ? ["upgrade-insecure-requests"] : []),
   ].join("; ");
 }

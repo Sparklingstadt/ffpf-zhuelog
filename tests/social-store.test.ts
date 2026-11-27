@@ -14,45 +14,45 @@ function flat(sql: { text: string }): string {
   return sql.text.replace(/\s+/g, " ");
 }
 
+const IS_MEMBER = `coalesce(u."role", 'user') <> 'admin' AND NOT coalesce(u."isAnonymous", false)`;
+
 test("memberDirectorySql lists every member but the viewer", () => {
-  const sql = memberDirectorySql("password:me");
+  const sql = memberDirectorySql("me");
   const text = flat(sql);
   for (const part of [
-    `'password:' || p."id"`,
-    `'sid:' || f."id"`,
-    "UNION ALL",
-    `f."followerId" = $1 AND f."followeeId" = a."ownerId"`,
-    `f."followerId" = a."ownerId" AND f."followeeId" = $2`,
-    `WHERE a."ownerId" <> $3`,
-    `ORDER BY a."displayName" COLLATE "ja-x-icu", a."createdAt", a."ownerId"`,
+    `SELECT u."id" AS "userId", u."name" AS "displayName"`,
+    `f."followerId" = $1 AND f."followeeId" = u."id"`,
+    `f."followerId" = u."id" AND f."followeeId" = $2`,
+    `FROM "user" u WHERE ${IS_MEMBER} AND u."id" <> $3`,
+    `ORDER BY u."name" COLLATE "ja-x-icu", u."createdAt", u."id"`,
     `AS "following"`,
     `AS "followsMe"`,
   ]) {
     assert.ok(text.includes(part), `${part}\n${text}`);
   }
-  assert.ok(!text.includes(`"loginId"`), text);
-  assert.deepEqual(sql.values, ["password:me", "password:me", "password:me"]);
+  assert.ok(!text.includes(`"username"`), text);
+  assert.deepEqual(sql.values, ["me", "me", "me"]);
 
-  const count = followerCountSql("password:me");
+  const count = followerCountSql("me");
   assert.ok(flat(count).includes(`FROM "Follow" WHERE "followeeId" = $1`));
-  assert.deepEqual(count.values, ["password:me"]);
+  assert.deepEqual(count.values, ["me"]);
 });
 
 test("directoryFromRows counts follows in both directions", () => {
   const rows = [
     {
-      ownerId: "password:a",
+      userId: "password:a",
       displayName: "A",
       following: true,
       followsMe: true,
     },
     {
-      ownerId: "password:b",
+      userId: "password:b",
       displayName: "B",
       following: true,
       followsMe: false,
     },
-    { ownerId: "sid:c", displayName: "C", following: false, followsMe: true },
+    { userId: "sid:c", displayName: "C", following: false, followsMe: true },
   ];
   assert.deepEqual(directoryFromRows(rows, BigInt(3)), {
     members: [
@@ -86,31 +86,28 @@ test("directoryFromRows counts follows in both directions", () => {
 });
 
 test("timelineSql reads the shared notes of the people the viewer follows", () => {
-  const sql = timelineSql("password:me", 100);
+  const sql = timelineSql("me", 100);
   const text = flat(sql);
   for (const part of [
-    `JOIN "Follow" f ON f."followeeId" = e."ownerId" AND f."followerId" = $1`,
-    `ON a."ownerId" = e."ownerId"`,
+    `e."userId" AS "userId", u."name" AS "ownerName"`,
+    `JOIN "Follow" f ON f."followeeId" = e."userId" AND f."followerId" = $1`,
+    `JOIN "user" u ON u."id" = e."userId" AND ${IS_MEMBER}`,
     `e."sharedAt" IS NOT NULL AND e."deletedAt" IS NULL`,
     `ORDER BY e."createdAt" DESC, e."id" DESC`,
     "LIMIT $2",
-    `AS "ownerName"`,
-    `'password:'`,
-    `'sid:'`,
-    "UNION ALL",
   ]) {
     assert.ok(text.includes(part), `${part}\n${text}`);
   }
-  assert.deepEqual(sql.values, ["password:me", 100]);
+  assert.deepEqual(sql.values, ["me", 100]);
 });
 
 test("followSql adds a row only for an existing member", () => {
   const now = new Date("2026-11-17T03:00:00.000Z");
 
-  const password = followSql("10001", "password:abc", now);
-  const text = flat(password);
+  const sql = followSql("admin1", "abc", now);
+  const text = flat(sql);
   for (const part of [
-    `FROM "PasswordAccount" WHERE "id" = $1`,
+    `WITH "target" AS (SELECT 1 FROM "user" u WHERE u."id" = $1 AND ${IS_MEMBER})`,
     `INSERT INTO "Follow" ("followerId", "followeeId", "createdAt")`,
     `WHERE EXISTS (SELECT 1 FROM "target")`,
     "ON CONFLICT DO NOTHING",
@@ -118,14 +115,5 @@ test("followSql adds a row only for an existing member", () => {
   ]) {
     assert.ok(text.includes(part), `${part}\n${text}`);
   }
-  assert.ok(!text.includes(`"SidAccount"`), text);
-  assert.deepEqual(password.values, ["abc", "10001", "password:abc", now]);
-
-  const sid = followSql("password:me", "sid:cabc", now);
-  assert.ok(flat(sid).includes(`FROM "SidAccount" WHERE "id" = $1`));
-  assert.ok(!flat(sid).includes(`"PasswordAccount"`));
-  assert.deepEqual(sid.values, ["cabc", "password:me", "sid:cabc", now]);
-
-  assert.throws(() => followSql("password:me", "github:1", now), RangeError);
-  assert.throws(() => followSql("password:me", "password:", now), RangeError);
+  assert.deepEqual(sql.values, ["abc", "admin1", "abc", now]);
 });

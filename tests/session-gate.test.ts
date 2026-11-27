@@ -47,19 +47,19 @@ function harness() {
   };
 }
 
-test("a session cookie passes the gate without any lookup", () => {
-  const h = harness();
-  const response = sessionGate(
-    request("/logs", { cookie: `theme=dark; zl_session=${"T".repeat(43)}` }),
-    h.next,
-  );
-  assert.equal(h.seen.length, 1);
-  assert.equal(response.headers.get("x-test-next"), "1");
-  // The cookie header reaches the page as the browser sent it.
-  assert.equal(
-    h.seen[0]!.headers.get("cookie"),
-    `theme=dark; zl_session=${"T".repeat(43)}`,
-  );
+test("a Better Auth session cookie passes the gate without any lookup", () => {
+  for (const name of [
+    "better-auth.session_token",
+    "__Secure-better-auth.session_token",
+  ]) {
+    const h = harness();
+    const cookie = `theme=dark; ${name}=${"T".repeat(32)}.sig`;
+    const response = sessionGate(request("/logs", { cookie }), h.next);
+    assert.equal(h.seen.length, 1, name);
+    assert.equal(response.headers.get("x-test-next"), "1", name);
+    // The cookie header reaches the page as the browser sent it.
+    assert.equal(h.seen[0]!.headers.get("cookie"), cookie, name);
+  }
 });
 
 test("signed-out page requests go to /signin with the callback path", () => {
@@ -76,22 +76,30 @@ test("signed-out page requests go to /signin with the callback path", () => {
 test("an empty session cookie is signed out", () => {
   const h = harness();
   const response = sessionGate(
-    request("/logs", { cookie: "zl_session=" }),
+    request("/logs", { cookie: "better-auth.session_token=" }),
     h.next,
   );
   assert.equal(response.status, 302);
   assert.equal(h.seen.length, 0);
 });
 
-test("the legacy cookies alone are signed out", () => {
-  const h = harness();
-  const response = sessionGate(
-    request("/logs", { cookie: "zl_access=a; zl_refresh=r" }),
-    h.next,
-  );
-  assert.equal(response.status, 302);
-  assert.equal(new URL(response.headers.get("location")!).pathname, "/signin");
-  assert.equal(h.seen.length, 0);
+test("the retired cookies alone are signed out", () => {
+  for (const cookie of [
+    "zl_access=a; zl_refresh=r",
+    `zl_session=${"T".repeat(43)}`,
+    "zl_act_as=abc",
+    "better-auth.session_data=x",
+  ]) {
+    const h = harness();
+    const response = sessionGate(request("/logs", { cookie }), h.next);
+    assert.equal(response.status, 302, cookie);
+    assert.equal(
+      new URL(response.headers.get("location")!).pathname,
+      "/signin",
+      cookie,
+    );
+    assert.equal(h.seen.length, 0, cookie);
+  }
 });
 
 test("signed-out /api requests get a 401 JSON that is not cached", async () => {
@@ -123,6 +131,8 @@ test("public routes pass while signed out", () => {
     "/signin",
     "/api/auth/callback/github/go?code=x",
     "/api/auth/callback/sid?code=x",
+    "/api/auth/get-session",
+    "/api/auth/oauth2/callback/sid?code=x",
     "/robots.txt",
     "/sitemap.xml",
     "/opengraph-image.png?a1b2c3",
@@ -172,6 +182,7 @@ test("a route that only looks public is gated", () => {
 
 test("the gate never sets cookies", () => {
   const cases: [string, Parameters<typeof request>[1]][] = [
+    ["/logs", { cookie: `better-auth.session_token=${"T".repeat(32)}` }],
     ["/logs", { cookie: `zl_session=${"T".repeat(43)}` }],
     ["/logs", { cookie: "zl_access=a; zl_refresh=r; zl_act_as=password:a" }],
     ["/logs", {}],

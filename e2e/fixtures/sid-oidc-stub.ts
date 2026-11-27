@@ -8,8 +8,13 @@ import {
 import { createServer, type IncomingMessage } from "node:http";
 
 // A stand-in for Sparklingstadt ID (sparklingstadt-id's OpenID Connect provider) for the e2e
-// run. It serves exactly what the web's Sparklingstadt ID client uses (the Sparklingstadt ID server's OpenID Connect endpoints):
+// run. It serves exactly what the web's Sparklingstadt ID client (Better Auth's
+// genericOAuth provider "sid") uses (the Sparklingstadt ID server's OpenID Connect endpoints):
 //
+//   GET  /.well-known/openid-configuration
+//                          discovery: the endpoints below, the issuer and
+//                          ES256 (so the web verifies the ID token against
+//                          the JWKS).
 //   GET  /oauth/authorize  checks the client and redirect URI, remembers the
 //                          PKCE challenge and nonce, and goes straight back to
 //                          redirect_uri?code=stub&state=… (no login screen).
@@ -18,8 +23,12 @@ import { createServer, type IncomingMessage } from "node:http";
 //                          ES256 ID token for sidStubUser carrying the nonce.
 //   GET  /oauth/jwks       the public key of this run's random P-256 key.
 //   GET  /oauth/logout     RP-Initiated Logout: checks the client, remembers the
-//                          call, and goes back to post_logout_redirect_uri.
+//                          call (with its id_token_hint), and goes back to
+//                          post_logout_redirect_uri.
 //   GET/DELETE /__logouts  (test only) the remembered logout calls / forget them.
+//   POST /__deny-next      (test only) the next /oauth/authorize answers
+//                          redirect_uri?error=access_denied&state=… instead,
+//                          as when the person declines on the ID server.
 //
 // Nothing leaves this machine, and the key exists only in this process.
 
@@ -53,9 +62,12 @@ export function startSidOidcStub(
   // The latest authorization request, which the code "stub" stands for.
   let pending: { challenge: string; nonce: string } | null = null;
   // Every call to /oauth/logout, for the spec to check.
+  // Set by POST /__deny-next: the next authorization is declined.
+  let denyNext = false;
   let logouts: {
     clientId: string | null;
     postLogoutRedirectUri: string | null;
+    idTokenHint: string | null;
   }[] = [];
 
   const idToken = (nonce: string) => {
@@ -91,6 +103,29 @@ export function startSidOidcStub(
         })
         .end(body);
 
+    if (
+      request.method === "GET" &&
+      url.pathname === "/.well-known/openid-configuration"
+    ) {
+      json(
+        200,
+        JSON.stringify({
+          issuer: options.issuer,
+          authorization_endpoint: `${options.issuer}/oauth/authorize`,
+          token_endpoint: `${options.issuer}/oauth/token`,
+          jwks_uri: `${options.issuer}/oauth/jwks`,
+          end_session_endpoint: `${options.issuer}/oauth/logout`,
+          response_types_supported: ["code"],
+          subject_types_supported: ["public"],
+          id_token_signing_alg_values_supported: ["ES256"],
+          scopes_supported: ["openid", "email", "profile"],
+          token_endpoint_auth_methods_supported: ["client_secret_basic"],
+          code_challenge_methods_supported: ["S256"],
+        }),
+      );
+      return;
+    }
+
     if (request.method === "GET" && url.pathname === "/oauth/authorize") {
       const params = url.searchParams;
       if (
@@ -106,11 +141,18 @@ export function startSidOidcStub(
         response.writeHead(400).end("invalid authorization request");
         return;
       }
+      const back = new URL(options.redirectUri);
+      if (denyNext) {
+        denyNext = false;
+        back.searchParams.set("error", "access_denied");
+        back.searchParams.set("state", params.get("state")!);
+        response.writeHead(302, { location: back.toString() }).end();
+        return;
+      }
       pending = {
         challenge: params.get("code_challenge")!,
         nonce: params.get("nonce")!,
       };
-      const back = new URL(options.redirectUri);
       back.searchParams.set("code", code);
       back.searchParams.set("state", params.get("state")!);
       response.writeHead(302, { location: back.toString() }).end();
@@ -158,8 +200,18 @@ export function startSidOidcStub(
         response.writeHead(400).end("invalid logout request");
         return;
       }
-      logouts.push({ clientId, postLogoutRedirectUri: back });
+      logouts.push({
+        clientId,
+        postLogoutRedirectUri: back,
+        idTokenHint: url.searchParams.get("id_token_hint"),
+      });
       response.writeHead(302, { location: back }).end();
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/__deny-next") {
+      denyNext = true;
+      json(200, "{}");
       return;
     }
 

@@ -5,7 +5,8 @@ export const databaseUrl =
   "postgresql://zhuelog_e2e:local-e2e-only@127.0.0.1:55439/zhuelog_e2e";
 export const baseURL = "http://127.0.0.1:3107";
 
-export const sessionCookieName = "zl_session";
+// Better Auth's session cookie (plain HTTP, so without the __Secure- prefix).
+export const sessionCookieName = "better-auth.session_token";
 // e2e/openai-stub.ts, which the web calls instead of OpenAI.
 export const openAiStubURL = "http://127.0.0.1:3109";
 // e2e/fixtures/sid-oidc-stub.ts, the Sparklingstadt ID issuer for the e2e run.
@@ -38,8 +39,19 @@ export function lineAccessToken() {
   return deriveSecret("line-access");
 }
 
+// Signs the web's Better Auth cookies (BETTER_AUTH_SECRET).
+export function betterAuthSecret() {
+  return deriveSecret("better-auth");
+}
+
 // The demo account's loginId in this run (DEMO_LOGIN_ID).
 export const demoLoginId = "demo";
+
+// The demo account's password (DEMO_PASSWORD): the demo button signs in with
+// it, so the fixture that makes the demo account stores its hash.
+export function demoPassword() {
+  return deriveSecret("demo-password").slice(0, 24);
+}
 
 function deriveSecret(label: string) {
   return createHmac("sha256", runSecret()).update(label).digest("hex");

@@ -1,8 +1,9 @@
-// A password account as an administrator sees it: never the hash.
+// A member as an administrator sees it on /admin/accounts. id is the member's
+// user id (the owner of their records). loginId is null for a member who
+// signs in with Sparklingstadt ID: they have no password here.
 export type MemberAccount = {
   id: string;
-  ownerId: string;
-  loginId: string;
+  loginId: string | null;
   displayName: string;
   createdAt: Date;
 };

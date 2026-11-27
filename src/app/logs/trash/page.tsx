@@ -6,7 +6,6 @@ import {
   purgeLearningEntryAction,
   restoreLearningEntryAction,
 } from "@/presentation/actions/note-trash-actions";
-import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { Breadcrumbs } from "@/presentation/components/layout/breadcrumbs";
 import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
@@ -26,13 +25,13 @@ export const dynamic = "force-dynamic";
 // Always the signed-in user's own trash: `?user=` is not read, so an admin
 // cannot open someone else's.
 export default async function LearningTrashPage() {
-  const { user, owner } = await requireNonGuestOwner(
+  const { user } = await requireNonGuestOwner(
     undefined,
     "/signin?callbackUrl=/logs/trash",
   );
 
-  const trash =
-    owner.kind === "self" ? await learningNotes.listTrashed() : null;
+  // learningNotes reads the signed-in user's own trash.
+  const trash = await learningNotes.listTrashed();
 
   return (
     <PageShell user={user} width="4xl">
@@ -44,11 +43,11 @@ export default async function LearningTrashPage() {
       />
       <PageHeader
         title="学習ノートのゴミ箱"
-        description={trash ? `ゴミ箱：${trash.total}件` : null}
+        description={`ゴミ箱：${trash.total}件`}
         dense
         actions={
           <>
-            {trash && trash.total > 0 ? (
+            {trash.total > 0 ? (
               <NoteActionForm
                 action={emptyLearningTrashAction}
                 label="ゴミ箱を空にする"
@@ -62,9 +61,7 @@ export default async function LearningTrashPage() {
         }
       />
 
-      {!trash ? (
-        <ReauthNotice subject="学習ノート" />
-      ) : trash.entries.length === 0 ? (
+      {trash.entries.length === 0 ? (
         <TrashEmpty />
       ) : (
         <>

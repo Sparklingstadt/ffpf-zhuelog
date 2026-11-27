@@ -38,7 +38,7 @@ describe("importRows", () => {
     assert.equal(rows.batch.rowCount, 3);
     assert.equal(rows.batch.fileName, "a.csv");
     assert.ok(rows.entries.every((e) => e.kind === "correction"));
-    assert.ok(rows.entries.every((e) => e.ownerId === "u1"));
+    assert.ok(rows.entries.every((e) => e.userId === "u1"));
     assert.ok(rows.entries.every((e) => e.batchId === rows.batch.id));
     const ids = [rows.batch.id, ...rows.entries.map((e) => e.id)];
     assert.equal(new Set(ids).size, 4);

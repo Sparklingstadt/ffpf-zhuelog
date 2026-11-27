@@ -17,7 +17,6 @@ import {
   parseLogNumber,
 } from "@/domain/calendar/value-objects/log-date";
 import { isMemberRole } from "@/domain/identity/entities/authenticated-user";
-import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { shareLearningEntryAction } from "@/presentation/actions/follow-actions";
 import { setNoteReviewAction } from "@/presentation/actions/note-review-actions";
 import { trashLearningEntryAction } from "@/presentation/actions/note-trash-actions";
@@ -85,15 +84,6 @@ export default async function LogDetailPage({
       ]}
     />
   );
-
-  if (owner.kind === "denied") {
-    return (
-      <PageShell user={user} width="5xl">
-        {crumbs}
-        <ReauthNotice subject="学習ノート" />
-      </PageShell>
-    );
-  }
 
   const [result, view] = await Promise.all([
     learningNotes.getDailyEntry(owner, date, entryNumber),

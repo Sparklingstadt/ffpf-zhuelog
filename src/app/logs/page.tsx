@@ -2,11 +2,9 @@ import { CalendarDays, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { showsRecords } from "@/application/identity/use-cases/resolve-record-owner";
 import { getTokyoDateParts } from "@/domain/calendar/value-objects/log-date";
 import { learningNotes } from "@/composition/learning-container";
 import { loadRecordOwnerView } from "@/composition/record-owner-options";
-import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { EmptyState } from "@/presentation/components/layout/empty-state";
 import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
@@ -45,13 +43,10 @@ export default async function LogsPage({ searchParams }: LogsPageProps) {
   );
   if (owner.kind === "redirect-self") redirect("/logs");
 
-  const hasNotes = showsRecords(owner);
-  const [dates, view] = hasNotes
-    ? await Promise.all([
-        learningNotes.listLogDates(owner),
-        loadRecordOwnerView(user, owner),
-      ])
-    : [[], null];
+  const [dates, view] = await Promise.all([
+    learningNotes.listLogDates(owner),
+    loadRecordOwnerView(user, owner),
+  ]);
   // The month asked for, else the newest note's, else this month.
   const newest = dates[0]?.date ?? getTokyoDateParts(new Date());
   const month = parseMonthParam(query.month) ?? {
@@ -78,9 +73,7 @@ export default async function LogsPage({ searchParams }: LogsPageProps) {
         <RecordOwnerControls owner={owner} view={view} path="/logs" />
       ) : null}
 
-      {!hasNotes ? (
-        <ReauthNotice subject="学習ノート" />
-      ) : dates.length === 0 ? (
+      {dates.length === 0 ? (
         <EmptyState icon={CalendarDays} title="まだ学習ノートがありません" />
       ) : (
         <div className="grid items-start gap-4 lg:grid-cols-[22rem_minmax(0,1fr)]">

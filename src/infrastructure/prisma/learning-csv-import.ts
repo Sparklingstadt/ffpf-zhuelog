@@ -17,7 +17,7 @@ const TRANSACTION_OPTIONS = { maxWait: 5_000, timeout: 60_000 };
 // Pure: the rows one import inserts. Entry i is created at now + i ms so that
 // (createdAt, id) order follows the file; hints are numbered from 0.
 export function importRows(
-  ownerId: string,
+  userId: string,
   fileName: string,
   drafts: LearningCsvDraft[],
   now: Date,
@@ -36,7 +36,7 @@ export function importRows(
     correctedText: string;
     pinyin: string;
     createdAt: Date;
-    ownerId: string;
+    userId: string;
     batchId: string;
   }[] = [];
   const hints: {
@@ -54,7 +54,7 @@ export function importRows(
       correctedText: draft.correctedText,
       pinyin: draft.pinyin,
       createdAt: new Date(now.getTime() + i),
-      ownerId,
+      userId,
       batchId: batch.id,
     });
     draft.hints.forEach((content, position) => {
@@ -81,11 +81,11 @@ export function createLearningCsvImport(
   return {
     // Stores the drafts as one batch in one transaction; returns how many notes.
     async importBatch(
-      ownerId: string,
+      userId: string,
       fileName: string,
       drafts: LearningCsvDraft[],
     ): Promise<number> {
-      const rows = importRows(ownerId, fileName, drafts, now(), id);
+      const rows = importRows(userId, fileName, drafts, now(), id);
       const client = db();
       // Array form: one transaction, sent in order (batch, notes, hints).
       await client.$transaction(

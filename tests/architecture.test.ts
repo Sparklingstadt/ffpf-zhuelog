@@ -118,25 +118,6 @@ test("the import check catches each forbidden form", () => {
   ]);
 });
 
-// JWT verification is a detail of the sign-in clients: jose is imported only
-// under infrastructure.
-test("only infrastructure imports jose", () => {
-  const files = readdirSync(root, { recursive: true, encoding: "utf8" })
-    .map((path) => path.replaceAll("\\", "/"))
-    .filter((path) => /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(path))
-    .filter((path) => !path.startsWith("generated/"));
-  const importers = files.filter((path) =>
-    moduleSpecifiers(readFileSync(`${root}${path}`, "utf8")).some((specifier) =>
-      /^jose(\/|$)/.test(specifier),
-    ),
-  );
-  assert.ok(importers.length > 0);
-  assert.deepEqual(
-    importers.filter((path) => !path.startsWith("infrastructure/")),
-    [],
-  );
-});
-
 // Pages, Server Actions, controllers and route handlers reach the database
 // and OpenAI only through the use cases composition builds: they never import
 // infrastructure/prisma or infrastructure/openai. Cookies, headers and request
@@ -185,4 +166,66 @@ test("UI components never import infrastructure", () => {
       .map((specifier) => `${path}: ${specifier}`),
   );
   assert.deepEqual(offenders, []);
+});
+
+// Better Auth is an infrastructure detail: the server library is imported only
+// under infrastructure/auth, the browser client only under presentation.
+const CLIENT_MODULE = /^better-auth\/(react|client\/plugins)(\/|$)/;
+const serverModule = (specifier: string) =>
+  /^better-auth(\/|$)/.test(specifier) && !CLIENT_MODULE.test(specifier);
+
+const betterAuthViolation = (path: string, specifier: string) =>
+  (serverModule(specifier) && !path.startsWith("infrastructure/auth/")) ||
+  (CLIENT_MODULE.test(specifier) && !path.startsWith("presentation/"));
+
+const betterAuthOffenders = (files: { path: string; text: string }[]) =>
+  files.flatMap(({ path, text }) =>
+    moduleSpecifiers(text)
+      .filter((specifier) => betterAuthViolation(path, specifier))
+      .map((specifier) => `${path}: ${specifier}`),
+  );
+
+test("better-auth is imported only under infrastructure/auth; its browser client only under presentation", () => {
+  const files = readdirSync(root, { recursive: true, encoding: "utf8" })
+    .map((path) => path.replaceAll("\\", "/"))
+    .filter((path) => /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(path))
+    .filter((path) => !path.startsWith("generated/"));
+  assert.ok(files.length > 0);
+  assert.deepEqual(
+    betterAuthOffenders(
+      files.map((path) => ({
+        path,
+        text: readFileSync(`${root}${path}`, "utf8"),
+      })),
+    ),
+    [],
+  );
+});
+
+test("the better-auth check catches each misplaced import", () => {
+  const server = 'import { betterAuth } from "better-auth";';
+  const plugin = 'import { admin } from "better-auth/plugins";';
+  const react = 'import { createAuthClient } from "better-auth/react";';
+  const clientPlugins =
+    'import { adminClient } from "better-auth/client/plugins";';
+  assert.deepEqual(
+    betterAuthOffenders([
+      { path: "application/x.ts", text: server },
+      { path: "presentation/x.ts", text: plugin },
+      { path: "infrastructure/auth/x.ts", text: server },
+      { path: "infrastructure/auth/y.ts", text: plugin },
+      { path: "infrastructure/auth/z.ts", text: react },
+      { path: "infrastructure/prisma/x.ts", text: clientPlugins },
+      { path: "presentation/auth.ts", text: react },
+      { path: "presentation/auth.ts", text: clientPlugins },
+      { path: "app/page.tsx", text: react },
+    ]),
+    [
+      "application/x.ts: better-auth",
+      "presentation/x.ts: better-auth/plugins",
+      "infrastructure/auth/z.ts: better-auth/react",
+      "infrastructure/prisma/x.ts: better-auth/client/plugins",
+      "app/page.tsx: better-auth/react",
+    ],
+  );
 });

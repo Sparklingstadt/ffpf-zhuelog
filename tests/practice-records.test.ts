@@ -21,27 +21,29 @@ import type {
 } from "../src/domain/practice/practice-round";
 
 const member: AuthenticatedUser = {
-  githubLogin: "taro",
-  githubId: "password:abc",
+  userId: "abc",
   role: "member",
-  accountId: "abc",
+  displayName: "taro",
+  username: "taro",
 };
-const actingAdmin: AuthenticatedUser = {
-  githubLogin: "octocat",
-  githubId: "password:abc",
-  role: "admin",
-  actingAs: { ownerId: "password:abc", loginId: "taro", displayName: "太郎" },
-  actorId: "10001",
+const impersonated: AuthenticatedUser = {
+  userId: "abc",
+  role: "member",
+  displayName: "太郎",
+  username: "taro",
+  impersonatedBy: "10001",
 };
 const demo: AuthenticatedUser = {
-  githubLogin: "demo",
-  githubId: "demo:1",
+  userId: "demo1",
   role: "member",
+  displayName: "demo",
   demo: true,
 };
-const guest: AuthenticatedUser = { githubLogin: "g", role: "guest" };
-const revoked: AuthenticatedUser = { ...member, role: "revoked" };
-const noGithubId: AuthenticatedUser = { githubLogin: "x", role: "member" };
+const guest: AuthenticatedUser = {
+  userId: "g1",
+  role: "guest",
+  displayName: "g",
+};
 
 const now = new Date("2026-11-16T03:00:00.000Z");
 const id = "0b7e3f5a-1c2d-4e5f-8a9b-0c1d2e3f4a5b";
@@ -128,9 +130,9 @@ function setup(
 
 test("practice records follow the signed-in owner", async () => {
   for (const [user, owner] of [
-    [member, "password:abc"],
-    [actingAdmin, "password:abc"],
-    [demo, "demo:1"],
+    [member, "abc"],
+    [impersonated, "abc"],
+    [demo, "demo1"],
   ] as const) {
     const { records, calls } = setup(user);
     await records.prepositions.list();
@@ -154,7 +156,7 @@ test("practice records follow the signed-in owner", async () => {
 });
 
 test("without an owner every method is forbidden before any check", async () => {
-  for (const user of [null, guest, revoked, noGithubId]) {
+  for (const user of [null, guest]) {
     const { records, calls } = setup(user);
     for (const run of [
       () => records.prepositions.list(),
@@ -175,8 +177,8 @@ test("list reads the newest 100 rounds", async () => {
   assert.deepEqual(await records.prepositions.list(), [summary]);
   assert.deepEqual(await records.complements.list(), [complementSummary]);
   assert.deepEqual(calls, [
-    ["listPrepositions", "password:abc", 100],
-    ["listComplements", "password:abc", 100],
+    ["listPrepositions", "abc", 100],
+    ["listComplements", "abc", 100],
   ]);
 });
 
@@ -190,8 +192,8 @@ test("get of an id of the wrong shape is null without asking the store", async (
   assert.deepEqual(await records.prepositions.get(id), record);
   assert.deepEqual(await records.complements.get(id), complementRecord);
   assert.deepEqual(calls, [
-    ["getPreposition", "password:abc", id],
-    ["getComplement", "password:abc", id],
+    ["getPreposition", "abc", id],
+    ["getComplement", "abc", id],
   ]);
 });
 
@@ -231,7 +233,7 @@ test("save checks the round before the store and passes one now", async () => {
     missCount: 2,
   };
   assert.deepEqual(calls, [
-    ["savePreposition", "password:abc", checked, now],
-    ["saveComplement", "password:abc", { ...checked, mode: "result" }, now],
+    ["savePreposition", "abc", checked, now],
+    ["saveComplement", "abc", { ...checked, mode: "result" }, now],
   ]);
 });

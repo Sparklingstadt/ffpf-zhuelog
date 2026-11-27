@@ -20,7 +20,7 @@ export type { AskRefusal } from "./chat-user";
 
 const FEATURE = "quick_question";
 
-// Neither a member nor an admin (signed out, a guest or no githubId): there
+// Neither a member nor an admin (signed out or a guest): there
 // are no question notes to read or save.
 export class QuestionForbiddenError extends Error {
   override name = "QuestionForbiddenError";
@@ -64,17 +64,17 @@ export type QuestionNotesDeps = {
 };
 
 // The signed-in user's question notes and quick questions: whose notes they
-// are (the member an admin acts as), who pays for an answer (the admin
-// themself), what the demo account may not do, and whether OpenAI is on.
+// are and who pays for an answer (the member an admin impersonates), what
+// the demo account may not do, and whether OpenAI is on.
 export function createQuestionNotes(deps: QuestionNotesDeps) {
   async function owner(): Promise<string> {
     const found = chatPerson(await deps.currentUser());
     if (!found) throw new QuestionForbiddenError();
-    return found.ownerId;
+    return found.userId;
   }
 
   function askerFor(
-    actorId: string,
+    userId: string,
     answer: NonNullable<QuestionNotesDeps["answer"]>,
   ): Asker {
     return {
@@ -85,7 +85,7 @@ export function createQuestionNotes(deps: QuestionNotesDeps) {
           feature: FEATURE,
           record: (usage) =>
             deps.recordUsage({
-              ownerId: actorId,
+              ownerId: userId,
               feature: FEATURE,
               model: usage.model,
               inputTokens: usage.inputTokens,
@@ -144,7 +144,7 @@ export function createQuestionNotes(deps: QuestionNotesDeps) {
         return { ok: false, reason: refusal ?? "forbidden" };
       if (!deps.answer || !deps.chatModel)
         return { ok: false, reason: "unavailable" };
-      return { ok: true, asker: askerFor(found.actorId, deps.answer) };
+      return { ok: true, asker: askerFor(found.userId, deps.answer) };
     },
   };
 }

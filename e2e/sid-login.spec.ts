@@ -1,7 +1,8 @@
 import type { BrowserContext, Page } from "@playwright/test";
-import { sidIssuerURL } from "./environment";
+import { sessionCookieName, sidIssuerURL } from "./environment";
 import { sidStubUser } from "./fixtures/sid-oidc-stub";
 import {
+  anyWidth,
   asMember,
   createMember,
   expect,
@@ -12,10 +13,11 @@ import {
 
 const password = "member-password-1";
 
-// Signs in through the real button: the web sends the browser to the stub's
-// /oauth/authorize, which comes straight back with a code; the web exchanges it
-// at the stub and verifies the ID token itself (signature, iss, aud, exp,
-// nonce) before starting a member session.
+// Signs in through the real button: Better Auth sends the browser to the
+// stub's /oauth/authorize (found by discovery), which comes straight back with
+// a code; Better Auth exchanges it at the stub and verifies the ID token
+// (signature against the JWKS, iss, aud, exp, nonce) before starting a
+// session.
 async function signInWithSid(page: Page, callback = "/") {
   await page.goto(`/signin?callbackUrl=${encodeURIComponent(callback)}`);
   await page
@@ -31,7 +33,7 @@ async function signInWithSid(page: Page, callback = "/") {
 
 async function sessionCookies(context: BrowserContext) {
   const cookies = await context.cookies();
-  return { session: cookies.find((c) => c.name === "zl_session")?.value };
+  return { session: cookies.find((c) => c.name === sessionCookieName)?.value };
 }
 
 // The stub's record of /oauth/logout calls (it runs in the e2e server process).
@@ -40,6 +42,7 @@ async function logoutCalls(method: "GET" | "DELETE" = "GET") {
   return (await response.json()) as {
     clientId: string;
     postLogoutRedirectUri: string;
+    idTokenHint: string | null;
   }[];
 }
 
@@ -67,30 +70,41 @@ test("a Sparklingstadt ID user signs in, keeps notes, gets the portal link and s
   await expect(
     page.getByRole("banner").getByText(sidStubUser.name, { exact: true }),
   ).toBeVisible();
+  // The first sign-in makes a member: a "user" from the ID token and a "sid"
+  // account keyed by the sub.
   const { rows } = await db.query(
-    'SELECT id, email, "displayName" FROM "SidAccount"',
+    `SELECT u."id", u."email", u."name", u."role", u."username", a."accountId"
+       FROM "user" u JOIN "account" a ON a."userId" = u."id" AND a."providerId" = 'sid'`,
   );
   expect(rows).toEqual([
     {
-      id: sidStubUser.sub,
+      id: expect.any(String),
       email: sidStubUser.email,
-      displayName: sidStubUser.name,
+      name: sidStubUser.name,
+      role: "user",
+      username: null,
+      accountId: sidStubUser.sub,
     },
   ]);
+  const userId = rows[0].id as string;
+  // The ID server's access token is stored encrypted (encryptOAuthTokens);
+  // the ID token is kept as it is, for the logout's id_token_hint.
+  const tokens = await db.query(
+    `SELECT "accessToken", "idToken" FROM "account" WHERE "providerId" = 'sid'`,
+  );
+  expect(tokens.rows[0].accessToken).toMatch(/^(\$ba\$\d+\$)?[0-9a-f]{80,}$/);
+  expect(tokens.rows[0].idToken).toMatch(/^eyJ/);
 
-  // A member: notes can be added, and they are owned by sid:<sub>.
+  // A member: notes can be added, and they are owned by the new user.
   await upload(page, "最初の文,添削後の文,ピン音\n雪の文,雪の添削,xuě");
   await expect(page.getByText("1件の学習文を登録しました。")).toBeVisible();
   await page.goto("/");
   await expect(page.getByText("雪の添削", { exact: true })).toBeVisible();
-  expect(
-    (await db.query('SELECT "ownerId" FROM "LearningEntry"')).rows,
-  ).toEqual([{ ownerId: `sid:${sidStubUser.sub}` }]);
-  expect(
-    (await db.query('SELECT "ownerId", role, "sessionVersion" FROM "Session"'))
-      .rows,
-  ).toEqual([
-    { ownerId: `sid:${sidStubUser.sub}`, role: "member", sessionVersion: 0 },
+  expect((await db.query('SELECT "userId" FROM "LearningEntry"')).rows).toEqual(
+    [{ userId }],
+  );
+  expect((await db.query('SELECT "userId" FROM "session"')).rows).toEqual([
+    { userId },
   ]);
 
   // No password here: the page points to the portal instead of the form.
@@ -110,7 +124,7 @@ test("a Sparklingstadt ID user signs in, keeps notes, gets the portal link and s
     page.getByRole("button", { name: "ゲストとして使う" }),
   ).toBeVisible();
   expect(await sessionCookies(context)).toEqual({ session: undefined });
-  expect((await db.query('SELECT 1 FROM "Session"')).rows).toEqual([]);
+  expect((await db.query('SELECT 1 FROM "session"')).rows).toEqual([]);
   await page.goto("/logs");
   await expect(page).toHaveURL(/\/signin(?:\?|$)/);
 });
@@ -148,7 +162,7 @@ test("a Sparklingstadt ID user and a password member find and follow each other"
   }
 });
 
-test("signing out of Sparklingstadt ID goes through the ID server's logout and back to /signin", async ({
+test("signing out of Sparklingstadt ID goes through the ID server's logout once and back to /signin", async ({
   page,
   context,
   baseURL,
@@ -156,6 +170,14 @@ test("signing out of Sparklingstadt ID goes through the ID server's logout and b
 }) => {
   await logoutCalls("DELETE");
   await signInWithSid(page, "/");
+  // A second sign-in keeps the one "sid" account (found by its sub).
+  await signOut(page);
+  await expect(page).toHaveURL(/\/signin(?:\?|$)/);
+  await logoutCalls("DELETE");
+  await signInWithSid(page, "/");
+  expect(
+    (await db.query(`SELECT 1 FROM "account" WHERE "providerId" = 'sid'`)).rows,
+  ).toHaveLength(1);
   await signOut(page);
 
   await expect(page).toHaveURL(/\/signin(?:\?|$)/);
@@ -166,10 +188,11 @@ test("signing out of Sparklingstadt ID goes through the ID server's logout and b
     {
       clientId: "e2e-sid-client",
       postLogoutRedirectUri: `${baseURL}/signin`,
+      idTokenHint: expect.any(String),
     },
   ]);
   expect(await sessionCookies(context)).toEqual({ session: undefined });
-  expect((await db.query('SELECT 1 FROM "Session"')).rows).toEqual([]);
+  expect((await db.query('SELECT 1 FROM "session"')).rows).toEqual([]);
 });
 
 test("a password member's sign-out does not pass through the ID server", async ({
@@ -187,3 +210,48 @@ test("a password member's sign-out does not pass through the ID server", async (
   ).toBeVisible();
   expect(await logoutCalls()).toEqual([]);
 });
+
+// Better Auth's own (English) error page is never shown: every failure comes
+// back to the sign-in page with a Japanese message.
+async function expectJapaneseFailure(page: Page, message: string) {
+  await expect(page).toHaveURL(/\/signin\?/);
+  await expect(page.getByText(message)).toBeVisible();
+  // Neither Better Auth's error code nor its English wording.
+  await expect(page.locator("body")).not.toContainText(
+    /error|state|please|denied|invalid/i,
+  );
+  await expect(
+    page.getByRole("button", { name: "Sparklingstadt ID でログイン" }),
+  ).toBeVisible();
+}
+
+test(
+  "a callback with an unknown state comes back to the sign-in page in Japanese",
+  anyWidth,
+  async ({ page, db }) => {
+    await page.goto("/api/auth/callback/sid?code=stub&state=bogus-state");
+    await expectJapaneseFailure(
+      page,
+      "認証中にエラーが発生しました。もう一度お試しください。",
+    );
+    expect((await db.query('SELECT 1 FROM "session"')).rows).toEqual([]);
+  },
+);
+
+test(
+  "a sign-in declined on the ID server shows the callback message and keeps the page to come back to",
+  anyWidth,
+  async ({ page, db }) => {
+    await fetch(`${sidIssuerURL}/__deny-next`, { method: "POST" });
+    await page.goto(`/signin?callbackUrl=${encodeURIComponent("/import")}`);
+    await page
+      .getByRole("button", { name: "Sparklingstadt ID でログイン" })
+      .click();
+    await expectJapaneseFailure(
+      page,
+      "認証サービスからの結果を確認できませんでした。もう一度お試しください。",
+    );
+    expect(new URL(page.url()).searchParams.get("callbackUrl")).toBe("/import");
+    expect((await db.query('SELECT 1 FROM "session"')).rows).toEqual([]);
+  },
+);

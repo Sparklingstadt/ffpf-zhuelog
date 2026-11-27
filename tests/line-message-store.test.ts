@@ -15,7 +15,7 @@ const flat = (text: string) => text.replace(/\s+/g, " ");
 const message = {
   webhookEventId: "E1",
   lineUserId: "U1",
-  ownerId: "password:c1",
+  userId: "u1",
   kind: "correction" as const,
   text: "你好",
 };
@@ -35,7 +35,7 @@ test("insertLineMessageSql ignores a second delivery", () => {
     "cid",
     "E1",
     "U1",
-    "password:c1",
+    "u1",
     "correction",
     "你好",
     now,
@@ -109,7 +109,7 @@ test("complete saves the note and settles the message together", async () => {
   {
     const fake = fakeCompleteDb(1);
     const store = createLineMessageStore(() => fake.db);
-    assert.equal(await store.complete("cid", "password:c1", note, now), true);
+    assert.equal(await store.complete("cid", "u1", note, now), true);
     assert.deepEqual(fake.options, [{ maxWait: 5000, timeout: 15000 }]);
     assert.equal(fake.threw(), null);
 
@@ -131,7 +131,7 @@ test("complete saves the note and settles the message together", async () => {
       correctedText: "我昨天去了学校",
       pinyin: "wǒ zuótiān qù le xuéxiào",
       createdAt: now,
-      ownerId: "password:c1",
+      userId: "u1",
       batchId: batch.id,
     });
 
@@ -150,7 +150,7 @@ test("complete saves the note and settles the message together", async () => {
 
     assert.deepEqual(fake.calls.lineMessage, [
       {
-        where: { id: "cid", ownerId: "password:c1", status: "pending" },
+        where: { id: "cid", userId: "u1", status: "pending" },
         data: { status: "done", entryId: entry.id, text: null, updatedAt: now },
       },
     ]);
@@ -158,17 +158,14 @@ test("complete saves the note and settles the message together", async () => {
   {
     const fake = fakeCompleteDb(0);
     const store = createLineMessageStore(() => fake.db);
-    assert.equal(await store.complete("cid", "password:c1", note, now), false);
+    assert.equal(await store.complete("cid", "u1", note, now), false);
     assert.ok(fake.threw() instanceof Error, "the transaction rolls back");
   }
   {
     const fake = fakeCompleteDb(1);
     const store = createLineMessageStore(() => fake.db);
     const noHints = { ...note, generation: { ...note.generation, hints: [] } };
-    assert.equal(
-      await store.complete("cid", "password:c1", noHints, now),
-      true,
-    );
+    assert.equal(await store.complete("cid", "u1", noHints, now), true);
     assert.deepEqual(fake.calls.hint, []);
   }
 });
@@ -178,7 +175,7 @@ test("a second delivery returns the stored row", async () => {
     id: "cold",
     webhookEventId: "E1",
     lineUserId: "U1",
-    ownerId: "password:c1",
+    userId: "u1",
     kind: "translation",
     text: null,
     status: "done",
@@ -208,7 +205,7 @@ test("a second delivery returns the stored row", async () => {
     id: "cold",
     webhookEventId: "E1",
     lineUserId: "U1",
-    ownerId: "password:c1",
+    ownerId: "u1",
     kind: "translation",
     text: "",
     status: "done",
@@ -223,7 +220,7 @@ test("a first delivery inserts with the new id", async () => {
     id: "cnew",
     webhookEventId: "E1",
     lineUserId: "U1",
-    ownerId: "password:c1",
+    userId: "u1",
     kind: "correction",
     text: "你好",
     status: "pending",
@@ -241,8 +238,9 @@ test("a first delivery inserts with the new id", async () => {
     () => db,
     () => "cnew",
   );
+  const { userId, ...rest } = row;
   assert.deepEqual(await store.insert(message, now), {
-    message: row,
+    message: { ...rest, ownerId: userId },
     created: true,
   });
   assert.equal(queries[0][0], "cnew");

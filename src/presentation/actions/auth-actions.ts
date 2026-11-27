@@ -2,45 +2,16 @@
 
 import {
   signInAsDemo,
-  signInAsGuest,
-  signInWithSid,
-  signInWithGitHub,
-  signInWithPassword,
   signOutCurrentUser,
 } from "@/composition/identity-container";
 import { getSafeCallbackPath } from "@/presentation/http/safe-callback-path";
 
-export async function signInWithGitHubAction(callbackPath: string) {
-  await signInWithGitHub(getSafeCallbackPath(callbackPath));
-}
-
-export async function signInWithSidAction(callbackPath: string) {
-  await signInWithSid(getSafeCallbackPath(callbackPath));
-}
-
-export async function signInAsGuestAction(callbackPath: string) {
-  await signInAsGuest(getSafeCallbackPath(callbackPath));
-}
-
+// Members, Sparklingstadt ID and guests sign in from the browser through
+// Better Auth's client (presentation/components/auth/sign-in-forms), so its
+// rate limit counts them. Only the demo, which anyone may enter without a
+// password, signs in on the server.
 export async function signInAsDemoAction(callbackPath: string) {
   await signInAsDemo(getSafeCallbackPath(callbackPath));
-}
-
-export async function signInWithPasswordAction(
-  callbackPath: string,
-  formData: FormData,
-): Promise<void> {
-  const safePath = getSafeCallbackPath(callbackPath);
-  const loginId = formData.get("loginId");
-  const password = formData.get("password");
-
-  // A rejected sign-in redirects to the sign-in page with one generic
-  // message and never echoes the input back (passwordFailureUrl).
-  await signInWithPassword({
-    loginId: typeof loginId === "string" ? loginId : "",
-    password: typeof password === "string" ? password : "",
-    redirectTo: safePath,
-  });
 }
 
 export async function signOutAction() {

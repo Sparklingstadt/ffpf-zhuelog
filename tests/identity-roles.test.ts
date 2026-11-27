@@ -11,7 +11,7 @@ import {
 
 const provider = (role: AppRole | null): CurrentUserProvider => ({
   getCurrentUser: async () =>
-    role ? { githubLogin: "taro", githubId: "1", role } : null,
+    role ? { userId: "u1", role, displayName: "太郎" } : null,
 });
 
 test("member-level use case admits admin and member only", async () => {
@@ -19,7 +19,6 @@ test("member-level use case admits admin and member only", async () => {
     ["admin", true],
     ["member", true],
     ["guest", false],
-    ["revoked", false],
     [null, false],
   ] as const)
     assert.equal(
@@ -34,7 +33,6 @@ test("viewer use case admits admin, member and guest only", async () => {
     ["admin", true],
     ["member", true],
     ["guest", true],
-    ["revoked", false],
     [null, false],
   ] as const)
     assert.equal(
@@ -53,5 +51,4 @@ test("isMemberRole is true for admin and member only", () => {
   assert.equal(isMemberRole("admin"), true);
   assert.equal(isMemberRole("member"), true);
   assert.equal(isMemberRole("guest"), false);
-  assert.equal(isMemberRole("revoked"), false);
 });

@@ -17,24 +17,27 @@ import {
 installNextStubs();
 
 const admin: AuthenticatedUser = {
-  githubLogin: "admin",
-  githubId: "10001",
+  userId: "10001",
   role: "admin",
+  displayName: "admin",
 };
 const member: AuthenticatedUser = {
-  githubLogin: "taro",
-  githubId: "password:c1abcdefghijklmnopqrstu",
+  userId: "c1abcdefghijklmnopqrstu",
   role: "member",
+  displayName: "taro",
+  username: "taro",
 };
-const guest: AuthenticatedUser = { githubLogin: "guest", role: "guest" };
-const revoked: AuthenticatedUser = { githubLogin: "old", role: "revoked" };
+const guest: AuthenticatedUser = {
+  userId: "g1",
+  role: "guest",
+  displayName: "guest",
+};
 
 let user: AuthenticatedUser | null = null;
 let listConversations: () => unknown = () => ({ conversations: [] });
 
 stubSource("composition/identity-container", {
-  // As the real getter: a revoked session is nobody.
-  getCurrentViewerUser: async () => (user?.role === "revoked" ? null : user),
+  getCurrentViewerUser: async () => user,
   getRecordOwner: async (requested: string | undefined) => ({
     user,
     owner: resolveRecordOwner(user, requested),
@@ -61,7 +64,7 @@ test("the chat and the practice records are for members and admins: sign-in or a
   const { requirePracticeRecordUser } = await practice();
 
   for (const guard of [requireChatUser, requirePracticeRecordUser]) {
-    for (const nobody of [null, revoked]) {
+    for (const nobody of [null]) {
       user = nobody;
       assert.equal((await redirectOf(() => guard(SIGN_IN))).to, SIGN_IN);
     }
@@ -88,10 +91,10 @@ test("the conversation list is the signed-in user's, and a failure to read it is
   await assert.rejects(loadConversationList(), /boom/);
 });
 
-test("pages of records send the signed-out and the revoked to sign-in", async () => {
+test("pages of records send the signed-out to sign-in", async () => {
   const { requireSignedInOwner } = await owner();
 
-  for (const visitor of [null, revoked]) {
+  for (const visitor of [null]) {
     user = visitor;
     assert.equal(
       (await redirectOf(() => requireSignedInOwner(undefined, SIGN_IN))).to,
@@ -108,24 +111,23 @@ test("pages of records send the signed-out and the revoked to sign-in", async ()
   user = member;
   assert.deepEqual(await requireSignedInOwner(undefined, SIGN_IN), {
     user: member,
-    owner: { kind: "self", ownerId: member.githubId },
+    owner: { kind: "self", ownerId: member.userId },
   });
   // A member asking for someone else is sent back to their own.
-  assert.deepEqual(
-    (await requireSignedInOwner(admin.githubId, SIGN_IN)).owner,
-    { kind: "redirect-self" },
-  );
+  assert.deepEqual((await requireSignedInOwner(admin.userId, SIGN_IN)).owner, {
+    kind: "redirect-self",
+  });
   user = admin;
-  assert.deepEqual(await requireSignedInOwner(member.githubId, SIGN_IN), {
+  assert.deepEqual(await requireSignedInOwner(member.userId, SIGN_IN), {
     user: admin,
-    owner: { kind: "other", ownerId: member.githubId },
+    owner: { kind: "other", ownerId: member.userId },
   });
 });
 
 test("pages with nothing for a guest send them home", async () => {
   const { requireNonGuestOwner } = await owner();
 
-  for (const visitor of [null, revoked]) {
+  for (const visitor of [null]) {
     user = visitor;
     assert.equal(
       (await redirectOf(() => requireNonGuestOwner(undefined, SIGN_IN))).to,
@@ -140,6 +142,6 @@ test("pages with nothing for a guest send them home", async () => {
   user = member;
   assert.deepEqual((await requireNonGuestOwner(undefined, SIGN_IN)).owner, {
     kind: "self",
-    ownerId: member.githubId,
+    ownerId: member.userId,
   });
 });

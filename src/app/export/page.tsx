@@ -2,7 +2,6 @@ import { BookOpenText, FileUp } from "lucide-react";
 import Link from "next/link";
 
 import { learningNotes } from "@/composition/learning-container";
-import { ReauthNotice } from "@/presentation/components/auth/reauth-notice";
 import { EmptyState } from "@/presentation/components/layout/empty-state";
 import { PageHeader } from "@/presentation/components/layout/page-header";
 import { PageShell } from "@/presentation/components/layout/page-shell";
@@ -15,12 +14,13 @@ export const dynamic = "force-dynamic";
 // Always the signed-in user's own notes: `?user=` is not read, so an admin
 // cannot export someone else's.
 export default async function LearningCsvExportPage() {
-  const { user, owner } = await requireNonGuestOwner(
+  const { user } = await requireNonGuestOwner(
     undefined,
     "/signin?callbackUrl=/export",
   );
 
-  const entries = owner.kind === "self" ? await learningNotes.listAll() : null;
+  // learningNotes reads the signed-in user's own notes.
+  const entries = await learningNotes.listAll();
 
   return (
     <PageShell user={user} width="5xl">
@@ -37,9 +37,7 @@ export default async function LearningCsvExportPage() {
         }
       />
 
-      {!entries ? (
-        <ReauthNotice subject="学習ノート" />
-      ) : entries.length === 0 ? (
+      {entries.length === 0 ? (
         <EmptyState
           icon={BookOpenText}
           title="まだ学習文がありません"

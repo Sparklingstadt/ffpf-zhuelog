@@ -103,12 +103,12 @@ export async function hintsByEntry(
 // Takes the client so a transaction can read them in its own snapshot.
 export async function liveEntriesById(
   client: Pick<PrismaClient, "learningEntry" | "hint">,
-  ownerId: string,
+  userId: string,
   ids: string[],
 ): Promise<Map<string, LearningEntry>> {
   if (ids.length === 0) return new Map();
   const rows = await client.learningEntry.findMany({
-    where: { ownerId, id: { in: ids }, deletedAt: null },
+    where: { userId, id: { in: ids }, deletedAt: null },
     select: entrySelect,
   });
   const hints = await hintsByEntry(
@@ -154,26 +154,26 @@ export function createLearningNoteReads(db: () => PrismaClient) {
     // The newest live notes, or with a search only those it matches; total
     // counts every live note the search matches. The count is read first.
     async listRecent(
-      ownerId: string,
+      userId: string,
       limit: number,
       search?: EntrySearch,
     ): Promise<RecentLearningEntries> {
       const condition = searchCondition(search);
       const [{ count }] = await db().$queryRaw<[{ count: bigint }]>`
         SELECT count(*) AS count FROM "LearningEntry"
-         WHERE "ownerId" = ${ownerId} AND "deletedAt" IS NULL ${condition}`;
+         WHERE "userId" = ${userId} AND "deletedAt" IS NULL ${condition}`;
       const rows = await db().$queryRaw<EntryRow[]>`
         SELECT ${ENTRY_COLUMNS} FROM "LearningEntry"
-         WHERE "ownerId" = ${ownerId} AND "deletedAt" IS NULL ${condition}
+         WHERE "userId" = ${userId} AND "deletedAt" IS NULL ${condition}
          ORDER BY "createdAt" DESC, "id" DESC
          LIMIT ${limit}`;
       return { entries: await toEntries(rows), total: Number(count) };
     },
 
     // Every live note of the owner, newest first, up to the export's limit.
-    async listAll(ownerId: string): Promise<LearningEntry[]> {
+    async listAll(userId: string): Promise<LearningEntry[]> {
       const rows = await db().learningEntry.findMany({
-        where: { ownerId, deletedAt: null },
+        where: { userId, deletedAt: null },
         select: entrySelect,
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         take: EXPORT_LIMIT,
@@ -183,14 +183,14 @@ export function createLearningNoteReads(db: () => PrismaClient) {
 
     // The Japan dates with live notes, newest first. The columns hold UTC
     // without a time zone, so 9 hours are added rather than AT TIME ZONE.
-    async listLogDates(ownerId: string): Promise<LogDateSummary[]> {
+    async listLogDates(userId: string): Promise<LogDateSummary[]> {
       const rows = await db().$queryRaw<{ day: string; count: bigint }[]>`
         SELECT to_char(d, 'YYYY-MM-DD') AS day, count AS count
           FROM (
             SELECT ("createdAt" + interval '9 hours')::date AS d,
                    count(*) AS count
               FROM "LearningEntry"
-             WHERE "ownerId" = ${ownerId} AND "deletedAt" IS NULL
+             WHERE "userId" = ${userId} AND "deletedAt" IS NULL
              GROUP BY d
           ) AS days
          ORDER BY d DESC`;
@@ -202,12 +202,12 @@ export function createLearningNoteReads(db: () => PrismaClient) {
 
     // The live notes of a Japan date, oldest first.
     async listDailyEntries(
-      ownerId: string,
+      userId: string,
       date: LogDate,
     ): Promise<LearningEntry[]> {
       const { start, end } = jstDayRange(date);
       const rows = await db().learningEntry.findMany({
-        where: { ownerId, deletedAt: null, createdAt: { gte: start, lt: end } },
+        where: { userId, deletedAt: null, createdAt: { gte: start, lt: end } },
         select: entrySelect,
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       });
@@ -218,7 +218,7 @@ export function createLearningNoteReads(db: () => PrismaClient) {
     // how many that date has; null when there is no such note. Counted
     // first: a note removed in between is not found.
     async getDailyEntry(
-      ownerId: string,
+      userId: string,
       date: LogDate,
       number: number,
     ): Promise<{ entry: LearningEntry; number: number; total: number } | null> {
@@ -226,13 +226,13 @@ export function createLearningNoteReads(db: () => PrismaClient) {
       const { start, end } = jstDayRange(date);
       const [{ count }] = await db().$queryRaw<[{ count: bigint }]>`
         SELECT count(*) AS count FROM "LearningEntry"
-         WHERE "ownerId" = ${ownerId} AND "deletedAt" IS NULL
+         WHERE "userId" = ${userId} AND "deletedAt" IS NULL
            AND "createdAt" >= ${start} AND "createdAt" < ${end}`;
       const total = Number(count);
       if (number > total) return null;
       const rows = await db().$queryRaw<EntryRow[]>`
         SELECT ${ENTRY_COLUMNS} FROM "LearningEntry"
-         WHERE "ownerId" = ${ownerId} AND "deletedAt" IS NULL
+         WHERE "userId" = ${userId} AND "deletedAt" IS NULL
            AND "createdAt" >= ${start} AND "createdAt" < ${end}
          ORDER BY "createdAt" ASC, "id" ASC
          OFFSET ${number - 1} LIMIT 1`;
@@ -242,8 +242,8 @@ export function createLearningNoteReads(db: () => PrismaClient) {
 
     // The newest of the owner's trash first, at most one page; total counts
     // the whole trash. The count is read first.
-    async listTrashed(ownerId: string): Promise<TrashedLearningEntries> {
-      const where = { ownerId, deletedAt: { not: null } };
+    async listTrashed(userId: string): Promise<TrashedLearningEntries> {
+      const where = { userId, deletedAt: { not: null } };
       const total = await db().learningEntry.count({ where });
       const rows = await db().learningEntry.findMany({
         where,

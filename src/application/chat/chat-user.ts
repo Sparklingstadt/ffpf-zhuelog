@@ -8,18 +8,15 @@ import type { OpenAiUsage } from "../../domain/vocabulary/vocabulary-entry";
 // What the quick questions and the chat share: whose notes they are, who
 // pays for an answer, who may ask, and how an answer is metered.
 
-// ownerId is whose notes these are; actorId is who is operating (the admin
-// themself while acting as a member), who pays for an answer.
-export type ChatPerson = { ownerId: string; actorId: string; demo: boolean };
+// userId is whose notes these are and who pays for an answer. An admin
+// impersonating a member is that member: the answer reads the member's notes
+// and is counted in the member's AI usage.
+export type ChatPerson = { userId: string; demo: boolean };
 
-// null: signed out, a guest or no githubId.
+// null: signed out or a guest.
 export function chatPerson(user: AuthenticatedUser | null): ChatPerson | null {
-  if (!user || !isMemberRole(user.role) || !user.githubId) return null;
-  return {
-    ownerId: user.githubId,
-    actorId: user.actorId ?? user.githubId,
-    demo: user.demo === true,
-  };
+  if (!user || !isMemberRole(user.role)) return null;
+  return { userId: user.userId, demo: user.demo === true };
 }
 
 export type AskRefusal = "signed-out" | "forbidden" | "demo" | "unavailable";

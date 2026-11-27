@@ -17,27 +17,29 @@ import {
 } from "../src/infrastructure/csv/learning-csv";
 
 const member: AuthenticatedUser = {
-  githubLogin: "taro",
-  githubId: "password:abc",
+  userId: "abc",
   role: "member",
-  accountId: "abc",
+  displayName: "taro",
+  username: "taro",
 };
 const admin: AuthenticatedUser = {
-  githubLogin: "octocat",
-  githubId: "10001",
+  userId: "10001",
   role: "admin",
+  displayName: "octocat",
 };
-const actingAdmin: AuthenticatedUser = {
-  githubLogin: "octocat",
-  githubId: "password:abc",
-  role: "admin",
-  actingAs: { ownerId: "password:abc", loginId: "taro", displayName: "太郎" },
-  actorId: "10001",
+const impersonated: AuthenticatedUser = {
+  userId: "abc",
+  role: "member",
+  displayName: "太郎",
+  username: "taro",
+  impersonatedBy: "10001",
 };
 const demo: AuthenticatedUser = { ...member, demo: true };
-const guest: AuthenticatedUser = { githubLogin: "g", role: "guest" };
-const revoked: AuthenticatedUser = { ...member, role: "revoked" };
-const noGithubId: AuthenticatedUser = { githubLogin: "x", role: "member" };
+const guest: AuthenticatedUser = {
+  userId: "g1",
+  role: "guest",
+  displayName: "g",
+};
 
 const entry: LearningEntry = {
   id: "e1",
@@ -103,44 +105,44 @@ function setup(user: AuthenticatedUser | null) {
 }
 
 const self = (ownerId: string) => ({ kind: "self", ownerId }) as const;
-const other = { kind: "other", ownerId: "password:other" } as const;
+const other = { kind: "other", ownerId: "other" } as const;
 
 test("reads the viewed owner", async () => {
   const { notes, calls } = setup(member);
-  assert.deepEqual(await notes.listRecent(self("password:abc"), 100), {
+  assert.deepEqual(await notes.listRecent(self("abc"), 100), {
     entries: [entry],
     total: 1,
   });
-  await notes.listRecent(self("password:abc"), 50, search);
-  await notes.listLogDates(self("password:abc"));
-  await notes.listDailyEntries(self("password:abc"), date);
-  assert.deepEqual(await notes.getDailyEntry(self("password:abc"), date, 1), {
+  await notes.listRecent(self("abc"), 50, search);
+  await notes.listLogDates(self("abc"));
+  await notes.listDailyEntries(self("abc"), date);
+  assert.deepEqual(await notes.getDailyEntry(self("abc"), date, 1), {
     entry,
     total: 3,
   });
   await notes.listAll();
   await notes.listTrashed();
   assert.deepEqual(calls, [
-    ["listRecent", "password:abc", 100, undefined],
-    ["listRecent", "password:abc", 50, search],
-    ["listLogDates", "password:abc"],
-    ["listDailyEntries", "password:abc", date],
-    ["getDailyEntry", "password:abc", date, 1],
-    ["listAll", "password:abc"],
-    ["listTrashed", "password:abc"],
+    ["listRecent", "abc", 100, undefined],
+    ["listRecent", "abc", 50, search],
+    ["listLogDates", "abc"],
+    ["listDailyEntries", "abc", date],
+    ["getDailyEntry", "abc", date, 1],
+    ["listAll", "abc"],
+    ["listTrashed", "abc"],
   ]);
 });
 
 test("reading one's own notes uses the signed-in owner, not the page's id", async () => {
   const { notes, calls } = setup(member);
-  await notes.listLogDates(self("password:someone-else"));
-  assert.deepEqual(calls, [["listLogDates", "password:abc"]]);
+  await notes.listLogDates(self("someone-else"));
+  assert.deepEqual(calls, [["listLogDates", "abc"]]);
 });
 
 test("getDailyEntry is null when the day has no such note", async () => {
   const { notes, deps } = setup(member);
   deps.reads.getDailyEntry = async () => null;
-  assert.equal(await notes.getDailyEntry(self("password:abc"), date, 9), null);
+  assert.equal(await notes.getDailyEntry(self("abc"), date, 9), null);
 });
 
 test("only admins read another owner", async () => {
@@ -162,37 +164,37 @@ test("only admins read another owner", async () => {
   await notes.listDailyEntries(other, date);
   await notes.getDailyEntry(other, date, 2);
   assert.deepEqual(calls, [
-    ["listRecent", "password:other", 100, undefined],
-    ["listLogDates", "password:other"],
-    ["listDailyEntries", "password:other", date],
-    ["getDailyEntry", "password:other", date, 2],
+    ["listRecent", "other", 100, undefined],
+    ["listLogDates", "other"],
+    ["listDailyEntries", "other", date],
+    ["getDailyEntry", "other", date, 2],
   ]);
 });
 
 test("writes always use the signed-in owner", async () => {
-  const { notes, calls } = setup(actingAdmin);
+  const { notes, calls } = setup(impersonated);
   assert.equal(await notes.trash("e1"), true);
   assert.equal(await notes.restore("e2"), true);
   assert.equal(await notes.purge("e3"), true);
   assert.equal(await notes.emptyTrash(), 2);
   assert.deepEqual(calls, [
-    ["trash", "password:abc", "e1"],
-    ["restore", "password:abc", "e2"],
-    ["purge", "password:abc", "e3"],
-    ["emptyTrash", "password:abc"],
+    ["trash", "abc", "e1"],
+    ["restore", "abc", "e2"],
+    ["purge", "abc", "e3"],
+    ["emptyTrash", "abc"],
   ]);
 });
 
 test("refuses without a member or admin", async () => {
-  for (const user of [null, guest, revoked, noGithubId]) {
+  for (const user of [null, guest]) {
     const { notes, calls } = setup(user);
     for (const run of [
-      () => notes.listRecent(self("password:abc"), 100),
+      () => notes.listRecent(self("abc"), 100),
       () => notes.listRecent(other, 100),
       () => notes.listAll(),
-      () => notes.listLogDates(self("password:abc")),
-      () => notes.listDailyEntries(self("password:abc"), date),
-      () => notes.getDailyEntry(self("password:abc"), date, 1),
+      () => notes.listLogDates(self("abc")),
+      () => notes.listDailyEntries(self("abc"), date),
+      () => notes.getDailyEntry(self("abc"), date, 1),
       () => notes.listTrashed(),
       () => notes.trash("e1"),
       () => notes.restore("e1"),
@@ -205,16 +207,18 @@ test("refuses without a member or admin", async () => {
   }
 });
 
-test("only plain members may share", async () => {
-  const { notes, calls } = setup(member);
-  assert.equal(await notes.setShared("e1", true), true);
-  assert.equal(await notes.setShared("e1", false), true);
-  assert.deepEqual(calls, [
-    ["setShared", "password:abc", "e1", true],
-    ["setShared", "password:abc", "e1", false],
-  ]);
+test("only members may share (an impersonating admin is the member)", async () => {
+  for (const user of [member, impersonated]) {
+    const { notes, calls } = setup(user);
+    assert.equal(await notes.setShared("e1", true), true);
+    assert.equal(await notes.setShared("e1", false), true);
+    assert.deepEqual(calls, [
+      ["setShared", "abc", "e1", true],
+      ["setShared", "abc", "e1", false],
+    ]);
+  }
 
-  for (const user of [admin, actingAdmin, demo]) {
+  for (const user of [admin, demo]) {
     const { notes, calls } = setup(user);
     for (const shared of [true, false])
       await assert.rejects(
@@ -227,9 +231,9 @@ test("only plain members may share", async () => {
 
 test("the review status is the signed-in owner's", async () => {
   for (const [user, ownerId] of [
-    [member, "password:abc"],
-    [actingAdmin, "password:abc"],
-    [demo, "password:abc"],
+    [member, "abc"],
+    [impersonated, "abc"],
+    [demo, "abc"],
   ] as const) {
     const { notes, calls } = setup(user);
     assert.equal(await notes.isInReview("e1"), true);
@@ -248,7 +252,7 @@ test("the review status is the signed-in owner's", async () => {
   assert.equal(await notes.isInReview("e9"), null);
   assert.equal(await notes.setInReview("e9", true), false);
 
-  for (const user of [null, guest, revoked, noGithubId]) {
+  for (const user of [null, guest]) {
     const { notes, calls } = setup(user);
     for (const run of [
       () => notes.isInReview("e1"),
@@ -275,9 +279,9 @@ const twoDrafts: LearningCsvDraft[] = [
 
 test("imports into the signed-in owner only", async () => {
   for (const [user, ownerId] of [
-    [member, "password:abc"],
-    [actingAdmin, "password:abc"],
-    [demo, "password:abc"],
+    [member, "abc"],
+    [impersonated, "abc"],
+    [demo, "abc"],
   ] as const) {
     const { notes, calls } = setup(user);
     assert.deepEqual(await notes.importCsv(csv(twoRows)), {
@@ -287,7 +291,7 @@ test("imports into the signed-in owner only", async () => {
     assert.deepEqual(calls, [["importBatch", ownerId, "notes.csv", twoDrafts]]);
   }
 
-  for (const user of [null, guest, revoked, noGithubId]) {
+  for (const user of [null, guest]) {
     const { notes, calls } = setup(user);
     await assert.rejects(
       notes.importCsv(csv(twoRows)),
@@ -344,7 +348,7 @@ test("passes the cut file name and the drafts", async () => {
     count: 2,
   });
   assert.deepEqual(calls, [
-    ["importBatch", "password:abc", name.slice(0, 255), twoDrafts],
+    ["importBatch", "abc", name.slice(0, 255), twoDrafts],
   ]);
 });
 

@@ -204,8 +204,8 @@ export function menuSections(
       title: "設定",
       links: [
         { label: "LINE 連携", href: "/account/line" },
-        // Admins sign in with GitHub and have no password here. Sparklingstadt ID
-        // members get a link to the Sparklingstadt ID server on the same page.
+        // Admins sign in with Sparklingstadt ID and have no password here;
+        // Sparklingstadt ID members get a link to the ID server on that page.
         ...(role === "member"
           ? [{ label: "パスワード変更", href: "/account/password" }]
           : []),
@@ -240,11 +240,7 @@ export function menuIdentity(user: AuthenticatedUser): {
 } {
   if (user.role === "guest") return { name: "ゲスト", roleLabel: "ゲスト" };
   if (user.role === "admin")
-    return { name: `@${user.githubLogin}`, roleLabel: "管理者" };
-  if (user.demo)
-    return { name: user.displayName ?? user.githubLogin, roleLabel: "デモ" };
-  return {
-    name: user.displayName ?? user.githubLogin,
-    roleLabel: "メンバー",
-  };
+    return { name: user.displayName, roleLabel: "管理者" };
+  if (user.demo) return { name: user.displayName, roleLabel: "デモ" };
+  return { name: user.displayName, roleLabel: "メンバー" };
 }

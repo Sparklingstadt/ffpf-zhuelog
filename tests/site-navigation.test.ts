@@ -157,21 +157,22 @@ test("a menu link is current on its page and below, and /logs leaves the trash a
 });
 
 test("the menu names the person by role", () => {
-  assert.deepEqual(menuIdentity({ role: "guest", githubLogin: "" }), {
-    name: "ゲスト",
-    roleLabel: "ゲスト",
-  });
-  assert.deepEqual(menuIdentity({ role: "admin", githubLogin: "octo" }), {
-    name: "@octo",
-    roleLabel: "管理者",
-  });
+  assert.deepEqual(
+    menuIdentity({ userId: "g1", role: "guest", displayName: "Anonymous" }),
+    { name: "ゲスト", roleLabel: "ゲスト" },
+  );
+  assert.deepEqual(
+    menuIdentity({ userId: "a1", role: "admin", displayName: "管理者の名前" }),
+    { name: "管理者の名前", roleLabel: "管理者" },
+  );
   assert.deepEqual(
     menuIdentity({
+      userId: "u1",
       role: "member",
-      githubLogin: "password:1",
-      displayName: "デモ",
+      displayName: "太郎",
+      username: "taro",
     }),
-    { name: "デモ", roleLabel: "メンバー" },
+    { name: "太郎", roleLabel: "メンバー" },
   );
 });
 
@@ -209,9 +210,10 @@ test("the demo menu leaves out what the demo account may not use", () => {
 test("the demo account is labelled demo", () => {
   assert.deepEqual(
     menuIdentity({
+      userId: "d1",
       role: "member",
-      githubLogin: "demo",
       displayName: "デモ",
+      username: "demo",
       demo: true,
     }),
     { name: "デモ", roleLabel: "デモ" },

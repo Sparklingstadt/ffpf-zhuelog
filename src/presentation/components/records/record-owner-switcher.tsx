@@ -10,7 +10,7 @@ type Props = {
   action: string;
 };
 
-// Admin-only switch for whose records the page shows. A plain GET form, so it
+// Admin-only switch for whose records the page shows, by user id. A plain GET form, so it
 // works without JavaScript (an empty `?user=` means the admin's own records).
 // With JavaScript, choosing 「自分」 leaves `user` out of the URL. Pages must
 // render it for admins only.
@@ -18,8 +18,8 @@ export function RecordOwnerSwitcher({ owner, options, action }: Props) {
   if (owner.kind !== "self" && owner.kind !== "other") return null;
 
   const selected = owner.kind === "other" ? owner.ownerId : "";
-  // An owner chosen via `?user=` that is not a listed member (e.g. a GitHub
-  // ID) still has to show as selected.
+  // An owner chosen via `?user=` that is not a listed member (e.g. an
+  // administrator's user id) still has to show as selected.
   const listed = options.some((option) => option.ownerId === selected);
 
   return (

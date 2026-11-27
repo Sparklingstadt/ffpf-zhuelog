@@ -1,8 +1,10 @@
 import { spawn, spawnSync } from "node:child_process";
 import {
   baseURL,
+  betterAuthSecret,
   databaseUrl,
   demoLoginId,
+  demoPassword,
   sidIssuerURL,
   cronSecret,
   lineAccessToken,
@@ -20,6 +22,8 @@ const sid = {
   issuer: sidIssuerURL,
   clientId: "e2e-sid-client",
   clientSecret: "e2e-sid-client-secret",
+  // Better Auth's callback for the "sid" provider (/callback/:id under
+  // /api/auth in better-auth 1.7).
   redirectUri: `${baseURL}/api/auth/callback/sid`,
 };
 
@@ -31,12 +35,11 @@ async function main() {
     // signed in).
     DATABASE_URL: databaseUrl,
     AUTH_URL: baseURL,
-    AUTH_ALLOWED_GITHUB_IDS: "10001", // adminOwnerId in fixtures.ts
+    BETTER_AUTH_SECRET: betterAuthSecret(),
+    // The demo button signs in to this account with this password; the
+    // fixtures that make the demo account store its hash.
     DEMO_LOGIN_ID: demoLoginId,
-    // Enables the GitHub button only; there is no GitHub stub and the e2e
-    // never completes a GitHub sign-in.
-    AUTH_GITHUB_ID: "e2e-client",
-    GITHUB_WEB_CLIENT_SECRET: "e2e-github-secret",
+    DEMO_PASSWORD: demoPassword(),
     LINE_OFFICIAL_ACCOUNT_ID: "@393bohaw",
     LINE_LINK_PREVIEW_MODE: "false",
     // Shows the Sparklingstadt ID button; sign-in completes against the local stub.

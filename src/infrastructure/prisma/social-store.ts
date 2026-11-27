@@ -1,27 +1,24 @@
 import { Prisma, type PrismaClient } from "../../generated/prisma/client";
-import {
-  isMemberOwnerId,
-  type FollowDirectory,
-  type FollowTimelineItem,
+import type {
+  FollowDirectory,
+  FollowTimelineItem,
 } from "../../domain/social/follow";
 import { hintsByEntry, toKind } from "./learning-note-reads";
+import { IS_MEMBER_USER } from "./member-users";
 
-// Follows, the shared-notes timeline and the member directory.
+// Follows, the shared-notes timeline and the member directory. Members are
+// the users who are neither admins nor guests (IS_MEMBER_USER).
 //
 // The directory and the timeline are raw statements run through $queryRaw:
-// Prisma's queries cannot UNION ALL the two account tables nor order by the
-// "ja-x-icu" collation, and ordering in JS would not match the database's
-// Japanese order.
+// Prisma's queries cannot order by the "ja-x-icu" collation, and ordering in
+// JS would not match the database's Japanese order.
 //
-// Following is one statement. Follow has no foreign key, so a check and then
-// an insert would give the row to a member removed in between. Instead a
-// data-modifying CTE inserts the row if the followee's account exists in the
-// statement's snapshot (READ COMMITTED) and reads whether it does. A delete
-// committed concurrently can still race, so the window is narrow but not
-// closed.
+// Following is one statement. Follow's foreign keys only say the followee is
+// a user, so a data-modifying CTE inserts the row if the followee is a member
+// in the statement's snapshot (READ COMMITTED) and reads whether it is.
 
 export type MemberRow = {
-  ownerId: string;
+  userId: string;
   displayName: string;
   following: boolean;
   followsMe: boolean;
@@ -35,22 +32,19 @@ export type TimelineRow = {
   pinyin: string;
   createdAt: Date;
   sharedAt: Date | null;
-  ownerId: string;
+  userId: string;
   ownerName: string;
 };
 
-// Pure: the member directory. Everyone with a password or Sparklingstadt ID
-// account but the viewer; no login id.
+// Pure: the member directory. Every member but the viewer; no login id.
 export function memberDirectorySql(viewerId: string): Prisma.Sql {
   return Prisma.sql`
-    SELECT a."ownerId" AS "ownerId", a."displayName" AS "displayName",
-           EXISTS (SELECT 1 FROM "Follow" f WHERE f."followerId" = ${viewerId} AND f."followeeId" = a."ownerId") AS "following",
-           EXISTS (SELECT 1 FROM "Follow" f WHERE f."followerId" = a."ownerId" AND f."followeeId" = ${viewerId}) AS "followsMe"
-      FROM (SELECT 'password:' || p."id" AS "ownerId", p."displayName", p."createdAt" FROM "PasswordAccount" p
-            UNION ALL
-            SELECT 'sid:' || f."id", f."displayName", f."createdAt" FROM "SidAccount" f) a
-     WHERE a."ownerId" <> ${viewerId}
-     ORDER BY a."displayName" COLLATE "ja-x-icu", a."createdAt", a."ownerId"`;
+    SELECT u."id" AS "userId", u."name" AS "displayName",
+           EXISTS (SELECT 1 FROM "Follow" f WHERE f."followerId" = ${viewerId} AND f."followeeId" = u."id") AS "following",
+           EXISTS (SELECT 1 FROM "Follow" f WHERE f."followerId" = u."id" AND f."followeeId" = ${viewerId}) AS "followsMe"
+      FROM "user" u
+     WHERE ${IS_MEMBER_USER} AND u."id" <> ${viewerId}
+     ORDER BY u."name" COLLATE "ja-x-icu", u."createdAt", u."id"`;
 }
 
 // Pure: every follow row pointing at the viewer, admins' included.
@@ -59,14 +53,15 @@ export function followerCountSql(viewerId: string): Prisma.Sql {
 }
 
 // Pure: the rows and the follower count as the domain's directory. Following
-// counts only listed members: a follow of a removed account is not counted.
+// counts only listed members: a follow of a user who is no longer a member
+// is not counted.
 export function directoryFromRows(
   rows: MemberRow[],
   followerCount: bigint,
 ): FollowDirectory {
   return {
-    members: rows.map(({ ownerId, displayName, following, followsMe }) => ({
-      ownerId,
+    members: rows.map(({ userId, displayName, following, followsMe }) => ({
+      ownerId: userId,
       displayName,
       following,
       followsMe,
@@ -76,31 +71,22 @@ export function directoryFromRows(
   };
 }
 
-// Pure: the newest notes of the owners the viewer follows, at most limit.
-// Only followed owners that still have an account; shared, not trashed.
+// Pure: the newest notes of the members the viewer follows, at most limit.
+// Only followed users that are still members; shared, not trashed.
 export function timelineSql(viewerId: string, limit: number): Prisma.Sql {
   return Prisma.sql`
     SELECT e."id", e."kind", e."originalText", e."correctedText", e."pinyin", e."createdAt", e."sharedAt",
-           e."ownerId" AS "ownerId", a."displayName" AS "ownerName"
+           e."userId" AS "userId", u."name" AS "ownerName"
       FROM "LearningEntry" e
-      JOIN "Follow" f ON f."followeeId" = e."ownerId" AND f."followerId" = ${viewerId}
-      JOIN (SELECT 'password:' || p."id" AS "ownerId", p."displayName" FROM "PasswordAccount" p
-            UNION ALL
-            SELECT 'sid:' || ff."id", ff."displayName" FROM "SidAccount" ff) a ON a."ownerId" = e."ownerId"
+      JOIN "Follow" f ON f."followeeId" = e."userId" AND f."followerId" = ${viewerId}
+      JOIN "user" u ON u."id" = e."userId" AND ${IS_MEMBER_USER}
      WHERE e."sharedAt" IS NOT NULL AND e."deletedAt" IS NULL
      ORDER BY e."createdAt" DESC, e."id" DESC
      LIMIT ${limit}`;
 }
 
-// The account table of each member owner id prefix, as fixed fragments.
-const PASSWORD_ACCOUNT = Prisma.sql`"PasswordAccount"`;
-const SID_ACCOUNT = Prisma.sql`"SidAccount"`;
-const PASSWORD_PREFIX = "password:";
-const SID_PREFIX = "sid:";
-
 // Pure: one statement that adds the follow only when followeeId is an
-// existing member, and reads whether it is. RangeError for an id that is
-// not isMemberOwnerId.
+// existing member, and reads whether it is.
 //
 // The INSERT ... SELECT parameters have no type to infer, so they are cast. A
 // data-modifying CTE runs even though the outer SELECT does not read it.
@@ -109,14 +95,8 @@ export function followSql(
   followeeId: string,
   now: Date,
 ): Prisma.Sql {
-  if (!isMemberOwnerId(followeeId)) {
-    throw new RangeError("not a member owner id");
-  }
-  const [table, id] = followeeId.startsWith(PASSWORD_PREFIX)
-    ? [PASSWORD_ACCOUNT, followeeId.slice(PASSWORD_PREFIX.length)]
-    : [SID_ACCOUNT, followeeId.slice(SID_PREFIX.length)];
   return Prisma.sql`
-    WITH "target" AS (SELECT 1 FROM ${table} WHERE "id" = ${id}),
+    WITH "target" AS (SELECT 1 FROM "user" u WHERE u."id" = ${followeeId} AND ${IS_MEMBER_USER}),
          "added" AS (
            INSERT INTO "Follow" ("followerId", "followeeId", "createdAt")
            SELECT ${followerId}::text, ${followeeId}::text, CAST(${now} AS TIMESTAMP(3))
@@ -164,7 +144,7 @@ export function createSocialStore(db: () => PrismaClient) {
           createdAt: row.createdAt,
           sharedAt: row.sharedAt,
           hints: hints.get(row.id) ?? [],
-          ownerId: row.ownerId,
+          ownerId: row.userId,
         },
         ownerName: row.ownerName,
       }));

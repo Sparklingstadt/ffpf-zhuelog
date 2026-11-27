@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import {
   createLineLink,
+  lineLinkAllowed,
   LineLinkForbiddenError,
   type LineLinkDeps,
 } from "../src/application/line/line-link";
@@ -11,32 +12,35 @@ import type { AuthenticatedUser } from "../src/domain/identity/entities/authenti
 const t0 = new Date("2026-11-17T03:00:00.000Z");
 
 const member: AuthenticatedUser = {
-  githubLogin: "taro",
-  githubId: "password:c1",
+  userId: "c1",
   role: "member",
-  accountId: "c1",
+  displayName: "taro",
+  username: "taro",
 };
 const admin: AuthenticatedUser = {
-  githubLogin: "octocat",
-  githubId: "10001",
+  userId: "10001",
   role: "admin",
+  displayName: "octocat",
 };
-const actingAdmin: AuthenticatedUser = {
-  githubLogin: "octocat",
-  githubId: "password:c1",
-  role: "admin",
-  actingAs: { ownerId: "password:c1", loginId: "taro", displayName: "太郎" },
-  actorId: "10001",
+const impersonated: AuthenticatedUser = {
+  userId: "c1",
+  role: "member",
+  displayName: "太郎",
+  username: "taro",
+  impersonatedBy: "10001",
 };
 const demo: AuthenticatedUser = {
-  githubLogin: "demo",
-  githubId: "password:demo",
+  userId: "demo",
   role: "member",
+  displayName: "demo",
+  username: "demo",
   demo: true,
 };
-const guest: AuthenticatedUser = { githubLogin: "g", role: "guest" };
-const revoked: AuthenticatedUser = { ...member, role: "revoked" };
-const noGithubId: AuthenticatedUser = { githubLogin: "x", role: "member" };
+const guest: AuthenticatedUser = {
+  userId: "g1",
+  role: "guest",
+  displayName: "g",
+};
 
 function harness(
   user: AuthenticatedUser | null,
@@ -58,8 +62,8 @@ function harness(
       async unlinkOwner(ownerId) {
         calls.push(["unlinkOwner", ownerId]);
       },
-      async putCode(ownerId, role, codeHash, expiresAt) {
-        calls.push(["putCode", ownerId, role, codeHash, expiresAt]);
+      async putCode(ownerId, codeHash, expiresAt) {
+        calls.push(["putCode", ownerId, codeHash, expiresAt]);
       },
     },
     newCode: () => "ABCD2345",
@@ -70,8 +74,16 @@ function harness(
   return { link: createLineLink(deps), calls };
 }
 
+test("lineLinkAllowed: members and admins as themselves, never while impersonated, the demo or a guest", () => {
+  assert.equal(lineLinkAllowed(member), true);
+  assert.equal(lineLinkAllowed(admin), true);
+  assert.equal(lineLinkAllowed(impersonated), false);
+  assert.equal(lineLinkAllowed(demo), false);
+  assert.equal(lineLinkAllowed(guest), false);
+});
+
 test("only members and admins who are themselves may link", async () => {
-  for (const user of [demo, actingAdmin, guest, revoked, noGithubId, null]) {
+  for (const user of [demo, impersonated, guest, null]) {
     const { link, calls } = harness(user);
     await assert.rejects(link.status(), LineLinkForbiddenError);
     await assert.rejects(link.issueCode(), LineLinkForbiddenError);
@@ -85,7 +97,7 @@ test("only members and admins who are themselves may link", async () => {
   await assert.rejects(link.status(), LineLinkForbiddenError);
 
   for (const [user, owner] of [
-    [member, "password:c1"],
+    [member, "c1"],
     [admin, "10001"],
   ] as const) {
     const { link, calls } = harness(user);
@@ -108,14 +120,12 @@ test("a code is issued for ten minutes and only its hash is stored", async () =>
   const expiresAt = new Date(t0.getTime() + 600_000);
   let h = harness(member);
   assert.deepEqual(await h.link.issueCode(), { code: "ABCD2345", expiresAt });
-  assert.deepEqual(h.calls, [
-    ["putCode", "password:c1", "member", "hash(ABCD2345)", expiresAt],
-  ]);
+  assert.deepEqual(h.calls, [["putCode", "c1", "hash(ABCD2345)", expiresAt]]);
 
   h = harness(admin);
   await h.link.issueCode();
   assert.deepEqual(h.calls, [
-    ["putCode", "10001", "admin", "hash(ABCD2345)", expiresAt],
+    ["putCode", "10001", "hash(ABCD2345)", expiresAt],
   ]);
 });
 
@@ -139,5 +149,5 @@ test("without LINE the page says unavailable and nothing is read", async () => {
 test("the review message setting needs a link", async () => {
   const { link, calls } = harness(member, { reviewNotify: false });
   assert.equal(await link.setReviewNotify(true), false);
-  assert.deepEqual(calls, [["setReviewNotify", "password:c1", true]]);
+  assert.deepEqual(calls, [["setReviewNotify", "c1", true]]);
 });

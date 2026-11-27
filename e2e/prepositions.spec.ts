@@ -53,12 +53,12 @@ test("a member's round of 25 shows its result, is recorded and can be read again
   await expect(page.getByText(`${QUESTION_COUNT}問 終了！`)).toBeVisible();
   await expect(page.getByText("記録に保存しました。")).toBeVisible();
   const { rows } = await db.query(
-    `SELECT "ownerId", "questionCount", "firstTryCount", "missCount", "elapsedMs", "questions"
+    `SELECT "userId", "questionCount", "firstTryCount", "missCount", "elapsedMs", "questions"
      FROM "PrepositionPracticeRecord"`,
   );
   expect(rows).toHaveLength(1);
   const [record] = rows;
-  expect(record.ownerId).toBe(memberOwnerId(accountId));
+  expect(record.userId).toBe(memberOwnerId(accountId));
   expect(record.questionCount).toBe(QUESTION_COUNT);
   expect(record.elapsedMs).toBeGreaterThan(0);
   for (const question of record.questions)
@@ -121,11 +121,11 @@ test(
     const {
       rows: [record],
     } = await db.query(
-      `SELECT "id", "createdAt" FROM "PrepositionPracticeRecord" WHERE "ownerId" = $1`,
+      `SELECT "id", "createdAt" FROM "PrepositionPracticeRecord" WHERE "userId" = $1`,
       [owner],
     );
     const { rows: items } = await db.query(
-      `SELECT "id", "due", "updatedAt" FROM "ReviewItem" WHERE "ownerId" = $1 ORDER BY "targetId"`,
+      `SELECT "id", "due", "updatedAt" FROM "ReviewItem" WHERE "userId" = $1 ORDER BY "targetId"`,
       [owner],
     );
     // Picking in order misses whenever the right choice is not the first, so
@@ -153,7 +153,7 @@ test(
       `SELECT "id", "due", "updatedAt", "state", "reps", "stability", "difficulty",
        "lastReview" IS NOT NULL AS "reviewed",
        "due" >= date_trunc('milliseconds', $2::timestamptz) AND "due" <= now() AS "now"
-     FROM "ReviewItem" WHERE "ownerId" = $1 ORDER BY "targetId"`,
+     FROM "ReviewItem" WHERE "userId" = $1 ORDER BY "targetId"`,
       [owner, before],
     );
     expect(after).toHaveLength(items.length);
@@ -214,11 +214,11 @@ test(
     );
 
     const { rows: records } = await db.query(
-      `SELECT "id", "ownerId" FROM "PrepositionPracticeRecord"`,
+      `SELECT "id", "userId" FROM "PrepositionPracticeRecord"`,
     );
-    expect(records).toEqual([{ id: record.id, ownerId: memberOwnerId(taro) }]);
+    expect(records).toEqual([{ id: record.id, userId: memberOwnerId(taro) }]);
     const { rows: items } = await db.query(
-      `SELECT count(*)::int AS n FROM "ReviewItem" WHERE "ownerId" = $1`,
+      `SELECT count(*)::int AS n FROM "ReviewItem" WHERE "userId" = $1`,
       [memberOwnerId(hanako)],
     );
     expect(items[0].n).toBe(0);

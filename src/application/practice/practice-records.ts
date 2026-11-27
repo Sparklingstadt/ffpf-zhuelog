@@ -20,8 +20,7 @@ import {
   type PracticeRound,
 } from "../../domain/practice/practice-round";
 
-// The signed-in user has no practice records: signed out, a guest, revoked
-// or without an owner id.
+// The signed-in user has no practice records: signed out or a guest.
 export class PracticeForbiddenError extends Error {
   override name = "PracticeForbiddenError";
 }
@@ -63,15 +62,14 @@ export type PracticeRecordsDeps = {
 };
 
 // Preposition and complement rounds, always the signed-in user's own (the
-// member an admin acts as; the demo has its own too), never an owner from a
+// member an admin impersonates; the demo has its own too), never an owner from a
 // form. The owner is decided first, so a refused user is refused before the
 // round is checked.
 export function createPracticeRecords(deps: PracticeRecordsDeps) {
   async function owner(): Promise<string> {
     const user = await deps.currentUser();
-    if (!user || !isMemberRole(user.role) || !user.githubId)
-      throw new PracticeForbiddenError();
-    return user.githubId;
+    if (!user || !isMemberRole(user.role)) throw new PracticeForbiddenError();
+    return user.userId;
   }
 
   // Saves are checked first and given one `now` (the row's createdAt and the

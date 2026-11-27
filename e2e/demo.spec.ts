@@ -8,8 +8,9 @@ import {
   test,
   upload,
 } from "./fixtures";
-import { baseURL, cronSecret, demoLoginId } from "./environment";
+import { baseURL, cronSecret, demoLoginId, demoPassword } from "./environment";
 import type { Client } from "pg";
+import { ScryptPasswordHasher } from "../src/infrastructure/security/scrypt-password-hasher";
 
 // Puts the demo account back to its fixture, as the nightly cron does. The
 // db fixture empties the accounts before every test, so it runs each time.
@@ -21,19 +22,33 @@ async function resetDemo(method = "POST") {
   expect(response.status).toBe(204);
 }
 
+// The demo user and the password hash of its credential account (null when
+// it has none).
 async function demoAccount(db: Client) {
   const { rows } = await db.query(
-    `SELECT id, "passwordHash", "displayName", "sessionVersion"
-       FROM "PasswordAccount" WHERE "loginId" = $1`,
+    `SELECT u.id, u.name, u.username,
+            (SELECT a.password FROM "account" a
+              WHERE a."userId" = u.id AND a."providerId" = 'credential') AS "passwordHash",
+            (SELECT count(*)::int FROM "account" a
+              WHERE a."userId" = u.id AND a."providerId" = 'credential') AS "credentialAccounts"
+       FROM "user" u WHERE u.username = $1`,
     [demoLoginId],
   );
   expect(rows).toHaveLength(1);
   return rows[0] as {
     id: string;
-    passwordHash: string;
-    displayName: string;
-    sessionVersion: number;
+    name: string;
+    username: string;
+    passwordHash: string | null;
+    credentialAccounts: number;
   };
+}
+
+// Whether the hash is DEMO_PASSWORD's (the app's scrypt format).
+function holdsDemoPassword(passwordHash: string | null) {
+  return passwordHash !== null
+    ? new ScryptPasswordHasher().verify(demoPassword(), passwordHash)
+    : Promise.resolve(false);
 }
 
 async function count(db: Client, sql: string, values: unknown[]) {
@@ -41,11 +56,11 @@ async function count(db: Client, sql: string, values: unknown[]) {
   return rows[0].n as number;
 }
 
-const liveNotes = `SELECT count(*)::int AS n FROM "LearningEntry" WHERE "ownerId" = $1 AND "deletedAt" IS NULL`;
+const liveNotes = `SELECT count(*)::int AS n FROM "LearningEntry" WHERE "userId" = $1 AND "deletedAt" IS NULL`;
 // Review items that name neither a note nor a word of their owner.
-const orphanItems = `SELECT count(*)::int AS n FROM "ReviewItem" i WHERE i."ownerId" = $1
-  AND NOT EXISTS (SELECT 1 FROM "LearningEntry" e WHERE i."kind" = 'entry' AND e."id" = i."targetId" AND e."ownerId" = i."ownerId")
-  AND NOT EXISTS (SELECT 1 FROM "VocabularyEntry" v WHERE i."kind" = 'vocabulary' AND v."id" = i."targetId" AND v."ownerId" = i."ownerId")`;
+const orphanItems = `SELECT count(*)::int AS n FROM "ReviewItem" i WHERE i."userId" = $1
+  AND NOT EXISTS (SELECT 1 FROM "LearningEntry" e WHERE i."kind" = 'entry' AND e."id" = i."targetId" AND e."userId" = i."userId")
+  AND NOT EXISTS (SELECT 1 FROM "VocabularyEntry" v WHERE i."kind" = 'vocabulary' AND v."id" = i."targetId" AND v."userId" = i."userId")`;
 
 test("the demo reset needs the cron secret", anyWidth, async () => {
   const response = await fetch(`${baseURL}/api/cron/demo-reset`, {
@@ -63,21 +78,23 @@ test("the demo reset needs the cron secret", anyWidth, async () => {
 test("the reset seeds the demo from the fixture", anyWidth, async ({ db }) => {
   await resetDemo();
   const account = await demoAccount(db);
-  expect(account.passwordHash).toBe("demo:no-password");
+  expect(account.name).toBe("デモ");
+  expect(account.credentialAccounts).toBe(1);
+  expect(await holdsDemoPassword(account.passwordHash)).toBe(true);
   const owner = memberOwnerId(account.id);
 
   expect(await count(db, liveNotes, [owner])).toBe(12);
   expect(
     await count(
       db,
-      `SELECT count(*)::int AS n FROM "VocabularyEntry" WHERE "ownerId" = $1`,
+      `SELECT count(*)::int AS n FROM "VocabularyEntry" WHERE "userId" = $1`,
       [owner],
     ),
   ).toBe(10);
   expect(
     await count(
       db,
-      `SELECT count(*)::int AS n FROM "ReviewItem" WHERE "ownerId" = $1 AND "due" <= now()`,
+      `SELECT count(*)::int AS n FROM "ReviewItem" WHERE "userId" = $1 AND "due" <= now()`,
       [owner],
     ),
   ).toBeGreaterThan(0);
@@ -90,7 +107,7 @@ test("the reset seeds the demo from the fixture", anyWidth, async ({ db }) => {
     expect(
       await count(
         db,
-        `SELECT count(*)::int AS n FROM "${table}" WHERE "ownerId" = $1`,
+        `SELECT count(*)::int AS n FROM "${table}" WHERE "userId" = $1`,
         [owner],
       ),
       table,
@@ -100,11 +117,11 @@ test("the reset seeds the demo from the fixture", anyWidth, async ({ db }) => {
     await count(
       db,
       `SELECT count(DISTINCT ("at" + interval '9 hours')::date)::int AS n FROM (
-         SELECT "createdAt" AS "at" FROM "LearningEntry" WHERE "ownerId" = $1 AND "deletedAt" IS NULL
-         UNION ALL SELECT "createdAt" FROM "VocabularyEntry" WHERE "ownerId" = $1
-         UNION ALL SELECT "createdAt" FROM "PrepositionPracticeRecord" WHERE "ownerId" = $1
-         UNION ALL SELECT "createdAt" FROM "ComplementPracticeRecord" WHERE "ownerId" = $1
-         UNION ALL SELECT "reviewedAt" FROM "ReviewLog" WHERE "ownerId" = $1) AS "activity"
+         SELECT "createdAt" AS "at" FROM "LearningEntry" WHERE "userId" = $1 AND "deletedAt" IS NULL
+         UNION ALL SELECT "createdAt" FROM "VocabularyEntry" WHERE "userId" = $1
+         UNION ALL SELECT "createdAt" FROM "PrepositionPracticeRecord" WHERE "userId" = $1
+         UNION ALL SELECT "createdAt" FROM "ComplementPracticeRecord" WHERE "userId" = $1
+         UNION ALL SELECT "reviewedAt" FROM "ReviewLog" WHERE "userId" = $1) AS "activity"
        WHERE "at" >= now() - interval '8 days'`,
       [owner],
     ),
@@ -117,18 +134,17 @@ test("the reset replaces only the demo's data", anyWidth, async ({ db }) => {
   const owner = memberOwnerId(before.id);
 
   // What visitors did during the day: a note in review, a follow each way,
-  // an AI call, a LINE link code; and a password change elsewhere bumped the
-  // session version.
+  // an AI call, a LINE link code; and someone is signed in to the demo.
   await db.query(
     `INSERT INTO "ImportBatch" (id, "fileName", "rowCount") VALUES ('bvisitor', 'visitor.csv', 1)`,
   );
   await db.query(
-    `INSERT INTO "LearningEntry" (id, "originalText", "correctedText", pinyin, "ownerId", "batchId")
+    `INSERT INTO "LearningEntry" (id, "originalText", "correctedText", pinyin, "userId", "batchId")
      VALUES ('nvisitor', '訪問者', '访问者', 'fǎngwènzhě', $1, 'bvisitor')`,
     [owner],
   );
   await db.query(
-    `INSERT INTO "ReviewItem" (id, "ownerId", language, kind, "targetId", due, "updatedAt")
+    `INSERT INTO "ReviewItem" (id, "userId", language, kind, "targetId", due, "updatedAt")
      VALUES ('ivisitor', $1, 'zh', 'entry', 'nvisitor', now(), now())`,
     [owner],
   );
@@ -141,17 +157,18 @@ test("the reset replaces only the demo's data", anyWidth, async ({ db }) => {
     [owner, other],
   );
   await db.query(
-    `INSERT INTO "AiUsage" (id, "ownerId", feature, model, "inputTokens", "outputTokens")
+    `INSERT INTO "AiUsage" (id, "userId", feature, model, "inputTokens", "outputTokens")
      VALUES ('uvisitor', $1, 'chat', 'gpt-test', 1, 1)`,
     [owner],
   );
   await db.query(
-    `UPDATE "PasswordAccount" SET "sessionVersion" = 4 WHERE id = $1`,
+    `INSERT INTO "session" ("id", "expiresAt", "token", "userId", "updatedAt")
+     VALUES ('svisitor', now() + interval '1 day', 'tvisitor', $1, now())`,
     [before.id],
   );
   await db.query(
-    `INSERT INTO "LineLinkCode" ("codeHash", "ownerId", role, "expiresAt")
-     VALUES ('hvisitor', $1, 'member', now() + interval '10 minutes')`,
+    `INSERT INTO "LineLinkCode" ("codeHash", "userId", "expiresAt")
+     VALUES ('hvisitor', $1, now() + interval '10 minutes')`,
     [owner],
   );
   // Members' own follows and link codes, which the reset must leave alone.
@@ -163,8 +180,8 @@ test("the reset replaces only the demo's data", anyWidth, async ({ db }) => {
     [other, third],
   );
   await db.query(
-    `INSERT INTO "LineLinkCode" ("codeHash", "ownerId", role, "expiresAt")
-     VALUES ('hother', $1, 'member', now() + interval '10 minutes')`,
+    `INSERT INTO "LineLinkCode" ("codeHash", "userId", "expiresAt")
+     VALUES ('hother', $1, now() + interval '10 minutes')`,
     [other],
   );
 
@@ -172,7 +189,14 @@ test("the reset replaces only the demo's data", anyWidth, async ({ db }) => {
 
   const after = await demoAccount(db);
   expect(after.id).toBe(before.id);
-  expect(after.sessionVersion).toBe(4);
+  // The demo's sessions survive the reset.
+  expect(
+    await count(
+      db,
+      `SELECT count(*)::int AS n FROM "session" WHERE id = 'svisitor' AND "userId" = $1`,
+      [before.id],
+    ),
+  ).toBe(1);
   expect(await count(db, liveNotes, [owner])).toBe(12);
   expect(
     await count(
@@ -199,7 +223,7 @@ test("the reset replaces only the demo's data", anyWidth, async ({ db }) => {
   expect(
     await count(
       db,
-      `SELECT count(*)::int AS n FROM "LineLinkCode" WHERE "ownerId" = $1`,
+      `SELECT count(*)::int AS n FROM "LineLinkCode" WHERE "userId" = $1`,
       [owner],
     ),
   ).toBe(0);
@@ -213,39 +237,99 @@ test("the reset replaces only the demo's data", anyWidth, async ({ db }) => {
   expect(
     await count(
       db,
-      `SELECT count(*)::int AS n FROM "LineLinkCode" WHERE "ownerId" = $1`,
+      `SELECT count(*)::int AS n FROM "LineLinkCode" WHERE "userId" = $1`,
       [other],
     ),
   ).toBe(1);
   expect(
     await count(
       db,
-      `SELECT count(*)::int AS n FROM "AiUsage" WHERE "ownerId" = $1`,
+      `SELECT count(*)::int AS n FROM "AiUsage" WHERE "userId" = $1`,
       [owner],
     ),
   ).toBe(1);
   expect(await count(db, liveNotes, [other])).toBe(1);
 });
 
-// A member whose loginId is DEMO_LOGIN_ID is not overwritten (the insert is ON
-// CONFLICT DO NOTHING); the demo sign-in refuses it, as it has a real password.
-test("an existing account keeps its password", anyWidth, async ({ db }) => {
-  const id = await createMember(
-    db,
-    demoLoginId,
-    "本当の会員",
-    "member-password-1",
+// A user whose username is DEMO_LOGIN_ID keeps its row (the insert is ON
+// CONFLICT DO NOTHING), but its password is DEMO_PASSWORD again, so the demo
+// button signs in to it whatever someone set during the day.
+test(
+  "an existing user keeps its name and gets DEMO_PASSWORD",
+  anyWidth,
+  async ({ db }) => {
+    const id = await createMember(
+      db,
+      demoLoginId,
+      "本当の会員",
+      "member-password-1",
+    );
+    await resetDemo();
+    const after = await demoAccount(db);
+    expect(after.id).toBe(id);
+    expect(after.name).toBe("本当の会員");
+    expect(after.credentialAccounts).toBe(1);
+    expect(await holdsDemoPassword(after.passwordHash)).toBe(true);
+    expect(
+      await new ScryptPasswordHasher().verify(
+        "member-password-1",
+        after.passwordHash!,
+      ),
+    ).toBe(false);
+    expect(await count(db, liveNotes, [memberOwnerId(id)])).toBe(12);
+  },
+);
+
+// The demo user is there but its credential account is gone: the reset makes
+// it again.
+test(
+  "the reset makes a missing credential account",
+  anyWidth,
+  async ({ db }) => {
+    await resetDemo();
+    const before = await demoAccount(db);
+    await db.query(`DELETE FROM "account" WHERE "userId" = $1`, [before.id]);
+    await resetDemo();
+    const after = await demoAccount(db);
+    expect(after.id).toBe(before.id);
+    expect(after.credentialAccounts).toBe(1);
+    expect(await holdsDemoPassword(after.passwordHash)).toBe(true);
+    const { rows } = await db.query(
+      `SELECT "accountId" FROM "account" WHERE "userId" = $1`,
+      [before.id],
+    );
+    expect(rows).toEqual([{ accountId: before.id }]);
+  },
+);
+
+// The daily reset also deletes the guests made more than 24 hours ago, and
+// their sessions with them; newer guests and old members stay.
+test("the reset deletes guests older than a day", anyWidth, async ({ db }) => {
+  const user = (id: string, anonymous: boolean, hoursAgo: number) =>
+    db.query(
+      `INSERT INTO "user" ("id", "name", "email", "isAnonymous", "createdAt", "updatedAt")
+       VALUES ($1, 'Anonymous', $1 || '@guest.zhuelog.invalid', $2, now() - make_interval(hours => $3), now())`,
+      [id, anonymous, hoursAgo],
+    );
+  await user("gold", true, 25);
+  await user("gnew", true, 23);
+  await user("mold", false, 25);
+  await db.query(
+    `INSERT INTO "session" ("id", "expiresAt", "token", "userId", "updatedAt")
+     VALUES ('sgold', now() + interval '1 day', 'tgold', 'gold', now()),
+            ('sgnew', now() + interval '1 day', 'tgnew', 'gnew', now())`,
   );
-  const { rows } = await db.query(
-    `SELECT "passwordHash" FROM "PasswordAccount" WHERE id = $1`,
-    [id],
-  );
+
   await resetDemo();
-  const after = await demoAccount(db);
-  expect(after.id).toBe(id);
-  expect(after.passwordHash).toBe(rows[0].passwordHash);
-  expect(after.displayName).toBe("本当の会員");
-  expect(await count(db, liveNotes, [memberOwnerId(id)])).toBe(12);
+
+  const { rows: users } = await db.query(
+    `SELECT id FROM "user" WHERE id IN ('gold', 'gnew', 'mold') ORDER BY id`,
+  );
+  expect(users).toEqual([{ id: "gnew" }, { id: "mold" }]);
+  const { rows: sessions } = await db.query(
+    `SELECT id FROM "session" WHERE id IN ('sgold', 'sgnew')`,
+  );
+  expect(sessions).toEqual([{ id: "sgnew" }]);
 });
 
 test("anyone can try the members' pages in the demo, without AI", async ({
@@ -347,11 +431,9 @@ test("anyone can try the members' pages in the demo, without AI", async ({
       hasText: "この操作を行う権限がありません。再度ログインしてください。",
     }),
   ).toBeVisible();
-  const { rows } = await db.query(
-    `SELECT "passwordHash" FROM "PasswordAccount" WHERE "loginId" = $1`,
-    [demoLoginId],
+  expect(await holdsDemoPassword((await demoAccount(db)).passwordHash)).toBe(
+    true,
   );
-  expect(rows).toEqual([{ passwordHash: "demo:no-password" }]);
 
   // LINE is for members and admins: the demo is sent home.
   await page.goto("/account/line");
@@ -401,27 +483,20 @@ test("the demo account can import CSV", async ({ page, db }) => {
   await upload(page, "デモの原文,デモの添削,demo pinyin");
   await expect(page.getByText("1件の学習文を登録しました。")).toBeVisible();
 
-  const account = await db.query(
-    `SELECT id FROM "PasswordAccount" WHERE "loginId" = $1`,
-    [demoLoginId],
-  );
+  const account = await demoAccount(db);
   const { rows } = await db.query(
-    `SELECT "ownerId" FROM "LearningEntry" WHERE "originalText" = 'デモの原文'`,
+    `SELECT "userId" FROM "LearningEntry" WHERE "originalText" = 'デモの原文'`,
   );
-  expect(rows).toEqual([{ ownerId: memberOwnerId(account.rows[0].id) }]);
+  expect(rows).toEqual([{ userId: memberOwnerId(account.id) }]);
 });
 
 test("the demo account can answer a review", async ({ page, db }) => {
   await resetDemo();
-  const account = await db.query(
-    `SELECT id FROM "PasswordAccount" WHERE "loginId" = $1`,
-    [demoLoginId],
-  );
-  const owner = memberOwnerId(account.rows[0].id);
+  const owner = memberOwnerId((await demoAccount(db)).id);
   const logs = async () =>
     (
       await db.query(
-        `SELECT count(*)::int AS n FROM "ReviewLog" WHERE "ownerId" = $1`,
+        `SELECT count(*)::int AS n FROM "ReviewLog" WHERE "userId" = $1`,
         [owner],
       )
     ).rows[0].n as number;
@@ -443,15 +518,11 @@ test("the demo account can answer a review", async ({ page, db }) => {
 test("the demo account saves a practice round", async ({ page, db }) => {
   test.setTimeout(90_000);
   await resetDemo();
-  const account = await db.query(
-    `SELECT id FROM "PasswordAccount" WHERE "loginId" = $1`,
-    [demoLoginId],
-  );
-  const owner = memberOwnerId(account.rows[0].id);
+  const owner = memberOwnerId((await demoAccount(db)).id);
   const rounds = async () =>
     (
       await db.query(
-        `SELECT count(*)::int AS n FROM "PrepositionPracticeRecord" WHERE "ownerId" = $1`,
+        `SELECT count(*)::int AS n FROM "PrepositionPracticeRecord" WHERE "userId" = $1`,
         [owner],
       )
     ).rows[0].n as number;
@@ -463,3 +534,104 @@ test("the demo account saves a practice round", async ({ page, db }) => {
   await practicePrepositionRound(page);
   expect(await rounds()).toBe(before + 1);
 });
+
+// Better Auth's own routes cannot change the demo for the next visitor:
+// /update-user is closed to everyone (404) and /change-password refuses the
+// demo (403), even with the right current password. The demo still signs in
+// afterwards, under the same name and username.
+test(
+  "the demo cannot change its name or password over Better Auth",
+  anyWidth,
+  async ({ page, db }) => {
+    await resetDemo();
+    const before = await demoAccount(db);
+    await page.goto("/signin");
+    await page.getByRole("button", { name: "デモで試す" }).click();
+    await expect(page).toHaveURL(/\/$/);
+
+    const answers = await page.evaluate(async (currentPassword) => {
+      const post = async (path: string, body: unknown) =>
+        (
+          await fetch(path, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(body),
+          })
+        ).status;
+      return {
+        updateUser: await post("/api/auth/update-user", {
+          name: "x",
+          username: "x",
+        }),
+        changePassword: await post("/api/auth/change-password", {
+          currentPassword,
+          newPassword: "changed-password-1",
+          revokeOtherSessions: true,
+        }),
+      };
+    }, demoPassword());
+    expect(answers).toEqual({ updateUser: 404, changePassword: 403 });
+
+    const after = await demoAccount(db);
+    expect(after.name).toBe(before.name);
+    expect(after.username).toBe(demoLoginId);
+    expect(after.passwordHash).toBe(before.passwordHash);
+
+    // Leave and come back in through the demo button.
+    const banner = page.getByRole("status", { name: "デモアカウント" });
+    await banner.getByRole("button", { name: "デモを終える" }).click();
+    await expect(page).toHaveURL(/\/signin(?:\?|$)/);
+    await page.getByRole("button", { name: "デモで試す" }).click();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(banner).toContainText("デモアカウントです。");
+    // The header's menu button starts with the user's name (then the role
+    // label).
+    await expect(
+      page.getByRole("banner").getByRole("button", { name: /のメニュー$/ }),
+    ).toHaveAccessibleName(new RegExp(`^${before.name}\\s`));
+  },
+);
+
+// The demo is one user shared by every visitor: its sessions are not listed
+// (they would show the other visitors' tokens, addresses and browsers) and
+// cannot be revoked over Better Auth (that would sign everyone out). The
+// routes are closed (404) and the visitor's own session keeps working.
+test(
+  "the demo cannot list or revoke the sessions it shares",
+  anyWidth,
+  async ({ page }) => {
+    await resetDemo();
+    await page.goto("/signin");
+    await page.getByRole("button", { name: "デモで試す" }).click();
+    await expect(page).toHaveURL(/\/$/);
+
+    const answers = await page.evaluate(async () => {
+      const post = async (path: string, body: unknown) =>
+        (
+          await fetch(path, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(body),
+          })
+        ).status;
+      return {
+        listSessions: (await fetch("/api/auth/list-sessions")).status,
+        revokeSession: await post("/api/auth/revoke-session", { token: "x" }),
+        revokeSessions: await post("/api/auth/revoke-sessions", {}),
+        revokeOtherSessions: await post("/api/auth/revoke-other-sessions", {}),
+        getSession: (await fetch("/api/auth/get-session")).status,
+      };
+    });
+    expect(answers).toEqual({
+      listSessions: 404,
+      revokeSession: 404,
+      revokeSessions: 404,
+      revokeOtherSessions: 404,
+      getSession: 200,
+    });
+    await page.reload();
+    await expect(
+      page.getByRole("status", { name: "デモアカウント" }),
+    ).toContainText("デモアカウントです。");
+  },
+);

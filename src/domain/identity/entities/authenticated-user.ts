@@ -1,29 +1,20 @@
-export type AppRole = "admin" | "member" | "guest" | "revoked";
+export type AppRole = "admin" | "member" | "guest";
 
-// The member an admin acts as. githubId is then the member's ownerId, so
-// records are read and written as theirs; role stays "admin".
-export type ActingAs = {
-  ownerId: string;
-  loginId: string;
-  displayName: string;
-};
-
+// The signed-in person, decided from their Better Auth session on every
+// request. userId (Better Auth's user.id) owns their records.
 export type AuthenticatedUser = {
-  githubLogin: string;
-  githubId?: string;
+  userId: string;
   role: AppRole;
-  displayName?: string;
-  accountId?: string;
-  actingAs?: ActingAs;
-  // While an admin acts as a member: the admin's own GitHub ID, the person
-  // who is actually operating (AI usage is recorded under it).
-  actorId?: string;
-  // The admin asked to act as a member but the target is malformed or no
-  // longer exists: githubId is the admin's own.
-  actAsIgnored?: boolean;
+  displayName: string;
+  // The login id of a member who signs in with a password (none for a
+  // Sparklingstadt ID member or a guest).
+  username?: string;
   // The demo account (a member): its data is shared by everyone trying the
   // demo, and the AI features, LINE, follows and password are closed to it.
   demo?: boolean;
+  // While an admin impersonates this member: the admin's own user id. The
+  // user is then the member in every way (role included).
+  impersonatedBy?: string;
 };
 
 export function isMemberRole(role: AppRole) {

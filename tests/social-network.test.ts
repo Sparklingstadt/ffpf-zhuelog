@@ -12,39 +12,41 @@ import type {
 } from "../src/domain/social/follow";
 
 const member: AuthenticatedUser = {
-  githubLogin: "taro",
-  githubId: "password:abc",
+  userId: "abc",
   role: "member",
-  accountId: "abc",
+  displayName: "taro",
+  username: "taro",
 };
-const actingAdmin: AuthenticatedUser = {
-  githubLogin: "octocat",
-  githubId: "password:abc",
-  role: "admin",
-  actingAs: { ownerId: "password:abc", loginId: "taro", displayName: "太郎" },
-  actorId: "10001",
+const impersonated: AuthenticatedUser = {
+  userId: "abc",
+  role: "member",
+  displayName: "太郎",
+  username: "taro",
+  impersonatedBy: "10001",
 };
 const admin: AuthenticatedUser = {
-  githubLogin: "octocat",
-  githubId: "10001",
+  userId: "10001",
   role: "admin",
+  displayName: "octocat",
 };
 const demo: AuthenticatedUser = {
-  githubLogin: "demo",
-  githubId: "demo:1",
+  userId: "demo1",
   role: "member",
+  displayName: "demo",
   demo: true,
 };
-const guest: AuthenticatedUser = { githubLogin: "g", role: "guest" };
-const revoked: AuthenticatedUser = { ...member, role: "revoked" };
-const noGithubId: AuthenticatedUser = { githubLogin: "x", role: "member" };
+const guest: AuthenticatedUser = {
+  userId: "g1",
+  role: "guest",
+  displayName: "g",
+};
 
 const now = new Date("2026-11-17T03:00:00.000Z");
 
 const directory: FollowDirectory = {
   members: [
     {
-      ownerId: "password:def",
+      ownerId: "def",
       displayName: "花子",
       following: true,
       followsMe: false,
@@ -57,7 +59,7 @@ const timeline: FollowTimelineItem[] = [
   {
     entry: {
       id: "note1",
-      ownerId: "password:def",
+      ownerId: "def",
       kind: "correction",
       originalText: "我吃了饭。",
       correctedText: "我吃饭了。",
@@ -111,16 +113,16 @@ test("the follows are the signed-in user's", async () => {
   assert.equal(await social.listMembers(), directory);
   assert.equal(await social.listTimeline(), timeline);
   assert.deepEqual(calls, [
-    { method: "members", args: ["password:abc"] },
-    { method: "timeline", args: ["password:abc", 100] },
+    { method: "members", args: ["abc"] },
+    { method: "timeline", args: ["abc", 100] },
   ]);
 
-  const acting = network(actingAdmin);
+  const acting = network(impersonated);
   await acting.social.listMembers();
   await acting.social.listTimeline();
   assert.deepEqual(acting.calls, [
-    { method: "members", args: ["password:abc"] },
-    { method: "timeline", args: ["password:abc", 100] },
+    { method: "members", args: ["abc"] },
+    { method: "timeline", args: ["abc", 100] },
   ]);
 
   const own = network(admin);
@@ -133,12 +135,12 @@ test("the follows are the signed-in user's", async () => {
 });
 
 test("the demo, guests and the signed out have no follows", async () => {
-  for (const user of [demo, guest, null, revoked, noGithubId]) {
+  for (const user of [demo, guest, null]) {
     const { calls, social } = network(user);
     await assert.rejects(social.listMembers(), SocialForbiddenError);
     await assert.rejects(social.listTimeline(), SocialForbiddenError);
-    await assert.rejects(social.follow("password:def"), SocialForbiddenError);
-    await assert.rejects(social.unfollow("password:def"), SocialForbiddenError);
+    await assert.rejects(social.follow("def"), SocialForbiddenError);
+    await assert.rejects(social.unfollow("def"), SocialForbiddenError);
     assert.deepEqual(calls, []);
   }
 
@@ -152,41 +154,41 @@ test("the demo, guests and the signed out have no follows", async () => {
 test("follow checks the id, then self, then the member", async () => {
   const checked = network(member);
   assert.equal(await checked.social.follow("github:1"), "not-found");
-  assert.equal(await checked.social.follow("password:abc"), "self");
+  assert.equal(await checked.social.follow("abc"), "self");
   assert.deepEqual(checked.calls, []);
 
   const missing = network(member, false);
-  assert.equal(await missing.social.follow("password:def"), "not-found");
+  assert.equal(await missing.social.follow("def"), "not-found");
   assert.deepEqual(missing.calls, [
-    { method: "follow", args: ["password:abc", "password:def", now] },
+    { method: "follow", args: ["abc", "def", now] },
   ]);
 
   const found = network(member, true);
-  assert.equal(await found.social.follow("password:def"), "followed");
+  assert.equal(await found.social.follow("def"), "followed");
   assert.deepEqual(found.calls, [
-    { method: "follow", args: ["password:abc", "password:def", now] },
+    { method: "follow", args: ["abc", "def", now] },
   ]);
 
-  const acting = network(actingAdmin);
-  assert.equal(await acting.social.follow("password:def"), "followed");
+  const acting = network(impersonated);
+  assert.equal(await acting.social.follow("def"), "followed");
   assert.deepEqual(acting.calls, [
-    { method: "follow", args: ["password:abc", "password:def", now] },
+    { method: "follow", args: ["abc", "def", now] },
   ]);
 
   const own = network(admin);
-  assert.equal(await own.social.follow("password:abc"), "followed");
+  assert.equal(await own.social.follow("abc"), "followed");
   assert.deepEqual(own.calls, [
-    { method: "follow", args: ["10001", "password:abc", now] },
+    { method: "follow", args: ["10001", "abc", now] },
   ]);
 });
 
 test("unfollow removes only the signed-in user's follow", async () => {
   const { calls, social } = network(member);
-  await social.unfollow("password:def");
+  await social.unfollow("def");
   await social.unfollow("github:1");
-  await social.unfollow("password:abc");
+  await social.unfollow("abc");
   assert.deepEqual(calls, [
-    { method: "unfollow", args: ["password:abc", "password:def"] },
-    { method: "unfollow", args: ["password:abc", "password:abc"] },
+    { method: "unfollow", args: ["abc", "def"] },
+    { method: "unfollow", args: ["abc", "abc"] },
   ]);
 });

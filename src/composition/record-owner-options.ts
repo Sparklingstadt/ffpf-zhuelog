@@ -9,12 +9,15 @@ export type RecordOwnerOption = {
   displayName: string;
 };
 
-// Members an admin can pick as the viewed owner: "表示名（ログインID）".
+// Members an admin can pick as the viewed owner, by user id: "表示名（ログイ
+// ンID）", or the name alone for a Sparklingstadt ID member.
 export async function listRecordOwnerOptions(): Promise<RecordOwnerOption[]> {
   const accounts = await memberAccounts.list();
   return accounts.map((account) => ({
-    ownerId: account.ownerId,
-    label: `${account.displayName}（${account.loginId}）`,
+    ownerId: account.id,
+    label: account.loginId
+      ? `${account.displayName}（${account.loginId}）`
+      : account.displayName,
     displayName: account.displayName,
   }));
 }

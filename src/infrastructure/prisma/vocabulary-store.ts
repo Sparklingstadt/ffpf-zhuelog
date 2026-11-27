@@ -17,10 +17,10 @@ const LIST_LIMIT = 1000;
 // (null when there is none).
 export function decideSave(
   existingOwnerId: string | null,
-  ownerId: string,
+  userId: string,
 ): "create" | "update" | "not-found" {
   if (existingOwnerId === null) return "create";
-  return existingOwnerId === ownerId ? "update" : "not-found";
+  return existingOwnerId === userId ? "update" : "not-found";
 }
 
 // Which unique constraint a Prisma P2002 error broke: the owner's word, the
@@ -86,22 +86,22 @@ export function createVocabularyStore(
   now: () => Date = () => new Date(),
 ) {
   async function saveOnce(
-    ownerId: string,
+    userId: string,
     input: VocabularyInput,
     at: Date,
   ): Promise<VocabularyEntry> {
     const row = await db().$transaction(async (tx) => {
       const existing = await tx.vocabularyEntry.findUnique({
         where: { id: input.id },
-        select: { ownerId: true },
+        select: { userId: true },
       });
-      const decision = decideSave(existing?.ownerId ?? null, ownerId);
+      const decision = decideSave(existing?.userId ?? null, userId);
       if (decision === "not-found") throw new VocabularyNotFoundError();
       if (decision === "update") {
         // Scoped by owner: the row may have been deleted or recreated
         // by someone else since the check above.
         const { count } = await tx.vocabularyEntry.updateMany({
-          where: { id: input.id, ownerId },
+          where: { id: input.id, userId },
           data: {
             pinyin: input.pinyin,
             meaning: input.meaning,
@@ -116,7 +116,7 @@ export function createVocabularyStore(
       const created = await tx.vocabularyEntry.create({
         data: {
           id: input.id,
-          ownerId,
+          userId,
           language: LANGUAGE,
           word: input.word,
           pinyin: input.pinyin,
@@ -130,7 +130,7 @@ export function createVocabularyStore(
         data: [
           {
             id: newId(),
-            ownerId,
+            userId,
             language: LANGUAGE,
             kind: REVIEW_KIND,
             targetId: created.id,
@@ -149,17 +149,17 @@ export function createVocabularyStore(
 
   return {
     // Newest first, with when each word's review card is next due.
-    async list(ownerId: string): Promise<VocabularyEntry[]> {
+    async list(userId: string): Promise<VocabularyEntry[]> {
       const client = db();
       const rows = await client.vocabularyEntry.findMany({
-        where: { ownerId },
+        where: { userId },
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         take: LIST_LIMIT,
       });
       if (rows.length === 0) return [];
       const cards = await client.reviewItem.findMany({
         where: {
-          ownerId,
+          userId,
           language: LANGUAGE,
           kind: REVIEW_KIND,
           targetId: { in: rows.map((row) => row.id) },
@@ -173,7 +173,7 @@ export function createVocabularyStore(
     // Adds the word (and queues its card, due now) or, when the id is the
     // owner's, edits only its reading and meaning.
     async save(
-      ownerId: string,
+      userId: string,
       input: VocabularyInput,
     ): Promise<VocabularyEntry> {
       const at = now();
@@ -182,7 +182,7 @@ export function createVocabularyStore(
       // the owner's), so a client retry applies once.
       for (let attempt = 0; ; attempt += 1) {
         try {
-          return await saveOnce(ownerId, input, at);
+          return await saveOnce(userId, input, at);
         } catch (error) {
           const kind = uniqueViolationOn(error);
           if (kind === "id" && attempt === 0) continue;
@@ -194,14 +194,14 @@ export function createVocabularyStore(
 
     // Deletes the word and its review card; the card's log goes with it
     // through the schema's cascade.
-    async remove(ownerId: string, id: string): Promise<void> {
+    async remove(userId: string, id: string): Promise<void> {
       await db().$transaction(async (tx) => {
         const { count } = await tx.vocabularyEntry.deleteMany({
-          where: { id, ownerId },
+          where: { id, userId },
         });
         if (count === 0) throw new VocabularyNotFoundError();
         await tx.reviewItem.deleteMany({
-          where: { ownerId, kind: REVIEW_KIND, targetId: id },
+          where: { userId, kind: REVIEW_KIND, targetId: id },
         });
       });
     },

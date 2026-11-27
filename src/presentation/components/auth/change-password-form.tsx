@@ -1,12 +1,16 @@
 "use client";
 
-import { useActionState } from "react";
+import { useState, type FormEvent } from "react";
 import { KeyRound, LoaderCircle } from "lucide-react";
 
 import {
-  changeOwnPasswordAction,
-  type ChangePasswordState,
-} from "@/presentation/actions/password-account-actions";
+  changePasswordFailure,
+  checkNewPassword,
+  type ChangePasswordFailure,
+} from "@/application/identity/own-password";
+import { signOutAfterPasswordChangeAction } from "@/presentation/actions/password-account-actions";
+import { authClient } from "@/presentation/lib/auth-client";
+import { changePasswordMessage } from "@/presentation/presenters/account-action-errors";
 import {
   Alert,
   AlertDescription,
@@ -16,16 +20,55 @@ import { Button } from "@/presentation/components/ui/button";
 import { Input } from "@/presentation/components/ui/input";
 import { Label } from "@/presentation/components/ui/label";
 
-const initialState: ChangePasswordState = { status: "idle" };
+function text(form: FormData, name: string) {
+  const value = form.get(name);
+  return typeof value === "string" ? value : "";
+}
 
+// The change goes from the browser to Better Auth's /change-password, so its
+// rate limit counts every attempt. It ends every other session of the
+// member; this one is then signed out too, and the member signs in again with
+// the new password.
 export function ChangePasswordForm() {
-  const [state, formAction, pending] = useActionState(
-    changeOwnPasswordAction,
-    initialState,
-  );
+  const [pending, setPending] = useState(false);
+  const [failure, setFailure] = useState<ChangePasswordFailure | null>(null);
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const currentPassword = text(form, "currentPassword");
+    const newPassword = text(form, "newPassword");
+    const refused = checkNewPassword({
+      newPassword,
+      confirmPassword: text(form, "confirmPassword"),
+    });
+    if (refused) {
+      setFailure(refused);
+      return;
+    }
+    setPending(true);
+    let outcome: ChangePasswordFailure | null;
+    try {
+      const { error } = await authClient.changePassword({
+        currentPassword,
+        newPassword,
+        revokeOtherSessions: true,
+      });
+      outcome = error ? changePasswordFailure(error) : null;
+    } catch {
+      outcome = "error";
+    }
+    if (outcome) {
+      setFailure(outcome);
+      setPending(false);
+      return;
+    }
+    // Goes to /signin?notice=password-changed.
+    await signOutAfterPasswordChangeAction();
+  }
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form onSubmit={onSubmit} className="space-y-5">
       <div className="space-y-2">
         <Label htmlFor="current-password">現在のパスワード</Label>
         <Input
@@ -64,10 +107,10 @@ export function ChangePasswordForm() {
         {pending ? <LoaderCircle className="animate-spin" /> : <KeyRound />}
         {pending ? "変更中…" : "パスワードを変更"}
       </Button>
-      {state.status === "error" ? (
+      {failure ? (
         <Alert variant="destructive">
           <AlertTitle>変更できませんでした</AlertTitle>
-          <AlertDescription>{state.message}</AlertDescription>
+          <AlertDescription>{changePasswordMessage(failure)}</AlertDescription>
         </Alert>
       ) : null}
     </form>

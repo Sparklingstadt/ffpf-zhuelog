@@ -4,7 +4,7 @@ import { normalizeLineOfficialAccountId } from "@/domain/line/official-account";
 
 // Secrets travel to these URLs (the Sparklingstadt ID issuer), so they must be HTTPS
 // unless they are this machine (local development and e2e).
-export function isHttpsOrLoopbackUrl(raw: string): boolean {
+function isHttpsOrLoopbackUrl(raw: string): boolean {
   let url: URL;
   try {
     url = new URL(raw);
@@ -33,17 +33,40 @@ export function sidConfig():
   return { issuer, clientId, clientSecret };
 }
 
-// The web's GitHub OAuth App for the code exchange: AUTH_GITHUB_ID (the id
-// the authorize URL also uses) and GITHUB_WEB_CLIENT_SECRET. Both trimmed of
-// Unicode White_Space and non-empty, else undefined.
-export function githubOAuthConfig():
-  { clientId: string; clientSecret: string } | undefined {
-  const clientId = trimWhiteSpace(process.env.AUTH_GITHUB_ID ?? "");
-  const clientSecret = trimWhiteSpace(
-    process.env.GITHUB_WEB_CLIENT_SECRET ?? "",
-  );
-  if (!clientId || !clientSecret) return undefined;
-  return { clientId, clientSecret };
+// sidConfig in the form the Better Auth configuration takes: null when
+// Sparklingstadt ID is not configured, and the "sid" provider is then left out.
+export function sidOAuthConfig(): {
+  issuer: string;
+  clientId: string;
+  clientSecret: string;
+} | null {
+  return sidConfig() ?? null;
+}
+
+// Better Auth's secret (BETTER_AUTH_SECRET, trimmed of Unicode White_Space).
+// Required: it signs the session cookies, so throws when unset or blank.
+export function betterAuthSecret(): string {
+  const secret = trimWhiteSpace(process.env.BETTER_AUTH_SECRET ?? "");
+  if (!secret) throw new Error("BETTER_AUTH_SECRET is not set");
+  return secret;
+}
+
+// The demo account's password (DEMO_PASSWORD, trimmed of Unicode
+// White_Space): the demo button signs in with it and the demo reset sets it
+// again. Undefined when blank, and there is then no demo.
+export function demoPassword(): string | undefined {
+  const password = trimWhiteSpace(process.env.DEMO_PASSWORD ?? "");
+  return password ? password : undefined;
+}
+
+// The demo account: DEMO_LOGIN_ID and DEMO_PASSWORD. Undefined unless both
+// are set; there is then no demo (no demo button, and /api/cron/demo-reset
+// answers 404).
+export function demoConfig():
+  { loginId: string; password: string } | undefined {
+  const loginId = demoLoginId();
+  const password = demoPassword();
+  return loginId && password ? { loginId, password } : undefined;
 }
 
 // Link to add the LINE official account as a friend. It is shown as a link
@@ -78,17 +101,6 @@ export function siteUrl(): string {
   const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
   if (vercel) return `https://${vercel}`;
   return "http://localhost:3000";
-}
-
-// GitHub account ids allowed to act as administrator: comma separated,
-// trimmed of Unicode White_Space, digits only. Empty means no administrator
-// gets through.
-export function allowedGitHubIds(): ReadonlySet<string> {
-  const ids = (process.env.AUTH_ALLOWED_GITHUB_IDS ?? "")
-    .split(",")
-    .map((id) => trimWhiteSpace(id))
-    .filter((id) => /^[0-9]+$/.test(id));
-  return new Set(ids);
 }
 
 let demoLoginIdReported = false;

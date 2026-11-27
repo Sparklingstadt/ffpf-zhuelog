@@ -23,7 +23,7 @@ function csvForm(user?: string) {
 
 function dependencies(overrides: Partial<Dependencies> = {}): Dependencies {
   return {
-    getMember: async () => ({ githubId: "219588180" }),
+    getMember: async () => ({ userId: "219588180" }),
     importCsv: async () => ({ ok: true, count: 1 }),
     ...overrides,
   };
@@ -83,11 +83,6 @@ test("CSV import checks the session and the file before importing", async () => 
       csvForm(),
       async () => null,
       "この操作を行う権限がありません。再度ログインしてください。",
-    ],
-    [
-      csvForm(),
-      async () => ({}),
-      "一度ログアウトしてログインし直してください。",
     ],
     [fileless, undefined, "CSVファイルを選択してください。"],
     [textInstead, undefined, "CSVファイルを選択してください。"],

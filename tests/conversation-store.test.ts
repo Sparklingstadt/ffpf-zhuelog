@@ -33,14 +33,14 @@ test("saveConversationSql updates only the owner's row and keeps createdAt", () 
   const text = sql.sql.replace(/\s+/g, " ");
   assert.ok(
     text.includes(
-      'INSERT INTO "ChatConversation" ("id", "ownerId", "title", "modelName", "ended", "messages", "createdAt", "updatedAt")',
+      'INSERT INTO "ChatConversation" ("id", "userId", "title", "modelName", "ended", "messages", "createdAt", "updatedAt")',
     ),
     text,
   );
   assert.ok(text.includes("::jsonb"), text);
   assert.ok(
     text.includes(
-      'ON CONFLICT ("id") DO UPDATE SET "title" = EXCLUDED."title", "modelName" = EXCLUDED."modelName", "ended" = EXCLUDED."ended", "messages" = EXCLUDED."messages", "updatedAt" = EXCLUDED."updatedAt" WHERE "ChatConversation"."ownerId" = EXCLUDED."ownerId"',
+      'ON CONFLICT ("id") DO UPDATE SET "title" = EXCLUDED."title", "modelName" = EXCLUDED."modelName", "ended" = EXCLUDED."ended", "messages" = EXCLUDED."messages", "updatedAt" = EXCLUDED."updatedAt" WHERE "ChatConversation"."userId" = EXCLUDED."userId"',
     ),
     text,
   );

@@ -10,7 +10,7 @@ function passThrough(request: NextRequest) {
   if (pathname.startsWith("/api/") || isMetadataFile(pathname))
     return NextResponse.next();
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
-  // The Sparklingstadt ID sign-in form redirects to the issuer.
+  // The sign-out form redirects to the Sparklingstadt ID issuer's logout.
   const sid = sidConfig();
   const csp = contentSecurityPolicy(
     nonce,
@@ -28,8 +28,8 @@ function passThrough(request: NextRequest) {
 }
 
 // Must sit alongside src/app; a root-level proxy is ignored for this layout.
-// Only checks that zl_session exists; pages, actions and route handlers check
-// the session itself (getCachedCurrentUser).
+// Only checks that a Better Auth session cookie exists; pages, actions and
+// route handlers check the session itself (getCachedCurrentUser).
 export function proxy(request: NextRequest) {
   return sessionGate(request, passThrough);
 }

@@ -1,28 +1,18 @@
+import { headers } from "next/headers";
 import { cache } from "react";
 
 import type { AuthenticatedUser } from "@/domain/identity/entities/authenticated-user";
-import {
-  readActAsCookie,
-  readSessionToken,
-} from "@/infrastructure/auth/web-session";
-import {
-  allowedGitHubIds,
-  demoLoginId,
-} from "@/infrastructure/config/environment";
-import { SessionCurrentUserProvider } from "@/infrastructure/identity/session-current-user-provider";
-import { prismaIdentityAccounts } from "@/infrastructure/prisma/identity-accounts";
-import { sessionStore } from "./sign-in-container";
+import { auth } from "@/infrastructure/auth/better-auth";
+import { demoLoginId } from "@/infrastructure/config/environment";
+import { BetterAuthCurrentUserProvider } from "@/infrastructure/identity/better-auth-current-user-provider";
 
-// The allowlist (AUTH_ALLOWED_GITHUB_IDS) and the demo login id are read
-// once, when this module loads: a change to them needs a redeploy (Vercel
-// needs one for any env change anyway). Everything else (the Session row,
-// sessionVersion, zl_act_as) is checked on every request.
-const provider = new SessionCurrentUserProvider(
-  readSessionToken,
-  readActAsCookie,
-  (token) => sessionStore.find(token, new Date()),
-  prismaIdentityAccounts,
-  { allowedGitHubIds: allowedGitHubIds(), demoLoginId: demoLoginId() },
+// The demo login id is read once, when this module loads: a change to it
+// needs a redeploy (Vercel needs one for any env change anyway). The session
+// (its expiry, the user's role, ban and impersonation) is checked on every
+// request.
+const provider = new BetterAuthCurrentUserProvider(
+  async () => auth.api.getSession({ headers: await headers() }),
+  demoLoginId(),
 );
 
 // The signed-in user, resolved at most once per request however many guards

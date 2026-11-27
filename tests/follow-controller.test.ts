@@ -45,11 +45,8 @@ function recorder<T>(result: T | Error) {
   };
 }
 
-const admin = async () => ({ githubId: "219588180", role: "admin" as const });
-const member = async () => ({
-  githubId: "password:ckm",
-  role: "member" as const,
-});
+const admin = async () => ({ userId: "219588180", role: "admin" as const });
+const member = async () => ({ userId: "ckm", role: "member" as const });
 
 // The error Next's redirect() throws.
 function nextRedirect(): Error {
@@ -67,32 +64,32 @@ function silenceConsoleError(t: TestContext) {
 test("follow uses the signed-in follower, never one from the form", async () => {
   const { calls, run } = recorder<FollowResult>("followed");
   const state = await handleFollow(
-    form({ followeeId: "password:ckb1", followerId: "password:evil" }),
+    form({ followeeId: "ckb1", followerId: "evil" }),
     { getMember: admin, run },
   );
   assert.deepEqual(state, success);
-  assert.deepEqual(calls, [["219588180", "password:ckb1"]]);
+  assert.deepEqual(calls, [["219588180", "ckb1"]]);
 });
 
-test("follow and unfollow accept a Sparklingstadt ID member", async () => {
+test("follow and unfollow pass the user ids on", async () => {
   const followed = recorder<FollowResult>("followed");
   assert.deepEqual(
-    await handleFollow(form({ followeeId: "sid:cabc" }), {
+    await handleFollow(form({ followeeId: "cabc" }), {
       getMember: member,
       run: followed.run,
     }),
     success,
   );
-  assert.deepEqual(followed.calls, [["password:ckm", "sid:cabc"]]);
+  assert.deepEqual(followed.calls, [["ckm", "cabc"]]);
   const unfollowed = recorder<void>(undefined);
   assert.deepEqual(
-    await handleUnfollow(form({ followeeId: "sid:cabc" }), {
-      getMember: async () => ({ githubId: "sid:cme", role: "member" }),
+    await handleUnfollow(form({ followeeId: "cabc" }), {
+      getMember: async () => ({ userId: "cme", role: "member" }),
       run: unfollowed.run,
     }),
     success,
   );
-  assert.deepEqual(unfollowed.calls, [["sid:cme", "sid:cabc"]]);
+  assert.deepEqual(unfollowed.calls, [["cme", "cabc"]]);
 });
 
 test("follow maps self and not-found to their messages", async () => {
@@ -102,7 +99,7 @@ test("follow maps self and not-found to their messages", async () => {
   ] as const) {
     const { run } = recorder<FollowResult>(result);
     assert.deepEqual(
-      await handleFollow(form({ followeeId: "password:ckb1" }), {
+      await handleFollow(form({ followeeId: "ckb1" }), {
         getMember: member,
         run,
       }),
@@ -113,13 +110,12 @@ test("follow maps self and not-found to their messages", async () => {
 
 test("follow rejects a malformed followee without calling run", async () => {
   for (const followeeId of [
-    "219588180",
-    "password:../x",
-    "password:",
+    "password:ckb1",
+    "sid:cabc",
+    "../x",
     "",
-    "sid:",
-    "sid:ABC",
-    "gitlab:1",
+    "a b",
+    "a".repeat(65),
   ]) {
     const { calls, run } = recorder<FollowResult>("followed");
     assert.deepEqual(
@@ -138,13 +134,10 @@ test("follow rejects a malformed followee without calling run", async () => {
 });
 
 test("follow and share without a session ask to sign in again", async () => {
-  for (const getMember of [
-    async () => null,
-    async () => ({ role: "member" as const }),
-  ]) {
+  for (const getMember of [async () => null]) {
     const follow = recorder<FollowResult>("followed");
     assert.deepEqual(
-      await handleFollow(form({ followeeId: "password:ckb1" }), {
+      await handleFollow(form({ followeeId: "ckb1" }), {
         getMember,
         run: follow.run,
       }),
@@ -154,7 +147,7 @@ test("follow and share without a session ask to sign in again", async () => {
 
     const unfollow = recorder<void>(undefined);
     assert.deepEqual(
-      await handleUnfollow(form({ followeeId: "password:ckb1" }), {
+      await handleUnfollow(form({ followeeId: "ckb1" }), {
         getMember,
         run: unfollow.run,
       }),
@@ -178,7 +171,7 @@ test("a failing follow logs only FOLLOW_FAILED and the error's name", async (t) 
   const logged = silenceConsoleError(t);
   const { run } = recorder<FollowResult>(new Error("down"));
   assert.deepEqual(
-    await handleFollow(form({ followeeId: "password:ckb1" }), {
+    await handleFollow(form({ followeeId: "ckb1" }), {
       getMember: member,
       run,
     }),
@@ -192,7 +185,7 @@ test("a failing unfollow logs only FOLLOW_FAILED and the error's name", async (t
   const logged = silenceConsoleError(t);
   const { run } = recorder<void>(new Error("down"));
   assert.deepEqual(
-    await handleUnfollow(form({ followeeId: "password:ckb1" }), {
+    await handleUnfollow(form({ followeeId: "ckb1" }), {
       getMember: member,
       run,
     }),
@@ -204,14 +197,14 @@ test("a failing unfollow logs only FOLLOW_FAILED and the error's name", async (t
 test("follow and unfollow treat SocialForbiddenError as not allowed and let Next's redirect through", async () => {
   const forbidden = new SocialForbiddenError();
   assert.deepEqual(
-    await handleFollow(form({ followeeId: "password:ckb1" }), {
+    await handleFollow(form({ followeeId: "ckb1" }), {
       getMember: member,
       run: recorder<FollowResult>(forbidden).run,
     }),
     unauthorized,
   );
   assert.deepEqual(
-    await handleUnfollow(form({ followeeId: "password:ckb1" }), {
+    await handleUnfollow(form({ followeeId: "ckb1" }), {
       getMember: member,
       run: recorder<void>(forbidden).run,
     }),
@@ -220,14 +213,14 @@ test("follow and unfollow treat SocialForbiddenError as not allowed and let Next
 
   const thrown = nextRedirect();
   await assert.rejects(
-    handleFollow(form({ followeeId: "password:ckb1" }), {
+    handleFollow(form({ followeeId: "ckb1" }), {
       getMember: member,
       run: recorder<FollowResult>(thrown).run,
     }),
     (error) => error === thrown,
   );
   await assert.rejects(
-    handleUnfollow(form({ followeeId: "password:ckb1" }), {
+    handleUnfollow(form({ followeeId: "ckb1" }), {
       getMember: member,
       run: recorder<void>(thrown).run,
     }),
@@ -238,13 +231,13 @@ test("follow and unfollow treat SocialForbiddenError as not allowed and let Next
 test("unfollow uses the signed-in follower, never one from the form", async () => {
   const { calls, run } = recorder<void>(undefined);
   assert.deepEqual(
-    await handleUnfollow(
-      form({ followeeId: "password:ckb1", followerId: "password:evil" }),
-      { getMember: admin, run },
-    ),
+    await handleUnfollow(form({ followeeId: "ckb1", followerId: "evil" }), {
+      getMember: admin,
+      run,
+    }),
     success,
   );
-  assert.deepEqual(calls, [["219588180", "password:ckb1"]]);
+  assert.deepEqual(calls, [["219588180", "ckb1"]]);
 });
 
 test("unfollow treats a malformed followee as not found", async () => {
@@ -263,7 +256,7 @@ test("share passes only the id and flag; admins are refused", async () => {
   const on = recorder(true);
   assert.deepEqual(
     await handleShare(
-      form({ id: "cmabc123", shared: "true", ownerId: "password:evil" }),
+      form({ id: "cmabc123", shared: "true", ownerId: "evil" }),
       { getMember: member, run: on.run },
     ),
     success,
@@ -361,7 +354,7 @@ test("follow and unfollow treat SocialForbiddenError as not allowed", async (t) 
   const errors = silenceConsoleError(t);
   const following = recorder<FollowResult>(new SocialForbiddenError());
   assert.deepEqual(
-    await handleFollow(form({ followeeId: "password:def" }), {
+    await handleFollow(form({ followeeId: "def" }), {
       getMember: member,
       run: following.run,
     }),
@@ -369,7 +362,7 @@ test("follow and unfollow treat SocialForbiddenError as not allowed", async (t) 
   );
   const unfollowing = recorder<void>(new SocialForbiddenError());
   assert.deepEqual(
-    await handleUnfollow(form({ followeeId: "password:def" }), {
+    await handleUnfollow(form({ followeeId: "def" }), {
       getMember: member,
       run: unfollowing.run,
     }),

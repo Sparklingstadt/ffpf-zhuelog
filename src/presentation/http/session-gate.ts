@@ -1,17 +1,19 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { SESSION_COOKIE } from "@/infrastructure/auth/session-cookies";
+import { hasSessionCookie } from "@/infrastructure/auth/session-cookie";
 
-// The proxy's gate: passes public routes and any request carrying zl_session;
-// it never reads the database (the pages check the session itself through
-// getCachedCurrentUser). It never writes cookies either, and forwards the
-// request untouched. Must stay free of next/headers and server-only modules.
+// The proxy's gate: passes public routes and any request carrying a Better
+// Auth session cookie; it never reads the database (the pages check the
+// session itself through getCachedCurrentUser). It never writes cookies
+// either, and forwards the request untouched. It imports no next/headers and
+// nothing that reads the database or the Better Auth server: only the cookie
+// reader of better-auth/cookies (through infrastructure/auth/session-cookie).
 export function sessionGate(
   request: NextRequest,
   next: (request: NextRequest) => NextResponse,
 ): NextResponse {
   const pathname = request.nextUrl.pathname;
-  if (isPublicRoute(pathname) || request.cookies.get(SESSION_COOKIE)?.value)
+  if (isPublicRoute(pathname) || hasSessionCookie(request))
     return next(request);
   if (pathname.startsWith("/api/")) {
     return NextResponse.json(

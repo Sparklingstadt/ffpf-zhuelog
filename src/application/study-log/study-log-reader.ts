@@ -4,8 +4,7 @@ import {
 } from "../../domain/identity/entities/authenticated-user";
 import { studyLogRange, type StudyDay } from "../../domain/study-log/study-log";
 
-// The signed-in user has no study log: signed out, a guest, revoked or
-// without an owner id.
+// The signed-in user has no study log: signed out or a guest.
 export class StudyLogForbiddenError extends Error {
   override name = "StudyLogForbiddenError";
 }
@@ -27,11 +26,10 @@ export function createStudyLogReader(deps: StudyLogReaderDeps) {
     // oldest first. RangeError when the range is not valid (studyLogRange).
     async list(from: string, to: string): Promise<StudyDay[]> {
       const user = await deps.currentUser();
-      if (!user || !isMemberRole(user.role) || !user.githubId)
-        throw new StudyLogForbiddenError();
+      if (!user || !isMemberRole(user.role)) throw new StudyLogForbiddenError();
       const range = studyLogRange(from, to);
       if (!range) throw new RangeError("not a study log range");
-      return deps.store.days(user.githubId, range.start, range.end);
+      return deps.store.days(user.userId, range.start, range.end);
     },
   };
 }

@@ -4,9 +4,9 @@ import { test } from "node:test";
 import { reviewItemsToDelete } from "../src/infrastructure/prisma/learning-note-writes";
 
 test("reviewItemsToDelete targets only the owner's entry review items", () => {
-  const where = reviewItemsToDelete("password:a", ["x", "y"]);
+  const where = reviewItemsToDelete("u-a", ["x", "y"]);
   assert.deepEqual(where, {
-    ownerId: "password:a",
+    userId: "u-a",
     kind: "entry",
     targetId: { in: ["x", "y"] },
   });

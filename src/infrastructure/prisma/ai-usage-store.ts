@@ -1,18 +1,19 @@
 import { Prisma, type PrismaClient } from "../../generated/prisma/client";
 import type { AiUsageTotal } from "../../domain/ai-usage/monthly-usage";
 import type { OpenAiUsage } from "../../domain/vocabulary/vocabulary-entry";
+import { IS_MEMBER_USER } from "./member-users";
 import { newId } from "./new-id";
 
 // Records one OpenAI call at `now`.
 export async function recordAiUsage(
   db: () => PrismaClient,
-  entry: OpenAiUsage & { ownerId: string; feature: string },
+  entry: OpenAiUsage & { userId: string; feature: string },
   now: Date = new Date(),
 ): Promise<void> {
   await db().aiUsage.create({
     data: {
       id: newId(),
-      ownerId: entry.ownerId,
+      userId: entry.userId,
       feature: entry.feature,
       model: entry.model,
       inputTokens: entry.inputTokens,
@@ -22,34 +23,29 @@ export async function recordAiUsage(
   });
 }
 
-// Pure: the month's usage as one raw query. Prisma's query API cannot join
-// the usage to the two member account tables (there is no relation) nor
-// order people by a window sum, and sorting in JS could disagree with the
-// database's collation. Every owner's calls in [from, to) by owner, feature
-// and model, with the member's name ("" for an admin or a deleted account);
-// the owners with the most tokens (input + output) in the range first, ties
-// by ownerId, then each owner's rows by feature and model. The member
-// prefixes are written in the SQL, not bound.
+// Pure: the month's usage as one raw query. Prisma's query API cannot order
+// people by a window sum, and sorting in JS could disagree with the
+// database's collation. Every user's calls in [from, to) by user, feature
+// and model, with the member's name ("" for an admin or a guest); the users
+// with the most tokens (input + output) in the range first, ties by userId,
+// then each user's rows by feature and model.
 export function aiUsageMonthSql(from: Date, to: Date): Prisma.Sql {
-  return Prisma.sql`SELECT u."ownerId" AS "ownerId",
-    coalesce(m."displayName", '') AS "displayName",
-    u."feature" AS "feature", u."model" AS "model",
-    count(*) AS "requests", sum(u."inputTokens") AS "inputTokens",
-    sum(u."outputTokens") AS "outputTokens"
-  FROM "AiUsage" u
-  LEFT JOIN (SELECT 'password:' || p."id" AS "ownerId", p."displayName" FROM "PasswordAccount" p
-             UNION ALL
-             SELECT 'sid:' || f."id", f."displayName" FROM "SidAccount" f) m
-         ON m."ownerId" = u."ownerId"
-  WHERE u."createdAt" >= ${from} AND u."createdAt" < ${to}
-  GROUP BY u."ownerId", m."displayName", u."feature", u."model"
-  ORDER BY sum(sum(u."inputTokens" + u."outputTokens")) OVER (PARTITION BY u."ownerId") DESC,
-    u."ownerId", u."feature", u."model"`;
+  return Prisma.sql`SELECT a."userId" AS "userId",
+    CASE WHEN ${IS_MEMBER_USER} THEN u."name" ELSE '' END AS "displayName",
+    a."feature" AS "feature", a."model" AS "model",
+    count(*) AS "requests", sum(a."inputTokens") AS "inputTokens",
+    sum(a."outputTokens") AS "outputTokens"
+  FROM "AiUsage" a
+  JOIN "user" u ON u."id" = a."userId"
+  WHERE a."createdAt" >= ${from} AND a."createdAt" < ${to}
+  GROUP BY a."userId", u."name", u."role", u."isAnonymous", a."feature", a."model"
+  ORDER BY sum(sum(a."inputTokens" + a."outputTokens")) OVER (PARTITION BY a."userId") DESC,
+    a."userId", a."feature", a."model"`;
 }
 
 // count and sum come back as bigint.
 export type AiUsageTotalRow = {
-  ownerId: string;
+  userId: string;
   displayName: string;
   feature: string;
   model: string;
@@ -61,7 +57,7 @@ export type AiUsageTotalRow = {
 // Pure: a row as the domain's AiUsageTotal.
 export function aiUsageTotalFromRow(row: AiUsageTotalRow): AiUsageTotal {
   return {
-    ownerId: row.ownerId,
+    ownerId: row.userId,
     displayName: row.displayName,
     feature: row.feature,
     model: row.model,
@@ -73,7 +69,7 @@ export function aiUsageTotalFromRow(row: AiUsageTotalRow): AiUsageTotal {
 
 export function createAiUsageStore(db: () => PrismaClient) {
   return {
-    // Every owner's totals of the calls in [from, to), most tokens first.
+    // Every user's totals of the calls in [from, to), most tokens first.
     async monthTotals(from: Date, to: Date): Promise<AiUsageTotal[]> {
       const rows = await db().$queryRaw<AiUsageTotalRow[]>(
         aiUsageMonthSql(from, to),

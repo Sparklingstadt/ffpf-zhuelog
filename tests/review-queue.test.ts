@@ -11,27 +11,29 @@ import { nextFsrsDues, type FsrsCard } from "../src/domain/review/fsrs";
 import type { StoredReviewItem } from "../src/infrastructure/prisma/review-store";
 
 const member: AuthenticatedUser = {
-  githubLogin: "taro",
-  githubId: "password:abc",
+  userId: "abc",
   role: "member",
-  accountId: "abc",
+  displayName: "taro",
+  username: "taro",
 };
-const actingAdmin: AuthenticatedUser = {
-  githubLogin: "octocat",
-  githubId: "password:abc",
-  role: "admin",
-  actingAs: { ownerId: "password:abc", loginId: "taro", displayName: "太郎" },
-  actorId: "10001",
+const impersonated: AuthenticatedUser = {
+  userId: "abc",
+  role: "member",
+  displayName: "太郎",
+  username: "taro",
+  impersonatedBy: "10001",
 };
 const demo: AuthenticatedUser = {
-  githubLogin: "demo",
-  githubId: "demo:1",
+  userId: "demo1",
   role: "member",
+  displayName: "demo",
   demo: true,
 };
-const guest: AuthenticatedUser = { githubLogin: "g", role: "guest" };
-const revoked: AuthenticatedUser = { ...member, role: "revoked" };
-const noGithubId: AuthenticatedUser = { githubLogin: "x", role: "member" };
+const guest: AuthenticatedUser = {
+  userId: "g1",
+  role: "guest",
+  displayName: "g",
+};
 
 // 2026-11-16 12:00 JST.
 const now = new Date("2026-11-16T03:00:00.000Z");
@@ -101,9 +103,9 @@ function setup(user: AuthenticatedUser | null) {
 
 test("reviews follow the signed-in owner", async () => {
   for (const [user, ownerId] of [
-    [member, "password:abc"],
-    [actingAdmin, "password:abc"],
-    [demo, "demo:1"],
+    [member, "abc"],
+    [impersonated, "abc"],
+    [demo, "demo1"],
   ] as const) {
     const { queue, calls } = setup(user);
     await queue.listDue(20);
@@ -124,7 +126,7 @@ test("reviews follow the signed-in owner", async () => {
     assert.deepEqual(calls.at(-1), ["answer", ownerId, itemId, logId, 3, now]);
   }
 
-  for (const user of [null, guest, revoked, noGithubId]) {
+  for (const user of [null, guest]) {
     const { queue, calls } = setup(user);
     await assert.rejects(queue.listDue(20), ReviewForbiddenError);
     await assert.rejects(queue.countDue(), ReviewForbiddenError);
@@ -141,10 +143,10 @@ test("listDue sums the kinds and works out each answer's next due from one now",
   const { queue, calls } = setup(member);
   const due = await queue.listDue(20);
   assert.deepEqual(calls, [
-    ["countDueByKind", "password:abc", now],
-    ["listDue", "password:abc", now, 20],
+    ["countDueByKind", "abc", now],
+    ["listDue", "abc", now, 20],
     // JST midnight 400 days before 2026-11-16.
-    ["reviewedDates", "password:abc", new Date("2025-10-11T15:00:00.000Z")],
+    ["reviewedDates", "abc", new Date("2025-10-11T15:00:00.000Z")],
   ]);
   assert.equal(due.count, 3);
   assert.deepEqual(due.byKind, { preposition: 2, entry: 1 });

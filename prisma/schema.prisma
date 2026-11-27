@@ -26,14 +26,15 @@ model LearningEntry {
   deletedAt     DateTime?
   // Set while the owner shares the note with the members who follow them.
   sharedAt      DateTime?
-  ownerId       String
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   batchId       String
   batch         ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
   hints         Hint[]
 
-  @@index([ownerId, createdAt])
-  @@index([ownerId, deletedAt])
-  @@index([ownerId, sharedAt])
+  @@index([userId, createdAt])
+  @@index([userId, deletedAt])
+  @@index([userId, sharedAt])
   @@index([batchId])
 }
 
@@ -48,54 +49,11 @@ model Hint {
   @@index([learningEntryId])
 }
 
-// Password sign-in for members. Managed by GitHub admins at /admin/accounts.
-model PasswordAccount {
-  id             String    @id @default(cuid())
-  loginId        String    @unique
-  displayName    String
-  passwordHash   String
-  sessionVersion Int       @default(0)
-  // Unused since sign-in throttling moved to SignInThrottle. Kept so the
-  // previous deployment keeps working while the migration is rolled out;
-  // drop them in a later migration.
-  failedAttempts Int       @default(0)
-  lockedUntil    DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-}
-
-// A member who signs in with Sparklingstadt ID (issued by sparklingstadt-id). id is the
-// Sparklingstadt ID server's sub; the ownerId is "sid:" + id. email is for display only and is
-// never used for authorization.
-model SidAccount {
-  id             String   @id
-  email          String
-  displayName    String
-  sessionVersion Int      @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  lastLoginAt    DateTime
-}
-
-// Unused. The former FFPF ID sign-in table; the app no longer reads or writes
-// it. Emptied by the migration that added SidAccount and kept for one release so
-// the previous deployment (and an Instant Rollback) still runs; drop it in a
-// later migration. No application code may use this model.
-model FfpfAccount {
-  id             String   @id
-  email          String
-  displayName    String
-  sessionVersion Int      @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  lastLoginAt    DateTime
-}
-
-// Fixed-window sign-in attempt counters, written by the web's sign-in (the retired Go API wrote the same keys).
-// Keys always include the client address ("client:<ip>",
-// "login:<ip>:<loginId>"), so nobody can lock another person out from
-// elsewhere; "password-change:<accountId>" is only reachable by the signed-in
-// member. Rows past expiresAt are dead and pruned opportunistically.
+// Fixed-window attempt counters (sign-in-throttle-store). Kept by
+// 20261127100000_owner_to_user for the LINE link-code redemption throttle
+// ("line-link:<lineUserId>") only: sign-in and the own password change are
+// limited by Better Auth's rateLimit table. Rows past expiresAt are dead and
+// pruned opportunistically.
 model SignInThrottle {
   key       String   @id
   count     Int
@@ -104,46 +62,28 @@ model SignInThrottle {
   @@index([expiresAt])
 }
 
-// One-way follow. Admins have no row in the database, so neither column has a
-// foreign key: the use cases check that the followee is an existing member.
+// One-way follow between users. The use cases check that the followee is a
+// member (not an admin or a guest).
 model Follow {
   followerId String
+  follower   User     @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
   followeeId String
+  followee   User     @relation("Followee", fields: [followeeId], references: [id], onDelete: Cascade)
   createdAt  DateTime @default(now())
 
   @@id([followerId, followeeId])
   @@index([followeeId])
 }
 
-// A signed-in browser (stage 11 of the Go retirement). The cookie holds a
-// random token; only its SHA-256 is kept here. role/login/sessionVersion are
-// what Go's refresh tokens kept (the ApiRefreshToken table, dropped in stage
-// 12b), so the per-request check stayed the same. The CHECK constraint in the
-// migration pins the shape of each role.
-model Session {
-  id             String   @id @default(cuid())
-  tokenHash      String   @unique // SHA-256 hex of the cookie's token
-  ownerId        String
-  role           String // "admin" | "member" | "guest"
-  login          String? // admin only: GitHub login at sign-in (display only)
-  sessionVersion Int? // member only: the account's sessionVersion at sign-in
-  expiresAt      DateTime
-  createdAt      DateTime @default(now())
-
-  @@index([ownerId])
-  @@index([expiresAt])
-}
-
-// Ties one LINE account to one Zhuelog owner (a PasswordAccount id prefixed
-// "password:", or an admin's GitHub numeric id). ownerId has no foreign key:
-// admins have no row in the database. role is "member" | "admin" (CHECK).
+// Ties one LINE account to one Zhuelog user. The role is the user's
+// ("user"."role").
 // reviewNotify is the owner's choice to get a LINE message on mornings when
 // reviews are due (off until they turn it on); reviewNotifiedOn is the JST
 // date the last one was sent, so the daily run sends at most one a day.
 model LineLink {
   lineUserId       String    @id
-  ownerId          String    @unique
-  role             String
+  userId           String    @unique
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt        DateTime  @default(now())
   reviewNotify     Boolean   @default(false)
   reviewNotifiedOn DateTime? @db.Date
@@ -151,11 +91,10 @@ model LineLink {
 
 // One-time link codes shown on /account/line. Only the SHA-256 hex of the code
 // is stored; issuing a new code replaces the previous one of the same owner.
-// role is "member" | "admin" (CHECK).
 model LineLinkCode {
   codeHash  String   @id
-  ownerId   String   @unique
-  role      String
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
 }
 
@@ -168,7 +107,8 @@ model LineMessage {
   id             String   @id @default(cuid())
   webhookEventId String   @unique
   lineUserId     String
-  ownerId        String
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   kind           String
   text           String?
   status         String   @default("pending")
@@ -182,11 +122,11 @@ model LineMessage {
 
 // A member's or admin's practice conversation with ChatGPT, saved whole by the web
 // after every answer. id is a UUID made by the browser; messages is
-// [{id, role, text}] with role "user" | "assistant". ownerId has no foreign
-// key: admins have no row in the database.
+// [{id, role, text}] with role "user" | "assistant".
 model ChatConversation {
   id        String   @id
-  ownerId   String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   title     String
   modelName String
   ended     Boolean
@@ -194,9 +134,9 @@ model ChatConversation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([id, ownerId])
-  @@index([ownerId, updatedAt])
-  @@index([ownerId, createdAt])
+  @@unique([id, userId])
+  @@index([userId, updatedAt])
+  @@index([userId, createdAt])
 }
 
 // One finished round of preposition practice by a member or admin, written by
@@ -204,10 +144,11 @@ model ChatConversation {
 // browser, so a retried save keeps one row. questions is [{id?, answer, noun, prompt, misses}] in the order asked,
 // with the wrong prepositions picked in misses; id is the question's id in the
 // Web's practice data and older rounds have none. The counts are derived from
-// it by Go. ownerId has no foreign key: admins have no row in the database.
+// it by Go.
 model PrepositionPracticeRecord {
   id            String   @id
-  ownerId       String
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   questionCount Int
   firstTryCount Int
   missCount     Int
@@ -216,20 +157,21 @@ model PrepositionPracticeRecord {
   startedAt     DateTime
   createdAt     DateTime @default(now())
 
-  @@unique([id, ownerId])
-  @@index([ownerId, createdAt])
+  @@unique([id, userId])
+  @@index([userId, createdAt])
 }
 
 // One question and one complete answer, independent of chat conversations.
 model QuickQuestion {
   id        String   @id
-  ownerId   String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   question  String
   answer    String
   modelName String
   createdAt DateTime @default(now())
 
-  @@index([ownerId, createdAt])
+  @@index([userId, createdAt])
 }
 
 // Complement rounds, isolated from preposition history. mode: result/potential/degree/
@@ -238,7 +180,8 @@ model QuickQuestion {
 // whose rounds are kept here.
 model ComplementPracticeRecord {
   id            String   @id
-  ownerId       String
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   mode          String
   questionCount Int
   firstTryCount Int
@@ -248,8 +191,8 @@ model ComplementPracticeRecord {
   startedAt     DateTime
   createdAt     DateTime @default(now())
 
-  @@unique([id, ownerId])
-  @@index([ownerId, createdAt])
+  @@unique([id, userId])
+  @@index([userId, createdAt])
 }
 
 // Something a member or admin reviews on a spaced-repetition schedule (FSRS),
@@ -262,7 +205,8 @@ model ComplementPracticeRecord {
 // state: 0 new, 1 learning, 2 review, 3 relearning.
 model ReviewItem {
   id             String      @id
-  ownerId        String
+  userId         String
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   language       String
   kind           String
   targetId       String
@@ -279,8 +223,8 @@ model ReviewItem {
   updatedAt      DateTime    @updatedAt
   logs           ReviewLog[]
 
-  @@unique([ownerId, language, kind, targetId])
-  @@index([ownerId, due])
+  @@unique([userId, language, kind, targetId])
+  @@index([userId, due])
 }
 
 // One answer to a review: the rating (1 again, 2 hard, 3 good, 4 easy) and
@@ -289,7 +233,8 @@ model ReviewItem {
 // answer is applied once.
 model ReviewLog {
   id            String     @id
-  ownerId       String
+  userId        String
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   itemId        String
   item          ReviewItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
   rating        Int
@@ -301,7 +246,7 @@ model ReviewLog {
   reviewedAt    DateTime
 
   @@index([itemId, reviewedAt])
-  @@index([ownerId, reviewedAt])
+  @@index([userId, reviewedAt])
 }
 
 // A word or phrase an owner picked out to learn, with its reading and
@@ -312,7 +257,8 @@ model ReviewLog {
 // reference: the note may later go to the trash or be deleted.
 model VocabularyEntry {
   id            String   @id
-  ownerId       String
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   language      String
   word          String
   pinyin        String
@@ -321,15 +267,16 @@ model VocabularyEntry {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  @@unique([ownerId, language, word])
-  @@index([ownerId, createdAt])
+  @@unique([userId, language, word])
+  @@index([userId, createdAt])
 }
 
 // One OpenAI call: who it was for, which feature, and the tokens it used.
 // Written by the web (and by the retired Go API before stage 8); read by the admin's monthly summary.
 model AiUsage {
   id           String   @id
-  ownerId      String
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   feature      String
   model        String
   inputTokens  Int
@@ -337,5 +284,101 @@ model AiUsage {
   createdAt    DateTime @default(now())
 
   @@index([createdAt])
-  @@index([ownerId, createdAt])
+  @@index([userId, createdAt])
+}
+
+// Better Auth's tables (1.7.28), shaped as `@better-auth/cli generate` would for
+// the username, anonymous and admin plugins and database rate limiting.
+model User {
+  id              String    @id
+  name            String
+  email           String    @unique
+  emailVerified   Boolean   @default(false)
+  image           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now()) @updatedAt
+  username        String?   @unique
+  displayUsername String?
+  isAnonymous     Boolean?  @default(false)
+  role            String?   @default("user")
+  banned          Boolean?  @default(false)
+  banReason       String?
+  banExpires      DateTime?
+  sessions        Session[]
+  accounts        Account[]
+
+  // Everything the user owns; deleting the user deletes it.
+  learningEntries            LearningEntry[]
+  chatConversations          ChatConversation[]
+  prepositionPracticeRecords PrepositionPracticeRecord[]
+  quickQuestions             QuickQuestion[]
+  complementPracticeRecords  ComplementPracticeRecord[]
+  reviewItems                ReviewItem[]
+  reviewLogs                 ReviewLog[]
+  vocabularyEntries          VocabularyEntry[]
+  aiUsages                   AiUsage[]
+  lineLink                   LineLink?
+  lineLinkCode               LineLinkCode?
+  lineMessages               LineMessage[]
+  following                  Follow[]                    @relation("Follower")
+  followers                  Follow[]                    @relation("Followee")
+
+  @@map("user")
+}
+
+model Session {
+  id             String   @id
+  expiresAt      DateTime
+  token          String   @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  ipAddress      String?
+  userAgent      String?
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  impersonatedBy String?
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+model RateLimit {
+  id          String @id
+  key         String @unique
+  count       Int
+  lastRequest BigInt
+
+  @@map("rateLimit")
 }

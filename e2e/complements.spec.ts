@@ -59,7 +59,7 @@ for (const [mode, label] of [
     const { rows } = await db.query('SELECT * FROM "ComplementPracticeRecord"');
     expect(rows).toHaveLength(1);
     expect(rows[0].mode).toBe(mode);
-    expect(rows[0].ownerId).toBe(memberOwnerId(id));
+    expect(rows[0].userId).toBe(memberOwnerId(id));
     expect(rows[0].questionCount).toBe(25);
     expect(rows[0].elapsedMs).toBeGreaterThan(0);
     // The verb mode names its questions by CSV row and verb, the others by

@@ -12,7 +12,7 @@ import type { StudyDay } from "../../domain/study-log/study-log";
 // reviews (answers), practice questions (the sum of questionCount), notes not
 // in the trash and words, each by its Japan day.
 export function studyLogSql(
-  ownerId: string,
+  userId: string,
   start: Date,
   end: Date,
 ): Prisma.Sql {
@@ -21,19 +21,19 @@ export function studyLogSql(
     sum("notes") AS "notes", sum("words") AS "words"
   FROM (
     SELECT ("reviewedAt" + interval '9 hours')::date AS "day", 1 AS "reviews", 0 AS "practice", 0 AS "notes", 0 AS "words"
-      FROM "ReviewLog" WHERE "ownerId" = ${ownerId} AND "reviewedAt" >= ${start} AND "reviewedAt" < ${end}
+      FROM "ReviewLog" WHERE "userId" = ${userId} AND "reviewedAt" >= ${start} AND "reviewedAt" < ${end}
     UNION ALL
     SELECT ("createdAt" + interval '9 hours')::date, 0, "questionCount", 0, 0
-      FROM "PrepositionPracticeRecord" WHERE "ownerId" = ${ownerId} AND "createdAt" >= ${start} AND "createdAt" < ${end}
+      FROM "PrepositionPracticeRecord" WHERE "userId" = ${userId} AND "createdAt" >= ${start} AND "createdAt" < ${end}
     UNION ALL
     SELECT ("createdAt" + interval '9 hours')::date, 0, "questionCount", 0, 0
-      FROM "ComplementPracticeRecord" WHERE "ownerId" = ${ownerId} AND "createdAt" >= ${start} AND "createdAt" < ${end}
+      FROM "ComplementPracticeRecord" WHERE "userId" = ${userId} AND "createdAt" >= ${start} AND "createdAt" < ${end}
     UNION ALL
     SELECT ("createdAt" + interval '9 hours')::date, 0, 0, 1, 0
-      FROM "LearningEntry" WHERE "ownerId" = ${ownerId} AND "deletedAt" IS NULL AND "createdAt" >= ${start} AND "createdAt" < ${end}
+      FROM "LearningEntry" WHERE "userId" = ${userId} AND "deletedAt" IS NULL AND "createdAt" >= ${start} AND "createdAt" < ${end}
     UNION ALL
     SELECT ("createdAt" + interval '9 hours')::date, 0, 0, 0, 1
-      FROM "VocabularyEntry" WHERE "ownerId" = ${ownerId} AND "createdAt" >= ${start} AND "createdAt" < ${end}
+      FROM "VocabularyEntry" WHERE "userId" = ${userId} AND "createdAt" >= ${start} AND "createdAt" < ${end}
   ) AS "activity"
   GROUP BY "day"
   ORDER BY "day"`;
@@ -62,9 +62,9 @@ export function studyDayFromRow(row: StudyDayRow): StudyDay {
 export function createStudyLogStore(db: () => PrismaClient) {
   return {
     // The owner's days with anything in [start, end), oldest first.
-    async days(ownerId: string, start: Date, end: Date): Promise<StudyDay[]> {
+    async days(userId: string, start: Date, end: Date): Promise<StudyDay[]> {
       const rows = await db().$queryRaw<StudyDayRow[]>(
-        studyLogSql(ownerId, start, end),
+        studyLogSql(userId, start, end),
       );
       return rows.map(studyDayFromRow);
     },

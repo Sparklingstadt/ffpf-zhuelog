@@ -1,6 +1,6 @@
 {
   "name": "@ffpf-zhuelog/web",
-  "version": "0.33.0",
+  "version": "0.34.0",
   "private": true,
   "license": "UNLICENSED",
   "engines": {
@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "next dev",
     "test:unit": "node scripts/test-unit.mjs",
+    "test:migration": "docker compose -f compose.e2e.yaml up -d --wait && node scripts/test-migration.mjs",
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint --max-warnings 0",
@@ -27,6 +28,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:sample": "tsx scripts/sample-members-seed.ts",
+    "auth:prepare-admin": "tsx scripts/prepare-better-auth-admin.ts",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate",
     "test:regression": "pnpm run typecheck && pnpm run lint && pnpm run test:unit && pnpm run build && pnpm run test:e2e"
@@ -35,12 +37,12 @@
     "@next/env": "16.4.6",
     "@prisma/adapter-pg": "^7.10.1",
     "@prisma/client": "^7.10.1",
+    "better-auth": "1.7.28",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.5.2",
     "csv-parse": "^7.0.3",
     "dotenv": "18.0.10",
     "geist": "^1.9.2",
-    "jose": "^6.2.18",
     "lucide-react": "^1.77.0",
     "next": "16.4.6",
     "pg": "^8.23.1",

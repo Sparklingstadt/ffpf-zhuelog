@@ -9,14 +9,14 @@ import {
 test("studyLogSql counts the five kinds per Japan day", () => {
   const start = new Date("2026-10-26T15:00:00.000Z");
   const end = new Date("2026-12-06T15:00:00.000Z");
-  const sql = studyLogSql("password:a", start, end);
+  const sql = studyLogSql("u-a", start, end);
   // `text` numbers the values as Postgres does ($1, $2, ...); `sql` uses "?".
   const text = sql.text.replace(/\s+/g, " ");
   for (const part of [
-    'FROM "ReviewLog" WHERE "ownerId" = $1 AND "reviewedAt" >= $2 AND "reviewedAt" < $3',
+    'FROM "ReviewLog" WHERE "userId" = $1 AND "reviewedAt" >= $2 AND "reviewedAt" < $3',
     'FROM "PrepositionPracticeRecord"',
     'FROM "ComplementPracticeRecord"',
-    'FROM "LearningEntry" WHERE "ownerId" = $10 AND "deletedAt" IS NULL AND "createdAt" >= $11 AND "createdAt" < $12',
+    'FROM "LearningEntry" WHERE "userId" = $10 AND "deletedAt" IS NULL AND "createdAt" >= $11 AND "createdAt" < $12',
     'FROM "VocabularyEntry"',
     `("reviewedAt" + interval '9 hours')::date`,
     'GROUP BY "day" ORDER BY "day"',
@@ -33,7 +33,7 @@ test("studyLogSql counts the five kinds per Japan day", () => {
   assert.doesNotMatch(text, /AT TIME ZONE/);
   assert.deepEqual(
     sql.values,
-    Array.from({ length: 5 }, () => ["password:a", start, end]).flat(),
+    Array.from({ length: 5 }, () => ["u-a", start, end]).flat(),
   );
 });
 

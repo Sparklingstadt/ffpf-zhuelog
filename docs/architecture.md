@@ -12,30 +12,28 @@ flowchart LR
   subgraph Web[Web: Next.js 16 on Vercel]
     RSC[Server Components]
     SA[Server Actions]
-    RH[Route Handlers<br/>チャット・クイック質問の答え・OAuth の callback・LINE の webhook と拾い直し・デモのリセット]
-    PX[proxy.ts<br/>zl_session があるかだけを見る]
+    RH[Route Handlers<br/>チャット・クイック質問の答え・Better Auth（/api/auth/*）・LINE の webhook と拾い直し・デモのリセット]
+    PX[proxy.ts<br/>Better Auth のセッション Cookie があるかだけを見る]
     CRON[Vercel Cron（Web の vercel.json）<br/>/api/cron/line-drain・/api/cron/demo-reset]
   end
   DB[(PostgreSQL / Neon<br/>スキーマは Prisma)]
   OpenAI[OpenAI API]
   LINE[LINE Messaging API]
-  GH[GitHub OAuth]
   SID[Sparklingstadt ID<br/>OpenID Connect]
 
   UI -->|HttpOnly Cookie| Web
-  Web -->|Prisma: ログインのセッション（Session）・ログインの試行回数・アカウントの確認・会員の管理・パスワード変更・単語帳・学習ノート・CSV の取り込み・復習・練習の記録・質問ノート・会話ノート・フォロー・タイムライン・学習ログ・AI の利用量の集計・LINE の連携とメッセージ・デモのリセット| DB
+  Web -->|Prisma: Better Auth の表（user・session・account・rateLimit）・LINE の連携コードの試行回数・単語帳・学習ノート・CSV の取り込み・復習・練習の記録・質問ノート・会話ノート・フォロー・タイムライン・学習ログ・AI の利用量の集計・LINE の連携とメッセージ・デモのリセット| DB
   Web -->|単語帳の下書き・クイック質問・チャット・LINE の添削と翻訳| OpenAI
   LINE -->|Webhook| Web
   Web -->|reply・push| LINE
   CRON -->|拾い直し・お知らせの push| LINE
   CRON --> OpenAI
   CRON -->|デモのリセット| DB
-  Web -->|ログインの code の交換| GH
   Web -->|ログインの code の交換・ログアウト| SID
 ```
 
 - アプリは Next.js 1 つです。ブラウザーが話す相手は Web だけで、Vercel のプロジェクトも 1 つです。
-- Web は、ログイン中の人を決めるために、実行時に `Session` の行と DB のアカウント（`PasswordAccount`・`SidAccount`）を Prisma（`src/infrastructure/prisma/`）で読みます。単語帳（一覧・保存・削除）と学習ノート（一覧・検索・カレンダー・日ごとの表示・ゴミ箱・共有・CSV の取り込み）と練習の記録（介詞・補語）も Prisma で読み書きし（CSV は Web が自分で検証・解析し、1 つのトランザクションで保存します）、「AI で下書き」・クイック質問・ChatGPT と話すは Web が OpenAI を直接呼んで、使った量を `AiUsage` に記録し、質問ノートと会話ノートも Prisma で読み書きし、フォロー（会員の一覧・タイムライン・フォローする／外す）も Prisma で読み書きし、会員の管理（作成・一覧・パスワードの再設定）と自分のパスワードの変更も Prisma で書き（ハッシュは Web が scrypt で作り、確かめます）、学習ログ（カレンダー）と AI の利用量の月ごとの集計は Prisma で読むだけです。LINE も Web が受け、webhook の署名を確かめ、添削・翻訳の OpenAI を直接呼んで reply し、連携とメッセージ（`LineLink`・`LineLinkCode`・`LineMessage`）を Prisma で読み書きします。デモのリセットも Web が 1 つのトランザクションで行います。ログイン（GitHub・ID とパスワード・Sparklingstadt ID・ゲスト・デモ）とログアウトも Web が行い、`Session` を読み書きします。以前はこれらを Go の API が受け持っていましたが、段階 0〜12 で Web に移し、Go を消しました（下の「2.」）。
+- Web は、ログイン中の人を決めるために、実行時に Better Auth の `session` と `user` の行を Prisma（`src/infrastructure/prisma/`）で読みます（Better Auth のアダプターが読みます）。単語帳（一覧・保存・削除）と学習ノート（一覧・検索・カレンダー・日ごとの表示・ゴミ箱・共有・CSV の取り込み）と練習の記録（介詞・補語）も Prisma で読み書きし（CSV は Web が自分で検証・解析し、1 つのトランザクションで保存します）、「AI で下書き」・クイック質問・ChatGPT と話すは Web が OpenAI を直接呼んで、使った量を `AiUsage` に記録し、質問ノートと会話ノートも Prisma で読み書きし、フォロー（会員の一覧・タイムライン・フォローする／外す）も Prisma で読み書きし、学習ログ（カレンダー）と AI の利用量の月ごとの集計は Prisma で読むだけです。会員の管理（作成・一覧・パスワードの再設定・なりすまし）と自分のパスワードの変更は、Better Auth の `admin` プラグインと `changePassword` が行います（ハッシュは scrypt のままです）。LINE も Web が受け、webhook の署名を確かめ、添削・翻訳の OpenAI を直接呼んで reply し、連携とメッセージ（`LineLink`・`LineLinkCode`・`LineMessage`）を Prisma で読み書きします。デモのリセットも Web が 1 つのトランザクションで行います。ログイン（ID とパスワード・Sparklingstadt ID・ゲスト・デモ）とログアウトは Better Auth が行います（下の「4. 認証」）。以前はこれらを Go の API が受け持っていましたが、段階 0〜12 で Web に移し、Go を消しました（下の「2.」）。
 - LINE は Web の `POST /api/line/webhook` に Webhook を送ります。Web が署名を確かめ、OpenAI で添削・翻訳し、結果を reply で返します。拾い直しと朝のお知らせは Web の `GET /api/cron/line-drain` で、Web の `vercel.json` の Cron が毎日 06:00 JST ごろに呼びます。
 
 ## 2. Go API をやめて Next.js 1 つにした理由
@@ -51,28 +49,28 @@ flowchart LR
 - **ログインを先に移す**：途中で Go を「Next.js のセッションを受け取る側」に作り変える必要があり、これからやめる Go に最初に手を入れることになるため、採りませんでした。
 - **まとめて書き直して一度に切り替える**：数万行の差分を一度に確かめることになり、1 機能ずつ移しながら Next.js での書き方を確かめるという目的に反するため、採りませんでした。
 
-**守っている決まり**：Prisma を import してよいのは `src/infrastructure/prisma/` だけで、pg と next-auth は import できません。これを `tests/architecture.test.ts` が検査します。
+**守っている決まり**：Prisma を import してよいのは `src/infrastructure/prisma/` だけで、pg と next-auth は import できません。`better-auth` のサーバー側は `src/infrastructure/auth/` だけ、ブラウザー用のクライアント（`better-auth/react`）は `src/presentation/` だけが import できます。これを `tests/architecture.test.ts` が検査します。
 
 **コードのコメントと Go**：`src/`・`tests/`・`e2e/` のコメントは、いまのコードが何をし、なぜそうするかだけを書いています。消した Go のファイルや関数を基準にした説明はありません。残っているのは、Go が書いた固定のテストデータ（`tests/fixtures/` の `scrypt-golden.json`・`fsrs-golden.json`・`demo-seed-golden.json`）の由来と、復習の計算が従っているライブラリ go-fsrs の名前だけです。Go のどの処理を移したかは、下の表の計画と `*-go-reference.md` に残しています。
 
 **どこを読めば何が分かるか**
 
-| 知りたいこと                        | 読む所                                                                                                                                                                                 |
-| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 層の分け方と、どこから読むか        | `docs/architecture.md`（3. Web の層）、`src/composition/*-container.ts`（機能ごとの組み立て。ここから application と store へたどれる）                                                |
-| ログイン中の人の決め方              | `src/composition/current-user.ts` → `src/infrastructure/identity/session-current-user-provider.ts` → `src/infrastructure/prisma/session-store.ts`                                      |
-| ログイン・ログアウト                | `src/composition/identity-container.ts`・`sign-in-container.ts` → `src/application/identity/sign-in.ts`。OAuth は `src/infrastructure/auth/`、コールバックは `src/presentation/http/`  |
-| ページの門番（Proxy）               | `src/proxy.ts` → `src/presentation/http/session-gate.ts`（Cookie があるかだけを見る）                                                                                                  |
-| 学習ノート・ゴミ箱・共有・検索・CSV | `src/application/learning/learning-notes.ts`、`src/infrastructure/prisma/learning-note-reads.ts`・`learning-note-writes.ts`・`learning-csv-import.ts`                                  |
-| 復習（FSRS）                        | `src/application/review/review-queue.ts`、`src/domain/review/`、`src/infrastructure/prisma/review-store.ts`                                                                            |
-| 練習の記録・質問・チャット          | `src/application/practice/`・`src/application/chat/`、`src/infrastructure/prisma/practice-record-store.ts`・`question-store.ts`・`conversation-store.ts`、`src/app/api/chat/route.ts`  |
-| 単語帳・学習ログ・AI の利用量       | `src/application/vocabulary/`・`study-log/`・`ai-usage/`、対応する `src/infrastructure/prisma/*-store.ts`、OpenAI は `src/infrastructure/openai/`                                      |
-| フォロー・会員の管理・パスワード    | `src/application/social/social-network.ts`、`src/application/identity/member-accounts.ts`・`own-password.ts`、`src/infrastructure/prisma/social-store.ts`・`password-account-store.ts` |
-| LINE と cron                        | `src/app/api/line/webhook/route.ts`・`src/app/api/cron/*/route.ts` → `src/application/line/line-bot.ts`・`src/application/demo/demo-reset.ts`、`vercel.json` の `crons`                |
-| 失敗したときの画面の文言とログ      | `src/presentation/controllers/action-state.ts`・`load-or.ts`                                                                                                                           |
-| 各段階で Go の何をどこへ移したか    | 各段階の計画（`docs/superpowers/plans/2026-11-16-deprecate-go-stage*.md`）と、`*-go-reference.md`（Go の処理の `file:line` の記録）、各 PR の説明の対応表                              |
-| 消した Go のファイルの中身          | 計画と `*-go-reference.md` に出てくる Go のファイル（`services/api/` の下にありました）を、`git show "$(git log -1 --format=%H -- <道>)^:<道>"` で読む                                 |
-| 本番への反映と、各段階で行った手順  | `docs/deployment.md`（「移行の記録（段階 1〜12）」）                                                                                                                                   |
+| 知りたいこと                        | 読む所                                                                                                                                                                                                                                                                       |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 層の分け方と、どこから読むか        | `docs/architecture.md`（3. Web の層）、`src/composition/*-container.ts`（機能ごとの組み立て。ここから application と store へたどれる）                                                                                                                                      |
+| ログイン中の人の決め方              | `src/composition/current-user.ts` → `src/infrastructure/identity/better-auth-current-user-provider.ts`（Better Auth の `getSession` の答えから役割を決める）                                                                                                                 |
+| ログイン・ログアウト                | Better Auth の設定は `src/infrastructure/auth/better-auth.ts`・`better-auth-rules.ts`、ハンドラーは `src/app/api/auth/[...all]/route.ts`、デモ・ログアウト・なりすましは `src/composition/identity-container.ts`、画面からの呼び出しは `src/presentation/lib/auth-client.ts` |
+| ページの門番（Proxy）               | `src/proxy.ts` → `src/presentation/http/session-gate.ts`（Better Auth の Cookie があるかだけを見る。読み方は `src/infrastructure/auth/session-cookie.ts`）                                                                                                                   |
+| 学習ノート・ゴミ箱・共有・検索・CSV | `src/application/learning/learning-notes.ts`、`src/infrastructure/prisma/learning-note-reads.ts`・`learning-note-writes.ts`・`learning-csv-import.ts`                                                                                                                        |
+| 復習（FSRS）                        | `src/application/review/review-queue.ts`、`src/domain/review/`、`src/infrastructure/prisma/review-store.ts`                                                                                                                                                                  |
+| 練習の記録・質問・チャット          | `src/application/practice/`・`src/application/chat/`、`src/infrastructure/prisma/practice-record-store.ts`・`question-store.ts`・`conversation-store.ts`、`src/app/api/chat/route.ts`                                                                                        |
+| 単語帳・学習ログ・AI の利用量       | `src/application/vocabulary/`・`study-log/`・`ai-usage/`、対応する `src/infrastructure/prisma/*-store.ts`、OpenAI は `src/infrastructure/openai/`                                                                                                                            |
+| フォロー・会員の管理・パスワード    | `src/application/social/social-network.ts`、`src/application/identity/member-accounts.ts`・`own-password.ts`、`src/infrastructure/prisma/social-store.ts`・`member-users.ts`                                                                                                 |
+| LINE と cron                        | `src/app/api/line/webhook/route.ts`・`src/app/api/cron/*/route.ts` → `src/application/line/line-bot.ts`・`src/application/demo/demo-reset.ts`、`vercel.json` の `crons`                                                                                                      |
+| 失敗したときの画面の文言とログ      | `src/presentation/controllers/action-state.ts`・`load-or.ts`                                                                                                                                                                                                                 |
+| 各段階で Go の何をどこへ移したか    | 各段階の計画（`docs/superpowers/plans/2026-11-16-deprecate-go-stage*.md`）と、`*-go-reference.md`（Go の処理の `file:line` の記録）、各 PR の説明の対応表                                                                                                                    |
+| 消した Go のファイルの中身          | 計画と `*-go-reference.md` に出てくる Go のファイル（`services/api/` の下にありました）を、`git show "$(git log -1 --format=%H -- <道>)^:<道>"` で読む                                                                                                                       |
+| 本番への反映と、各段階で行った手順  | `docs/deployment.md`（「移行の記録（段階 1〜12）」）                                                                                                                                                                                                                         |
 
 ## 3. Web の層
 
@@ -97,52 +95,59 @@ src/
 
 `presentation` と `app` は、Cookie・ヘッダー・署名の処理（`infrastructure` の `auth`・`preferences`・`security`・`line`・`config`）は直接 import してよいことにしています。どれも HTTP のやり取りそのもので、`composition` から転送し直しても名前が増えるだけだからです。
 
-- **ログインの切れ目**：Cookie `zl_session` が無いときは Proxy が、行が無い・期限切れのときは各ページと Server Action が、ログイン画面へ送ります。
-- **接続元の IP**：`x-real-ip` / `x-forwarded-for` から Web が自分で決め、ログインの試行回数に使います。
+- **ログインの切れ目**：Better Auth の Cookie が無いときは Proxy が、行が無い・期限切れのときは各ページと Server Action が、ログイン画面へ送ります。
+- **接続元の IP**：`x-real-ip`（無ければ `x-forwarded-for`）を Better Auth が読み、ログインのレート制限に使います（下の「4. 認証」の「試行回数」）。
 
 ## 4. 認証
 
-ログインとログアウトは、すべて Web が行います。
+ログインとログアウトは、Better Auth 1.7.28 が `/api/auth/*`（`src/app/api/auth/[...all]/route.ts`）で行います。設定は `src/infrastructure/auth/better-auth.ts`、設定の判断の部分は `better-auth-rules.ts` にあります（DB も要求も使わない関数なので、そのまま単体テストできます）。設計は [2026-11-27-better-auth-migration-design.md](superpowers/specs/2026-11-27-better-auth-migration-design.md) にあります。以前の自前のログイン（GitHub ログイン、自前のセッション、会員ごとのアカウントの表）は、この切り替えで消しました。
 
-| ログイン          | 中身                                                                                                                                                                                                                                                                                                                                                                          |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GitHub OAuth      | PKCE つき。管理者だけ。管理者は GitHub の数字の ID の許可リスト（`AUTH_ALLOWED_GITHUB_IDS`）で決める。code の交換は Web（`AUTH_GITHUB_ID` と `GITHUB_WEB_CLIENT_SECRET`）                                                                                                                                                                                                     |
-| ID とパスワード   | 管理者が発行する会員。パスワードは scrypt（N=2^15, r=8, p=1）で、書き込みも確認も Web（`src/infrastructure/security/scrypt-password-hasher.ts`）。`tests/fixtures/scrypt-golden.json` は、以前の Go が書いた固定のファイル                                                                                                                                                    |
-| Sparklingstadt ID | 自作の ID サーバー（sparklingstadt-id）の OpenID Connect。ID トークンは `jose` で検証する（ES256 の署名、iss・aud・exp。鍵は ID サーバーの JWKS を 10 分覚え、exp の猶予は 60 秒）。nonce・email_verified・email・sub は Web が確かめる（`src/infrastructure/auth/sid-oidc-client.ts`）。code の交換は Web（`SID_CLIENT_SECRET`）。ログアウトでは ID サーバーのログインも消す |
-| ゲスト            | データを持たない。練習だけ使える                                                                                                                                                                                                                                                                                                                                              |
-| デモ              | `DEMO_LOGIN_ID` のアカウントに、パスワードなしで入る。全員で 1 つのアカウントを使う                                                                                                                                                                                                                                                                                           |
+| ログイン          | 中身                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ID とパスワード   | 管理者が作る会員。`username` プラグインで、ログイン ID は `user.username`（英小文字・数字・`.` `_` `-` の 3〜32 文字。入力は前後の空白を除いて小文字にしてから確かめる）。パスワードは scrypt（N=2^15, r=8, p=1）のまま（`src/infrastructure/security/scrypt-password-hasher.ts`）で、`account`（`providerId` は `credential`）に置く。`tests/fixtures/scrypt-golden.json` は、以前の Go が書いた固定のファイル。会員は自分で登録できず（`disableSignUp`）、メールアドレスでのログイン（`/sign-in/email`）も閉じている |
+| Sparklingstadt ID | 自作の ID サーバー（sparklingstadt-id）の OpenID Connect。`genericOAuth` の `providerId: "sid"`（discovery、PKCE、`client_secret_basic`）。ID トークンの検証は Better Auth に任せ、検証に必要な issuer と JWKS が discovery で取れないときは、ID トークンを未検証で受けずにこのログインを使えなくする（`requireIdTokenVerification`）。誰でも入れて、初めてのログインで `user` と `account` ができる。管理者は、`user.role` が `admin` の人で、この道で入る                                                            |
+| ゲスト            | `anonymous` プラグイン。データを持たず、練習だけ使える。ゲストの `user` は、毎日のデモのリセットの cron が、作ってから 24 時間たったものを消す                                                                                                                                                                                                                                                                                                                                                                         |
+| デモ              | `DEMO_LOGIN_ID` の会員に、「デモで試す」から入る。Server Action が `DEMO_PASSWORD` で `auth.api.signInUsername` を呼ぶ（パスワードなしで入る道はない）。全員で 1 つのアカウントを使う                                                                                                                                                                                                                                                                                                                                  |
 
-GitHub と Sparklingstadt ID が code を交換するときの `redirect_uri` は、`AUTH_URL` の origin から決まります（GitHub は `/api/auth/callback/github/go`、Sparklingstadt ID は `/api/auth/callback/sid`）。GitHub の OAuth App と Sparklingstadt ID のサーバーに登録した URL と 1 文字でも違うと、ログインできません。
+**redirect_uri**：Sparklingstadt ID の callback は `<AUTH_URL の origin>/api/auth/callback/sid` で、以前と同じです。ログアウトの戻り先 `post_logout_redirect_uri` は `<AUTH_URL の origin>/signin` で、ID サーバーのクライアントに登録した URL と 1 文字でも違うと、ID サーバーがログアウトの戻りを断ります。`AUTH_URL` が無いと `baseURL` は本番の URL になるので、Preview では必ず `AUTH_URL` を入れます（そうしないと、SID と origin の確かめが通りません）。
 
-**セッション（`zl_session`）**
+**アカウントのつなぎ方**：SID の `account` は `sub` でだけ `user` につなぎます（`disableImplicitLinking`）。メールアドレスが同じというだけでは、つなぎません。ID サーバーが管理者のメールアドレスを名乗る人にコードを出しても、その人が管理者にならないようにするためです。管理者の `user` と `sub` は、切り替えのときに `scripts/prepare-better-auth-admin.ts` が前もって用意します（[deployment.md](deployment.md) の「移行の記録」）。
 
-- ブラウザーの Cookie `zl_session`（HttpOnly・SameSite=Lax）に、ランダムな 32 バイトのトークンを置きます。DB の `Session` には、トークンの SHA-256 のハッシュだけを保存します。
-- ログインのたびに、新しいトークンを出します。そのブラウザーの前のセッションの行は消し、`zl_act_as` と、Go の時代の Cookie（`zl_access`・`zl_refresh`）も消します。
-- 期限は固定です。会員と管理者は 30 日、ゲストは 24 時間で、使っても延びません。期限が来たら、ログインし直します。
-- 期限切れの行は、ログインのたびに最大 100 行まで消します。別のジョブは要りません。
-- ログアウトは、自分の行を消し、Cookie を消します。DB が失敗しても、Cookie は消します。
+**セッション**
 
-**毎回の確かめ**：リクエストのたびに、Cookie のトークンから `Session` の行を引き、次を確かめます。アカウントの `sessionVersion` や `zl_act_as` を変えたら、次のリクエストから効きます。許可リスト（`AUTH_ALLOWED_GITHUB_IDS`）とデモの `DEMO_LOGIN_ID` は、モジュールを読み込むときに 1 度だけ読むので、変えたら再デプロイのあとに効きます。
-
-- 行が無い・期限切れ・形が違うときは、未ログインです。
-- 管理者は、`AUTH_ALLOWED_GITHUB_IDS` に載っているときだけ管理者です。外れていると `revoked` で、どのページも使えません（外したのが効くのは、再デプロイのあとです）。
-- 会員は、アカウントがあり、`sessionVersion` が行に書いた値と同じときだけ通ります。デモのアカウントには、デモの印を付けます。
-- ゲストは、DB のアカウントを読みません。
-
-**Proxy**：`src/proxy.ts` は、Cookie `zl_session` があるかだけを見ます。DB は読まず、更新もしません。無ければログイン画面へ送ります。中身の確かめは、上の「毎回の確かめ」を各ページ・Server Action・Route Handler が行います。
+- Better Auth の Cookie（`better-auth.session_token`。HTTPS では `__Secure-` が付く）に、署名したトークンを置き、DB の `session` に行を持ちます。期限は 30 日（ゲストも同じ）で、使うと延びます（Better Auth の既定の `updateAge`）。ログインのたびに新しいトークンです。
+- ログアウトは、自分の `session` の行を消し、Cookie を消します。DB が失敗しても、Cookie は消します。SID でログインした人は、続けて ID サーバーの `end_session_endpoint` へ送り、ID サーバーのログインも消します。
+- **毎回の確かめ**：各ページ・Server Action・Route Handler が `auth.api.getSession` で、Cookie から `session` と `user` の行を引きます。役割は、`isAnonymous` ならゲスト、`role` が `admin` なら管理者、それ以外は会員です。`banned` の人は通しません。デモは、`username` が `DEMO_LOGIN_ID` の会員です。
+- **Proxy**：`src/proxy.ts` は、Better Auth の Cookie があるかだけを見ます。DB は読まず、更新もしません。無ければログイン画面へ送ります。
 
 **失効**
 
-- 会員がパスワードを変えると、またはパスワードを管理者が再設定すると、Web が 1 つの `UPDATE` でハッシュと `sessionVersion` を変え、その人の `Session` の行をすべて消します。ほかの端末も、次のリクエストでログインし直しになります。
-- 管理者は、許可リストから外して再デプロイしたあと、`revoked` になります（行は期限まで残ります）。
-- 全員をログアウトさせたいときは、`DELETE FROM "Session"` を実行します（[deployment.md](deployment.md) の「7. 運用上の注意」）。
+- 会員がパスワードを変えると（`changePassword`）、ほかの端末の `session` を消します（`revokeOtherSessions`）。管理者がパスワードを再設定すると、その会員の `session` をすべて消します。
+- 全員をログアウトさせたいときは、`DELETE FROM "session"` を実行します（[deployment.md](deployment.md) の「7. 運用上の注意」）。
 
-**試行回数**
+**試行回数**：Better Auth のレート制限だけで数えます。保存先は DB の `rateLimit`（Vercel のサーバーレスで、インスタンスをまたいで効かせるため）です。窓は 1 分に 10 回までで、`/sign-in/username` は 15 分に 20 回まで、`/change-password` は 15 分に 5 回までです（`AUTH_RATE_LIMIT`）。次の点に注意します。
 
-- 接続元ごと、接続元とログイン ID の組ごとに、15 分の窓で数えます（`SignInThrottle`）。Web が数えます。
-- アカウントそのものはロックしません。ほかの場所からの失敗で、本人が締め出されないようにするためです。
+- レート制限は、`NODE_ENV=production` のときだけ働きます（Better Auth の既定）。`next dev` では働きません（e2e は本番モードで動かすので、働きます）。
+- 接続元の IP は `x-real-ip`（無ければ `x-forwarded-for`）で、Vercel が必ず `x-real-ip` を付けます。`x-real-ip` が無く、`x-forwarded-for` に複数のアドレスがあるときは、IP が決まらず、数えられません。
+- `/api/auth/*` への HTTP のリクエストにだけ効きます。サーバーから `auth.api.*` を呼ぶと数えません（デモのログインと、管理者の機能がこれです）。会員・SID・ゲストのログインは、画面から Better Auth のクライアント（`src/presentation/lib/auth-client.ts`）で HTTP を通します。
+- 以前の、接続元とログイン ID の組で数える自前の制限はありません。アカウントそのものはロックしません。ほかの場所からの失敗で、本人が締め出されないようにするためです。
+- `SignInThrottle` の表は残していますが、ログインでは使いません。LINE の連携コードの入力の試行回数（`line-link:<LINE のユーザー ID>`、1 時間に 5 回まで）だけが使います。
 
-**会員として操作**：管理者は、会員の画面を閲覧のみで見られます。管理者がメニューから会員を選ぶと、Web が Cookie `zl_act_as`（会員の `ownerId`）を書きます。Web は、リクエストのたびに、管理者であることを確かめ、`zl_act_as` が `password:` ＋英小文字と数字だけの形で、そのパスワードアカウントが DB にあることを確かめます。1 つでも外れると、`zl_act_as` は無視して、管理者自身の画面を出します。管理者以外には効きません。LINE の連携はできず（LINE 連携の画面は `/` に戻ります）、AI の利用量は管理者のほうに数えます。新しくログインすると、`zl_act_as` は消えます。
+**自前で足したもの**：Better Auth に任せずに足したのは、1 つの `hooks.before`（中で 3 つに分かれます）と、アプリ側の LINE の確かめと、`disabledPaths` です（`better-auth.ts`）。
+
+- **デモのパスワード変更を断る**：`/change-password` で、`username` が `DEMO_LOGIN_ID` の人を断ります。デモのパスワードが変わると、その日はほかの人がデモに入れないためです。なりすまし中の `/change-password` も断ります（会員のパスワードは管理者が変えるものではなく、変えるとなりすましの外の普通のセッションを管理者が得るため）。`hooks.before` の 1 つめの分かれです。
+- **ゲストへのなりすましを断る**：`/admin/impersonate-user` で、相手が `isAnonymous` の `user` なら断ります。呼んだ人が管理者かを先に確かめ、管理者でなければ admin プラグインの 401/403 のままにします（相手の id がゲストのものかを、管理者以外に知らせないため）。管理者になりすますのは、プラグインの既定で断られます。`hooks.before` の 2 つめの分かれです。
+- **なりすまし中は LINE の連携を使えない**：`session.impersonatedBy` があるとき、連携の画面（`/account/line`）と Server Action は `/` に戻します。管理者の LINE が会員に結び付くのを防ぐためです。これは Better Auth の hook ではなく、アプリの側で確かめています。
+- **古いセッション Cookie を落とす（better-auth 1.7.28 の不具合の回避）**：`/sign-in/username`・`/sign-in/anonymous`・`/callback/*` へのリクエストから、ブラウザーの前のセッション Cookie（`better-auth.session_token`・`better-auth.session_data`）を外します。anonymous プラグインの after-hook が、期限切れや別の場所で消えた Cookie の `getSession` で Cookie の削除を起こし、そのとき、いま作ったばかりのセッションの `Set-Cookie` まで消してしまい、ログインが 200 で終わるのにブラウザーはログインしていない状態になるためです。**Better Auth の側が直ったら消します。** 副作用として、ゲストが会員でログインしても、ゲストの `user` はつなぎません（毎日の掃除が消します）。`hooks.before` の 3 つめの分かれです。
+- **使わないルートを閉じる（`disabledPaths`）**：次の `/api/auth/*` は、HTTP では `404` です。サーバーから `auth.api.*` で呼ぶ処理や、ほかのルートの中の処理（ログアウト、`changePassword` の `revokeOtherSessions`、管理者の `revokeUserSessions`）には影響しません。
+  - `/update-user`：名前とログイン ID を変えられると、デモが壊れるため。今も会員が自分の名前や ID を変える画面はありません。
+  - `/sign-in/email`：会員のメールアドレス（`memberEmail`）は推測でき、`/sign-in/username` より緩いレート制限になるため。
+  - `/list-sessions`・`/revoke-session`・`/revoke-sessions`・`/revoke-other-sessions`：デモは全員で 1 人の `user` なので、一覧はほかの訪問者のセッションのトークン・IP・ブラウザーを見せ、取り消しは全員をログアウトさせるため。アプリは使っていません。
+  - `/is-username-available`：誰でもログイン ID の有無を調べられるため。会員の作成は `auth.api.createUser` で、使っていません。
+  - `/get-access-token`・`/refresh-token`・`/account-info`：Sparklingstadt ID の会員になりすました管理者が、その会員の ID サーバーのトークンを得られるため。アプリは使っていません。あわせて、ID サーバーの access token と refresh token は暗号化して保存します（`encryptOAuthTokens`）。ID トークンはログアウトの `id_token_hint` に使うので、そのままです。
+- **管理者は admin プラグインを直接呼べる**：管理者は、画面を通さずに admin プラグインの `/api/auth/admin/*` を呼べます（役割の変更・利用停止など、画面に無い操作も含みます）。管理者は信頼する人なので、閉じていません。
+
+**会員として操作（なりすまし）**：管理者は、`admin` プラグインの `impersonateUser` で会員になりすまし、その会員としてログインしているのと同じ画面を見ます。会員だけがなりすませます（ゲストと管理者にはなれません）。長さは 1 時間（プラグインの既定）で、バナー（`acting-banner.tsx`）の「戻る」が `stopImpersonating` を呼びます。なりすましの間は、管理画面と AI の利用量は使えず、AI の利用量は会員のほうに数えます。なりすましの間にログアウトすると、先になりすましを終えてから、管理者をログアウトします（会員の ID サーバーのログアウトへは送りません）。
 
 ## 5. 復習
 
@@ -225,11 +230,11 @@ sequenceDiagram
 
 | 種類       | 数                                           | 中身                                                                                                    |
 | ---------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| 単体（TS） | 799 件                                       | ドメインの規則、表示の変換、層の検査、ログインとセッション、サーバーアクションとページ用ガード          |
-| E2E        | 269 件（PC 164 件、うち 105 件はスマホでも） | Playwright。Docker の Postgres、Web、OpenAI と LINE と Sparklingstadt ID のスタブを立ち上げて画面を通す |
+| 単体（TS） | 674 件                                       | ドメインの規則、表示の変換、層の検査、ログインとセッション、サーバーアクションとページ用ガード          |
+| E2E        | 282 件（PC 174 件、うち 108 件はスマホでも） | Playwright。Docker の Postgres、Web、OpenAI と LINE と Sparklingstadt ID のスタブを立ち上げて画面を通す |
 
-- **E2E の幅**：PC とスマホ（Pixel 7）の 2 つの幅で走らせます。リダイレクト、入力の検査、権限、HTTP ヘッダーのようにサーバーのふるまいだけを見る 59 件は、幅で結果が変わらないので PC だけで走らせます（`e2e/fixtures.ts` の `anyWidth`）。
-- **E2E の土台**：`e2e/server.ts` が、マイグレーション、`next build`、スタブの起動を行います。ログインは Web の `Session` で行い、テストの側が行を書いて `zl_session` を作ります。テストのたびに表を空にします。
+- **E2E の幅**：PC とスマホ（Pixel 7）の 2 つの幅で走らせます。リダイレクト、入力の検査、権限、HTTP ヘッダーのようにサーバーのふるまいだけを見る 66 件は、幅で結果が変わらないので PC だけで走らせます（`e2e/fixtures.ts` の `anyWidth`）。
+- **E2E の土台**：`e2e/server.ts` が、マイグレーション、`next build`、スタブの起動を行います。ログインは画面から実際に行います（会員は ID とパスワード、管理者は Sparklingstadt ID のスタブ。管理者の `user` は、テストが前もって DB に作って SID のスタブの `sub` につなぎます）。テストのたびに表を空にします。
 - **CSV のパースの検証**：CSV の取り込みを Web に戻したので、約 45 件の CSV の見本は `tests/fixtures/learning-csv/` にあり、TS のパーサー（csv-parse）がその見本と同じ結果を返すことを確かめています。
 - **lefthook**：commit の前に format・lint・型チェック、push の前に単体と E2E を走らせます。
 - **CI**：GitHub Actions の `verify`（`.github/workflows/verify.yml`）が、プルリクエストと main で、`pnpm audit`・型チェック・lint・単体・本番ビルド・E2E を走らせます。lefthook と同じ検査に、手元では走らせていない `pnpm audit` と本番ビルドを足したものです。
@@ -243,6 +248,6 @@ sequenceDiagram
 
 ## 11. いまの課題
 
-- **Go の古い Cookie を消す処理が残っている**：`LEGACY_SESSION_COOKIES`（Go の古い Cookie の `zl_access`・`zl_refresh` を、ログインとログアウトのたびに消す処理）は、11b の切り替えから 30 日たてば要りません。2026 年 12 月の末を過ぎたら消してよいです。
-- **セッションは延びない**：Web のセッションは、30 日（ゲストは 24 時間）で必ず切れます。使っていても延ばしません。長く使う人は、月に 1 回ログインし直します。
-- **外部キーがない**：管理者は DB に行を持たないので、`ownerId` に外部キーがありません。持ち主の整合性はコードで守っています（フォローは、相手のアカウントがあるときだけ行を足す 1 つの SQL）。
+- **古いセッション Cookie を落とす回避策**：ログインの前に前のセッション Cookie を外す `hooks.before`（上の「4. 認証」の「自前で足したもの」）は、better-auth 1.7.28 の不具合の回避です。上流が直ったら消します。そのとき、ゲストが会員でログインしたときにゲストの `user` をつなげるようになります。
+- **ログインのレート制限は `next dev` では働かない**：`NODE_ENV=production` のときだけ働きます。手元の `pnpm run dev` で制限を試すことはできません。
+- **ゲストの `user` が 24 時間残る**：ゲストの `user` は、毎日のデモのリセットが消します。`DEMO_LOGIN_ID` か `DEMO_PASSWORD` が無いと、この掃除も動きません。

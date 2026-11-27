@@ -423,15 +423,15 @@ export function createLineBot(deps: LineBotDeps) {
   };
 }
 
-// Whether an owner may still use LINE. Admins must still be on the
-// allowlist; members must still exist; any other role never may.
+// Whether an owner may still use LINE: their user must still exist and may
+// sign in as a member or an admin (not a guest, not banned). The role comes
+// from "user"."role" with the link, so an admin needs no allowlist; any other
+// role never may.
 export function createLineOwnerCheck(deps: {
-  adminIds: ReadonlySet<string>;
-  memberExists(ownerId: string): Promise<boolean>;
+  ownerExists(ownerId: string): Promise<boolean>;
 }): (ownerId: string, role: string) => Promise<boolean> {
   return async (ownerId, role) => {
-    if (role === "admin") return deps.adminIds.has(ownerId);
-    if (role === "member") return deps.memberExists(ownerId);
-    return false;
+    if (role !== "admin" && role !== "member") return false;
+    return deps.ownerExists(ownerId);
   };
 }

@@ -43,7 +43,6 @@ test("a save without permission is not allowed", async () => {
   for (const getViewer of [
     async () => null,
     async () => ({ role: "guest" as const }),
-    async () => ({ role: "revoked" as const }),
   ])
     assert.deepEqual(
       await handlePracticeRoundSave(input, {

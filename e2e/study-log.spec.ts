@@ -77,37 +77,37 @@ test("the study log counts each kind by Japan day, the owner's only", async ({
   ]);
   await db.query(
     `UPDATE "LearningEntry" SET "deletedAt" = '2026-11-01 00:00:00'
-      WHERE "ownerId" = $1 AND "originalText" = '扔掉的笔记。'`,
+      WHERE "userId" = $1 AND "originalText" = '扔掉的笔记。'`,
     [taro],
   );
   await db.query(
     `INSERT INTO "PrepositionPracticeRecord"
-       (id, "ownerId", "questionCount", "firstTryCount", "missCount", "elapsedMs", questions, "startedAt", "createdAt")
+       (id, "userId", "questionCount", "firstTryCount", "missCount", "elapsedMs", questions, "startedAt", "createdAt")
      VALUES ($1, $2, 3, 3, 0, 1000, '[]', '2026-10-31 15:30:00', '2026-10-31 15:30:00')`,
     [randomUUID(), taro],
   );
   await db.query(
     `INSERT INTO "ComplementPracticeRecord"
-       (id, "ownerId", mode, "questionCount", "firstTryCount", "missCount", "elapsedMs", questions, "startedAt", "createdAt")
+       (id, "userId", mode, "questionCount", "firstTryCount", "missCount", "elapsedMs", questions, "startedAt", "createdAt")
      VALUES ($1, $2, 'result', 2, 2, 0, 1000, '[]', '2026-11-01 16:00:00', '2026-11-01 16:00:00')`,
     [randomUUID(), taro],
   );
   const wordId = randomUUID();
   await db.query(
     `INSERT INTO "VocabularyEntry"
-       (id, "ownerId", language, word, pinyin, meaning, "createdAt", "updatedAt")
+       (id, "userId", language, word, pinyin, meaning, "createdAt", "updatedAt")
      VALUES ($1, $2, 'zh', '认真', 'rènzhēn', 'まじめに', '2026-11-01 15:00:00', '2026-11-01 15:00:00')`,
     [wordId, taro],
   );
   const itemId = randomUUID();
   await db.query(
-    `INSERT INTO "ReviewItem" (id, "ownerId", language, kind, "targetId", due, "updatedAt")
+    `INSERT INTO "ReviewItem" (id, "userId", language, kind, "targetId", due, "updatedAt")
      VALUES ($1, $2, 'zh', 'vocabulary', $3, '2026-11-01 15:00:00', '2026-11-01 15:00:00')`,
     [itemId, taro, wordId],
   );
   await db.query(
     `INSERT INTO "ReviewLog"
-       (id, "ownerId", "itemId", rating, state, due, stability, difficulty, "scheduledDays", "reviewedAt")
+       (id, "userId", "itemId", rating, state, due, stability, difficulty, "scheduledDays", "reviewedAt")
      VALUES ($1, $2, $3, 3, 0, '2026-11-01 15:00:00', 0, 0, 0, '2026-11-01 15:00:00')`,
     [randomUUID(), taro, itemId],
   );
