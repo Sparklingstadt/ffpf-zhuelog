@@ -17,6 +17,13 @@ test("callbacks reject external, encoded slash, backslash, control and malformed
     "/%0a/evil.example",
     "/bad%",
     "/".repeat(2001),
+    // Dot segments vanish when the URL is parsed, leaving "//host".
+    "/.//evil.example",
+    "/..//evil.example",
+    "/x/..//evil.example/a",
+    "/%2e//evil.example",
+    "/%2E%2e//evil.example",
+    "/././/evil.example?next=1#top",
   ]) {
     assert.equal(getSafeCallbackPath(value), "/");
   }
