@@ -164,14 +164,24 @@ test("a tapped tab shows it is loading until the page arrives", async ({
 }) => {
   await asAdmin(context);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
-  // Holds the page's answer back so the waiting state can be seen.
+  // Holds each page's answer back so the waiting state can be seen. Set
+  // before the first page loads, so the links' prefetches are held too: a
+  // prefetched page shows its skeleton at once instead.
   let release = () => {};
   const held = new Promise<void>((resolve) => (release = resolve));
   await page.route(/\/review(\?.*)?$/, async (route) => {
     await held;
     await route.continue();
   });
+  let releaseVocabulary = () => {};
+  const heldVocabulary = new Promise<void>(
+    (resolve) => (releaseVocabulary = resolve),
+  );
+  await page.route(/\/vocabulary(\?.*)?$/, async (route) => {
+    await heldVocabulary;
+    await route.continue();
+  });
+  await page.goto("/");
   const tab = page
     .getByRole("navigation", { name: "メインメニュー" })
     .getByRole("link", { name: "復習" });
@@ -184,20 +194,15 @@ test("a tapped tab shows it is loading until the page arrives", async ({
   await expect(tab.locator("[data-pending]")).toHaveCount(0);
 
   // The header's links on a wide screen do the same.
-  await page.unroute(/\/review(\?.*)?$/);
   await page.setViewportSize({ width: 1280, height: 900 });
-  let releaseNotes = () => {};
-  const heldNotes = new Promise<void>((resolve) => (releaseNotes = resolve));
-  await page.route(/127\.0\.0\.1:\d+\/(\?.*)?$/, async (route) => {
-    await heldNotes;
-    await route.continue();
-  });
   const link = page
     .getByRole("navigation", { name: "主なページ" })
-    .getByRole("link", { name: "学習ノート" });
+    .getByRole("link", { name: "単語帳" });
   await link.click();
   await expect(link.locator("[data-pending]")).toHaveCount(1);
-  releaseNotes();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/review$/);
+  releaseVocabulary();
+  await expect(page).toHaveURL(/\/vocabulary$/);
   await expect(link.locator("[data-pending]")).toHaveCount(0);
+  await page.unrouteAll({ behavior: "wait" });
 });
