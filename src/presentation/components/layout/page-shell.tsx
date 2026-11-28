@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import type { AuthenticatedUser } from "@/domain/identity/entities/authenticated-user";
 import { AppHeader } from "@/presentation/components/layout/app-header";
-import { renderedAt } from "@/presentation/components/layout/rendered-at";
+import { signedInHeaderProps } from "@/presentation/controllers/review-count";
 import { cn } from "@/presentation/lib/utils";
 
 const widths = {
@@ -31,7 +31,7 @@ export function PageShell({
 }) {
   return (
     <>
-      <AppHeader user={user} renderedAt={renderedAt()} />
+      <AppHeader {...signedInHeaderProps(user)} />
       <main className="flex-1">
         <div
           className={cn(

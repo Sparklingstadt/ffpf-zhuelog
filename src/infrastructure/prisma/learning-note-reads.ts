@@ -152,22 +152,27 @@ export function createLearningNoteReads(db: () => PrismaClient) {
 
   return {
     // The newest live notes, or with a search only those it matches; total
-    // counts every live note the search matches. The count is read first.
+    // counts every live note the search matches. The count and the rows are
+    // asked for together (the database may be far from the server); a note
+    // added or trashed in between can leave total one off until the next
+    // load.
     async listRecent(
       userId: string,
       limit: number,
       search?: EntrySearch,
     ): Promise<RecentLearningEntries> {
       const condition = searchCondition(search);
-      const [{ count }] = await db().$queryRaw<[{ count: bigint }]>`
-        SELECT count(*) AS count FROM "LearningEntry"
-         WHERE "userId" = ${userId} AND "deletedAt" IS NULL ${condition}`;
-      const rows = await db().$queryRaw<EntryRow[]>`
-        SELECT ${ENTRY_COLUMNS} FROM "LearningEntry"
-         WHERE "userId" = ${userId} AND "deletedAt" IS NULL ${condition}
-         ORDER BY "createdAt" DESC, "id" DESC
-         LIMIT ${limit}`;
-      return { entries: await toEntries(rows), total: Number(count) };
+      const [[{ count }], entries] = await Promise.all([
+        db().$queryRaw<[{ count: bigint }]>`
+          SELECT count(*) AS count FROM "LearningEntry"
+           WHERE "userId" = ${userId} AND "deletedAt" IS NULL ${condition}`,
+        db().$queryRaw<EntryRow[]>`
+          SELECT ${ENTRY_COLUMNS} FROM "LearningEntry"
+           WHERE "userId" = ${userId} AND "deletedAt" IS NULL ${condition}
+           ORDER BY "createdAt" DESC, "id" DESC
+           LIMIT ${limit}`.then(toEntries),
+      ]);
+      return { entries, total: Number(count) };
     },
 
     // Every live note of the owner, newest first, up to the export's limit.

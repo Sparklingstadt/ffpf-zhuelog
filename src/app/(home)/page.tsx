@@ -12,7 +12,7 @@ import {
   parseEntrySearch,
   type EntrySearch,
 } from "@/domain/learning/entry-search";
-import type { DueReviews } from "@/domain/review/review-item";
+import type { DueSummary } from "@/domain/review/review-item";
 import { setNoteReviewAction } from "@/presentation/actions/note-review-actions";
 import type { ViewedOwner } from "@/domain/learning/viewed-owner";
 import { loadRecordOwnerView } from "@/composition/record-owner-options";
@@ -58,19 +58,8 @@ async function loadEntries(
 
 // How many reviews are due and the review streak, or null when they cannot
 // be read: the home then just leaves the card out.
-async function loadDueReviews(): Promise<Pick<
-  DueReviews,
-  "count" | "streakDays" | "byKind" | "recentDays"
-> | null> {
-  return loadOr(
-    "REVIEW_COUNT_UNAVAILABLE",
-    async () => {
-      const { count, streakDays, byKind, recentDays } =
-        await reviews.listDue(1);
-      return { count, streakDays, byKind, recentDays };
-    },
-    null,
-  );
+async function loadDueReviews(): Promise<DueSummary | null> {
+  return loadOr("REVIEW_COUNT_UNAVAILABLE", () => reviews.dueSummary(), null);
 }
 
 // The ids of the user's notes in their review queue, so each card can offer

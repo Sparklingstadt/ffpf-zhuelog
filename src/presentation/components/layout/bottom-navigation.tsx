@@ -24,12 +24,9 @@ const tabInteractive =
 export function BottomNavigation({
   role,
   demo = false,
-  renderedAt,
 }: {
   role: AppRole;
   demo?: boolean;
-  // When the server rendered the page, so the review count follows actions.
-  renderedAt?: number;
 }) {
   const current = bottomPageOf(usePathname());
 
@@ -49,10 +46,7 @@ export function BottomNavigation({
               {/* After the name, so it reads 「復習（29問）」; drawn on the
                   icon's corner. */}
               {tab.page === "review" && tab.href ? (
-                <ReviewCountBadge
-                  renderedAt={renderedAt}
-                  className="absolute top-2 left-[calc(50%+0.25rem)] bg-destructive text-white"
-                />
+                <ReviewCountBadge className="absolute top-2 left-[calc(50%+0.25rem)] bg-destructive text-white" />
               ) : null}
             </>
           );
