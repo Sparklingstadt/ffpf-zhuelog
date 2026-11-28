@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import type { AppRole } from "@/domain/identity/entities/authenticated-user";
+import { LinkPending } from "@/presentation/components/layout/link-pending";
 import { BOTTOM_TAB_ICONS } from "@/presentation/components/layout/main-tab-icons";
 import {
   bottomPageOf,
@@ -23,12 +24,9 @@ const tabInteractive =
 export function BottomNavigation({
   role,
   demo = false,
-  renderedAt,
 }: {
   role: AppRole;
   demo?: boolean;
-  // When the server rendered the page, so the review count follows actions.
-  renderedAt?: number;
 }) {
   const current = bottomPageOf(usePathname());
 
@@ -48,10 +46,7 @@ export function BottomNavigation({
               {/* After the name, so it reads 「復習（29問）」; drawn on the
                   icon's corner. */}
               {tab.page === "review" && tab.href ? (
-                <ReviewCountBadge
-                  renderedAt={renderedAt}
-                  className="absolute top-2 left-[calc(50%+0.25rem)] bg-destructive text-white"
-                />
+                <ReviewCountBadge className="absolute top-2 left-[calc(50%+0.25rem)] bg-destructive text-white" />
               ) : null}
             </>
           );
@@ -63,11 +58,14 @@ export function BottomNavigation({
               className={cn(
                 tabBase,
                 tabInteractive,
-                "relative",
+                // Pressed and on its way: it already looks like the current
+                // tab, with the bar on top.
+                "relative has-data-pending:bg-primary/10 has-data-pending:text-primary",
                 active ? "bg-primary/10 text-primary" : "text-muted-foreground",
               )}
             >
               {content}
+              <LinkPending className="inset-x-4 top-0.5" />
             </Link>
           ) : (
             <button

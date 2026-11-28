@@ -116,8 +116,8 @@ test("reviews follow the signed-in owner", async () => {
       calls.map((call) => [call[0], call[1]]),
       [
         ["countDueByKind", ownerId],
-        ["listDue", ownerId],
         ["reviewedDates", ownerId],
+        ["listDue", ownerId],
         ["countDue", ownerId],
         ["entryIdsInReview", ownerId],
         ["answer", ownerId],
@@ -144,9 +144,9 @@ test("listDue sums the kinds and works out each answer's next due from one now",
   const due = await queue.listDue(20);
   assert.deepEqual(calls, [
     ["countDueByKind", "abc", now],
-    ["listDue", "abc", now, 20],
     // JST midnight 400 days before 2026-11-16.
     ["reviewedDates", "abc", new Date("2025-10-11T15:00:00.000Z")],
+    ["listDue", "abc", now, 20],
   ]);
   assert.equal(due.count, 3);
   assert.deepEqual(due.byKind, { preposition: 2, entry: 1 });
@@ -214,4 +214,68 @@ test("an answer with a logId that is not a lower-case UUID is refused without as
   for (const bad of ["", "not-a-uuid", logId.toUpperCase()])
     assert.equal(await queue.answer({ itemId, logId: bad, rating: 3 }), false);
   assert.deepEqual(calls, []);
+});
+
+test("dueSummary gives the home's numbers without reading any item", async () => {
+  const { queue, calls } = setup(member);
+  const summary = await queue.dueSummary();
+  assert.deepEqual(calls, [
+    ["countDueByKind", "abc", now],
+    ["reviewedDates", "abc", new Date("2025-10-11T15:00:00.000Z")],
+  ]);
+  assert.deepEqual(summary, {
+    count: 3,
+    byKind: { preposition: 2, entry: 1 },
+    streakDays: 2,
+    recentDays: [false, false, false, true, false, true, true],
+  });
+
+  for (const user of [null, guest]) {
+    const { queue, calls } = setup(user);
+    await assert.rejects(queue.dueSummary(), ReviewForbiddenError);
+    assert.deepEqual(calls, []);
+  }
+});
+
+// The database may be far from the server, so reads that do not need each
+// other's answer are asked for together.
+test("listDue and dueSummary start their reads together", async () => {
+  for (const [read, expected] of [
+    ["listDue", ["countDueByKind", "reviewedDates", "listDue"]],
+    ["dueSummary", ["countDueByKind", "reviewedDates"]],
+  ] as const) {
+    const started: string[] = [];
+    let finished = 0;
+    // No read finishes until the test lets it: every one must have started
+    // by then.
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const slow =
+      <R>(name: string, result: R) =>
+      async () => {
+        started.push(name);
+        await gate;
+        finished += 1;
+        return result;
+      };
+    const queue = createReviewQueue({
+      currentUser: async () => member,
+      store: {
+        countDue: slow("countDue", 0),
+        countDueByKind: slow("countDueByKind", {}),
+        listDue: slow("listDue", []),
+        reviewedDates: slow("reviewedDates", []),
+        answer: slow("answer", true),
+        entryIdsInReview: slow("entryIdsInReview", new Set<string>()),
+      },
+      now: () => now,
+    });
+    const pending = read === "listDue" ? queue.listDue(20) : queue.dueSummary();
+    // Lets the owner lookup and the calls' starts run.
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(started, expected);
+    assert.equal(finished, 0);
+    release();
+    await pending;
+  }
 });

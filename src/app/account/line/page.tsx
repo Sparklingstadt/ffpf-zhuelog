@@ -14,6 +14,7 @@ import {
 import { LineLinkPanel } from "@/presentation/components/account/line-link-panel";
 import { LineReviewNotifyForm } from "@/presentation/components/account/line-review-notify-form";
 import { AppHeader } from "@/presentation/components/layout/app-header";
+import { signedInHeaderProps } from "@/presentation/controllers/review-count";
 import {
   Card,
   CardContent,
@@ -42,7 +43,7 @@ export default async function LineLinkPage() {
 
   return (
     <>
-      <AppHeader user={user} />
+      <AppHeader {...signedInHeaderProps(user)} />
       <main className="flex-1">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12">
           <header className="space-y-2 border-b pb-6">

@@ -261,3 +261,44 @@ test("the count leaves out trashed notes but still counts cards whose target is 
   await expect(page.getByText("1 / 1")).toBeVisible();
   await expect(page.getByText("第二")).toHaveCount(1);
 });
+
+// The count comes with the page itself: moving between pages asks the server
+// for nothing else, and the tab still follows what the user does.
+test("the tab's count needs no request of its own", async ({
+  page,
+  context,
+  db,
+}) => {
+  await seedNotes(db, adminOwnerId, [
+    { text: "第一", createdAt: "2026-10-04T01:00:00Z" },
+    { text: "第二", createdAt: "2026-10-04T02:00:00Z" },
+  ]);
+  await asAdmin(context);
+  const asked: string[] = [];
+  page.on("request", (request) => {
+    const { pathname } = new URL(request.url());
+    if (pathname.startsWith("/api/")) asked.push(pathname);
+  });
+
+  await page.goto("/logs/2026/10/4/1");
+  await expect(reviewTab(page)).toHaveAccessibleName(/復習$/);
+  // A Server Action renders the page again, and the count with it.
+  await page.getByRole("button", { name: "復習に入れる" }).click();
+  await expect(reviewTab(page)).toHaveAccessibleName(/（1問）$/);
+
+  // Moving to another page (no full load) keeps the count current.
+  await db.query(
+    `INSERT INTO "ReviewItem"
+       ("id", "userId", "language", "kind", "targetId", "due", "state", "createdAt", "updatedAt")
+     VALUES ('c' || substr(md5(random()::text), 1, 24), $1, 'zh', 'entry', 'ngone0000000000000',
+             now(), 0, now(), now())`,
+    [adminOwnerId],
+  );
+  await page
+    .getByRole("banner")
+    .getByRole("link", { name: "学习録", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(reviewTab(page)).toHaveAccessibleName(/（2問）$/);
+  expect(asked).toEqual([]);
+});

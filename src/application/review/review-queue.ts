@@ -15,6 +15,7 @@ import {
   REVIEW_ITEM_ID,
   REVIEW_LOG_ID,
   type DueReviews,
+  type DueSummary,
   type ReviewItem,
   type ReviewRating,
 } from "../../domain/review/review-item";
@@ -71,29 +72,49 @@ export function createReviewQueue(deps: ReviewQueueDeps) {
     return user.userId;
   }
 
+  // The counts by kind and the review days, read together.
+  async function readSummary(ownerId: string, now: Date): Promise<DueSummary> {
+    const today = japanDate(now);
+    const [byKind, reviewed] = await Promise.all([
+      deps.store.countDueByKind(ownerId, now),
+      deps.store.reviewedDates(
+        ownerId,
+        japanMidnightBefore(today, REVIEW_HISTORY_DAYS),
+      ),
+    ]);
+    return {
+      count: Object.values(byKind).reduce((sum, n) => sum + n, 0),
+      byKind,
+      streakDays: reviewStreak(today, reviewed),
+      recentDays: recentReviewDays(today, reviewed),
+    };
+  }
+
   return {
     // How many items are due now and the first `limit` (1..100) of them,
     // the longest overdue first, with the streak. One `now` is used for
-    // every read and every item's next dues.
+    // every read and every item's next dues. The three reads do not need
+    // each other's answer, so they are asked for together: the database may
+    // be far from the server, and each wait is a round trip.
     async listDue(limit: number): Promise<DueReviews> {
       if (!Number.isInteger(limit) || limit < 1 || limit > MAX_DUE_LIMIT)
         throw new RangeError("the due list limit must be 1 to 100");
       const ownerId = await owner();
       const now = deps.now();
-      const today = japanDate(now);
-      const byKind = await deps.store.countDueByKind(ownerId, now);
-      const stored = await deps.store.listDue(ownerId, now, limit);
-      const reviewed = await deps.store.reviewedDates(
-        ownerId,
-        japanMidnightBefore(today, REVIEW_HISTORY_DAYS),
-      );
+      const [summary, stored] = await Promise.all([
+        readSummary(ownerId, now),
+        deps.store.listDue(ownerId, now, limit),
+      ]);
       return {
-        count: Object.values(byKind).reduce((sum, n) => sum + n, 0),
-        byKind,
-        streakDays: reviewStreak(today, reviewed),
-        recentDays: recentReviewDays(today, reviewed),
+        ...summary,
         items: stored.map((item) => toReviewItem(item, now)),
       };
+    },
+
+    // listDue's numbers without the items, for the home's card: it reads no
+    // item, note or word.
+    async dueSummary(): Promise<DueSummary> {
+      return readSummary(await owner(), deps.now());
     },
 
     // Only how many items are due now, for the badge in the header.

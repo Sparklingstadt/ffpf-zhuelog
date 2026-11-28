@@ -31,7 +31,8 @@ export type ReviewItem = {
   nextDue: readonly [Date, Date, Date, Date] | null;
 };
 
-export type DueReviews = {
+// What is due now and the review days, without the items.
+export type DueSummary = {
   // Every item due now, which may be more than items holds.
   count: number;
   // count by kind ("entry", "vocabulary", "preposition", "complement");
@@ -43,6 +44,10 @@ export type DueReviews = {
   // Whether there was a review on each of the last 7 days, Japan time,
   // oldest first; the last is today.
   recentDays: readonly boolean[];
+};
+
+export type DueReviews = DueSummary & {
+  // The first of the due items, the longest overdue first.
   items: ReviewItem[];
 };
 
