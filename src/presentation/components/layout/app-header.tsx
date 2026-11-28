@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import type { AuthenticatedUser } from "@/domain/identity/entities/authenticated-user";
 import { CurrentLink } from "@/presentation/components/layout/current-link";
+import { LinkPending } from "@/presentation/components/layout/link-pending";
 import {
   GitHubMark,
   repositoryUrl,
@@ -49,11 +50,12 @@ function MainLinks({
           asChild
           variant="ghost"
           size="sm"
-          className="data-[current]:bg-primary/10 data-[current]:text-primary"
+          className="relative data-[current]:bg-primary/10 data-[current]:text-primary has-data-pending:bg-primary/10 has-data-pending:text-primary"
         >
           <CurrentLink href={ai.href} page="ai">
             <Sparkles />
             {ai.label}
+            <LinkPending className="inset-x-2 bottom-0" />
           </CurrentLink>
         </Button>
       ) : null}
@@ -76,7 +78,7 @@ function HeaderLink({
       asChild
       variant="ghost"
       size="sm"
-      className="data-[current]:bg-primary/10 data-[current]:text-primary"
+      className="relative data-[current]:bg-primary/10 data-[current]:text-primary has-data-pending:bg-primary/10 has-data-pending:text-primary"
     >
       <CurrentLink href={href} page={tab.page}>
         <Icon />
@@ -84,6 +86,7 @@ function HeaderLink({
         {tab.page === "review" ? (
           <ReviewCountBadge renderedAt={renderedAt} />
         ) : null}
+        <LinkPending className="inset-x-2 bottom-0" />
       </CurrentLink>
     </Button>
   );

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import type { AppRole } from "@/domain/identity/entities/authenticated-user";
+import { LinkPending } from "@/presentation/components/layout/link-pending";
 import { BOTTOM_TAB_ICONS } from "@/presentation/components/layout/main-tab-icons";
 import {
   bottomPageOf,
@@ -63,11 +64,14 @@ export function BottomNavigation({
               className={cn(
                 tabBase,
                 tabInteractive,
-                "relative",
+                // Pressed and on its way: it already looks like the current
+                // tab, with the bar on top.
+                "relative has-data-pending:bg-primary/10 has-data-pending:text-primary",
                 active ? "bg-primary/10 text-primary" : "text-muted-foreground",
               )}
             >
               {content}
+              <LinkPending className="inset-x-4 top-0.5" />
             </Link>
           ) : (
             <button

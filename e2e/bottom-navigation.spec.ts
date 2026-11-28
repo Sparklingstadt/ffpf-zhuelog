@@ -155,3 +155,49 @@ test("guest menu keeps five tabs without linking to restricted features", async 
   await expect(page).toHaveURL(/\/signin/);
   await expect(menu).toHaveCount(0);
 });
+
+// The server's answer can take a moment (every page is rendered on demand),
+// so the tapped tab or header link shows at once that it was pressed.
+test("a tapped tab shows it is loading until the page arrives", async ({
+  page,
+  context,
+}) => {
+  await asAdmin(context);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  // Holds the page's answer back so the waiting state can be seen.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route(/\/review(\?.*)?$/, async (route) => {
+    await held;
+    await route.continue();
+  });
+  const tab = page
+    .getByRole("navigation", { name: "メインメニュー" })
+    .getByRole("link", { name: "復習" });
+  await expect(tab.locator("[data-pending]")).toHaveCount(0);
+  await tab.click();
+  await expect(tab.locator("[data-pending]")).toHaveCount(1);
+  await expect(page).toHaveURL(/\/$/);
+  release();
+  await expect(page).toHaveURL(/\/review$/);
+  await expect(tab.locator("[data-pending]")).toHaveCount(0);
+
+  // The header's links on a wide screen do the same.
+  await page.unroute(/\/review(\?.*)?$/);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  let releaseNotes = () => {};
+  const heldNotes = new Promise<void>((resolve) => (releaseNotes = resolve));
+  await page.route(/127\.0\.0\.1:\d+\/(\?.*)?$/, async (route) => {
+    await heldNotes;
+    await route.continue();
+  });
+  const link = page
+    .getByRole("navigation", { name: "主なページ" })
+    .getByRole("link", { name: "学習ノート" });
+  await link.click();
+  await expect(link.locator("[data-pending]")).toHaveCount(1);
+  releaseNotes();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(link.locator("[data-pending]")).toHaveCount(0);
+});
